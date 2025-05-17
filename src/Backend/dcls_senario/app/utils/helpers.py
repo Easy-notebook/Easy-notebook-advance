@@ -1,0 +1,117 @@
+from fastapi import HTTPException
+import logging
+import asyncio
+import json
+import os
+from fastapi.responses import StreamingResponse
+from typing import AsyncIterable, Dict, Any, List
+
+from app.core.config import STAGES
+from app.utils.logger import (
+    log_stream_start, 
+    log_header_sent, 
+    log_action_generated,
+    log_action_sent,
+    log_stream_complete
+)
+
+logger = logging.getLogger("app")
+
+# 是否启用调试模式（可从环境变量读取）
+DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
+# 调试模式下的延迟倍数
+DEBUG_DELAY_MULTIPLIER = float(os.environ.get("DEBUG_DELAY_MULTIPLIER", "3"))
+
+def get_stage_or_abort(stage_id: str) -> dict:
+    """获取指定阶段信息，如果不存在则抛出异常"""
+    stage = STAGES.get(stage_id)
+    if not stage:
+        raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
+    return stage
+
+def validate_step_index(stage: dict, step_index: int) -> dict:
+    """验证步骤索引是否有效"""
+    if not isinstance(step_index, int) or step_index < 0 or step_index >= len(stage["steps"]):
+        raise HTTPException(status_code=404, detail=f"Step index {step_index} out of range")
+    return stage["steps"][step_index]
+
+async def generate_streaming_response(sequence: dict):
+    """生成流式响应"""
+    log_stream_start(sequence.get("stage_id"), sequence.get("step"), True)
+    
+    header = {"header": {
+        "stage_id": sequence.get("stage_id"), 
+        "step": sequence.get("step"),
+        "next_step": sequence.get("next_step")
+    }}
+    
+    header_json = json.dumps(header)
+    log_header_sent(header_json)
+    yield header_json + "\n"
+    
+    # 处理步骤列表或异步迭代器
+    steps = sequence.get("steps", [])
+    if isinstance(steps, AsyncIterable):
+        # 如果是异步迭代器，直接迭代
+        count = 0
+        async for action in steps:
+            count += 1
+            action_json = json.dumps({"action": action})
+            log_action_sent(action_json)
+            yield action_json + "\n"
+            # 确保每个操作都被立即刷新到客户端
+            await asyncio.sleep(0.01)  # 微小延迟确保数据被发送
+    else:
+        # 如果是列表，按顺序处理
+        for i, action in enumerate(steps):
+            delay = action.get("delay", 0) / 1000.0
+            if DEBUG_MODE:
+                delay *= DEBUG_DELAY_MULTIPLIER
+                logger.info(f"调试模式: 延迟 {delay} 秒后发送操作")
+            await asyncio.sleep(delay)  # 使用异步睡眠替代阻塞式睡眠
+            action_json = json.dumps({"action": action})
+            log_action_sent(action_json)
+            yield action_json + "\n"
+            # 确保每个操作都被立即刷新到客户端
+            await asyncio.sleep(0.01)  # 微小延迟确保数据被发送
+    
+    log_stream_complete()
+
+def create_streaming_response(sequence: dict):
+    """创建流式响应对象"""
+    return StreamingResponse(
+        generate_streaming_response(sequence),
+        media_type="application/json"
+    )
+
+async def generate_step_actions(actions: List[Dict[str, Any]], debug_mode: bool = DEBUG_MODE, delay_multiplier: float = DEBUG_DELAY_MULTIPLIER) -> AsyncIterable[Dict[str, Any]]:
+    """
+    流式生成步骤操作的异步迭代器
+    
+    Args:
+        actions: 要执行的操作列表
+        debug_mode: 是否启用调试模式，添加更明显的延迟
+        delay_multiplier: 调试模式下的延迟倍数
+    """
+    # 添加额外的初始延迟，使流式输出更明显
+    if debug_mode:
+        await asyncio.sleep(1.0)
+        
+    for i, action in enumerate(actions):
+        delay = action.get("delay", 0)/1000
+        action_type = action.get("type", "unknown")
+        logger.info(f"生成步骤操作: {action_type} 延迟 {delay} 秒")
+        
+        # 在调试模式下增加延迟
+        if debug_mode:
+            delay *= delay_multiplier
+            # 对于第一个操作，添加额外延迟让效果更明显
+            if i == 0:
+                delay += 1.0
+            logger.info(f"调试模式: 操作 {i+1}/{len(actions)} 延迟 {delay} 秒")
+        
+        # 记录正在生成的操作
+        log_action_generated(i, len(actions), action_type, delay)
+        
+        await asyncio.sleep(delay)
+        yield action 

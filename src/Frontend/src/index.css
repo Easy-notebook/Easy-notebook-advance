@@ -1,0 +1,483 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.prose.max-w-none.p-6.text-lg.leading-relaxed.markdown-cell {
+    padding: 0;
+}
+
+* {
+    /* font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; */
+    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    line-height: 1.4;
+    font-size: 12px;
+    text-align: left;
+    margin-bottom: 0;
+}
+
+p {
+    color: black;
+}
+
+.markdown-cell {
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #202124;
+    line-height: 1.4;
+}
+
+/* 悬停状态 */
+.markdown-cell #untitled-cell:hover {
+    color: #4B5563 !important;
+    /* 悬停时稍微深一点的灰色 */
+}
+
+/* 确保内部元素也遵循这些样式 */
+.markdown-cell #untitled-cell * {
+    color: inherit !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+.markdown-cell h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    background-image: linear-gradient(to right, #b7274b, #f43f5e);
+
+    /* 使文字透明,显示背景 */
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+
+
+    border-bottom: 2px solid rgb(159, 18, 57);
+    line-height: 1.6;
+}
+
+.markdown-cell h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: white;
+    /* background-color: rgb(159, 18, 57); */
+    background-image: linear-gradient(to right, #be123c, #f43f5e);
+    border-radius: 5px;
+    padding: 0.2rem 0.5rem;
+    margin-top: 1.5rem;
+    /* margin-bottom: 1.3rem; */
+    line-height: 1.5;
+}
+
+.markdown-cell h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    /* color: rgb(159, 18, 57); */
+    background-image: linear-gradient(to right, #be123c, #f43f5e);
+
+    /* 使文字透明,显示背景 */
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    margin-top: 1rem;
+    /* margin-bottom: 1.2rem; */
+    line-height: 1.2;
+    padding-bottom: 0;
+}
+
+.markdown-cell h4 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    /* color: rgb(159, 18, 57); */
+    background-image: linear-gradient(to right, #be123c, #f43f5e);
+
+    /* 使文字透明,显示背景 */
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    margin-top: 1rem;
+    /* margin-bottom: 1rem; */
+    line-height: 1.2rem;
+    padding-left: 0.5rem;
+    border-left: 3px solid rgb(159, 18, 57);
+    padding-bottom: 0;
+}
+
+.markdown-cell h5 {
+    font-size: 1rem;
+    font-weight: 400;
+    color: rgb(159, 18, 57);
+    margin-top: 0.8rem;
+    /* margin-bottom: 0.8rem; */
+    line-height: 1.2;
+}
+
+.markdown-cell h6 {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: rgb(159, 18, 57);
+    margin-top: 0.8rem;
+    /* margin-bottom: 0.8rem; */
+    line-height: 1.2;
+    font-style: italic;
+}
+
+.markdown-cell p {
+    font-size: 1rem;
+    /* margin-bottom: 1rem; */
+    line-height: 1.6;
+}
+
+.markdown-cell a {
+    color: rgb(159, 18, 57);
+    text-decoration: none;
+    border-bottom: 1.5px solid rgb(159, 18, 57);
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.markdown-cell a:hover {
+    color: rgb(185, 28, 72);
+    border-bottom-color: rgb(185, 28, 72);
+}
+
+.markdown-cell pre {
+    background-color: rgba(159, 18, 57, 0.05);
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    overflow-x: auto;
+    line-height: 1.6;
+    border: 1px solid rgba(159, 18, 57, 0.1);
+}
+
+.markdown-cell code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    background-color: rgba(159, 18, 57, 0.05);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    color: rgb(159, 18, 57);
+}
+
+.cell-cursor {
+    position: absolute;
+    left: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 16px;
+    background-color: rgb(159, 18, 57);
+    box-shadow: 0 0 8px rgba(159, 18, 57, 0.5);
+    animation: cursorBlink 1s ease-in-out infinite;
+    border-radius: 2px;
+}
+
+.cell-highlight {
+    transition: all 0.3s ease;
+}
+
+.cell-highlight:hover {
+    background-color: rgba(159, 18, 57, 0.05);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #F9FAFB;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    /* background: rgba(159, 18, 57, 0.2); */
+    background: #F9FAFB;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    /* background: rgba(159, 18, 57, 0.3); */
+    background: #f1fa8c;
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(159, 18, 57, 0.2) #F9FAFB;
+}
+
+/* Markdown 元素样式 */
+.markdown-cell ul,
+.markdown-cell ol {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.markdown-cell ul {
+    list-style-type: disc;
+}
+
+.markdown-cell ol {
+    list-style-type: decimal;
+    counter-reset: item;
+}
+
+.markdown-cell li {
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+    position: relative;
+    padding-left: 1.2rem;
+}
+
+.markdown-cell ul ul,
+.markdown-cell ul ol,
+.markdown-cell ol ul,
+.markdown-cell ol ol {
+    margin-top: 0.5rem;
+    /* margin-bottom: 0.5rem; */
+}
+
+/* 引用样式 */
+.markdown-cell blockquote {
+    border-left: 4px solid rgb(159, 18, 57);
+    background-color: rgba(159, 18, 57, 0.05);
+    padding: 0.5rem 1rem;
+    margin: 1.5rem 0;
+    color: #374151;
+    font-style: italic;
+}
+
+/* 苹果风格表格样式 - 带 Ruby 红色点缀 */
+.markdown-cell table {
+    width: auto;
+    min-width: 50%;
+    max-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 1rem 0;
+    margin-bottom: 2rem;
+    /* padding: 0 1.5rem; */
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 1px rgba(171, 27, 46, 0.1);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    border: 1px solid rgba(171, 27, 46, 0.08);
+    color: black;
+}
+
+.markdown-cell th,
+.markdown-cell td {
+    padding: 0.5rem;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid rgba(171, 27, 46, 0.06);
+}
+
+.markdown-cell th {
+    /* background-color: rgba(171, 27, 46, 0.03); */
+    background-color:rgb(171, 27, 46);
+
+    font-weight: 500;
+    /* color: rgb(171, 27, 46); */
+    color: white;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+}
+
+.markdown-cell thead tr:first-child th:first-child {
+    border-top-left-radius: 12px;
+}
+
+.markdown-cell thead tr:first-child th:last-child {
+    border-top-right-radius: 12px;
+}
+
+.markdown-cell tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.markdown-cell tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+.markdown-cell tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.markdown-cell tr {
+    transition: background-color 0.2s ease;
+}
+
+.markdown-cell tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.01);
+}
+
+.markdown-cell tbody tr:hover {
+    background-color: rgba(171, 27, 46, 0.04);
+}
+
+/* 可选：添加苹果风格的表格标题 */
+.markdown-cell table caption {
+    padding: 1rem 0;
+    font-weight: 500;
+    color: #333333;
+    text-align: left;
+    font-size: 1.125rem;
+}
+
+/* 可选：添加对移动设备的响应式支持 */
+@media (max-width: 768px) {
+    .markdown-cell th,
+    .markdown-cell td {
+        padding: 0.75rem 1rem;
+    }
+}
+
+/* 图片样式 */
+.markdown-cell img {
+    max-width: 100%;
+    height: auto;
+    margin: 1rem 0;
+}
+
+/* 水平线样式 */
+.markdown-cell hr {
+    border: none;
+    border-top: 1px solid rgba(159, 18, 57, 0.2);
+    margin: 2rem 0;
+}
+
+/* 强调样式 */
+.markdown-cell strong {
+    font-weight: 700;
+    color: rgb(159, 18, 57);
+}
+
+.markdown-cell em {
+    font-style: italic;
+    color: rgb(159, 18, 57);
+}
+
+/* 暗色模式 */
+@media (prefers-color-scheme: dark) {
+    .markdown-cell {
+        color: #d1d5db;
+    }
+
+    .markdown-cell h1 {
+        color: rgb(225, 29, 72);
+        border-bottom-color: rgb(225, 29, 72);
+    }
+
+    .markdown-cell h2 {
+        color: #f3f4f6;
+        background-color: rgb(225, 29, 72);
+    }
+
+    .markdown-cell h3 {
+        color: rgb(225, 29, 72);
+    }
+
+    .markdown-cell h4 {
+        color: rgb(225, 29, 72);
+        border-left-color: rgb(225, 29, 72);
+    }
+
+    .markdown-cell h5 {
+        color: rgb(225, 29, 72);
+    }
+
+    .markdown-cell h6 {
+        color: rgb(225, 29, 72);
+    }
+
+    .markdown-cell a {
+        color: rgb(225, 29, 72);
+        border-bottom-color: rgb(225, 29, 72);
+    }
+
+    .markdown-cell a:hover {
+        color: rgb(244, 63, 94);
+        border-bottom-color: rgb(244, 63, 94);
+    }
+
+    .markdown-cell blockquote {
+        border-left-color: rgb(225, 29, 72);
+        background-color: rgba(225, 29, 72, 0.1);
+        color: #d1d5db;
+    }
+
+    .markdown-cell pre {
+        background-color: rgba(225, 29, 72, 0.1);
+        border-color: rgba(225, 29, 72, 0.2);
+    }
+
+    .markdown-cell code {
+        background-color: rgba(225, 29, 72, 0.1);
+        color: rgb(244, 63, 94);
+    }
+
+    .markdown-cell th {
+        background-color: rgba(225, 29, 72, 0.1);
+        color: rgb(244, 63, 94);
+    }
+
+    .markdown-cell tr:nth-child(even) {
+        background-color: rgba(225, 29, 72, 0.05);
+    }
+
+    .markdown-cell tr:hover {
+        background-color: rgba(225, 29, 72, 0.1);
+    }
+
+    .markdown-cell strong {
+        color: rgb(244, 63, 94);
+    }
+
+    .markdown-cell em {
+        color: rgb(244, 63, 94);
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: rgba(225, 29, 72, 0.3);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(225, 29, 72, 0.4);
+    }
+
+    * {
+        scrollbar-color: rgba(225, 29, 72, 0.3) #111827;
+    }
+}
+
+@keyframes cursorBlink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+
+.codeCell {
+    ::-webkit-scrollbar-thumb {
+        background: rgba(225, 29, 72, 0.3);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(225, 29, 72, 0.4);
+    }
+
+    * {
+        scrollbar-color: rgba(225, 29, 72, 0.3) #111827;
+        scrollbar-width: thin;
+    }
+}

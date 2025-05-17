@@ -1,0 +1,13 @@
+*.env
+node_modules
+*.zip
+*.log
+
+notebooks/
+notebooks.db
+*.ipynb
+__pycache__/
+
+*.mp4
+logs
+asset
