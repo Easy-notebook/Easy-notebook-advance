@@ -9,7 +9,7 @@ export default function ImportLoadingState({ fileName, progress }) {
                     <div className="flex flex-col items-center gap-4">
                         {/* Loading Spinner */}
                         <div className="relative">
-                            <Loader2 className="w-12 h-12 animate-spin text-rose-800" />
+                            <Loader2 className="w-12 h-12 animate-spin text-theme-800" />
                         </div>
 
                         {/* Loading Text */}
@@ -27,7 +27,7 @@ export default function ImportLoadingState({ fileName, progress }) {
                             <div className="w-full mt-4">
                                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                                     <div
-                                        className="h-full bg-rose-800 transition-all duration-300 ease-in-out"
+                                        className="h-full bg-theme-800 transition-all duration-300 ease-in-out"
                                         style={{ width: `${progress}%` }}
                                     />
                                 </div>

@@ -1,0 +1,124 @@
+{
+  "modeToggle": {
+    "completeMode": "Complete Mode",
+    "stepMode": "Step Mode"
+  },
+  "cell": {
+    "addCodeCell": "Add Code Cell",
+    "addTextCell": "Add Text Cell",
+    "aiGenerate": "AI Generate"
+  },
+  "navigation": {
+    "prevStage": "Prev Stage",
+    "prevStep": "Prev Step",
+    "nextStage": "Next Stage",
+    "nextStep": "Next Step",
+    "topOfAll": "Top of ALL",
+    "endOfAll": "End of ALL"
+  },
+  "fileOperations": {
+    "runAll": "Run All",
+    "running": "Running...",
+    "import": "Import",
+    "export": "Export"
+  },
+  "exportOptions": {
+    "exportToJSON": "Export to JSON",
+    "exportToDocx": "Export to Word",
+    "exportToPDF": "Export to PDF",
+    "exportToMarkdown": "Export to Markdown"
+  },
+  "toast": {
+    "success": "Success",
+    "error": "Error",
+    "cellAdded": "New {type} cell added",
+    "allCellsExecuted": "All cells executed successfully",
+    "exportSuccess": "Notebook exported successfully",
+    "exportFailed": "Failed to export notebook"
+  },
+  "cellTypes": {
+    "code": "code",
+    "markdown": "text",
+    "file": "file"
+  },
+  "settings": {
+    "title": "Settings",
+    "tabs": {
+      "general": "General",
+      "shortcuts": "Shortcuts",
+      "markdown": "Markdown"
+    },
+    "api": {
+      "title": "API Configuration",
+      "apiKey": "API Key",
+      "baseUrl": "Base URL",
+      "apiTimeout": "API Timeout (ms)",
+      "placeholders": {
+        "apiKey": "Enter your API key",
+        "baseUrl": "https://api.example.com/v1",
+        "apiTimeout": "30000"
+      }
+    },
+    "shortcuts": {
+      "title": "Keyboard Shortcuts",
+      "recordPrompt": "Click to record"
+    },
+    "markdown": {
+      "title": "Markdown Preferences",
+      "autoFormat": "Auto Format",
+      "autoFormatDesc": "Format markdown as you type",
+      "syntaxHighlighting": "Syntax Highlighting",
+      "syntaxHighlightingDesc": "Enable code syntax highlighting",
+      "lineNumbers": "Line Numbers",
+      "lineNumbersDesc": "Show line numbers in code blocks",
+      "tabSize": "Tab Size",
+      "tabSizeDesc": "Number of spaces for tabs"
+    }
+  },
+  "emptyState": {
+    "title": "Easy-notebook-EnvInsight",
+    "commandPlaceholder": "Type a command...",
+    "questionPlaceholder": "Ask anything about data science...",
+    "commandMode": "Command mode",
+    "questionMode": "Question mode",
+    "executeBtnText": "Execute",
+    "askBtnText": "Ask",
+    "dragDropHint": "Drop to Start Analysis...",
+    "selectDataFile": "Select data file to Begin",
+    "uploading": "Uploading...",
+    "orStartScratch": "or start from scratch [tmp file]",
+    "addText": "Add Text",
+    "addCode": "Add Code",
+    "uploadCSV": "Upload CSV File to Begin",
+    "analysisDisplay": "Each analysis step will be displayed in real-time, with fully editable code and visualizations",
+    "pressShiftEnter": "Press Shift + Enter for new line",
+    "uploadFiles": "Upload Files"
+  },
+  "problemDefine": {
+    "selectAnalysis": "Please select the type of analysis you want to perform, or describe the problem you want to solve:",
+    "customProblem": "Custom Problem Description",
+    "addBackground": "Would you like to add background info about the dataset?",
+    "skip": "Skip",
+    "addDatasetInfo": "Add dataset background info",
+    "enterDatasetInfo": "Enter dataset background info below.",
+    "datasetInputPlaceholder": "input the context of the dataset, such as the source of the data, the collection period, and the business rules...",
+    "cancel": "Cancel",
+    "submit": "Submit Information",
+    "infoCanceled": "Dataset information input canceled.",
+    "infoEmpty": "Dataset information cannot be empty.",
+    "infoAdded": "Dataset info added:",
+    "confirmSettings": "Please confirm your settings:\n- **Problem:** {problem}\n- **Target:** {target}\n{datasetInfo}\n\nIs this correct?",
+    "confirmAndStart": "Confirm and Start Analysis",
+    "adjustSettings": "Adjust Settings",
+    "whatAdjust": "What would you like to adjust?",
+    "changeType": "Change Analysis Type/Target",
+    "editDatasetInfo": "Edit Dataset Info",
+    "restartWorkflow": "Restart Workflow",
+    "selectNewType": "Select a new analysis type:",
+    "describePrompt": "Okay, please describe your problem.",
+    "problemInput": "Describe your problem or requirements...",
+    "followUpQuestion": "Ask follow-up questions about the results...",
+    "processing": "Processing...",
+    "selectOptions": "Please select from the options above"
+  }
+} 

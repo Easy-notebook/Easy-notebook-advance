@@ -285,24 +285,24 @@ const CSVPreviewApp = ({
                                 <tbody>
                                     <tr className="">
                                         <td className="pr-6 align-middle">
-                                            <span className="inline-flex items-center rounded-md bg-rose-600 px-2 py-1 text-xs font-medium text-white">Filename</span>
+                                            <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Filename</span>
                                         </td>
                                         <td className="pr-6 text-sm font-medium align-middle">{fileName}</td>
                                         <td className="pr-6 align-middle">
-                                            <span className="inline-flex items-center rounded-md bg-rose-600 px-2 py-1 text-xs font-medium text-white">Rows</span>
+                                            <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Rows</span>
                                         </td>
                                         <td className="pr-6 text-sm font-medium align-middle">{csvData.length}</td>
 
                                         <td className="pr-6 align-middle">
-                                            <span className="inline-flex items-center rounded-md bg-rose-600 px-2 py-1 text-xs font-medium text-white">Columns</span>
+                                            <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Columns</span>
                                         </td>
                                         <td className="pr-6 text-sm font-medium align-middle">{headers.length}</td>
                                         <td className="pr-6 align-middle">
-                                            <span className="inline-flex items-center rounded-md bg-rose-600 px-3 py-1 text-xs font-medium text-white">Size</span>
+                                            <span className="inline-flex items-center rounded-md bg-theme-600 px-3 py-1 text-xs font-medium text-white">Size</span>
                                         </td>
                                         <td className="pr-6 text-sm font-medium align-middle">{(fileSize / 1024).toFixed(2)} KB</td>
                                         <td className="pr-6 align-middle">
-                                            <span className="inline-flex items-center rounded-md bg-rose-600 px-2 py-1 text-xs font-medium text-white">Last edited</span>
+                                            <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Last edited</span>
                                         </td>
                                         <td className="pr-6 text-sm font-medium align-middle">{new Date(lastModified).toLocaleString()}</td>
                                     </tr>
@@ -333,25 +333,25 @@ const CSVPreviewApp = ({
                         <div className="border-b flex-shrink-0">
                             <div className="flex">
                                 <button
-                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'data' ? 'border-b-2 border-rose-600 text-rose-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'data' ? 'border-b-2 border-theme-600 text-theme-700' : 'text-gray-500 hover:text-gray-700'}`}
                                     onClick={() => setActiveTab('data')}
                                 >
                                     Data Table
                                 </button>
                                 <button
-                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'columns' ? 'border-b-2 border-rose-600 text-rose-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'columns' ? 'border-b-2 border-theme-600 text-theme-700' : 'text-gray-500 hover:text-gray-700'}`}
                                     onClick={() => setActiveTab('columns')}
                                 >
                                     Columns Overview
                                 </button>
                                 <button
-                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'analysis' ? 'border-b-2 border-rose-600 text-rose-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'analysis' ? 'border-b-2 border-theme-600 text-theme-700' : 'text-gray-500 hover:text-gray-700'}`}
                                     onClick={() => setActiveTab('analysis')}
                                 >
                                     Statistical Analysis
                                 </button>
                                 <button
-                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'detailed' ? 'border-b-2 border-rose-600 text-rose-700' : 'text-gray-500 hover:text-gray-700'}`}
+                                    className={`py-3 px-6 font-medium text-sm ${activeTab === 'detailed' ? 'border-b-2 border-theme-600 text-theme-700' : 'text-gray-500 hover:text-gray-700'}`}
                                     onClick={() => setActiveTab('detailed')}
                                 >
                                     Detailed Information
@@ -377,7 +377,7 @@ const CSVPreviewApp = ({
                                             <tbody className="bg-white divide-y divide-gray-200">
                                                 {headers.map((header, index) => (
                                                     <tr key={index} className="hover:bg-gray-50">
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-rose-700">{header}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-theme-700">{header}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                                             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${stats[header]?.dataType === 'numeric' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
                                                                 }`}>
@@ -506,7 +506,7 @@ const CSVPreviewApp = ({
                                             <tbody className="bg-white divide-y divide-gray-200">
                                                 {headers.map((header, index) => (
                                                     <tr key={index} className="hover:bg-gray-50">
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-rose-700">{header}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-theme-700">{header}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                                             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${stats[header]?.dataType === 'numeric' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
                                                                 }`}>
@@ -554,19 +554,19 @@ const CSVPreviewApp = ({
                                                     <tbody>
                                                         <tr className="h-8">
                                                             <td className="text-gray-700 pr-8">Total Data Points:</td>
-                                                            <td className="font-medium text-rose-600">{csvData.length * headers.length}</td>
+                                                            <td className="font-medium text-theme-600">{csvData.length * headers.length}</td>
                                                         </tr>
                                                         <tr className="h-8">
                                                             <td className="text-gray-700 pr-8">Numeric Columns:</td>
-                                                            <td className="font-medium text-rose-600">{Object.values(stats).filter(stat => stat.dataType === 'numeric').length}</td>
+                                                            <td className="font-medium text-theme-600">{Object.values(stats).filter(stat => stat.dataType === 'numeric').length}</td>
                                                         </tr>
                                                         <tr className="h-8">
                                                             <td className="text-gray-700 pr-8">Categorical Columns:</td>
-                                                            <td className="font-medium text-rose-600">{Object.values(stats).filter(stat => stat.dataType === 'categorical').length}</td>
+                                                            <td className="font-medium text-theme-600">{Object.values(stats).filter(stat => stat.dataType === 'categorical').length}</td>
                                                         </tr>
                                                         <tr className="h-8">
                                                             <td className="text-gray-700 pr-8">Current Page Size:</td>
-                                                            <td className="font-medium text-rose-600">{rowsPerPage} rows</td>
+                                                            <td className="font-medium text-theme-600">{rowsPerPage} rows</td>
                                                         </tr>
                                                     </tbody>
                                                 </table>

@@ -14,20 +14,20 @@ import FileTree from './FileExplorer';
 
 const StatusStyles = {
   colors: {
-    completed: 'text-rose-600 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
-    'in-progress': 'text-rose-800 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
+    completed: 'text-theme-600 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
+    'in-progress': 'text-theme-800 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
     pending: 'text-black bg-white/10 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)]'
   },
   steps: {
-    completed: 'bg-rose-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
-    'in-progress': 'bg-rose-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
+    completed: 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
+    'in-progress': 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
     pending: 'bg-gray-300/50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]'
   }
 };
 
 const StatusIcon = memo(({ status }) => {
   if (status === 'completed') {
-    return <CheckCircle2 size={16} className="text-rose-500" />;
+    return <CheckCircle2 size={16} className="text-theme-500" />;
   }
   return null;
 });
@@ -40,7 +40,7 @@ const StepButton = memo(({ step, isActive, onClick }) => (
       transition-all duration-300 text-base tracking-wide relative
       backdrop-blur-sm
       ${isActive
-        ? 'bg-white/10 text-rose-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
+        ? 'bg-white/10 text-theme-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
         : 'hover:bg-white/5 text-gray-700'}
     `}
   >
@@ -50,7 +50,7 @@ const StepButton = memo(({ step, isActive, onClick }) => (
     `} />
     <span className="font-normal">{step.title}</span>
     {isActive && (
-      <ArrowRight size={16} className="ml-auto text-rose-600" />
+      <ArrowRight size={16} className="ml-auto text-theme-600" />
     )}
   </button>
 ));
@@ -91,7 +91,7 @@ const PhaseSection = memo(({
             w-full flex items-center p-2.5 hover:bg-white/10 rounded-lg 
             transition-all duration-300 relative group backdrop-blur-sm
             ${isActive ? 'bg-white/10' : ''}
-            ${currentStepId === introStep.id ? 'border-2 border-rose-500 shadow-[0_2px_8px_rgba(0,0,0,0.1)]' : ''}
+            ${currentStepId === introStep.id ? 'border-2 border-theme-500 shadow-[0_2px_8px_rgba(0,0,0,0.1)]' : ''}
           `}
         >
           <div className={`
@@ -158,7 +158,7 @@ const MiniSidebar = memo(({ phases, currentPhaseId, onPhaseClick }) => (
             className={`
               w-full p-2 flex items-center justify-center
               hover:bg-white/10 transition-all duration-300
-              ${currentPhaseId === phase.id ? 'text-rose-800 bg-white/10' : 'text-gray-400'}
+              ${currentPhaseId === phase.id ? 'text-theme-800 bg-white/10' : 'text-gray-400'}
             `}
             title={phase.title}
           >
@@ -171,8 +171,8 @@ const MiniSidebar = memo(({ phases, currentPhaseId, onPhaseClick }) => (
               <IconComponent size={16} />
               {currentPhaseId === phase.id && (
                 <div className="absolute -top-1 -right-1 w-4 h-4">
-                  <div className="w-4 h-4 rounded-full bg-rose-800 animate-ping" />
-                  <div className="absolute inset-0 w-4 h-4 rounded-full bg-rose-800" />
+                  <div className="w-4 h-4 rounded-full bg-theme-800 animate-ping" />
+                  <div className="absolute inset-0 w-4 h-4 rounded-full bg-theme-800" />
                 </div>
               )}
             </div>
@@ -292,7 +292,7 @@ const OutlineSidebar = ({
               onClick={() => setActiveTab('outline')}
               className={`
                 px-3 py-1 rounded
-                ${activeTab === 'outline' ? 'bg-white text-rose-800 font-semibold'
+                ${activeTab === 'outline' ? 'bg-white text-theme-800 font-semibold'
                   : 'text-gray-600 hover:bg-white/10'}
               `}
             >
@@ -302,7 +302,7 @@ const OutlineSidebar = ({
               onClick={() => setActiveTab('file')}
               className={`
                 px-3 py-1 rounded
-                ${activeTab === 'file' ? 'bg-white text-rose-800 font-semibold'
+                ${activeTab === 'file' ? 'bg-white text-theme-800 font-semibold'
                   : 'text-gray-600 hover:bg-white/10'}
               `}
             >
@@ -348,7 +348,7 @@ const OutlineSidebar = ({
           <div className="py-2.5">
             {tasks.map((task) => (
               <div key={task.id} className="mb-5">
-                <h2 className="pl-7 px-3 text-lg font-semibold text-rose-800 mb-3">
+                <h2 className="pl-7 px-3 text-lg font-semibold text-theme-800 mb-3">
                   {task.title}
                 </h2>
                 {task.phases.map((phase) => (
@@ -375,15 +375,15 @@ const OutlineSidebar = ({
       {viewMode === 'step' && currentPhaseId ? (
         <div className="w-full h-20 pl-7 flex items-center border-t border-gray-200 relative">
           <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
-          <div className="w-4 h-4 rounded-full bg-rose-800 mr-4 animate-pulse shadow-lg" />
-          <span className="font-medium tracking-wide text-rose-800 relative text-base">
+          <div className="w-4 h-4 rounded-full bg-theme-800 mr-4 animate-pulse shadow-lg" />
+          <span className="font-medium tracking-wide text-theme-800 relative text-base">
             {tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.title || ''}
           </span>
         </div>
       ) : (
         activeTab === 'file' && isHovered ? (
           <div className="w-full h-10 pl-7 flex items-center justify-start border-t border-gray-200 relative">
-            <span className="font-medium tracking-wide text-rose-800 relative text-base truncate overflow-hidden whitespace-nowrap">
+            <span className="font-medium tracking-wide text-theme-800 relative text-base truncate overflow-hidden whitespace-nowrap">
               {'drop files to upload'}
             </span>
           </div>

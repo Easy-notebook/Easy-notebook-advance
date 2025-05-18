@@ -88,11 +88,11 @@ const ImageDisplay = memo(({
                 <tbody>
                     <tr className="z-100 bg-white bg-opacity-20 backdrop-blur-lg">
                         <td className="pr-6 align-middle">
-                            <span className="inline-flex items-center rounded-md bg-rose-600 px-2 py-1 text-xs font-medium text-white">Filename</span>
+                            <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Filename</span>
                         </td>
                         <td className="pr-6 text-sm font-medium align-middle">{fileName}</td>
                         <td className="pr-6 align-middle">
-                            <span className="inline-flex items-center rounded-md bg-rose-600 px-2 py-1 text-xs font-medium text-white">Last edited</span>
+                            <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Last edited</span>
                         </td>
                         <td className="pr-6 text-sm font-medium align-middle">{new Date(lastModified).toLocaleString()}</td>
                     </tr>

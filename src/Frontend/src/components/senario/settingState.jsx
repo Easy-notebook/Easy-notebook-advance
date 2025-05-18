@@ -1,13 +1,14 @@
 // components/SettingsPage.js
 import { useState, useEffect, useCallback } from 'react';
 import { Settings, Settings2, Key, FileText, Keyboard } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import useSettingsStore, { useSettings, useSettingsOpen} from '../../store/settingsStore';
 
 // Base components
 const Input = ({ className = '', ...props }) => (
     <input
         className={`w-full px-4 py-3 border border-gray-300 rounded-md text-lg
-        focus:outline-none focus:ring-2 focus:ring-rose-500 ${className}`}
+        focus:outline-none focus:ring-2 focus:ring-theme-500 ${className}`}
         {...props}
     />
 );
@@ -19,8 +20,8 @@ const Switch = ({ checked, onCheckedChange, className = '' }) => (
         aria-checked={checked}
         onClick={() => onCheckedChange(!checked)}
         className={`relative inline-flex h-8 w-14 items-center rounded-full 
-        ${checked ? 'bg-rose-500' : 'bg-gray-300'} 
-        transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2
+        ${checked ? 'bg-theme-500' : 'bg-gray-300'} 
+        transition-colors focus:outline-none focus:ring-2 focus:ring-theme-500 focus:ring-offset-2
         ${className}`}
     >
         <span
@@ -31,6 +32,7 @@ const Switch = ({ checked, onCheckedChange, className = '' }) => (
 );
 
 const SettingsPage = () => {
+    const { t } = useTranslation();
     const settings = useSettings();
     const settingsOpen = useSettingsOpen();
     const store = useSettingsStore();
@@ -79,7 +81,7 @@ const SettingsPage = () => {
             onClick={() => setActiveTab(id)}
             className={`flex items-center space-x-2 px-4 py-3 font-medium rounded-3xl 
         transition-colors ${activeTab === id
-                    ? 'bg-rose-50 text-rose-600'
+                    ? 'bg-theme-50 text-theme-600'
                     : 'text-gray-600 hover:bg-gray-100'}`}
         >
             <Icon className="w-5 h-5" />
@@ -152,9 +154,9 @@ const SettingsPage = () => {
                         type="text"
                         value={isRecording ? currentKeys.join(' + ') : value}
                         className={`w-52 text-right font-mono text-base cursor-pointer
-            ${isRecording ? 'bg-gray-50 border-rose-500' : ''}`}
+            ${isRecording ? 'bg-gray-50 border-theme-500' : ''}`}
                         onClick={handleClick}
-                        placeholder="Click to record"
+                        placeholder={t('settings.shortcuts.recordPrompt')}
                     />
                 </div>
             </div>
@@ -167,37 +169,37 @@ const SettingsPage = () => {
             <div className="p-2">
                 <h2 className="text-xl font-bold mb-4 flex items-center space-x-2">
                     <Key className="w-5 h-5" />
-                    <span>API Configuration</span>
+                    <span>{t('settings.api.title')}</span>
                 </h2>
                 <div className="space-y-5">
                     <div>
-                        <label className="block text-lg font-medium text-gray-700 mb-2">API Key</label>
+                        <label className="block text-lg font-medium text-gray-700 mb-2">{t('settings.api.apiKey')}</label>
                         <Input
                             type="password"
                             name="apiKey"
                             value={settings.apiKey}
                             onChange={handleApiSettingsChange}
-                            placeholder="Enter your API key"
+                            placeholder={t('settings.api.placeholders.apiKey')}
                         />
                     </div>
                     <div>
-                        <label className="block text-lg font-medium text-gray-700 mb-2">Base URL</label>
+                        <label className="block text-lg font-medium text-gray-700 mb-2">{t('settings.api.baseUrl')}</label>
                         <Input
                             type="text"
                             name="baseUrl"
                             value={settings.baseUrl}
                             onChange={handleApiSettingsChange}
-                            placeholder="https://api.example.com/v1"
+                            placeholder={t('settings.api.placeholders.baseUrl')}
                         />
                     </div>
                     <div>
-                        <label className="block text-lg font-medium text-gray-700 mb-2">API Timeout (ms)</label>
+                        <label className="block text-lg font-medium text-gray-700 mb-2">{t('settings.api.apiTimeout')}</label>
                         <Input
                             type="number"
                             name="apiTimeout"
                             value={settings.apiTimeout}
                             onChange={handleApiSettingsChange}
-                            placeholder="30000"
+                            placeholder={t('settings.api.placeholders.apiTimeout')}
                         />
                     </div>
                 </div>
@@ -207,7 +209,7 @@ const SettingsPage = () => {
             <div className="p-2">
                 <h2 className="text-xl font-bold mb-4 flex items-center space-x-2">
                     <Keyboard className="w-6 h-6" />
-                    <span>Keyboard Shortcuts</span>
+                    <span>{t('settings.shortcuts.title')}</span>
                 </h2>
                 <div className="space-y-5">
                     {Object.entries(settings.shortcuts).map(([key, value]) => (
@@ -228,20 +230,17 @@ const SettingsPage = () => {
             <div className="p-2">
                 <h2 className="text-xl font-bold mb-4 flex items-center space-x-2">
                     <FileText className="w-6 h-6" />
-                    <span>Markdown Preferences</span>
+                    <span>{t('settings.markdown.title')}</span>
                 </h2>
                 <div className="space-y-5">
                     {Object.entries(settings.markdownPreferences).map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between">
                             <div>
                                 <h3 className="text-lg font-medium text-gray-700">
-                                    {key.replace(/([A-Z])/g, ' $1').trim()}
+                                    {t(`settings.markdown.${key}`)}
                                 </h3>
                                 <p className="text-base text-gray-500">
-                                    {key === 'autoFormat' && 'Format markdown as you type'}
-                                    {key === 'syntaxHighlighting' && 'Enable code syntax highlighting'}
-                                    {key === 'lineNumbers' && 'Show line numbers in code blocks'}
-                                    {key === 'tabSize' && 'Number of spaces for tabs'}
+                                    {t(`settings.markdown.${key}Desc`)}
                                 </p>
                             </div>
                             {typeof value === 'boolean' ? (
@@ -276,7 +275,7 @@ const SettingsPage = () => {
                             <div className="flex items-center justify-between px-6 py-4">
                                 <div className="flex items-center space-x-2">
                                     <Settings2 className="w-5 h-5 text-gray-600" />
-                                    <h1 className="text-xl font-bold text-gray-800">Tweak</h1>
+                                    <h1 className="text-xl font-bold text-gray-800">{t('settings.title')}</h1>
                                 </div>
                                 <button
                                     onClick={store.closeSettings}
@@ -299,9 +298,9 @@ const SettingsPage = () => {
                             </div>
 
                             <div className="px-6 py-2 flex space-x-2">
-                                <TabButton id="general" label="General" icon={Settings} />
-                                <TabButton id="shortcuts" label="Shortcuts" icon={Keyboard} />
-                                <TabButton id="markdown" label="Markdown" icon={FileText} />
+                                <TabButton id="general" label={t('settings.tabs.general')} icon={Settings} />
+                                <TabButton id="shortcuts" label={t('settings.tabs.shortcuts')} icon={Keyboard} />
+                                <TabButton id="markdown" label={t('settings.tabs.markdown')} icon={FileText} />
                             </div>
                         </div>
 

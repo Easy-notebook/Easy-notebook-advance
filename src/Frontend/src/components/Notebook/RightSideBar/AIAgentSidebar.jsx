@@ -58,7 +58,7 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
       {exceedsMaxLines && (
         <button
           onClick={toggleExpand}
-          className="mt-2 text-xs font-medium text-rose-600 hover:text-rose-800 transition-colors duration-300"
+          className="mt-2 text-xs font-medium text-theme-600 hover:text-theme-800 transition-colors duration-300"
         >
           {isExpanded ? 'Collapse Details' : 'View Details'}
         </button>
@@ -72,7 +72,7 @@ const getEventLabel = (type) => {
   const labelConfig = {
     [EVENT_TYPES.USER_ASK_QUESTION]: {
       text: 'Question',
-      color: 'bg-rose-100 text-rose-800'
+      color: 'bg-theme-100 text-theme-800'
     },
     [EVENT_TYPES.USER_NEW_INSTRUCTION]: {
       text: 'Instruction',
@@ -112,7 +112,7 @@ const getEventLabel = (type) => {
     },
     [EVENT_TYPES.AI_REPLYING_QUESTION]: {
       text: 'Reply',
-      color: 'bg-rose-100 text-rose-800'
+      color: 'bg-theme-100 text-theme-800'
     },
     [EVENT_TYPES.AI_FIXING_CODE]: {
       text: 'Debug',
@@ -134,7 +134,7 @@ const getEventLabel = (type) => {
 
   return labelConfig[type] || {
     text: 'Event',
-    color: 'bg-rose-100 text-rose-800'
+    color: 'bg-theme-100 text-theme-800'
   };
 };
 
@@ -142,7 +142,7 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
   const iconConfig = {
     [EVENT_TYPES.USER_ASK_QUESTION]: {
       Icon: MessageSquare,
-      color: 'text-rose-600'
+      color: 'text-theme-600'
     },
     [EVENT_TYPES.USER_NEW_INSTRUCTION]: {
       Icon: Command,
@@ -182,7 +182,7 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
     },
     [EVENT_TYPES.AI_REPLYING_QUESTION]: {
       Icon: MessageCircle,
-      color: 'text-rose-800'
+      color: 'text-theme-800'
     },
     [EVENT_TYPES.AI_FIXING_CODE]: {
       Icon: Wrench,
@@ -202,7 +202,7 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
     }
   };
 
-  const { Icon = ShieldCheck, color = 'text-rose-800' } = iconConfig[type] || {};
+  const { Icon = ShieldCheck, color = 'text-theme-800' } = iconConfig[type] || {};
 
   return (
     <div className="relative">
@@ -225,7 +225,7 @@ const ViewSwitcher = () => {
             className={`
               px-5 py-2 rounded-md transition-all duration-300 flex items-center gap-2
               ${activeView === view
-                ? 'bg-white text-rose-800 font-semibold'
+                ? 'bg-white text-theme-800 font-semibold'
                 : 'text-gray-600 hover:bg-white/10'
               }
             `}
@@ -352,7 +352,7 @@ const AIAgentSidebar = () => {
         className={`
           p-4 relative transition-all duration-300
           ${index === 0 && !isOriginal
-            ? 'bg-white/10 rounded-lg ring-1 ring-rose-200'
+            ? 'bg-white/10 rounded-lg ring-1 ring-theme-200'
             : 'hover:bg-white/10 hover:rounded-lg hover:shadow-sm'
           }
         `}
@@ -402,7 +402,7 @@ const AIAgentSidebar = () => {
         {action.relatedQAIds?.length > 0 && (
           <button
             onClick={() => handleJumpToQA(action.relatedQAIds[0])}
-            className="flex items-center gap-1 text-xs text-rose-600 hover:text-rose-800 mt-2 transition-colors duration-300"
+            className="flex items-center gap-1 text-xs text-theme-600 hover:text-theme-800 mt-2 transition-colors duration-300"
           >
             <MessageSquare size={16} />
             <span>Linked to Q&A {action.relatedQAIds.join(', ')}</span>
@@ -471,7 +471,7 @@ const AIAgentSidebar = () => {
                     className={`
                       relative p-4 rounded-lg shadow-sm max-w-md transition-all duration-300
                       ${index === 0
-                        ? 'bg-white/10 ring-1 ring-rose-200'
+                        ? 'bg-white/10 ring-1 ring-theme-200'
                         : qa.type === 'user'
                           ? 'bg-white/10 text-left hover:bg-white/10'
                           : 'bg-white/10 text-right hover:bg-white/10'
@@ -503,7 +503,7 @@ const AIAgentSidebar = () => {
           {isLoading && (
             <div
               className="
-                flex items-center justify-center gap-3 text-rose-700 p-4 my-4 
+                flex items-center justify-center gap-3 text-theme-700 p-4 my-4 
                 bg-white/10 rounded-lg animate-pulse transition-all duration-300
               "
             >

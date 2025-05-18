@@ -235,8 +235,8 @@ const FileTreeItem = memo(({
                 <div className={`mr-2 ${item.type !== 'directory' ? 'ml-4' : ''}`}>
                     {item.type === 'directory'
                         ? (isExpanded
-                            ? <FolderOpen size={20} className="text-rose-800" />
-                            : <Folder size={20} className="text-rose-800" />
+                            ? <FolderOpen size={20} className="text-theme-800" />
+                            : <Folder size={20} className="text-theme-800" />
                         )
                         : getFileIcon(item.name)
                     }
@@ -244,7 +244,7 @@ const FileTreeItem = memo(({
 
                 {/* File or folder name */}
                 <span
-                    className={`truncate text-sm font-bold ${item.type === 'directory' ? 'text-rose-800' : ''}`}
+                    className={`truncate text-sm font-bold ${item.type === 'directory' ? 'text-theme-800' : ''}`}
                     title={item.name}
                 >
                     {item.name}
@@ -646,10 +646,10 @@ const FileTree = memo(({ notebookId, projectName }) => {
             {/* Upload status overlay */}
             {uploadState.uploading && (
                 <div className="absolute inset-0 bg-white bg-opacity-80 z-10 flex flex-col justify-center items-center">
-                    <div className="mb-2 text-rose-800">Uploading files...</div>
+                    <div className="mb-2 text-theme-800">Uploading files...</div>
                     <div className="w-64 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-rose-800 rounded-full"
+                            className="h-full bg-theme-800 rounded-full"
                             style={{ width: `${uploadState.progress}%` }}
                         ></div>
                     </div>
@@ -666,17 +666,17 @@ const FileTree = memo(({ notebookId, projectName }) => {
             {/* Loading indicator for preview operations */}
             {previewLoading && (
                 <div className="absolute inset-0 bg-white bg-opacity-60 z-10 flex items-center justify-center">
-                    <div className="animate-pulse text-rose-800">Loading preview...</div>
+                    <div className="animate-pulse text-theme-800">Loading preview...</div>
                 </div>
             )}
 
             {/* File tree header with refresh button */}
             {projectName && (<div className="flex justify-between items-center px-3 mb-3 ml-4 mt-2">
-                <h2 className="text-lg font-semibold text-rose-800">
+                <h2 className="text-lg font-semibold text-theme-800">
                     {projectName}
                 </h2>
                 <button
-                    className="p-1 rounded hover:bg-gray-200 text-rose-800"
+                    className="p-1 rounded hover:bg-gray-200 text-theme-800"
                     onClick={fetchFileListWrapper}
                     title="Refresh file list"
                 >
@@ -686,7 +686,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
             {/* Drop zone indicator */}
             {draggedOver && (
-                <div className="absolute inset-0 border-2 border-dashed border-rose-500 bg-rose-100 bg-opacity-20 z-0"></div>
+                <div className="absolute inset-0 border-2 border-dashed border-theme-500 bg-theme-100 bg-opacity-20 z-0"></div>
             )}
 
             {/* File tree content */}

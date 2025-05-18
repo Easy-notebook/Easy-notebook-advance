@@ -545,7 +545,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                                     useStore.getState().clearAllOutputs();
                                     useCodeStore.getState().restartKernel();
                                 }}
-                                className="p-2 hover:bg-rose-600 rounded"
+                                className="p-2 hover:bg-theme-600 rounded"
                                 title="Restart kernel"
                             >
                                 <RefreshCw className="w-4 h-4" />
@@ -571,12 +571,12 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                         </div>
                         {/* 右侧：AI Debug / Tooltip */}
                         <div className="flex items-center gap-2 relative">
-                            {cell.description && <button className="peer p-2 text-black rounded-md hover:bg-rose-100">
+                            {cell.description && <button className="peer p-2 text-black rounded-md hover:bg-theme-100">
                                 <InfoIcon className="w-4 h-4" />
                             </button>}
                             <div className="absolute top-full right-0 px-5 py-3 rounded-lg opacity-0 peer-hover:opacity-100 transition-opacity w-[320px] break-words invisible peer-hover:visible z-50">
                                 <div className="absolute inset-0 rounded-lg shadow-lg">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-rose-100/50 via-purple-100/50 to-pink-100/50 animate-gradient" />
+                                    <div className="absolute inset-0 bg-gradient-to-r from-theme-100/50 via-purple-100/50 to-pink-100/50 animate-gradient" />
                                 </div>
                                 <div className="relative z-10">
                                     <ReactMarkdown className="text-[15px] leading-relaxed tracking-wide text-gray-800">
@@ -674,7 +674,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                                                     setIsUserToggled(true);
                                                     setIsExpanded(true);
                                                 }}
-                                                className="px-4 py-1.5 text-sm bg-gray-900/90 text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-rose-500 flex items-center gap-1"
+                                                className="px-4 py-1.5 text-sm bg-gray-900/90 text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
                                                 title="Expand"
                                             >
                                                 <span>Expand</span>
@@ -687,7 +687,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                                                     setIsExpanded(false);
                                                     handleCollapse();
                                                 }}
-                                                className="px-4 py-1.5 text-sm bg-gray-900/90 text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-rose-500 flex items-center gap-1"
+                                                className="px-4 py-1.5 text-sm bg-gray-900/90 text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
                                                 title="Collapse"
                                             >
                                                 <span>Collapse</span>

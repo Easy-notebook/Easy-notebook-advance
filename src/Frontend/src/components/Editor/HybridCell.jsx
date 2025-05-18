@@ -69,7 +69,7 @@ const HybridCell = ({ cell, onDelete }) => {
             {/* Loading animation background */}
 
             <div className="absolute inset-0 rounded-lg">
-                <div className="absolute inset-0 bg-gradient-to-r from-rose-100 via-purple-100 to-pink-100 animate-pulse"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-theme-100 via-purple-100 to-pink-100 animate-pulse"></div>
                 <div className="absolute inset-0 bg-white/50"></div>
             </div>
 
@@ -84,7 +84,7 @@ const HybridCell = ({ cell, onDelete }) => {
                         {/* {contentType.type === 'code' && cell.type !== 'code' && (
                             <button
                                 onClick={handleConvertToCode}
-                                className="p-2 bg-rose-500 text-white rounded-md hover:bg-rose-700 transition-colors"
+                                className="p-2 bg-theme-500 text-white rounded-md hover:bg-theme-700 transition-colors"
                                 title="Convert to Code Cell"
                             >
                                 <Code2 className="w-4 h-4" />
@@ -108,7 +108,7 @@ const HybridCell = ({ cell, onDelete }) => {
                         <div className="border rounded-md overflow-hidden">
                             <div className="bg-gray-100 px-4 py-2 text-sm text-gray-700 border-b flex justify-between items-center">
                                 <span>{contentType.language}</span>
-                                {isCurrentCell && <span className="text-xs text-rose-600">Current Cell</span>}
+                                {isCurrentCell && <span className="text-xs text-theme-600">Current Cell</span>}
                             </div>
                             <CodeMirror
                                 value={contentType.content}

@@ -678,7 +678,7 @@ const StageTemplate = ({ config, onComplete }) => {
                                         transition-colors whitespace-nowrap 
                                         focus:outline-none
                                         ${currentStepIndex === index
-                                                ? 'text-rose-600 border-b-2 border-rose-500 bg-rose-50/50'
+                                                ? 'text-theme-600 border-b-2 border-theme-500 bg-theme-50/50'
                                                 : 'text-gray-600 hover:bg-gray-100'
                                             } 
                                 ${!isCompleted ? 'opacity-50 cursor-not-allowed' : ''}
@@ -692,7 +692,7 @@ const StageTemplate = ({ config, onComplete }) => {
                                             flex items-center justify-center 
                                             rounded-full mr-2
                                             ${currentStepIndex === index
-                                                    ? 'bg-rose-100 text-rose-600'
+                                                    ? 'bg-theme-100 text-theme-600'
                                                     : 'bg-gray-200 text-gray-600'
                                                 }
                                         `}
@@ -757,11 +757,11 @@ const StageTemplate = ({ config, onComplete }) => {
                                     )}
                                     <button
                                         onClick={handleContinue}
-                                        className="bg-white bg-opacity-20 backdrop-blur-lg rounded-full px-5 py-2.5 shadow-lg text-gray-700 hover:text-rose-700 transition-all duration-300 flex items-center text-sm font-medium"
+                                        className="bg-white bg-opacity-20 backdrop-blur-lg rounded-full px-5 py-2.5 shadow-lg text-gray-700 hover:text-theme-700 transition-all duration-300 flex items-center text-sm font-medium"
                                     >
                                         {onComplete ? 'Continue to Next Stage' : `End ${config.stageTitle || 'Current Stage'}`}
                                         {continueCountdown > 0 && !isReturnVisit && (
-                                            <span className="ml-2 bg-rose-500 bg-opacity-80 px-2 py-0.5 rounded-full text-white text-xs">
+                                            <span className="ml-2 bg-theme-500 bg-opacity-80 px-2 py-0.5 rounded-full text-white text-xs">
                                                 {continueCountdown}s
                                             </span>
                                         )}
