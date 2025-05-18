@@ -49,6 +49,17 @@ const RESERVED_SHORTCUTS = new Set([
     'Ctrl+X',
     'Ctrl+A',
     'Ctrl+Z',
+    'Ctrl+Y',
+    'Ctrl+F',
+    'Ctrl+P',
+    'Ctrl+S',
+    'Ctrl+O',
+    'Ctrl+W',
+    'Ctrl+T',
+    'Ctrl+N',
+    'Alt+Tab',
+    'Alt+F4',
+    'F5',
 ]);
 
 // Initial settings with default values
@@ -209,7 +220,7 @@ const isValidUrl = (url) => {
 
 const validateShortcut = (shortcut, existingShortcuts) => {
     const keyPattern = /^(Ctrl|Alt|Shift|Meta)$/;
-    const finalKeyPattern = /^[A-Za-z0-9]$/;
+    const finalKeyPattern = /^([A-Za-z0-9]|F[1-9]|F1[0-2]|Enter|Space|Escape|Delete|Tab|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown)$/;
     const parts = shortcut.split('+').map(p => p.trim());
 
     if (parts.length > MAX_SHORTCUT_KEYS || parts.length < 2) {

@@ -22,6 +22,7 @@ import {
 } from '../../../utils/fileUtils';
 import usePreviewStore from '../../../store/previewStore';
 import useStore from '../../../store/notebookStore';
+import { useTranslation } from 'react-i18next';
 
 // Initialize file type icons
 initializeFileTypeIcons();
@@ -289,6 +290,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
         progress: 0,
         error: null
     });
+    const { t } = useTranslation();
 
     // Access preview store
     const {error: previewError, isLoading: previewLoading } = usePreviewStore();
@@ -618,7 +620,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
     if (isLoading && !files) {
         return (
             <div className="py-4 px-3 flex justify-center items-center h-full">
-                <div className="animate-pulse text-gray-500">Loading files...</div>
+                <div className="animate-pulse text-gray-500">{t('LeftSideBar.loadingFiles')}</div>
             </div>
         );
     }
@@ -638,7 +640,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
             {(draggedOver || uploadState.uploading) ? null : (
                 <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center opacity-0 hover:opacity-20 transition-opacity duration-300 bg-gray-100 border border-dashed border-gray-300">
                     <div className="text-center">
-                        <p className="text-gray-500">Drag and drop files here to upload</p>
+                        <p className="text-gray-500">{t('LeftSideBar.dragFiles')}</p>
                     </div>
                 </div>
             )}
@@ -646,7 +648,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
             {/* Upload status overlay */}
             {uploadState.uploading && (
                 <div className="absolute inset-0 bg-white bg-opacity-80 z-10 flex flex-col justify-center items-center">
-                    <div className="mb-2 text-theme-800">Uploading files...</div>
+                    <div className="mb-2 text-theme-800">{t('LeftSideBar.uploadingFiles')}</div>
                     <div className="w-64 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div
                             className="h-full bg-theme-800 rounded-full"
@@ -666,7 +668,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
             {/* Loading indicator for preview operations */}
             {previewLoading && (
                 <div className="absolute inset-0 bg-white bg-opacity-60 z-10 flex items-center justify-center">
-                    <div className="animate-pulse text-theme-800">Loading preview...</div>
+                    <div className="animate-pulse text-theme-800">{t('LeftSideBar.loadingPreview')}</div>
                 </div>
             )}
 
@@ -692,7 +694,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
             {/* File tree content */}
             {fileTree.length === 0 ? (
                 <div className="flex justify-center items-center h-full w-full">
-                    <p className="text-gray-500">Drag and drop files here to upload.</p>
+                    <p className="text-gray-500">{t('LeftSideBar.dragFiles')}</p>
                 </div>
             ) : (
                 <div>

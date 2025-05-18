@@ -16,6 +16,14 @@
     "topOfAll": "Top of ALL",
     "endOfAll": "End of ALL"
   },
+  "LeftSideBar": {
+    "outline": "Outline",
+    "files": "Files",
+    "dropFiles": "Drop files to upload",
+    "dragFiles": "Drag files here or click to upload",
+    "loadingPreview": "Loading preview...",
+    "uploadingFiles":"Files uploading..."
+  },
   "fileOperations": {
     "runAll": "Run All",
     "running": "Running...",
@@ -53,6 +61,7 @@
       "apiKey": "API Key",
       "baseUrl": "Base URL",
       "apiTimeout": "API Timeout (ms)",
+      "save": "Save",
       "placeholders": {
         "apiKey": "Enter your API key",
         "baseUrl": "https://api.example.com/v1",
@@ -61,7 +70,14 @@
     },
     "shortcuts": {
       "title": "Keyboard Shortcuts",
-      "recordPrompt": "Click to record"
+      "recordPrompt": "Click to record",
+      "actions": {
+        "newCell": "New Cell",
+        "runCell": "Run Cell",
+        "deleteCell": "Delete Cell",
+        "formatCode": "Format Code",
+        "saveFile": "Save File"
+      }
     },
     "markdown": {
       "title": "Markdown Preferences",

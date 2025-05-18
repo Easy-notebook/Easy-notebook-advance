@@ -39,16 +39,63 @@ const SettingsPage = () => {
 
     const [activeTab, setActiveTab] = useState('general');
     const [recordingShortcut, setRecordingShortcut] = useState(null);
+    const [shortcutError, setShortcutError] = useState(null);
+    const [apiSettingsState, setApiSettingsState] = useState({
+        apiKey: '',
+        baseUrl: settings.baseUrl,
+        apiTimeout: settings.apiTimeout
+    });
+    const [apiError, setApiError] = useState(null);
+
+    // 组件加载时初始化API设置状态
+    useEffect(() => {
+        setApiSettingsState({
+            apiKey: '', // 不显示已保存的加密密钥
+            baseUrl: settings.baseUrl,
+            apiTimeout: settings.apiTimeout
+        });
+    }, [settings.baseUrl, settings.apiTimeout]);
 
     // Handlers
     const handleApiSettingsChange = async (e) => {
         const { name, value } = e.target;
+        
+        // 更新本地状态
+        setApiSettingsState(prev => ({
+            ...prev,
+            [name]: value
+        }));
+
+        // 如果不是API密钥，直接更新
+        if (name !== 'apiKey') {
+            try {
+                setApiError(null);
+                await store.updateApiSettings({
+                    [name]: value
+                });
+            } catch (error) {
+                console.error('Failed to update API settings:', error);
+                setApiError(error.message);
+            }
+        }
+    };
+
+    const handleApiKeySave = async () => {
         try {
-            await store.updateApiSettings({
-                [name]: value
-            });
+            setApiError(null);
+            if (apiSettingsState.apiKey) {
+                await store.updateApiSettings({
+                    apiKey: apiSettingsState.apiKey
+                });
+                // 保存成功后清空输入框
+                setApiSettingsState(prev => ({
+                    ...prev,
+                    apiKey: ''
+                }));
+            }
         } catch (error) {
-            console.error('Failed to update API settings:', error);
+            console.error('Failed to update API key:', error);
+            setApiError(error.message);
         }
     };
 
@@ -60,9 +107,16 @@ const SettingsPage = () => {
 
     const handleShortcutChange = (key, value) => {
         try {
+            setShortcutError(null);
             store.updateShortcut(key, value);
         } catch (error) {
             console.error('Failed to update shortcut:', error);
+            setShortcutError({
+                key,
+                message: error.message
+            });
+            // 重置为之前的值
+            setTimeout(() => setShortcutError(null), 3000);
         }
     };
 
@@ -93,6 +147,7 @@ const SettingsPage = () => {
     const ShortcutInput = ({ label, shortcutKey, value, recordingShortcut, onRecordingChange, onShortcutChange }) => {
         const [currentKeys, setCurrentKeys] = useState([]);
         const isRecording = recordingShortcut === shortcutKey;
+        const hasError = shortcutError && shortcutError.key === shortcutKey;
 
         const handleKeyDown = useCallback((e) => {
             e.preventDefault();
@@ -105,7 +160,12 @@ const SettingsPage = () => {
             if (e.metaKey) keys.add('Meta');
 
             if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-                keys.add(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+                let keyName = e.key;
+                
+                if (e.key === ' ') keyName = 'Space';
+                else if (e.key.length === 1) keyName = e.key.toUpperCase();
+                
+                keys.add(keyName);
             }
             setCurrentKeys(Array.from(keys));
         }, [isRecording]);
@@ -115,7 +175,11 @@ const SettingsPage = () => {
             if (!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
                 onRecordingChange(null);
                 if (currentKeys.length > 0) {
-                    onShortcutChange(shortcutKey, currentKeys.join(' + '));
+                    try {
+                        onShortcutChange(shortcutKey, currentKeys.join(' + '));
+                    } catch (error) {
+                        console.error('Invalid shortcut:', error);
+                    }
                 }
                 setCurrentKeys([]);
             }
@@ -154,10 +218,16 @@ const SettingsPage = () => {
                         type="text"
                         value={isRecording ? currentKeys.join(' + ') : value}
                         className={`w-52 text-right font-mono text-base cursor-pointer
-            ${isRecording ? 'bg-gray-50 border-theme-500' : ''}`}
+            ${isRecording ? 'bg-gray-50 border-theme-500' : ''}
+            ${hasError ? 'border-red-500' : ''}`}
                         onClick={handleClick}
                         placeholder={t('settings.shortcuts.recordPrompt')}
                     />
+                    {hasError && (
+                        <p className="absolute right-0 text-xs text-red-500 mt-1">
+                            {shortcutError.message}
+                        </p>
+                    )}
                 </div>
             </div>
         );
@@ -174,20 +244,35 @@ const SettingsPage = () => {
                 <div className="space-y-5">
                     <div>
                         <label className="block text-lg font-medium text-gray-700 mb-2">{t('settings.api.apiKey')}</label>
-                        <Input
-                            type="password"
-                            name="apiKey"
-                            value={settings.apiKey}
-                            onChange={handleApiSettingsChange}
-                            placeholder={t('settings.api.placeholders.apiKey')}
-                        />
+                        <div className="flex items-center space-x-2">
+                            <Input
+                                type="password"
+                                name="apiKey"
+                                value={apiSettingsState.apiKey}
+                                onChange={handleApiSettingsChange}
+                                placeholder={t('settings.api.placeholders.apiKey')}
+                                className={apiError ? 'border-red-500' : ''}
+                            />
+                            <button
+                                onClick={handleApiKeySave}
+                                className="px-4 py-3 bg-theme-500 text-white rounded-md hover:bg-theme-600"
+                            >
+                                {t('settings.api.save')}
+                            </button>
+                        </div>
+                        {apiError && (
+                            <p className="text-sm text-red-500 mt-1">{apiError}</p>
+                        )}
+                        {settings.apiKey && (
+                            <p className="text-sm text-green-600 mt-1">{t('settings.api.keyStored')}</p>
+                        )}
                     </div>
                     <div>
                         <label className="block text-lg font-medium text-gray-700 mb-2">{t('settings.api.baseUrl')}</label>
                         <Input
                             type="text"
                             name="baseUrl"
-                            value={settings.baseUrl}
+                            value={apiSettingsState.baseUrl}
                             onChange={handleApiSettingsChange}
                             placeholder={t('settings.api.placeholders.baseUrl')}
                         />
@@ -197,7 +282,7 @@ const SettingsPage = () => {
                         <Input
                             type="number"
                             name="apiTimeout"
-                            value={settings.apiTimeout}
+                            value={apiSettingsState.apiTimeout}
                             onChange={handleApiSettingsChange}
                             placeholder={t('settings.api.placeholders.apiTimeout')}
                         />
@@ -215,7 +300,7 @@ const SettingsPage = () => {
                     {Object.entries(settings.shortcuts).map(([key, value]) => (
                         <ShortcutInput
                             key={key}
-                            label={key.replace(/([A-Z])/g, ' $1').trim()}
+                            label={t(`settings.shortcuts.actions.${key}`)}
                             shortcutKey={key}
                             value={value}
                             recordingShortcut={recordingShortcut}

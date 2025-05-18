@@ -1,7 +1,7 @@
 // services/notebookApi.js
 
-const API_BASE_URL = 'http://localhost:18600';
-// const API_BASE_URL = 'https://easy-notebook.silan.tech/api';
+// const API_BASE_URL = 'http://localhost:18600';
+const API_BASE_URL = 'https://easy-notebook.silan.tech/api';
 
 // API response handling for non-stream responses
 const handleResponse = async (response) => {

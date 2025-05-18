@@ -11,6 +11,7 @@ import useStore from '../../../store/notebookStore';
 import iconMapping from '../../../utils/iconMapping';
 import useSettingsStore from '../../../store/settingsStore';
 import FileTree from './FileExplorer';
+import { useTranslation } from 'react-i18next';
 
 const StatusStyles = {
   colors: {
@@ -196,6 +197,7 @@ const OutlineSidebar = ({
   const notebookId = useStore((state) => state.notebookId);
   const [activeTab, setActiveTab] = useState('outline');
   const [isHovered, setIsHovered] = useState(false);
+  const { t } = useTranslation();
 
   const [expandedSections, setExpandedSections] = useState(() => {
     const initialState = {};
@@ -296,7 +298,7 @@ const OutlineSidebar = ({
                   : 'text-gray-600 hover:bg-white/10'}
               `}
             >
-              Outline
+              {t('LeftSideBar.outline')}
             </button>
             <button
               onClick={() => setActiveTab('file')}
@@ -306,7 +308,7 @@ const OutlineSidebar = ({
                   : 'text-gray-600 hover:bg-white/10'}
               `}
             >
-              Files
+              {t('LeftSideBar.files')}
             </button>
           </div>
         </div>
@@ -384,7 +386,7 @@ const OutlineSidebar = ({
         activeTab === 'file' && isHovered ? (
           <div className="w-full h-10 pl-7 flex items-center justify-start border-t border-gray-200 relative">
             <span className="font-medium tracking-wide text-theme-800 relative text-base truncate overflow-hidden whitespace-nowrap">
-              {'drop files to upload'}
+              {t('LeftSideBar.dropFiles')}
             </span>
           </div>
         ) :

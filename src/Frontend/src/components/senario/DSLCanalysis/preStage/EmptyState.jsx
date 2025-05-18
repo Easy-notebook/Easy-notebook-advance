@@ -223,9 +223,6 @@ const AICommandInput = () => {
             setFiles(prev => [...prev, ...newFiles]);
         }
         setIsUploading(false);
-        // // 清空input，以便可以重复上传同一个文件
-        // e.target.value = null;
-        // }, 1000);
     }, []);
 
     const removeFile = useCallback((fileId) => {
