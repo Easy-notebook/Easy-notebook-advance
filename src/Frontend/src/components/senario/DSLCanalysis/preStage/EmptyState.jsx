@@ -8,7 +8,7 @@ import {
     useRef,
     useCallback,
 } from 'react';
-
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
     Upload,
@@ -31,6 +31,7 @@ import usePreStageStore from '../store/preStageStore';
 import { generalResponse } from '../stages/StageGeneralFunction';
 
 const AICommandInput = () => {
+    const { t } = useTranslation();
     // 这里根据自己的 store 改成正确的引入
     const {
         addAction,
@@ -242,7 +243,7 @@ const AICommandInput = () => {
                     ${input.startsWith('/') ? 'bg-slate-50' : 'bg-white'}
 
                     focus:outline-none border-2 transition-all duration-200
-                    ${isFocused ? 'border-rose-400' : 'border-gray-200'}
+                    ${isFocused ? 'border-theme-400' : 'border-gray-200'}
                     ${input.startsWith('/') ? 'font-mono' : 'font-normal'}
                 `}
             >
@@ -251,7 +252,7 @@ const AICommandInput = () => {
                     <Sparkles
                         className={`
                             w-5 h-5 transition-colors duration-200
-                            ${input.startsWith('/') ? 'text-blue-600' : 'text-rose-600'}
+                            ${input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
                         `}
                     />
                 </div>
@@ -289,8 +290,8 @@ const AICommandInput = () => {
                     onBlur={() => setIsFocused(false)}
                     placeholder={
                         input.startsWith('/')
-                            ? 'Type a command...'
-                            : 'Ask anything about data science...'
+                            ? t('emptyState.commandPlaceholder')
+                            : t('emptyState.questionPlaceholder')
                     }
                     className={`
                         w-full h-full pl-20 pr-36 py-3 pt-4 rounded-3xl
@@ -320,18 +321,18 @@ const AICommandInput = () => {
                         flex items-center gap-1.5 px-4 py-1.5 rounded-full
                         transition-all duration-200 text-sm font-medium
                         ${input.trim()
-                            ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer'
+                            ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer'
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'}
                     `}
                 >
                     <SendHorizontal className="w-4 h-4" />
-                    {input.startsWith('/') ? 'Execute' : 'Ask'}
+                    {input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
                 </button>
 
                 {/* Shift + Enter 提示 */}
                 {isFocused && (
                     <div className="absolute -top-5 right-2 text-xs text-gray-400 bg-white px-2">
-                        Press Shift + Enter for new line
+                        {t('emptyState.pressShiftEnter')}
                     </div>
                 )}
             {/* 已上传文件列表 */}
@@ -362,10 +363,10 @@ const AICommandInput = () => {
                 <div className="mt-2 ml-10">
                     <div
                         className={`
-                            ${input.startsWith('/') ? 'text-blue-600' : 'text-rose-600'}
+                            ${input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
                         `}
                     >
-                        {input.startsWith('/') ? '⌘ Command mode' : '💭 Question mode'}
+                        {input.startsWith('/') ? `⌘ ${t('emptyState.commandMode')}` : `💭 ${t('emptyState.questionMode')}`}
                     </div>
                 </div>
             )}
@@ -376,19 +377,22 @@ const AICommandInput = () => {
 /**
  * 拖拽悬浮提示组件
  */
-export const DragOverlay = () => (
-    <div className="fixed inset-0 bg-rose-50 bg-opacity-90 flex items-center justify-center z-50 pointer-events-none">
+export const DragOverlay = () => {
+    const { t } = useTranslation();
+    return (
+    <div className="fixed inset-0 bg-theme-50 bg-opacity-90 flex items-center justify-center z-50 pointer-events-none">
         <div className="text-center">
-            <Upload className="w-16 h-16 text-rose-700 mx-auto mb-4 animate-bounce" />
-            <p className="text-xl font-medium text-rose-700">
-                Drop to Start Analysis...
+            <Upload className="w-16 h-16 text-theme-700 mx-auto mb-4 animate-bounce" />
+            <p className="text-xl font-medium text-theme-700">
+                {t('emptyState.dragDropHint')}
             </p>
         </div>
     </div>
-);
+)};
 
 // 文件上传进度组件
-const TypingTitle = ({ initialText = 'Easy-Notebook' }) => {
+const TypingTitle = () => {
+    const { t } = useTranslation();
     const [text, setText] = useState('');
     const [isTypingDone, setIsTypingDone] = useState(false);
     const [showCursor, setShowCursor] = useState(true);
@@ -441,9 +445,9 @@ const TypingTitle = ({ initialText = 'Easy-Notebook' }) => {
     }, [deleteText, startTyping]);
 
     useEffect(() => {
-        const cleanup = startTyping(initialText);
+        const cleanup = startTyping(t('emptyState.title'));
         return () => cleanup();
-    }, [startTyping, initialText]);
+    }, [startTyping, t]);
 
     // Expose changeText method to parent
     useEffect(() => {
@@ -515,7 +519,7 @@ const TypingTitle = ({ initialText = 'Easy-Notebook' }) => {
                 `}
             </style>
             <div className="title-container">
-                <span className="text-4xl font-bold mb-4 bg-gradient-to-r from-rose-700 to-rose-500 text-transparent bg-clip-text leading-tight">
+                <span className="text-4xl font-bold mb-4 leading-tight theme-grad-text">
                     {text}
                     {showCursor && (
                         <div
@@ -548,42 +552,46 @@ export const Header = () => (
 /**
  * 上传区域
  */
-export const UploadSection = ({ onFileUpload, isUploading }) => (
+export const UploadSection = ({ onFileUpload, isUploading }) => {
+    const { t } = useTranslation();
+    return (
     <div className="flex justify-center items-start gap-8 mb-12">
         <div>
             <button
                 onClick={onFileUpload}
                 disabled={isUploading}
-                className={`px-8 py-3 ${isUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'text-rose-700 hover:text-white hover:bg-rose-700 border-2 border-rose-700'} rounded-lg transition-all duration-200 font-medium text-lg flex items-center justify-center`}
+                className={`px-8 py-3 ${isUploading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'text-theme-700 hover:text-white hover:bg-theme-700 border-2 border-theme-700'} rounded-lg transition-all duration-200 font-medium text-lg flex items-center justify-center`}
             >
                 {isUploading ? (
                     <>
                         <Loader className="w-5 h-5 mr-2 animate-spin" />
-                        Uploading...
+                        {t('emptyState.uploading')}
                     </>
                 ) : (
-                    'Select data file to Begin'
+                    t('emptyState.selectDataFile')
                 )}
             </button>
         </div>
     </div>
-);
+)};
 
 /**
  * 分割线
  */
-export const Divider = () => (
+export const Divider = () => {
+    const { t } = useTranslation();
+    return (
     <div className="relative mb-4 max-w-lg mx-auto">
         <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-200" />
         </div>
         <div className="relative flex justify-center">
             <span className="px-8 text-base text-gray-400 bg-white">
-                or start from scratch [tmp file]
+                {t('emptyState.orStartScratch')}
             </span>
         </div>
     </div>
-);
+)};
 
 /**
  * 操作按钮
@@ -592,41 +600,45 @@ export const ActionButton = ({ onClick, children, disabled }) => (
     <button
         onClick={onClick}
         disabled={disabled}
-        className={`flex items-center gap-3 px-6 py-3 ${disabled ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-rose-700'} rounded-full transition-all duration-200 text-lg`}
+        className={`flex items-center gap-3 px-6 py-3 ${disabled ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-theme-700'} rounded-full transition-all duration-200 text-lg`}
     >
         <PlusCircle size={24} />
         {children}
     </button>
 );
 
-export const UploadButton = ({ onFileUpload, isUploading }) => (
+export const UploadButton = ({ onFileUpload, isUploading }) => {
+    const { t } = useTranslation();
+    return (
     <button
         onClick={onFileUpload}
         disabled={isUploading}
-        className={`flex items-center gap-3 px-6 py-3 ${isUploading ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-rose-700'} rounded-full transition-all duration-200 text-lg`}
+        className={`flex items-center gap-3 px-6 py-3 ${isUploading ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-theme-700'} rounded-full transition-all duration-200 text-lg`}
     >
         <Upload className="w-6 h-6" />
-        Upload CSV File to Begin
+        {t('emptyState.uploadCSV')}
     </button>
-);
+)};
 
 /**
  * 底部提示
  */
-export const Footer = () => (
+export const Footer = () => {
+    const { t } = useTranslation();
+    return (
     <div className="mt-16 text-gray-400">
         <p className="text-base leading-relaxed">
-            Each analysis step will be displayed in real-time,
-            with fully editable code and visualizations
+            {t('emptyState.analysisDisplay')}
         </p>
     </div>
-);
+)};
 
 /**
  * 空状态主组件
  * 负责组合以上组件，并处理拖拽上传逻辑
  */
 const EmptyState = ({ onAddCell, onFileUpload }) => {
+    const { t } = useTranslation();
     const [isDragging, setIsDragging] = useState(false);
     const [dragCounter, setDragCounter] = useState(0);
     const { setViewMode } = useStore();
@@ -778,7 +790,7 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
                 {isUploading ?
                     <div>
                         <Loader className="w-5 h-5 mr-2 animate-spin" />
-                        Uploading...
+                        {t('emptyState.uploading')}
                     </div>
                     : < div >
                         {/* <UploadSection
@@ -794,13 +806,13 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
                                 onClick={() => onAddCell('markdown')}
                                 disabled={isUploading}
                             >
-                                Add Text
+                                {t('emptyState.addText')}
                             </ActionButton>
                             <ActionButton
                                 onClick={() => onAddCell('code')}
                                 disabled={isUploading}
                             >
-                                Add Code
+                                {t('emptyState.addCode')}
                             </ActionButton>
                             <UploadButton
                                 onFileUpload={handleFileUpload}

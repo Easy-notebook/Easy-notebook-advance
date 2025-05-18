@@ -291,7 +291,7 @@ const FileCell = ({ cell, onDelete, onUpdate }) => {
   const renderUploadArea = () => (
     <div
       className={`relative w-full h-40 border-2 border-dashed rounded 
-        ${dragOver ? 'border-[#B91C1C] bg-rose-50' : 'border-gray-300'}
+        ${dragOver ? 'border-[#B91C1C] bg-theme-50' : 'border-gray-300'}
         transition-colors duration-200`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -374,7 +374,7 @@ const FileCell = ({ cell, onDelete, onUpdate }) => {
                 {isPreviewable(file) && (
                   <button
                     onClick={() => handlePreview(file)}
-                    className="p-1 hover:bg-rose-50 rounded text-[#B91C1C]"
+                    className="p-1 hover:bg-theme-50 rounded text-[#B91C1C]"
                     title="Preview"
                   >
                     <Eye size={16} />
@@ -382,14 +382,14 @@ const FileCell = ({ cell, onDelete, onUpdate }) => {
                 )}
                 <button
                   onClick={() => handleDownload(file)}
-                  className="p-1 hover:bg-rose-50 rounded text-[#B91C1C]"
+                  className="p-1 hover:bg-theme-50 rounded text-[#B91C1C]"
                   title="Download"
                 >
                   <Download size={16} />
                 </button>
                 <button
                   onClick={() => handleDeleteFile(file)}
-                  className="p-1 hover:bg-rose-50 rounded text-[#B91C1C]"
+                  className="p-1 hover:bg-theme-50 rounded text-[#B91C1C]"
                   title="Delete"
                 >
                   <Trash2 size={16} />
@@ -447,7 +447,7 @@ const FileCell = ({ cell, onDelete, onUpdate }) => {
           {renderUploadArea()}
           {uploading && renderProgress()}
           {error && (
-            <div className="mt-4 flex items-center text-sm text-rose-600">
+            <div className="mt-4 flex items-center text-sm text-theme-600">
               <X size={16} className="mr-1" />
               {error}
             </div>

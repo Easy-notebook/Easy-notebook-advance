@@ -228,12 +228,12 @@ const CommandInput = () => {
                             flex items-start gap-3 px-6 py-4 border-b border-gray-200
                             rounded-xl
                             focus:outline-none border-2 transition-all duration-200
-                            ${isFocused ? 'border-rose-400' : 'border-gray-200'}
+                            ${isFocused ? 'border-theme-400' : 'border-gray-200'}
                             ${input.startsWith('/') ? 'font-mono' : 'font-normal'}
                         `}
                         >
                         <Command className={`w-6 h-6 text-gray-500 mt-1               
-                                            ${input.startsWith('/') ? 'text-blue-600' : 'text-rose-600'}
+                                            ${input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
                                         `} />
                         <textarea
                             ref={textareaRef}

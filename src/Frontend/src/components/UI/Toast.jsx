@@ -13,7 +13,7 @@ const Toast = ({ toasts, removeToast }) => {
         const bgColor = {
           success: 'bg-green-500',
           error: 'bg-red-500',
-          info: 'bg-rose-500',
+          info: 'bg-theme-500',
           warning: 'bg-yellow-500'
         }[type] || 'bg-gray-500';
     

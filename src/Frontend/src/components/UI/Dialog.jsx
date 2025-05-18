@@ -53,9 +53,9 @@ const DialogContent = ({
           {children}
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 rounded-sm p-1 opacity-70 hover:opacity-100 hover:bg-rose-100"
+            className="absolute right-4 top-4 rounded-sm p-1 opacity-70 hover:opacity-100 hover:bg-theme-100"
           >
-            <X className="h-4 w-4 text-rose-800" />
+            <X className="h-4 w-4 text-theme-800" />
             <span className="sr-only">Close</span>
           </button>
         </div>
@@ -73,7 +73,7 @@ const DialogHeader = ({ className = "", ...props }) => (
 
 const DialogTitle = ({ className = "", ...props }) => (
   <h3
-    className={`text-lg font-semibold leading-none tracking-tight text-rose-800 ${className}`}
+    className={`text-lg font-semibold leading-none tracking-tight text-theme-800 ${className}`}
     {...props}
   />
 );

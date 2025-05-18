@@ -82,13 +82,13 @@ function BottomBar() {
             {/* Resize handle */}
             {expanded && (
                 <div
-                    className="resize-handle absolute top-0 left-0 right-0 h-1 cursor-ns-resize hover:bg-rose-800"
+                    className="resize-handle absolute top-0 left-0 right-0 h-1 cursor-ns-resize hover:bg-theme-800"
                     title="Drag to resize"
                 />
             )}
 
             {/* Header bar - made more compact */}
-            <div className="flex items-center justify-between h-8 text-rose-800">
+            <div className="flex items-center justify-between h-8 text-theme-800">
                 <style>{`
                     .infoBar{
                         color: white;
@@ -114,8 +114,8 @@ function BottomBar() {
                             className={`
                                 px-2 py-0.5 rounded-md text-xs flex items-center gap-1.5
                                 ${currentTab === 'terminal'
-                                    ? 'bg-white text-rose-800 shadow-sm border border-rose-100'
-                                    : 'text-gray-700 hover:bg-rose-50'}
+                                    ? 'bg-white text-theme-800 shadow-sm border border-theme-100'
+                                    : 'text-gray-700 hover:bg-theme-50'}
                             `}
                             onClick={() => setCurrentTab('terminal')}
                         >
@@ -126,8 +126,8 @@ function BottomBar() {
                             className={`
                                 px-2 py-0.5 rounded-md text-xs flex items-center gap-1.5
                                 ${currentTab === 'problems'
-                                    ? 'bg-white text-rose-800 shadow-sm border border-rose-100'
-                                    : 'text-gray-700 hover:bg-rose-50'}
+                                    ? 'bg-white text-theme-800 shadow-sm border border-theme-100'
+                                    : 'text-gray-700 hover:bg-theme-50'}
                             `}
                             onClick={() => setCurrentTab('problems')}
                         >
@@ -138,8 +138,8 @@ function BottomBar() {
                             className={`
                                 px-2 py-0.5 rounded-md text-xs flex items-center gap-1.5
                                 ${currentTab === 'output'
-                                    ? 'bg-white text-rose-800 shadow-sm border border-rose-100'
-                                    : 'text-gray-700 hover:bg-rose-50'}
+                                    ? 'bg-white text-theme-800 shadow-sm border border-theme-100'
+                                    : 'text-gray-700 hover:bg-theme-50'}
                             `}
                             onClick={() => setCurrentTab('output')}
                         >
@@ -150,8 +150,8 @@ function BottomBar() {
                             className={`
                                 px-2 py-0.5 rounded-md text-xs flex items-center gap-1.5
                                 ${currentTab === 'debug'
-                                    ? 'bg-white text-rose-800 shadow-sm border border-rose-100'
-                                    : 'text-gray-700 hover:bg-rose-50'}
+                                    ? 'bg-white text-theme-800 shadow-sm border border-theme-100'
+                                    : 'text-gray-700 hover:bg-theme-50'}
                             `}
                             onClick={() => setCurrentTab('debug')}
                         >
@@ -186,18 +186,18 @@ function BottomBar() {
                         {currentTab === 'terminal' && (
                             <div className="p-2 font-mono">
                                 <p className="text-xs">$ npm start</p>
-                                <p className="text-xs text-rose-800">&gt; project@0.1.0 start</p>
-                                <p className="text-xs text-rose-800">&gt; react-scripts start</p>
+                                <p className="text-xs text-theme-800">&gt; project@0.1.0 start</p>
+                                <p className="text-xs text-theme-800">&gt; react-scripts start</p>
                                 <p className="text-xs text-gray-500">Starting development server...</p>
                                 <p className="text-xs text-gray-500">Compiled successfully!</p>
                                 <p className="text-xs mt-1.5">
                                     You can now view the project in the browser.
                                 </p>
                                 <p className="text-xs mt-0.5">
-                                    Local: <span className="text-rose-800">http://localhost:3000</span>
+                                    Local: <span className="text-theme-800">http://localhost:3000</span>
                                 </p>
                                 <p className="text-xs">
-                                    Network: <span className="text-rose-800">http://192.168.1.5:3000</span>
+                                    Network: <span className="text-theme-800">http://192.168.1.5:3000</span>
                                 </p>
                             </div>
                         )}
@@ -211,13 +211,13 @@ function BottomBar() {
                                 <p className="text-xs font-medium text-gray-800">Build Output</p>
                                 <p className="text-xs text-gray-600 mt-0.5">File sizes after gzip:</p>
                                 <p className="text-xs mt-0.5">
-                                    <span className="text-rose-800 font-medium">62.5 KB</span> <span className="text-gray-600">build/static/js/main.chunk.js</span>
+                                    <span className="text-theme-800 font-medium">62.5 KB</span> <span className="text-gray-600">build/static/js/main.chunk.js</span>
                                 </p>
                                 <p className="text-xs">
-                                    <span className="text-rose-800 font-medium">28.1 KB</span> <span className="text-gray-600">build/static/js/0.chunk.js</span>
+                                    <span className="text-theme-800 font-medium">28.1 KB</span> <span className="text-gray-600">build/static/js/0.chunk.js</span>
                                 </p>
                                 <p className="text-xs">
-                                    <span className="text-rose-800 font-medium">16.2 KB</span> <span className="text-gray-600">build/static/css/main.chunk.css</span>
+                                    <span className="text-theme-800 font-medium">16.2 KB</span> <span className="text-gray-600">build/static/css/main.chunk.css</span>
                                 </p>
                             </div>
                         )}

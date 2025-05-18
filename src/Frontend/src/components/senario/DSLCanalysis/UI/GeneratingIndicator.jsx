@@ -23,10 +23,10 @@ const GeneratingIndicator = ({ handleTerminate }) => {
         >
             <FaStopCircle
                 size={20}
-                className="text-gray-500 group-hover:text-rose-500 transition-colors duration-300"
+                className="text-gray-500 group-hover:text-theme-500 transition-colors duration-300"
             />
             <span className="text-gray-500 text-sm font-medium group-hover:hidden">Generating{ellipsis}</span>
-            <span className="text-rose-500 text-sm font-medium hidden group-hover:block">Stop</span>
+            <span className="text-theme-500 text-sm font-medium hidden group-hover:block">Stop</span>
         </div>
     );
 };

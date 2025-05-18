@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, memo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { useTranslation } from 'react-i18next';
 import CodeCell from '../Editor/CodeCell';
 import MarkdownCell from '../Editor/MarkdownCell';
 import HybridCell from '../Editor/HybridCell';
@@ -13,28 +14,29 @@ import ExportToFile from './FunctionBar/ExportToFile';
 import { createExportHandlers } from '../../utils/exportToFile/exportUtils';
 import { useToast } from '../UI/Toast';
 import AIAgentSidebar from './RightSideBar/AIAgentSidebar';
-import useOperatorStore from '../../store/operatorStore'; // 导入 operatorStore
+import useOperatorStore from '../../store/operatorStore';
 import CommandInput from './FunctionBar/AITerminal';
 import { useAIAgentStore } from '../../store/AIAgentStore';
 import usePreviewStore from '../../store/previewStore';
-import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook'; // 导入自定义 Hook
+import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
 import DSLCPipeline from '../senario/DSLCanalysis/Pipeline';
 import useSettingsStore from '../../store/settingsStore';
 import SettingsPage from '../senario/settingState';
-// import BottomBar from './FunctionBar/BottomBar';
 import CompleteMode from '../senario/BasicMode/CompleteMode';
 import StepMode from '../senario/BasicMode/StepMode';
-
 import PreviewApp from './Display/PreviewApp';
+import LanguageSwitcher from '../../i18n/LanguageSwitcher';
 
+const VUE_PRIMARY = '#41B883';
+const VUE_SECONDARY = '#35495E';
 
 const ModeToggle = memo(({ viewMode, onModeChange }) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
   const modes = [
-    { id: 'complete', label: 'Complete Mode', class: 'basic' },
-    { id: 'step', label: 'Step Mode', class: 'basic' },
-    // { id: 'dslc', label: 'DSLC Mode', class: 'Auto DataScience' },
+    { id: 'complete', label: 'Complete Mode', name: t('modeToggle.completeMode') },
+    { id: 'step', label: 'Step Mode', name: t('modeToggle.stepMode') },
   ];
 
   const selectedMode = modes.find(mode => mode.id === viewMode);
@@ -44,19 +46,25 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50"
-      >
-        <span style={{
-          font: '18px ui-sans-serif, -apple-system, system-ui',
-          viewBox: "0 0 24 24",
-          fontWeight: 600,
-          height: '24px',
-          letterSpacing: 'normal',
-          lineHeight: '28px',
-          color: '#5D5D5D',
-          overflowClipMargin: 'content-box',
+        style={{
+          whiteSpace: 'nowrap', // 保证按钮内容不换行
         }}
+      >
+        <span
+          style={{
+            font: '18px ui-sans-serif, -apple-system, system-ui',
+            fontWeight: 600,
+            height: '24px',
+            letterSpacing: 'normal',
+            lineHeight: '28px',
+            overflowClipMargin: 'content-box',
+            whiteSpace: 'nowrap', // 保证mode名称不换行
+            display: 'inline-block',
+            verticalAlign: 'middle', 
+          }}
+          className="theme-grad-text"
         >
-          {selectedMode?.label}
+          {selectedMode?.name}
         </span>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
           className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
@@ -71,18 +79,19 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
           {modes.map(mode => (
             <button
               key={mode.id}
-              onClick={() => {
-                onModeChange(mode.id);
-                setIsOpen(false);
-              }}
-              className={`w-full text-left p-3 hover:bg-gray-50 flex items-center justify-between ${viewMode === mode.id ? 'bg-gray-50' : ''
-                }`}
+              onClick={() => { onModeChange(mode.id); setIsOpen(false); }}
+              className={`w-full text-left p-3 flex items-center justify-between transition-colors ${viewMode === mode.id ? 'bg-white/90' : 'hover:bg-white/80'}`}
+              style={{ whiteSpace: 'nowrap' }} // 保证下拉项不换行
             >
-              <span className={`text-lg font-medium ${viewMode === mode.id ? 'text-rose-800' : 'text-gray-600'
-                }`}>
-                {mode.label}
+              <span
+                className="text-lg font-medium"
+                style={{
+                  color: viewMode === mode.id ? VUE_PRIMARY : VUE_SECONDARY,
+                }}
+              >
+                {mode.name}
               </span>
-              {viewMode === mode.id && <span className="text-black">✓</span>}
+              {viewMode === mode.id && <span style={{ color: VUE_PRIMARY, marginLeft: 8 }}>✓</span>}
             </button>
           ))}
         </div>
@@ -91,8 +100,8 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
   );
 });
 
-// CellDivider component remains unchanged
 const CellDivider = memo(({ index, onAddCell, viewMode }) => {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -102,27 +111,27 @@ const CellDivider = memo(({ index, onAddCell, viewMode }) => {
       onMouseLeave={() => setIsHovered(false)}
     >
       {isHovered && viewMode === 'complete' && (
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white shadow-lg rounded-lg p-1 z-10">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 backdrop-blur-md shadow-lg rounded-2xl p-2 z-10">
           <button
             onClick={() => onAddCell('code', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
           >
             <PlusCircle size={16} />
-            Add Code Cell
+            {t('cell.addCodeCell')}
           </button>
           <button
             onClick={() => onAddCell('markdown', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
           >
             <PlusCircle size={16} />
-            Add Text Cell
+            {t('cell.addTextCell')}
           </button>
           <button
             onClick={() => onAddCell('file', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
           >
             <Sparkles size={16} />
-            AI Generate
+            {t('cell.aiGenerate')}
           </button>
         </div>
       )}
@@ -130,7 +139,6 @@ const CellDivider = memo(({ index, onAddCell, viewMode }) => {
   );
 });
 
-// StepNavigation 组件保持不变
 const StepNavigation = memo(({
   currentPhase,
   currentStepIndex,
@@ -142,97 +150,87 @@ const StepNavigation = memo(({
   isFirstPhase,
   isLastPhase
 }) => {
+  const { t } = useTranslation();
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === totalSteps - 1;
+
+  const baseBtn = "flex items-center gap-2 px-6 py-2.5 rounded-full font-medium transition-all duration-200 shadow-lg";
+  const enabledStyle = `bg-white/80 backdrop-blur-md hover:bg-white/90`;
+  const disabledStyle = `bg-white/60 text-gray-400`;
 
   const renderPreviousButton = () => {
     if (isFirstStep) {
       if (!isFirstPhase) {
         return (
-          <button
-            onClick={onPreviousPhase}
-            className="flex items-center gap-2 px-6 py-2.5 bg-white/80 backdrop-blur-md shadow-lg
-              text-rose-600 rounded-full hover:bg-white/90 transition-all duration-200 font-medium"
-          >
-            <ArrowLeft size={16} />
-            Prev Stage
+          <button 
+            onClick={onPreviousPhase} 
+            className={`${baseBtn} ${enabledStyle}`}
+            style={{ color: VUE_PRIMARY }}
+          > 
+            <ArrowLeft size={16}/> {t('navigation.prevStage')}
           </button>
         );
       }
-      return (
-        <button
-          className="flex items-center gap-2 px-6 py-2.5 bg-white/60 backdrop-blur-md text-gray-400
-            rounded-full transition-all duration-200 font-medium"
-        >
-          Top of ALL
-        </button>
-      );
+      return <button className={`${baseBtn} ${disabledStyle}`}>{t('navigation.topOfAll')}</button>;
     }
-
     return (
-      <button
-        onClick={onPrevious}
-        className="flex items-center gap-2 px-6 py-2.5 bg-white/80 backdrop-blur-md shadow-lg
-          text-rose-600 rounded-full hover:bg-white/90 transition-all duration-200 font-medium"
-      >
-        <ArrowLeft size={16} />
-        Prev Step
+      <button 
+        onClick={onPrevious} 
+        className={`${baseBtn} ${enabledStyle}`}
+        style={{ color: VUE_PRIMARY }}
+      > 
+        <ArrowLeft size={16}/> {t('navigation.prevStep')}
       </button>
     );
   };
 
   const renderNextButton = () => {
+    const nextBtnStyle = {
+      backgroundColor: `${VUE_PRIMARY}90`,
+      color: 'white',
+    };
+    
     if (isLastStep) {
       if (!isLastPhase) {
         return (
-          <button
-            onClick={onNextPhase}
-            className="flex items-center gap-2 px-6 py-2.5 bg-rose-600/90 backdrop-blur-md text-white 
-              rounded-full hover:bg-rose-600 transition-all duration-200 font-medium shadow-lg"
+          <button 
+            onClick={onNextPhase} 
+            className={`${baseBtn}`}
+            style={nextBtnStyle}
           >
-            Next Stage
-            <ArrowRight size={16} />
+            {t('navigation.nextStage')} <ArrowRight size={16}/>
           </button>
         );
       }
-      return (
-        <button
-          className="flex items-center gap-2 px-6 py-2.5 bg-white/60 backdrop-blur-md text-gray-400
-            rounded-full transition-all duration-200 font-medium"
-        >
-          End of ALL
-        </button>
-      );
+      return <button className={`${baseBtn} ${disabledStyle}`}>{t('navigation.endOfAll')}</button>;
     }
-
     return (
-      <button
-        onClick={onNext}
-        className="flex items-center gap-2 px-6 py-2.5 bg-rose-600/90 backdrop-blur-md text-white 
-          rounded-full hover:bg-rose-600 transition-all duration-200 font-medium shadow-lg"
+      <button 
+        onClick={onNext} 
+        className={`${baseBtn}`}
+        style={nextBtnStyle}
       >
-        Next Step
-        <ArrowRight size={16} />
+        {t('navigation.nextStep')} <ArrowRight size={16}/>
       </button>
     );
   };
 
   return (
-    <div className="h-20 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md border-t border-gray-100/50 shadow-lg">
+    <div className="h-20 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md" style={{ borderColor: `${VUE_SECONDARY}33` }}>
       <div className="flex items-center gap-2">
         {renderPreviousButton()}
       </div>
 
       <div className="flex flex-col items-center gap-2">
-        <span className="text-lg font-medium text-gray-800">
+        <span className="text-lg font-semibold" style={{ color: VUE_SECONDARY }}>
           {currentPhase?.title}
         </span>
         <div className="flex items-center gap-3">
           {totalSteps > 0 && Array.from({ length: totalSteps }).map((_, idx) => (
             <div
               key={idx}
-              className={`h-2 w-2 rounded-full transition-all duration-200 ${idx === currentStepIndex ? 'bg-rose-600' : 'bg-gray-200/50'
-                }`}
+              className={`h-2 w-2 rounded-full transition duration-200 ${idx === currentStepIndex ? '' : 'bg-gray-200/50'}`}
+              style={idx === currentStepIndex ? { backgroundColor: VUE_PRIMARY } : {}}
             />
           ))}
         </div>
@@ -245,8 +243,9 @@ const StepNavigation = memo(({
   );
 });
 
-// Main NotebookApp 组件
+// Main NotebookApp component
 const NotebookApp = () => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const {
     notebookId,
@@ -321,40 +320,40 @@ const NotebookApp = () => {
       setLastAddedCellId(newCell.id);
 
       toast({
-        title: "Success",
-        description: `New ${type} cell added`,
+        title: t('toast.success'),
+        description: t('toast.cellAdded', { type: t(`cellTypes.${type}`) }),
         variant: "success",
       });
     } catch (err) {
       console.error('Error adding cell:', err);
       setError('Failed to add cell. Please try again.');
       toast({
-        title: "Error",
+        title: t('toast.error'),
         description: err.message,
         variant: "destructive",
       });
     }
-  }, [initializeNotebook, notebookId, currentRunningPhaseId, addCell, setLastAddedCellId, setError, toast]);
+  }, [initializeNotebook, notebookId, currentRunningPhaseId, addCell, setLastAddedCellId, setError, toast, t]);
 
   // Run all cells
   const handleRunAll = useCallback(async () => {
     try {
       await runAllCells();
       toast({
-        title: "Success",
-        description: "All cells executed successfully",
+        title: t('toast.success'),
+        description: t('toast.allCellsExecuted'),
         variant: "success",
       });
     } catch (err) {
       console.error('Error running all cells:', err);
       setError('Failed to run all cells. Please try again.');
       toast({
-        title: "Error",
+        title: t('toast.error'),
         description: err.message,
         variant: "destructive",
       });
     }
-  }, [runAllCells, setError, toast]);
+  }, [runAllCells, setError, toast, t]);
 
   // Navigation handlers
   const handlePreviousStep = useCallback(() => {
@@ -480,19 +479,19 @@ const NotebookApp = () => {
       URL.revokeObjectURL(url);
 
       toast({
-        title: "Success",
-        description: "Notebook exported successfully",
+        title: t('toast.success'),
+        description: t('toast.exportSuccess'),
         variant: "success",
       });
     } catch (err) {
       console.error('Error exporting notebook:', err);
       toast({
-        title: "Error",
-        description: "Failed to export notebook",
+        title: t('toast.error'),
+        description: t('toast.exportFailed'),
         variant: "destructive",
       });
     }
-  }, [notebookId, cells, tasks, toast]);
+  }, [notebookId, cells, tasks, toast, t]);
 
   const { exportDocx, exportPdf, exportMarkdown } = createExportHandlers(cells, tasks);
 
@@ -575,8 +574,6 @@ const NotebookApp = () => {
    * 渲染内容区域。
    */
   const renderContent = useCallback(() => {
-
-
     if (cells.length === 0 || viewMode === 'dslc') {
       return <DSLCPipeline onAddCell={handleAddCell}
         className="w-full h-full"
@@ -692,7 +689,7 @@ const NotebookApp = () => {
   ]);
 
   return (
-    <div className="h-screen flex" >
+    <div className="h-screen flex">
       <SettingsPage />
       {/* 左侧边栏 */}
       {!(cells.length === 0) && <div className={`${isCollapsed ? 'w-14' : 'w-96'} transition-all duration-500 ease-in-out relative`}>
@@ -707,22 +704,17 @@ const NotebookApp = () => {
           allowPagination={allowPagination} // 传递翻页权限设置
         />
       </div>
-}
+      }
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <CommandInput
           onClick={() => setShowCommandInput(true)}
         />
-        <header className="h-16 flex items-center justify-between px-3 bg-gray-50 ">
-          <div className="flex items-left">
-            {
-              isCollapsed && <button
-                onClick={settingstore.openSettings}
-                className='flex items-center justify-between p-3 rounded-lg hover:bg-gray-50'>
-                <Settings2 size={16} />
-              </button>
-            }
-            <ModeToggle viewMode={viewMode} onModeChange={handleModeChange} className="w-48" />
+        <header className="h-16 flex items-center justify-between px-3 bg-white/80 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            {isCollapsed && <button onClick={settingstore.openSettings} className="p-3 rounded-lg hover:bg-white/90 transition-colors"><Settings2 size={16} /></button>}
+            <ModeToggle viewMode={viewMode} onModeChange={handleModeChange} />
+            <LanguageSwitcher />
           </div>
 
           <div className="flex items-center gap-3">
@@ -731,11 +723,12 @@ const NotebookApp = () => {
               <>
                 <button
                   onClick={handleRunAll}
-                  className="flex items-center gap-2 px-4 py-2 text-base font-medium hover:bg-gray-100 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
                   disabled={cells.length === 0 || isExecuting}
+                  style={{ color: VUE_SECONDARY }}
                 >
                   <Play size={16} />
-                  {isExecuting ? 'Running...' : 'Run All'}
+                  {isExecuting ? t('fileOperations.running') : t('fileOperations.runAll')}
                 </button>
 
                 <ExportToFile
@@ -749,10 +742,11 @@ const NotebookApp = () => {
             }
             <button
               onClick={triggerFileInput}
-              className="flex items-center gap-2 px-4 py-2 text-base font-medium hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
+              style={{ color: VUE_SECONDARY }}
             >
               <Upload size={16} />
-              Import
+              {t('fileOperations.import')}
             </button>
             <input
               type="file"
@@ -764,28 +758,27 @@ const NotebookApp = () => {
 
             <div className='flex items-center gap-2'>
               {!(cells.length === 0 || viewMode === 'dslc') && <button
-                className="flex items-center gap-2 px-4 py-2 text-rose-800 font-semibold font-medium hover:bg-gray-100 rounded-lg transition-colors"
-                onClick={() => { setShowCommandInput(true); }} // 点击事件          
+                className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
+                onClick={() => { setShowCommandInput(true); }}
+                style={{ color: VUE_PRIMARY }}
               >
                 <TerminalSquare size={16} />
               </button>}
               <button
-                onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)} // 右侧边栏折叠按钮点击事件
-                className="flex items-center gap-2 px-4 py-2 text-rose-800 font-semibold bg-rose-50 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+                className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
+                style={{ color: VUE_PRIMARY, backgroundColor: `${VUE_PRIMARY}15` }}
               >
                 <BarChartHorizontalBig size={16} />
               </button>
             </div>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-blue-200 bg-white w-full h-full"
-          style={{ borderRadius: "15px" }}>
+        <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-blue-200 bg-white w-full h-full">
           {isShowingFileExplorer && <PreviewApp />}
           <div className={`${isShowingFileExplorer ? 'hidden' : 'block'} w-full h-full `}>
             {renderContent()}
           </div>
-
-          {/* {viewMode === 'complete' && cells.length !== 0 && <BottomBar />} */}
         </div>
 
         {error && (

@@ -1,5 +1,6 @@
 import ResizablePanel from '../UI/ResizableSplitPanel';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Send,
     Loader2,
@@ -12,6 +13,7 @@ import { useAIPlanningContextStore } from '../store/aiPlanningContext'
 import usePreStageStore from '../store/preStageStore';
 // Start of Selection
 const ProblemDefineWorkload = ({ confirmProblem }) => {
+    const { t } = useTranslation();
     /* ─────────── State ─────────── */
     const [stage, setStage] = useState('intro');
     const [input, setInput] = useState('');
@@ -56,11 +58,11 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
     const getMessageClassNames = useCallback((role) => {
         const base = 'rounded-2xl px-4 py-3 w-fit shadow-md';
         if (role === 'user')
-            return `${base} bg-white backdrop-blur-lg border border-rose-200 max-w-[40%]`;
+            return `${base} bg-white backdrop-blur-lg border border-theme-200 max-w-[40%]`;
         if (role === 'system')
             return `${base} bg-white bg-opacity-20 backdrop-blur-lg rounded-full shadow-gray-300 max-w-[40%]`;
         // if (role === 'assistant')
-        //     return `${base} bg-white/90 text-gray-800 border border-rose-200 shadow-rose-200 max-w-[40%]`;
+        //     return `${base} bg-white/90 text-gray-800 border border-theme-200 shadow-theme-200 max-w-[40%]`;
         return `${base} bg-white bg-opacity-20 backdrop-blur-lg shadow-gray-300 max-w-[40%]`;
     }, []);
     const generateId = () => Math.random().toString(36).substring(2, 11);
@@ -101,7 +103,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
             const assistantMessage = {
                 id: generateId(),
                 role: 'assistant',
-                content: 'Please select the type of analysis you want to perform, or describe the problem you want to solve:',
+                content: t('problemDefine.selectAnalysis'),
                 options: choices,
                 onSelect: handleInitialChoiceRef.current
             };
@@ -109,7 +111,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
             setMessages([assistantMessage]);
             setStage('intro');
         }, 50);
-    }, [choiceMap, setSelectedProblem, setDatasetInfoStore]);
+    }, [choiceMap, setSelectedProblem, setDatasetInfoStore, t]);
 
     const handleSelect = useCallback((messageId, option, callback) => {
         triggerBounce();
@@ -134,8 +136,8 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
     }, [input, loading, pushMessage, triggerBounce]);
 
     const handleInitialChoice = useCallback((option) => {
-        if (option === 'Custom Problem Description') {
-            pushMessage('assistant', 'Okay, please describe your problem.');
+        if (option === t('problemDefine.customProblem')) {
+            pushMessage('assistant', t('problemDefine.describePrompt'));
             setStage('free_input');
             return;
         }
@@ -159,27 +161,27 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
 
         pushMessage(
             'assistant',
-            `You have selected ${selectedChoiceRef.problem_name || 'your analysis'}.\n\nWould you like to add background info about the dataset?`,
-            ['Skip', 'Add dataset background info'],
+            `${selectedChoiceRef.problem_name ? `You have selected ${selectedChoiceRef.problem_name}` : 'You have selected your analysis'}.\n\n${t('problemDefine.addBackground')}`,
+            [t('problemDefine.skip'), t('problemDefine.addDatasetInfo')],
             handleDatasetInfoChoiceRef.current,
         );
         setStage('dataBackground');
-    }, [pushMessage, choiceMap]);
+    }, [pushMessage, choiceMap, t]);
 
     const handleCancelDatasetInfo = useCallback(() => {
         setInfoBoxAnimation('animate-fade-out');
         setTimeout(() => {
             setShowDataInfoInput(false);
             setInfoBoxAnimation('');
-            pushMessage('system', 'Dataset information input canceled.');
+            pushMessage('system', t('problemDefine.infoCanceled'));
             showConfirmationRef.current();
         }, 300);
-    }, [pushMessage]);
+    }, [pushMessage, t]);
 
     const submitDatasetInfo = useCallback(() => {
         const info = datasetInfoInput.trim();
         if (!info) {
-            pushMessage('system', 'Dataset information cannot be empty.');
+            pushMessage('system', t('problemDefine.infoEmpty'));
             return;
         }
 
@@ -188,11 +190,11 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
             setDatasetInfoStore(info);
             setShowDataInfoInput(false);
             setInfoBoxAnimation('');
-            pushMessage('user', `Dataset info added: "${info}"`);
+            pushMessage('user', `${t('problemDefine.infoAdded')} "${info}"`);
             setDatasetInfoInput('');
             setTimeout(() => showConfirmationRef.current(), 400);
         }, 300);
-    }, [datasetInfoInput, pushMessage, setDatasetInfoStore]);
+    }, [datasetInfoInput, pushMessage, setDatasetInfoStore, t]);
 
     const showConfirmation = useCallback(() => {
         if (!target) {
@@ -208,26 +210,28 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         usePreStageStore.getState().setProblemName(problemName);
         usePreStageStore.getState().setSelectedProblem(target, problem_description, problemName);
 
+        const datasetInfo = dataBackground ? `- **Dataset Background:** ${dataBackground}` : '';
+        const confirmText = t('problemDefine.confirmSettings', {
+            problem: problem_description || 'Custom problem analysis',
+            target: target,
+            datasetInfo: dataBackground ? `- **Dataset Background:** ${dataBackground}` : ''
+        });
+
         pushMessage(
             'assistant',
-            `Please confirm your settings:
-- **Problem:** ${problem_description || 'Custom problem analysis'}
-- **Target:** ${target}
-${dataBackground ? `- **Dataset Background:** ${dataBackground}` : ''}
-
-Is this correct?`,
-            ['Confirm and Start Analysis', 'Adjust Settings'],
+            confirmText,
+            [t('problemDefine.confirmAndStart'), t('problemDefine.adjustSettings')],
             handleConfirmRef.current,
         );
         setStage('confirm');
-    }, [dataBackground, pushMessage, problem_description, target, choiceMap]);
+    }, [dataBackground, pushMessage, problem_description, target, choiceMap, t]);
 
     const handleConfirm = useCallback((option) => {
-        if (option === 'Adjust Settings') {
+        if (option === t('problemDefine.adjustSettings')) {
             pushMessage(
                 'assistant',
-                'What would you like to adjust?',
-                ['Change Analysis Type/Target', 'Edit Dataset Info', 'Restart Workflow'],
+                t('problemDefine.whatAdjust'),
+                [t('problemDefine.changeType'), t('problemDefine.editDatasetInfo'), t('problemDefine.restartWorkflow')],
                 handleAdjustmentChoiceRef.current,
             );
         } else {
@@ -243,10 +247,10 @@ Is this correct?`,
                 console.log("problem_name is empty");
             }
         }
-    }, [pushMessage, confirmProblem, fileName, addVariable, problem_description, dataBackground, problem_name]);
+    }, [pushMessage, confirmProblem, fileName, addVariable, problem_description, dataBackground, problem_name, t]);
 
     const handleAdjustmentChoice = useCallback((option) => {
-        if (option === 'Change Analysis Type/Target') {
+        if (option === t('problemDefine.changeType')) {
             const problemOptions = choiceMap?.filter(item => item?.problem_description)
                 .map(item => item.problem_description) || [];
             
@@ -258,30 +262,30 @@ Is this correct?`,
             
             pushMessage(
                 'assistant',
-                'Select a new analysis type:',
+                t('problemDefine.selectNewType'),
                 problemOptions,
                 handleTypeSelectRef.current,
             );
             setStage('chooseType');
-        } else if (option === 'Edit Dataset Info') {
+        } else if (option === t('problemDefine.editDatasetInfo')) {
             setDatasetInfoInput(dataBackground || '');
             setInfoBoxAnimation('animate-float-in');
             setShowDataInfoInput(true);
-            pushMessage('assistant', 'Edit dataset background info below.');
+            pushMessage('assistant', t('problemDefine.enterDatasetInfo'));
         } else {
             resetWorkflow();
         }
-    }, [pushMessage, dataBackground, resetWorkflow, choiceMap]);
+    }, [pushMessage, dataBackground, resetWorkflow, choiceMap, t]);
 
     const handleDatasetInfoChoice = useCallback((option) => {
-        if (option === 'Skip') {
+        if (option === t('problemDefine.skip')) {
             showConfirmationRef.current();
         } else {
             setInfoBoxAnimation('animate-float-in');
             setShowDataInfoInput(true);
-            pushMessage('assistant', 'Enter dataset background info below.');
+            pushMessage('assistant', t('problemDefine.enterDatasetInfo'));
         }
-    }, [pushMessage]);
+    }, [pushMessage, t]);
 
     const handleTypeSelect = useCallback((option) => {
         // 查找选中的问题，添加空值检查
@@ -301,13 +305,13 @@ Is this correct?`,
 
         pushMessage(
             'assistant',
-            `You selected ${selectedChoice.problem_name || 'your analysis'}.
-Would you like to add background info?`,
-            ['Skip', 'Add dataset background info'],
+            `${selectedChoice.problem_name ? `You selected ${selectedChoice.problem_name}` : 'You selected your analysis'}.
+${t('problemDefine.addBackground')}`,
+            [t('problemDefine.skip'), t('problemDefine.addDatasetInfo')],
             handleDatasetInfoChoiceRef.current,
         );
         setStage('dataBackground');
-    }, [pushMessage, choiceMap, setSelectedProblem]);
+    }, [pushMessage, choiceMap, setSelectedProblem, t]);
 
     /* ─────────── Side Effects ─────────── */
     useEffect(scrollToBottom, [messages, scrollToBottom]);
@@ -341,7 +345,7 @@ Would you like to add background info?`,
             const assistantMessage = {
                 id: generateId(),
                 role: 'assistant',
-                content: 'Please select the analysis type you want to perform, or describe the problem you want to solve:',
+                content: t('problemDefine.selectAnalysis'),
                 options: problem_options,
                 onSelect: handleInitialChoiceRef.current
             };
@@ -350,7 +354,7 @@ Would you like to add background info?`,
                 setStage('intro');
             }, 0);
         }
-    }, [ messages.length, choiceMap]);
+    }, [ messages.length, choiceMap, t]);
 
     /* ─────────── JSX ─────────── */
     return (
@@ -391,9 +395,9 @@ Would you like to add background info?`,
                                                 <button
                                                     key={opt}
                                                     onClick={() => handleSelect(m.id, opt, m.onSelect)}
-                                                    className={`px-3 py-1.5 text-xs rounded-2xl text-rose-700 transition-all duration-300 transform hover:scale-105 ${m.role === 'user'
+                                                    className={`px-3 py-1.5 text-xs rounded-2xl text-theme-700 transition-all duration-300 transform hover:scale-105 ${m.role === 'user'
                                                         ? 'bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 hover:shadow-md'
-                                                        : 'border border-rose-200 hover:shadow-md hover:from-rose-100 hover:to-rose-200'
+                                                        : 'border border-theme-200 hover:shadow-md hover:from-theme-100 hover:to-theme-200'
                                                         } animate-bounce-in`}
                                                     style={{
                                                         animationDelay: `${i * 0.1 + 0.3}s`,
@@ -401,11 +405,11 @@ Would you like to add background info?`,
                                                     }}
                                                 >
                                                     <span className="flex items-center space-x-1">
-                                                        {opt.includes('start analysis') && (
+                                                        {opt.includes(t('problemDefine.confirmAndStart')) && (
                                                             <Sparkles size={12} className="mr-1 animate-pulse" />
                                                         )}
                                                         <span>{opt}</span>
-                                                        {opt.includes('start analysis') && (
+                                                        {opt.includes(t('problemDefine.confirmAndStart')) && (
                                                             <ArrowRight size={12} className="ml-1 animate-slide-in-right" />
                                                         )}
                                                     </span>
@@ -420,12 +424,12 @@ Would you like to add background info?`,
                         {/* Dataset info input box with enhanced animations */}
                         {showDataInfoInput && (
                             <div className={`flex justify-start w-full my-4 ${infoBoxAnimation || 'animate-float-in'}`}>
-                                <div className="bg-white/90 backdrop-blur-sm border border-rose-200 rounded-2xl p-4 text-gray-800 shadow-lg w-full transition-all duration-300">
+                                <div className="bg-white/90 backdrop-blur-sm border border-theme-200 rounded-2xl p-4 text-gray-800 shadow-lg w-full transition-all duration-300">
                                     <textarea
                                         value={datasetInfoInput}
                                         onChange={(e) => setDatasetInfoInput(e.target.value)}
-                                        placeholder="input the context of the dataset, such as the source of the data, the collection period, and the business rules..."
-                                        className="w-full p-3 border border-rose-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-400 min-h-[100px] text-sm transition-all duration-300 bg-white/70"
+                                        placeholder={t('problemDefine.datasetInputPlaceholder')}
+                                        className="w-full p-3 border border-theme-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-theme-500/50 focus:border-theme-400 min-h-[100px] text-sm transition-all duration-300 bg-white/70"
                                         rows={4}
                                         autoFocus
                                     />
@@ -435,19 +439,19 @@ Would you like to add background info?`,
                                             className="px-4 py-1.5 text-sm rounded-full text-gray-600 hover:bg-gray-100 border border-gray-300 transition-all duration-300 hover:scale-105 animate-slide-in-right"
                                             style={{ animationDelay: '0.3s' }}
                                         >
-                                            Cancel
+                                            {t('problemDefine.cancel')}
                                         </button>
                                         <button
                                             onClick={submitDatasetInfoRef.current}
                                             disabled={!datasetInfoInput.trim()}
                                             className={`px-4 py-1.5 text-sm rounded-full flex items-center space-x-1 transition-all duration-300 animate-slide-in-right ${!datasetInfoInput.trim()
                                                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                                : 'bg-gradient-to-r from-rose-500 to-purple-500 text-white hover:shadow-lg transform hover:scale-105'
+                                                : 'bg-gradient-to-r from-theme-500 to-purple-500 text-white hover:shadow-lg transform hover:scale-105'
                                                 }`}
                                             style={{ animationDelay: '0.4s' }}
                                         >
                                             <Sparkles size={14} className="mr-1 animate-spin-slow" />
-                                            <span>Submit Information</span>
+                                            <span>{t('problemDefine.submit')}</span>
                                             <ArrowRight size={14} className="ml-1 animate-slide-in-right" />
                                         </button>
                                     </div>
@@ -459,7 +463,7 @@ Would you like to add background info?`,
                     </div>
 
                     {/* Input area */}
-                    <div className="border-t border-rose-100 bg-white/70 backdrop-blur-sm px-4 py-3 rounded-b-2xl">
+                    <div className="border-t border-theme-100 bg-white/70 backdrop-blur-sm px-4 py-3 rounded-b-2xl">
                         {(stage === 'free_input' || stage === 'done') && !showDataInfoInput ? (
                             <form onSubmit={handleSubmit} className="flex space-x-3 items-center animate-fade-in">
                                 <input
@@ -467,9 +471,9 @@ Would you like to add background info?`,
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     placeholder={
-                                        stage === 'free_input' ? 'Describe your problem or requirements...' : 'Ask follow-up questions about the results...'
+                                        stage === 'free_input' ? t('problemDefine.problemInput') : t('problemDefine.followUpQuestion')
                                     }
-                                    className="flex-1 px-4 py-2 border border-rose-200 rounded-full focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-400 text-sm transition-all duration-300 bg-white/80 shadow-inner hover:shadow"
+                                    className="flex-1 px-4 py-2 border border-theme-200 rounded-full focus:outline-none focus:ring-2 focus:ring-theme-500/50 focus:border-theme-400 text-sm transition-all duration-300 bg-white/80 shadow-inner hover:shadow"
                                     disabled={loading}
                                     aria-label="chat input"
                                     autoFocus
@@ -479,7 +483,7 @@ Would you like to add background info?`,
                                     disabled={loading || !input.trim()}
                                     className={`rounded-full w-10 h-10 flex items-center justify-center transition-all duration-300 ${loading || !input.trim()
                                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-rose-500 to-purple-500 text-white shadow-md hover:shadow-lg transform hover:scale-110'
+                                        : 'bg-gradient-to-r from-theme-500 to-purple-500 text-white shadow-md hover:shadow-lg transform hover:scale-110'
                                         }`}
                                     aria-label="submit"
                                 >
@@ -491,12 +495,12 @@ Would you like to add background info?`,
                                 {loading ? (
                                     <span className="flex items-center justify-center space-x-2">
                                         <Loader2 size={16} className="animate-spin" />
-                                        <span className="animate-pulse">Processing...</span>
+                                        <span className="animate-pulse">{t('problemDefine.processing')}</span>
                                     </span>
                                 ) : (
                                     <span className="flex items-center justify-center space-x-2">
                                         <ChevronUp size={16} className="animate-bounce" />
-                                        <span>Please select from the options above</span>
+                                        <span>{t('problemDefine.selectOptions')}</span>
                                         <ChevronUp size={16} className="animate-bounce" style={{ animationDelay: '0.2s' }} />
                                     </span>
                                 )}
@@ -509,7 +513,7 @@ Would you like to add background info?`,
                                 {[...Array(3)].map((_, i) => (
                                     <div
                                         key={i}
-                                        className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-rose-500' : 'bg-rose-300'
+                                        className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-theme-500' : 'bg-theme-300'
                                             } animate-pulse`}
                                         style={{ animationDelay: `${i * 0.2}s` }}
                                     />
