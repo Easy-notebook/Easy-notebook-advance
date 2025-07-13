@@ -1,7 +1,8 @@
 {
   "modeToggle": {
     "completeMode": "Create Mode",
-    "stepMode": "Demo Mode"
+    "stepMode": "Demo Mode",
+    "wysiwygMode": "WYSIWYG Mode"
   },
   "cell": {
     "addCodeCell": "Add Code Cell",

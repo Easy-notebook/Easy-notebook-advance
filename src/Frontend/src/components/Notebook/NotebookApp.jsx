@@ -26,6 +26,7 @@ import CompleteMode from '../senario/BasicMode/CompleteMode';
 import StepMode from '../senario/BasicMode/StepMode';
 import PreviewApp from './Display/PreviewApp';
 import LanguageSwitcher from '../../i18n/LanguageSwitcher';
+import TiptapNotebookEditor from '../Editor/TiptapNotebookEditor';
 
 const VUE_PRIMARY = '#41B883';
 const VUE_SECONDARY = '#35495E';
@@ -37,6 +38,7 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
   const modes = [
     { id: 'complete', label: 'Create Mode', name: t('modeToggle.completeMode') },
     { id: 'step', label: 'Demo Mode', name: t('modeToggle.stepMode') },
+    { id: 'wysiwyg', label: 'WYSIWYG Mode', name: t('modeToggle.wysiwygMode') },
   ];
 
   const selectedMode = modes.find(mode => mode.id === viewMode);
@@ -592,6 +594,22 @@ const NotebookApp = () => {
           renderCell={renderCell}
           renderStepNavigation={renderStepNavigation}
         />
+      );
+    }
+
+    if (viewMode === 'wysiwyg') {
+      return (
+        <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 my-auto">
+          <div className="h-10 w-full"></div>
+          <div className="relative">
+            <TiptapNotebookEditor
+              className="w-full"
+              placeholder="Start writing your notebook... Type ```python to create a code block"
+              readOnly={false}
+            />
+          </div>
+          <div className="h-20 w-full"></div>
+        </div>
       );
     }
 
