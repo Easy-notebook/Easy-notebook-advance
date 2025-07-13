@@ -450,7 +450,7 @@ const TiptapNotebookEditor = forwardRef(({
   }
 
   return (
-    <div className="tiptap-notebook-editor-container w-full h-full bg-white">
+    <div className="tiptap-notebook-editor-container w-full h-full bg-transparent">
       {/* 浮动工具栏 - 选中文本时显示 */}
       <BubbleMenu 
         editor={editor}
