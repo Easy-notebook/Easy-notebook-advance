@@ -1,6 +1,5 @@
 # agents/results_evaluation_agent.py
 from .base_agent import BaseDSLC_Agent
-from langchain.memory import ConversationBufferMemory
 from DCLSAgents.prompts.results_evaluation_prompts import *
 import re
 import os
@@ -47,7 +46,7 @@ class ResultsEvaluationAgent(BaseDSLC_Agent):
                 multiple_datasets_code=multiple_datasets_code
             )
             
-            generated_code, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            generated_code, _ = self.chat_with_memory(input_data, None)
             code_match = re.search(r"```python\n(.*?)\n```", generated_code, re.DOTALL)
             
             if code_match:
@@ -165,7 +164,7 @@ class ResultsEvaluationAgent(BaseDSLC_Agent):
                 model_training_code=model_training_code
             )
             
-            generated_code, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            generated_code, _ = self.chat_with_memory(input_data, None)
             code_match = re.search(r"```python\n(.*?)\n```", generated_code, re.DOTALL)
             
             if code_match:

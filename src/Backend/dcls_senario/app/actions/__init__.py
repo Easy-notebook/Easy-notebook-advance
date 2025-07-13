@@ -19,16 +19,16 @@ async def get_sequence_generator(stage_id: str, step_index: int, state: Optional
     stage = get_stage_or_abort(stage_id)
     step = validate_step_index(stage, step_index)
     
-    if stage_id == "data-cleaning":
+    if stage_id == "data_cleaning":
         return await generate_data_cleaning_sequence(step_index, step, state, stream)
     
-    if stage_id == "data-loading-and-hypothesis-proposal":
+    if stage_id == "data_loading_and_hypothesis_proposal":
         return await generate_data_loading_and_hypothesis_proposal_sequence(step_index, step, state, stream)
     
-    if stage_id == "exploratory-data-analysis":
+    if stage_id == "exploratory_data_analysis":
         return await generate_exploratory_data_sequence(step_index, step, state, stream)
     
-    if stage_id == "model-proposal":
+    if stage_id == "model_proposal":
         return await generate_model_proposal_sequence(step_index, step, state, stream)
     
     raise HTTPException(status_code=404, detail=f"No sequence generator implemented for stage {stage_id}")

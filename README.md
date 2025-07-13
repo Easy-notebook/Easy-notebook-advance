@@ -170,7 +170,7 @@ This ensures a **goal-driven**, **quality-controlled** execution pipeline thatâ€
 ### Frontend Architecture
 
 - **React-Based Responsive UI**: Combined with Zustand state management for efficient state updates and UI rendering
-- **Multi-Mode Views**: Supporting Complete Mode, Step Mode, and DSLC Mode for various interaction preferences
+- **Multi-Mode Views**: Supporting Create Mode, Demo Mode, and DSLC Mode for various interaction preferences
 - **Adaptive Cell System**: Supporting code, Markdown, hybrid, and file cell types
 - **WebSocket/SSE Streaming Communication**: Enabling real-time streaming updates of code and outputs
 

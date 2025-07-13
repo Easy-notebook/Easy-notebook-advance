@@ -9,7 +9,6 @@ async def generate_data_loading_and_hypothesis_proposal_step_4(
 ) -> Dict[str, Any]:
     state = state or {}
     
-    # 初始化场景内agent（如果需要）
     problem_definition_agent = ProblemDefinitionAndDataCollectionAgent(llm=llm)
     
     step_template = StepTemplate(step, state)

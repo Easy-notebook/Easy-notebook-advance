@@ -1,8 +1,5 @@
-from langchain.tools import BaseTool
-from langchain.pydantic_v1 import BaseModel, Field
-from langchain.base_language import BaseLanguageModel
 import re
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 from DCLSAgents.prompts.debug_prompts import (
     DEBUG_TEMPLATE,
     DEBUG_LOCATE_TEMPLATE,
@@ -13,47 +10,48 @@ from DCLSAgents.prompts.debug_prompts import (
     DEBUG_TEST_FIX_TEMPLATE,
     DEBUG_TEST_MERGE_TEMPLATE
 )
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema import AIMessage, HumanMessage, SystemMessage
 
-class DebugInput(BaseModel):
-    """输入参数模型"""
-    code: str = Field(..., description="需要调试的代码")
-    error_message: str = Field(..., description="error_message")
-    output_message: str = Field("", description="代码输出信息(可选)")
-    tools_description: str = Field("", description="工具描述(可选)")
-    is_test_error: bool = Field(False, description="是否为测试错误")
-    test_info: str = Field("", description="测试相关信息")
-
-class DebugTool(BaseTool):
-    name: str = "debug"
-    description: str = "调试代码错误的工具"
-    args_schema: type[BaseModel] = DebugInput
+class DebugTool:
+    """调试代码错误的工具 - 无LangChain版本"""
     
-    llm: BaseLanguageModel = Field(description="Language Model to use")
-    all_error_messages: List[str] = Field(default_factory=list, description="存储所有error_message的列表")
-    memory: ConversationBufferMemory = Field(default_factory=lambda: ConversationBufferMemory(), description="对话记忆")
-    
-    def __init__(self, llm: BaseLanguageModel):
+    def __init__(self, oracle=None):
         """初始化工具"""
-        super().__init__(llm=llm)
-        if not llm:
-            raise ValueError("必须提供 LLM 实例")
-        self.memory = ConversationBufferMemory()
-        # 添加系统消息
-        system_message = SystemMessage(content="你是一个专业的代码调试助手，擅长分析和修复代码错误。请帮助用户定位和解决代码中的问题。")
-        self.memory.chat_memory.add_message(system_message)
+        self.name = "debug"
+        self.description = "调试代码错误的工具"
+        
+        if oracle is None:
+            try:
+                from app.utils.oracle import Oracle
+                self.oracle = Oracle()
+            except ImportError:
+                self.oracle = None
+        else:
+            self.oracle = oracle
+            
+        if not self.oracle:
+            raise ValueError("必须提供 Oracle 实例或确保 Oracle 类可用")
+            
+        self.all_error_messages: List[str] = []
+        self.conversation_history: List[Dict[str, str]] = []
+        
+        # 添加系统消息到历史
+        self.conversation_history.append({
+            "role": "system",
+            "content": "你是一个专业的代码调试助手，擅长分析和修复代码错误。请帮助用户定位和解决代码中的问题。"
+        })
             
     def _chat_with_memory(self, prompt: str) -> str:
         """使用记忆进行对话"""
-        self.memory.chat_memory.add_message(HumanMessage(content=prompt))
-        chat_prompt = ChatPromptTemplate.from_messages(self.memory.chat_memory.messages)
-        chain = chat_prompt | self.llm
-        response = chain.invoke({})
-        reply = response.content
-        self.memory.chat_memory.add_message(AIMessage(content=reply))
-        return reply
+        # 添加用户消息到历史
+        self.conversation_history.append({"role": "user", "content": prompt})
+        
+        # 使用Oracle生成响应
+        response = self.oracle.generate(self.conversation_history)
+        
+        # 添加助手响应到历史
+        self.conversation_history.append({"role": "assistant", "content": response})
+        
+        return response
 
     def _locate_error(self, wrong_code: str, error_messages: str, output_messages: str) -> str:
         """定位错误"""
@@ -195,9 +193,20 @@ class DebugTool(BaseTool):
                 "message": f"调试过程出错: {str(e)}"
             }
 
+    def run(self, tool_input: Dict[str, Any]) -> Dict:
+        """运行调试工具 - 新接口"""
+        code = tool_input.get("code", "")
+        error_message = tool_input.get("error_message", "")
+        output_message = tool_input.get("output_message", "")
+        tools_description = tool_input.get("tools_description", "")
+        is_test_error = tool_input.get("is_test_error", False)
+        test_info = tool_input.get("test_info", "")
+        
+        return self._run(code, error_message, output_message, tools_description, is_test_error, test_info)
+    
     def _run(self, code: str, error_message: str, output_message: str = "", 
              tools_description: str = "", 
-             is_test_error: bool = False) -> Dict:
+             is_test_error: bool = False, test_info: str = "") -> Dict:
         """运行调试工具"""
         try:
             # 检查是否需要请求帮助
@@ -208,10 +217,10 @@ class DebugTool(BaseTool):
                 }
             
             # 根据错误类型选择不同的调试策略
-            if is_test_error :
+            if is_test_error:
                 return self._debug_test_failure(
                     code,
-                    error_message,
+                    test_info or error_message,
                     output_message
                 )
             else:

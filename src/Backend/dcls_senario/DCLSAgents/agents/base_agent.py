@@ -1,16 +1,52 @@
-from langchain_core.messages import SystemMessage, HumanMessage,AIMessage
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
-from langchain_openai import ChatOpenAI
 import json
 import re
-from DCLSAgents.tools import *
 import os
 import logging
 import time
-import openai
+from typing import Optional, Union, List, Dict, Any
+
+# Import tools without LangChain
+try:
+    from DCLSAgents.tools import ImageToTextTool, UnitTestTool, DebugTool
+except ImportError:
+    # If tools import fails, define dummy classes
+    class ImageToTextTool:
+        def __init__(self, *args, **kwargs):
+            pass
+        def run(self, tool_input):
+            return "ImageToTextTool not available"
+    
+    class UnitTestTool:
+        def __init__(self, *args, **kwargs):
+            pass
+        def run(self, tool_input):
+            return {"status": "error", "message": "UnitTestTool not available"}
+    
+    class DebugTool:
+        def __init__(self, *args, **kwargs):
+            pass
+        def run(self, tool_input):
+            return {"status": "error", "message": "DebugTool not available"}
+
+# Import the enhanced Oracle class
+try:
+    from app.utils.oracle import Oracle, OracleError, OracleAPIError, OracleValidationError
+except ImportError:
+    # Fallback for different import paths
+    try:
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'app', 'utils'))
+        from oracle import Oracle, OracleError, OracleAPIError, OracleValidationError
+    except ImportError:
+        # If Oracle is not available, define dummy classes
+        class OracleError(Exception):
+            pass
+        class OracleAPIError(OracleError):
+            pass
+        class OracleValidationError(OracleError):
+            pass
+        Oracle = None
 
 class BaseDSLC_Agent():
     def __init__(
@@ -19,27 +55,51 @@ class BaseDSLC_Agent():
         system_message: str,
         memory=None,
         llm=None,
+        oracle: Optional[Oracle] = None,
         tools=None,
-        max_turns=3
+        max_turns=3,
+        api_key: Optional[str] = None,
+        base_url: str = "https://openkey.cloud/v1",
+        model: str = "gpt-4o"
     ):
         self.name = name
-        self.memory = memory or ConversationBufferMemory()
-        self.llm = llm
+        self.system_message_content = system_message
+        self.llm = llm  # Keep for backward compatibility
         self.max_turns = max_turns
         
-        self.system_message = SystemMessage(content=system_message)
-        self.memory.chat_memory.add_message(self.system_message)
+        # Initialize conversation history (replacing LangChain memory)
+        self.conversation_history = []
+        self.conversation_history.append({
+            "role": "system",
+            "content": system_message
+        })
+        
+        # Initialize Oracle if not provided and Oracle class is available
+        if oracle is None and Oracle is not None:
+            try:
+                # Use provided API key or fallback to default/environment
+                if not api_key:
+                    api_key = os.getenv("OPENAI_API_KEY", "sk-iLOmdIAzvILZxzlY94AdC46e7bE145089aD6Fe7bAc3e7489")
+                
+                self.oracle = Oracle(
+                    api_key=api_key,
+                    base_url=base_url,
+                    model=model,
+                    temperature=0.7,
+                    enable_logging=True
+                )
+            except (OracleError, OracleValidationError) as e:
+                logging.error(f"Failed to initialize Oracle: {e}")
+                # Fallback to original LLM if Oracle fails
+                self.oracle = None
+        else:
+            self.oracle = oracle if Oracle is not None else None
         
         self.tools = tools or []
-        self.conversation = ConversationChain(
-            llm=self.llm,
-            memory=self.memory,
-            verbose=False
-        )
         
         # 设置日志
         self.setup_logger()
-        self.logger.info(f"Initialized {self.name} agent")
+        self.logger.info(f"Initialized {self.name} agent with {'enhanced Oracle' if self.oracle else 'legacy LLM'}")
 
     def setup_logger(self):
         """设置日志记录器"""
@@ -63,108 +123,121 @@ class BaseDSLC_Agent():
             self.logger.info(f"Logger setup completed for {self.name}")
 
     def get_memory_token(self):
-        buffer = self.memory.chat_memory.messages
-        num_tokens = self.llm.get_num_tokens_from_messages(buffer)
-        return num_tokens
+        """获取对话历史的token数量估算"""
+        if self.oracle:
+            total_tokens = 0
+            for msg in self.conversation_history:
+                total_tokens += self.oracle.count_tokens(msg.get("content", ""))
+            return total_tokens
+        else:
+            # 简单估算：4个字符约等于1个token
+            total_chars = sum(len(msg.get("content", "")) for msg in self.conversation_history)
+            return total_chars // 4
 
     def get_recent_k_conversations(self):
         """获取最近 k 轮对话"""
-        return self.memory.chat_memory.messages[-self.max_turns:]  # 只获取最后 k 轮对话
+        # 保留系统消息，然后取最近的对话轮次
+        system_msgs = [msg for msg in self.conversation_history if msg["role"] == "system"]
+        other_msgs = [msg for msg in self.conversation_history if msg["role"] != "system"]
+        return system_msgs + other_msgs[-self.max_turns*2:]  # user+assistant = 2条消息为1轮
 
     def execute(self, input_data):
-        """执行Agent的任务，并通过 SystemMessage 和 HumanMessage 调用 LLM 生成响应"""
-        #self.logger.info(f"Executing with input: {input_data[:100]}...")
+        """执行Agent的任务"""
         try:
-            human_message = HumanMessage(content=input_data)
-            ai_response = self.conversation.predict(input=human_message.content)
-            self.logger.info(f"Execution completed successfully")
-            return ai_response
+            if self.oracle:
+                # 使用Oracle执行
+                self.conversation_history.append({"role": "user", "content": input_data})
+                response = self.oracle.generate(self.conversation_history)
+                self.conversation_history.append({"role": "assistant", "content": response})
+                self.logger.info("Execution completed successfully")
+                return response
+            else:
+                # 回退方案：如果没有Oracle和LLM，返回错误
+                self.logger.error("No LLM provider available")
+                return "Error: No LLM provider available"
         except Exception as e:
             self.logger.error(f"Error during execution: {str(e)}")
             raise
     
     def execute2(self, input_data):
         """执行Agent的任务，控制传递的对话轮次"""
-        #self.logger.info(f"Executing with controlled turns, input: {input_data[:100]}...")
         try:
-            human_message = HumanMessage(content=input_data)
-            self.memory.chat_memory.add_message(human_message)
-            recent_messages = self.get_recent_k_conversations()
-
-            prompt = ChatPromptTemplate.from_messages(recent_messages)
-            chain = LLMChain(llm=self.llm, prompt=prompt, verbose=True)
-
-            ai_response = chain.run(input_data=input_data)
-            self.memory.chat_memory.add_message(AIMessage(content=ai_response))
-            self.logger.info("Execution with controlled turns completed successfully")
-            return ai_response
+            if self.oracle:
+                # 添加用户消息
+                self.conversation_history.append({"role": "user", "content": input_data})
+                
+                # 获取最近的对话
+                recent_messages = self.get_recent_k_conversations()
+                
+                # 使用Oracle生成响应
+                response = self.oracle.generate(recent_messages)
+                
+                # 添加助手响应
+                self.conversation_history.append({"role": "assistant", "content": response})
+                
+                self.logger.info("Execution with controlled turns completed successfully")
+                return response
+            else:
+                self.logger.error("No LLM provider available")
+                return "Error: No LLM provider available"
         except Exception as e:
             self.logger.error(f"Error during controlled execution: {str(e)}")
             raise
     
-    def chat_with_memory(self, prompt: str, memory: ConversationBufferMemory, stream_output: bool = False):
+    def chat_with_memory(self, prompt: str, memory=None, stream_output: bool = False):
         """使用记忆进行对话，可选择是否使用流式输出
         
         Args:
             prompt: 输入的提示词
-            memory: 对话记忆
+            memory: 对话记忆（忽略，使用内部历史）
             stream_output: 是否使用流式输出，默认为 False
         """
-        max_retries = 3
-        retry_delay = 2
-        
-        for attempt in range(max_retries):
-            try:
-                if not any(isinstance(msg, SystemMessage) for msg in memory.chat_memory.messages):
-                    memory.chat_memory.add_message(self.system_message)
-                memory.chat_memory.add_message(HumanMessage(content=prompt))
-                chat_prompt = ChatPromptTemplate.from_messages(memory.chat_memory.messages)
-                chain = chat_prompt | self.llm
+        try:
+            if self.oracle:
+                # 使用内部对话历史
+                self.conversation_history.append({"role": "user", "content": prompt})
+                
+                # 使用Oracle生成响应
+                response = self.oracle.generate(self.conversation_history, stream=stream_output)
                 
                 if stream_output:
-                    # 使用流式输出
+                    # Handle streaming response
                     full_response = ""
-                    for chunk in chain.stream({}):
-                        if hasattr(chunk, 'content'):
-                            chunk_content = chunk.content
-                        else:
-                            chunk_content = chunk
-                        full_response += chunk_content
-                        print(chunk_content, end="", flush=True)
-                else:
-                    # 使用普通输出
-                    response = chain.invoke({})
-                    full_response = response.content
+                    for chunk in response:
+                        full_response += chunk
+                        print(chunk, end="", flush=True)
+                    response = full_response
                 
-                # 将完整响应添加到记忆中
-                memory.chat_memory.add_message(AIMessage(content=full_response))
-                return full_response, memory
+                # 添加响应到历史
+                self.conversation_history.append({"role": "assistant", "content": response})
                 
-            except openai.AuthenticationError as e:
-                if "无效的令牌" in str(e):
-                    if attempt == max_retries - 1:  # 最后一次尝试
-                        self.logger.error(f"Authentication failed after {max_retries} attempts: {str(e)}")
-                        raise
-                    else:
-                        self.logger.warning(f"Token error on attempt {attempt + 1}, retrying in {retry_delay} seconds...")
-                        if memory.chat_memory.messages:
-                            memory.chat_memory.messages.pop()
-                        time.sleep(retry_delay)
-                        continue
-                else:
-                    raise
-                    
-            except Exception as e:
-                self.logger.error(f"Error during chat with memory: {str(e)}")
-                raise
+                # 为了兼容性，返回(response, self)
+                return response, self
+            else:
+                self.logger.error("No Oracle available for chat with memory")
+                return "Error: No LLM provider available", self
+                
+        except Exception as e:
+            self.logger.error(f"Error during chat with memory: {str(e)}")
+            raise
 
-    def chat_without_memory(self,prompt: str, system_setting: str=None,  stream_output: bool = False):
+    def chat_without_memory(self, prompt: str, system_setting: str=None, stream_output: bool = False):
         """不使用记忆进行对话，可选择是否使用流式输出
         
         Args:
             prompt: 输入的提示词
+            system_setting: 系统设置消息
             stream_output: 是否使用流式输出，默认为 False
         """
+        # Try using Oracle first if available
+        if self.oracle:
+            try:
+                return self._chat_without_memory_oracle(prompt, system_setting, stream_output)
+            except (OracleError, OracleAPIError) as e:
+                self.logger.warning(f"Oracle failed, falling back to legacy LLM: {e}")
+                # Fall through to legacy implementation
+        
+        # Legacy implementation
         max_retries = 3
         retry_delay = 2
         
@@ -224,6 +297,33 @@ class BaseDSLC_Agent():
             except Exception as e:
                 self.logger.error(f"Error during chat without memory: {str(e)}")
                 raise
+
+    def _chat_without_memory_oracle(self, prompt: str, system_setting: str=None, stream_output: bool = False):
+        """使用Oracle进行无记忆对话"""
+        try:
+            # Use Oracle's generate_with_system method for cleaner implementation
+            if system_setting:
+                response = self.oracle.generate_with_system(
+                    user_message=prompt,
+                    system_message=system_setting,
+                    stream=stream_output
+                )
+            else:
+                response = self.oracle.generate(prompt, stream=stream_output)
+            
+            if stream_output:
+                # Handle streaming response
+                full_response = ""
+                for chunk in response:
+                    full_response += chunk
+                    print(chunk, end="", flush=True)
+                return full_response
+            else:
+                return response
+                
+        except Exception as e:
+            self.logger.error(f"Error in Oracle chat without memory: {str(e)}")
+            raise OracleError(f"Oracle conversation failed: {e}")
     
     def parse_llm_json(self, response):
         """
@@ -237,13 +337,64 @@ class BaseDSLC_Agent():
             return f"未找到JSON数据，原始响应: {response}"
         except json.JSONDecodeError as e:
             return f"JSON解析错误: {str(e)}，原始响应: {response}"
+
+    def generate_json_response(self, prompt: str, system_setting: str = None) -> Dict[str, Any]:
+        """使用Oracle生成JSON响应
+        
+        Args:
+            prompt: 输入提示词
+            system_setting: 系统设置消息
+            
+        Returns:
+            解析后的JSON字典
+        """
+        if self.oracle:
+            try:
+                if system_setting:
+                    messages = [
+                        {"role": "system", "content": system_setting},
+                        {"role": "user", "content": prompt}
+                    ]
+                    return self.oracle.generate_json(messages)
+                else:
+                    return self.oracle.generate_json(prompt)
+            except (OracleError, OracleAPIError) as e:
+                self.logger.warning(f"Oracle JSON generation failed: {e}")
+                # Fall back to text parsing
+                
+        # Fallback: generate text response and parse JSON
+        text_response = self.chat_without_memory(prompt, system_setting)
+        return self.parse_llm_json(text_response)
+
+    def get_token_usage_info(self) -> Dict[str, Any]:
+        """获取Oracle的token使用信息"""
+        if self.oracle:
+            return self.oracle.get_model_info()
+        return {"message": "Oracle not available, using legacy LLM"}
+
+    def estimate_request_cost(self, text: str) -> float:
+        """估算请求成本"""
+        if self.oracle:
+            try:
+                input_tokens = self.oracle.count_tokens(text)
+                # Estimate output tokens as 25% of input (rough estimation)
+                output_tokens = int(input_tokens * 0.25)
+                return self.oracle.estimate_cost(input_tokens, output_tokens)
+            except Exception as e:
+                self.logger.warning(f"Cost estimation failed: {e}")
+        return 0.0
+
+    def create_oracle_conversation(self) -> Optional['Conversation']:
+        """创建Oracle对话实例"""
+        if self.oracle:
+            return self.oracle.create_conversation()
+        return None
     
     def save_history_to_txt(self, filepath):
         """保存历史对话到文本文件，排除 SystemMessage"""
-        messages = self.memory.chat_memory.messages
         filtered_messages = [
-            {"type": type(msg).__name__, "content": msg.content}
-            for msg in messages if not isinstance(msg, SystemMessage)
+            msg for msg in self.conversation_history 
+            if msg["role"] != "system"
         ]
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -257,11 +408,23 @@ class BaseDSLC_Agent():
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 loaded_messages = json.load(f)
+            
+            # 清除现有历史（保留系统消息）
+            system_msgs = [msg for msg in self.conversation_history if msg["role"] == "system"]
+            self.conversation_history = system_msgs
+            
+            # 加载历史消息
             for msg in loaded_messages:
-                if msg["type"] == "HumanMessage":
-                    self.memory.chat_memory.add_message(HumanMessage(content=msg["content"]))
-                elif msg["type"] == "AIMessage":
-                    self.memory.chat_memory.add_message(AIMessage(content=msg["content"]))
+                if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                    if msg["role"] in ["user", "assistant"]:
+                        self.conversation_history.append(msg)
+                elif isinstance(msg, dict) and "type" in msg and "content" in msg:
+                    # 兼容旧格式
+                    if msg["type"] == "HumanMessage":
+                        self.conversation_history.append({"role": "user", "content": msg["content"]})
+                    elif msg["type"] == "AIMessage":
+                        self.conversation_history.append({"role": "assistant", "content": msg["content"]})
+            
             return f"历史对话已从 {filepath} 加载"
         except Exception as e:
             return f"加载失败: {str(e)}"
@@ -351,7 +514,7 @@ plt.rcParams['axes.unicode_minus'] = False
                 
             output_message = '\n'.join(output)
             
-            debug_tool = DebugTool(llm=self.llm)
+            debug_tool = DebugTool(oracle=self.oracle)
             print(extracted_code)
             print(error_message)
             debug_result = debug_tool.run(tool_input={
@@ -386,13 +549,15 @@ plt.rcParams['axes.unicode_minus'] = False
         Returns:
             Tuple[bool, str]: (是否全部通过, 测试报告)
         """
-        from tools import UnitTestTool
-        
-        test_tool = UnitTestTool()
-        results = test_tool.run(tool_input={
-            "phase": "数据清理",
-            "data_path": cleaned_data_path,
-            "original_data_path": original_data_path
-        })
-        
-        return results["all_passed"], results["report"]
+        try:
+            test_tool = UnitTestTool()
+            results = test_tool.run(tool_input={
+                "phase": "数据清理",
+                "data_path": cleaned_data_path,
+                "original_data_path": original_data_path
+            })
+            
+            return results["all_passed"], results["report"]
+        except Exception as e:
+            self.logger.error(f"Unit test execution failed: {e}")
+            return False, f"单元测试执行失败: {str(e)}"

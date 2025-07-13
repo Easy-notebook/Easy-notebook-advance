@@ -1,5 +1,4 @@
 from .base_agent import BaseDSLC_Agent
-from langchain.memory import ConversationBufferMemory
 import pandas as pd
 from DCLSAgents.prompts.problem_definition_prompts import *
 
@@ -73,7 +72,7 @@ class ProblemDefinitionAndDataCollectionAgent(BaseDSLC_Agent):
                 problem_description=problem_description,
                 context_description=context_description
             )
-            response,_ = self.chat_with_memory(input_data,ConversationBufferMemory())
+            response,_ = self.chat_with_memory(input_data, None)
             self.data_corr = response
             return self.data_corr
         except Exception as e:

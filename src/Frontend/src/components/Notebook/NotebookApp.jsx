@@ -35,14 +35,14 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const modes = [
-    { id: 'complete', label: 'Complete Mode', name: t('modeToggle.completeMode') },
-    { id: 'step', label: 'Step Mode', name: t('modeToggle.stepMode') },
+    { id: 'complete', label: 'Create Mode', name: t('modeToggle.completeMode') },
+    { id: 'step', label: 'Demo Mode', name: t('modeToggle.stepMode') },
   ];
 
   const selectedMode = modes.find(mode => mode.id === viewMode);
 
   return (
-    <div className="relative w-full max-w-md">
+    <div className="relative w-full max-w-md z-99999">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50"
@@ -53,6 +53,7 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
         <span
           style={{
             font: '18px ui-sans-serif, -apple-system, system-ui',
+            zIndex: 99999,
             fontWeight: 600,
             height: '24px',
             letterSpacing: 'normal',
@@ -81,7 +82,7 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
               key={mode.id}
               onClick={() => { onModeChange(mode.id); setIsOpen(false); }}
               className={`w-full text-left p-3 flex items-center justify-between transition-colors ${viewMode === mode.id ? 'bg-white/90' : 'hover:bg-white/80'}`}
-              style={{ whiteSpace: 'nowrap' }} // 保证下拉项不换行
+              style={{ whiteSpace: 'nowrap' }}
             >
               <span
                 className="text-lg font-medium"

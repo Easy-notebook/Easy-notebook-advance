@@ -1,15 +1,6 @@
-from langchain.tools import BaseTool
-from langchain.pydantic_v1 import BaseModel, Field
-from langchain.base_language import BaseLanguageModel
 import pandas as pd
 import os
-from typing import Dict, List, Tuple
-
-class UnitTestInput(BaseModel):
-    """输入参数模型"""
-    phase: str = Field(..., description="测试阶段(如'数据清理','特征工程'等)")
-    data_path: str = Field(..., description="清理后的数据文件路径")
-    original_data_path: str = Field(None, description="原始数据文件路径(可选)")
+from typing import Dict, List, Tuple, Any, ClassVar
 
 class DataCleaningTest:
     """数据清理阶段的测试集合"""
@@ -207,26 +198,25 @@ class DataCleaningTest:
                 "passed": False,
                 "message": f"测试执行失败: {str(e)}"
             }
-from typing import ClassVar, Dict
-
-
-class UnitTestTool(BaseTool):
-    name: str = "unit_test"
-    description: str = "执行不同阶段的单元测试"
-    args_schema: type[BaseModel] = UnitTestInput
+class UnitTestTool:
+    """执行不同阶段的单元测试 - 无LangChain版本"""
     
-    # 定义各阶段的测试函数映射
-    PHASE_TESTS:ClassVar[Dict[str, list]] = {
-        "数据清理": [
-            DataCleaningTest.test_file_readable,
-            DataCleaningTest.test_empty_dataset,
-            DataCleaningTest.test_missing_values,
-            DataCleaningTest.test_duplicated_features,
-            DataCleaningTest.test_duplicated_rows,
-            DataCleaningTest.test_data_consistency,
-            #DataCleaningTest.test_numeric_conversion,
-        ]
-    }
+    def __init__(self):
+        self.name = "unit_test"
+        self.description = "执行不同阶段的单元测试"
+        
+        # 定义各阶段的测试函数映射
+        self.PHASE_TESTS: Dict[str, list] = {
+            "数据清理": [
+                DataCleaningTest.test_file_readable,
+                DataCleaningTest.test_empty_dataset,
+                DataCleaningTest.test_missing_values,
+                DataCleaningTest.test_duplicated_features,
+                DataCleaningTest.test_duplicated_rows,
+                DataCleaningTest.test_data_consistency,
+                #DataCleaningTest.test_numeric_conversion,
+            ]
+        }
     
     def _generate_report(self, results: Dict) -> str:
         """生成测试报告"""
@@ -238,6 +228,14 @@ class UnitTestTool(BaseTool):
             report.append(f"{status} {test['name']}: {test['message']}")
             
         return "\n".join(report)
+
+    def run(self, tool_input: Dict[str, Any]) -> Dict:
+        """运行单元测试 - 新接口"""
+        phase = tool_input.get("phase", "")
+        data_path = tool_input.get("data_path", "")
+        original_data_path = tool_input.get("original_data_path")
+        
+        return self._run(phase, data_path, original_data_path)
 
     def _run(self, phase: str, data_path: str, original_data_path: str = None) -> Dict:
         """运行指定阶段的单元测试"""

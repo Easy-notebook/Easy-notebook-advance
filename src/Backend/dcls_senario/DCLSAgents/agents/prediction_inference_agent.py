@@ -3,7 +3,6 @@ import json
 import pandas as pd
 import os
 import re
-from langchain.memory import ConversationBufferMemory
 from DCLSAgents.prompts.prediction_inference_prompts import *
 from DCLSAgents.tools import *
 
@@ -225,7 +224,7 @@ class PredictionAndInferenceAgent(BaseDSLC_Agent):
             )
             #print(input_data)
 
-            generated_code, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            generated_code, _ = self.chat_with_memory(input_data, None)
             code_match = re.search(r"```python\n(.*?)\n```", generated_code, re.DOTALL)
             
             if code_match:
@@ -325,7 +324,7 @@ from tools.ml_tools import *
                 context_description=self.context_description,
             )
             
-            generated_code, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            generated_code, _ = self.chat_with_memory(input_data, None)
             code_match = re.search(r"```python\n(.*?)\n```", generated_code, re.DOTALL)
             
             if code_match:
@@ -420,7 +419,7 @@ from tools.ml_tools import transform_features,reduce_dimensions,select_features,
                 results=json.dumps(results, ensure_ascii=False, indent=2),
             )
             
-            summary, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            summary, _ = self.chat_with_memory(input_data, None)
             code_match = re.search(r"```markdown\n(.*?)\n```", summary, re.DOTALL)
             if code_match:
                 summary= code_match.group(1).strip()

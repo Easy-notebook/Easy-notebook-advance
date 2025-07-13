@@ -3,7 +3,6 @@ from DCLSAgents.prompts.pcs_prompts import *
 import json
 import pandas as pd
 import re
-from langchain.memory import ConversationBufferMemory
 import os
 import shutil
 
@@ -167,7 +166,7 @@ class PCSAgent(BaseDSLC_Agent):
             )
 
             # 生成代码
-            generated_code, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            generated_code, _ = self.chat_with_memory(input_data, None)
             
             # 提取代码部分
             code_match = re.search(r"```python\n(.*?)\n```", generated_code, re.DOTALL)

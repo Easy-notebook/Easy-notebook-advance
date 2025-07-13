@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
+import { usePipelineStore } from '../store/pipelineController';
 
 const AgentThinkingIndicator = ({
     agentName = "AI",
     customText = null,
-    textArray = []
+    textArray = [],
+    useWorkflowThinking = false
 }) => {
     const [seconds, setSeconds] = useState(0);
     const [rotation, setRotation] = useState(0);
     const [opacity, setOpacity] = useState(1);
     const [textIndex, setTextIndex] = useState(0);
+    const [workflowThinkingTexts, setWorkflowThinkingTexts] = useState([]);
     const animationRef = useRef(null);
 
     // 处理时间计数
@@ -56,10 +59,27 @@ const AgentThinkingIndicator = ({
         }
     }, [textArray]);
 
+    // Get agent thinking from frontend store
+    const agentThinkingHistory = usePipelineStore(state => state.agentThinkingHistory);
+    
+    // Update workflow thinking texts
+    useEffect(() => {
+        if (useWorkflowThinking && agentThinkingHistory) {
+            const agentThinking = agentThinkingHistory
+                .filter(thinking => thinking.agent_name === agentName)
+                .slice(-5) // Get last 5 thinking records
+                .map(thinking => thinking.current_step || thinking.description || `${agentName} is thinking...`);
+            
+            setWorkflowThinkingTexts(agentThinking);
+        }
+    }, [useWorkflowThinking, agentName, agentThinkingHistory]);
+
     // 确定显示的文本
     const displayText = () => {
         if (customText) {
             return customText;
+        } else if (useWorkflowThinking && workflowThinkingTexts.length > 0) {
+            return workflowThinkingTexts[textIndex % workflowThinkingTexts.length];
         } else if (textArray && textArray.length > 0) {
             return textArray[textIndex];
         } else {

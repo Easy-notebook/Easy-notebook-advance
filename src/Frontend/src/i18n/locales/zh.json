@@ -1,7 +1,7 @@
 {
   "modeToggle": {
-    "completeMode": "完整模式",
-    "stepMode": "步骤模式"
+    "completeMode": "创作模式",
+    "stepMode": "演示模式"
   },
   "cell": {
     "addCodeCell": "添加代码单元格",

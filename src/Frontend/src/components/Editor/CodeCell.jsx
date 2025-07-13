@@ -331,7 +331,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
         switch (cellMode) {
             case DISPLAY_MODES.COMPLETE:
                 icon = <Layout className="w-4 h-4" />;
-                title = 'Complete mode';
+                title = 'Create Mode';
                 break;
             case DISPLAY_MODES.CODE_ONLY:
                 icon = <Code className="w-4 h-4" />;
@@ -343,7 +343,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                 break;
             default:
                 icon = <Layout className="w-4 h-4" />;
-                title = 'Complete mode';
+                title = 'Create Mode';
         }
         return (
             <button

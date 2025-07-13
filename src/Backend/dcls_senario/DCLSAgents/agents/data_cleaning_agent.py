@@ -1,14 +1,11 @@
 # agents/data_cleaning_agent.py
 from .base_agent import BaseDSLC_Agent
-from langchain_core.messages import SystemMessage
 import json
-from langchain.memory import ConversationBufferMemory
 import pandas as pd
 import re
 from DCLSAgents.prompts.data_cleaning_prompts import *
 from DCLSAgents.tools import *
 import os
-from langchain_openai import ChatOpenAI
 
 
 class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
@@ -34,7 +31,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
         self.check_unit = check_unit
         
         # 初始化工具
-        # self.image_tool = ImageToTextTool(llm = ChatOpenAI(api_key="sk-EXz3GV6bxgS30Jyj5751C85fFaFd4c408e821fF99344462d",base_url="https://deepseek.perfxlab.cn/v1",model="Qwen2.5-VL-7B"))
+        # self.image_tool = ImageToTextTool(llm=None)  # LLM dependency removed
         self.logger.info("DataCleaningAndEDA_Agent initialized with tools")
     
     def generate_cleaning_task_list(self):
@@ -73,7 +70,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 csv_path=csv_file_path,
                 context_description=context_description
             )
-            generated_code, _ = self.chat_with_memory(input_data,ConversationBufferMemory())
+            generated_code, _ = self.chat_with_memory(input_data,None)
             self.logger.info("Successfully generated dimension check code")
             return generated_code
         except Exception as e:
@@ -85,7 +82,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
             result=result,
             context_description=context_description
         )
-        response, _ = self.chat_with_memory(request,ConversationBufferMemory())
+        response, _ = self.chat_with_memory(request,None)
         if response=="no problem":
             return "no problem"
         parsed_json = self.parse_llm_json(response)
@@ -178,7 +175,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 hypothesis=hypothesis['hypothesis'],
                 validation_method=hypothesis['verification_method']
             )
-            generated_code, _ = self.chat_with_memory(input_data,ConversationBufferMemory())
+            generated_code, _ = self.chat_with_memory(input_data,None)
             self.logger.info("Successfully generated hypothesis validation code")
             return generated_code
         except Exception as e:
@@ -195,7 +192,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 validation_result=validation_result
             )
 
-            response, _ = self.chat_with_memory(input_data,ConversationBufferMemory())
+            response, _ = self.chat_with_memory(input_data,None)
             updated_hypothesis = self.parse_llm_json(response)
             if updated_hypothesis:
                 self.logger.info("Successfully analyzed hypothesis validation results")
@@ -363,7 +360,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 data_preview=', '.join(data.columns)
             )
 
-            response, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            response, _ = self.chat_with_memory(input_data, None)
             self.logger.info("Successfully generated PCS evaluation code")
             return response
         except Exception as e:
@@ -388,7 +385,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 csv_path=csv_file_path,
                 problem_description=question
             )
-            response, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            response, _ = self.chat_with_memory(input_data, None)
             response_json = self.parse_llm_json(response)
 
             if response_json and isinstance(response_json, list):
@@ -426,7 +423,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 csv_path=csv_file_path,
                 discrete_vars=discrete_info
             )
-            response, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            response, _ = self.chat_with_memory(input_data, None)
             code_match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
 
             if not code_match:
@@ -465,7 +462,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 first_10_rows=first_10_str,
                 random_10_rows=random_10_str
             )
-            response, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            response, _ = self.chat_with_memory(input_data, None)
             self.logger.info("Successfully compared data samples")
             return response
         except Exception as e:
@@ -636,7 +633,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 problem_description=self.problem_description
             )
             
-            response, _ = self.chat_with_memory(input_data, ConversationBufferMemory())
+            response, _ = self.chat_with_memory(input_data, None)
             self.logger.info("Successfully generated EDA summary")
             return response if response else "无法生成有效的EDA分析总结。"
         except Exception as e:
