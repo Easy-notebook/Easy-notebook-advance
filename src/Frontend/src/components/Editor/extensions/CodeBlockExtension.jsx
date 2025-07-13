@@ -109,13 +109,14 @@ export const CodeBlockExtension = Node.create({
   addInputRules() {
     return [
       {
-        find: /^```python\s$/,
+        find: /^```python$/,
         handler: ({ state, range, match }) => {
           const cellId = uuidv4()
           const { tr } = state
-          const start = range.from
+          const start = range.from - match[0].length
           const end = range.to
 
+          // 删除触发文本并插入代码块
           tr.replaceWith(start, end, this.type.create({
             language: 'python',
             code: '',

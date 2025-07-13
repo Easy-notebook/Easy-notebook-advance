@@ -77,9 +77,19 @@ const TiptapNotebookEditor = forwardRef(({
     
     editable: !readOnly,
     
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
       // 防止循环更新
       if (isInternalUpdate.current) return
+      
+      // 检查是否是格式化操作（如粗体、斜体等）
+      const isFormattingOperation = transaction.steps.some(step => 
+        step.jsonID === 'addMark' || 
+        step.jsonID === 'removeMark' ||
+        step.jsonID === 'setNodeMarkup'
+      )
+      
+      // 格式化操作使用较短的防抖时间，文本输入使用较长的防抖时间
+      const debounceTime = isFormattingOperation ? 100 : 300
       
       // 使用防抖延迟同步
       clearTimeout(window.tiptapSyncTimeout)
@@ -103,7 +113,7 @@ const TiptapNotebookEditor = forwardRef(({
             isInternalUpdate.current = false
           }, 50)
         }
-      }, 500) // 增加防抖时间到500ms
+      }, debounceTime)
     },
     
     editorProps: {
@@ -287,63 +297,140 @@ const TiptapNotebookEditor = forwardRef(({
   }
 
   /**
-   * Markdown到HTML转换 - 超简化版本
+   * Markdown到HTML转换 - 支持格式化标记
    */
   function convertMarkdownToHtml(markdown) {
     if (!markdown) return '<p></p>'
     
-    // 简单的段落处理，避免复杂的正则表达式
-    const lines = markdown.split('\n')
-    const htmlLines = lines.map(line => {
-      if (line.startsWith('# ')) return `<h1>${line.slice(2)}</h1>`
-      if (line.startsWith('## ')) return `<h2>${line.slice(3)}</h2>`
-      if (line.startsWith('### ')) return `<h3>${line.slice(4)}</h3>`
-      if (line.trim() === '') return '<br>'
-      return `<p>${line}</p>`
+    // 处理行内格式化
+    function processInlineFormatting(text) {
+      return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // 粗体
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')              // 斜体
+        .replace(/`(.*?)`/g, '<code>$1</code>')            // 行内代码
+    }
+    
+    // 按段落分割
+    const paragraphs = markdown.split('\n\n')
+    
+    const htmlParagraphs = paragraphs.map(paragraph => {
+      const lines = paragraph.split('\n')
+      
+      // 处理列表
+      if (lines.some(line => line.trim().startsWith('- '))) {
+        const listItems = lines
+          .filter(line => line.trim().startsWith('- '))
+          .map(line => `<li>${processInlineFormatting(line.trim().slice(2))}</li>`)
+          .join('')
+        return `<ul>${listItems}</ul>`
+      }
+      
+      // 处理单行内容
+      if (lines.length === 1) {
+        const line = lines[0].trim()
+        if (line.startsWith('# ')) {
+          return `<h1>${processInlineFormatting(line.slice(2))}</h1>`
+        }
+        if (line.startsWith('## ')) {
+          return `<h2>${processInlineFormatting(line.slice(3))}</h2>`
+        }
+        if (line.startsWith('### ')) {
+          return `<h3>${processInlineFormatting(line.slice(4))}</h3>`
+        }
+        if (line.startsWith('#### ')) {
+          return `<h4>${processInlineFormatting(line.slice(5))}</h4>`
+        }
+        if (line.startsWith('##### ')) {
+          return `<h5>${processInlineFormatting(line.slice(6))}</h5>`
+        }
+        if (line.startsWith('###### ')) {
+          return `<h6>${processInlineFormatting(line.slice(7))}</h6>`
+        }
+        if (line.startsWith('> ')) {
+          return `<blockquote>${processInlineFormatting(line.slice(2))}</blockquote>`
+        }
+        if (line === '') {
+          return '<br>'
+        }
+        return `<p>${processInlineFormatting(line)}</p>`
+      }
+      
+      // 多行段落
+      const processedLines = lines.map(line => processInlineFormatting(line)).join('<br>')
+      return `<p>${processedLines}</p>`
     })
     
-    return htmlLines.join('')
+    return htmlParagraphs.join('')
   }
 
   /**
-   * HTML到Markdown转换 - 超简化版本
+   * HTML到Markdown转换 - 支持格式化标记
    */
   function convertHtmlToMarkdown(html) {
     if (!html) return ''
     
-    // 使用DOM解析，避免复杂的正则表达式
+    // 使用DOM解析，递归处理所有格式化
     const parser = new DOMParser()
     const doc = parser.parseFromString(html, 'text/html')
     
-    const result = []
-    Array.from(doc.body.childNodes).forEach(node => {
+    function processNode(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent
+      }
+      
       if (node.nodeType === Node.ELEMENT_NODE) {
+        const children = Array.from(node.childNodes).map(processNode).join('')
+        
         switch (node.tagName.toLowerCase()) {
           case 'h1':
-            result.push(`# ${node.textContent}`)
-            break
+            return `# ${children}`
           case 'h2':
-            result.push(`## ${node.textContent}`)
-            break
+            return `## ${children}`
           case 'h3':
-            result.push(`### ${node.textContent}`)
-            break
+            return `### ${children}`
+          case 'h4':
+            return `#### ${children}`
+          case 'h5':
+            return `##### ${children}`
+          case 'h6':
+            return `###### ${children}`
+          case 'strong':
+          case 'b':
+            return `**${children}**`
+          case 'em':
+          case 'i':
+            return `*${children}*`
+          case 'code':
+            return `\`${children}\``
+          case 'blockquote':
+            return `> ${children}`
+          case 'li':
+            return `- ${children}`
+          case 'ul':
+            return children
+          case 'ol':
+            return children
           case 'p':
-            result.push(node.textContent)
-            break
+            return children
           case 'br':
-            result.push('')
-            break
+            return '\n'
           default:
-            result.push(node.textContent)
+            return children
         }
-      } else if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent.trim()
-        if (text) result.push(text)
+      }
+      
+      return ''
+    }
+    
+    const result = []
+    Array.from(doc.body.childNodes).forEach(node => {
+      const processed = processNode(node)
+      if (processed.trim()) {
+        result.push(processed)
       }
     })
     
-    return result.join('\n')
+    return result.join('\n\n')
   }
 
   /**
