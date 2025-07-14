@@ -31,10 +31,21 @@ const TiptapNotebookEditor = forwardRef(({
   const isInternalUpdate = useRef(false)
   
   // 缓存上次的cells状态，用于增量更新
-  const lastCellsRef = useRef(cells)
+  const lastCellsRef = useRef([])
   
-  // 缓存转换结果
-  const initialContent = useMemo(() => convertCellsToHtml(cells), [])
+  // 初始化lastCellsRef
+  useEffect(() => {
+    lastCellsRef.current = cells
+  }, [])
+  
+  // 初始内容 - 只在首次渲染时计算，后续更新通过useEffect处理
+  const initialContent = useMemo(() => {
+    console.log('=== 计算initialContent ===');
+    console.log('初始cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+    const content = convertCellsToHtml(cells)
+    console.log('初始HTML长度:', content.length);
+    return content
+  }, [cells.length]) // 只在cells数量变化时重新计算，避免内容变化导致重新初始化
 
   const editor = useEditor({
     extensions: [

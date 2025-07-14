@@ -149,13 +149,19 @@ const CodeBlockView = ({
   const { cells, updateCell, deleteCell, addCell, setCurrentCell, setEditingCellId } = useStore()
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // 创建虚拟cell对象，从store中获取最新内容
+  // 创建虚拟cell对象，优先从store中获取最新内容
   const virtualCell = useMemo(() => {
     const existingCell = cells.find(cell => cell.id === cellId)
     if (existingCell) {
+      // 完全使用store中的数据，确保数据是最新的
+      console.log(`CodeBlockView ${cellId}: 使用store中的最新数据`, {
+        content: existingCell.content.substring(0, 50) + '...',
+        outputs: existingCell.outputs.length
+      })
       return existingCell
     }
-    // 如果store中没有，使用node attributes的初始值
+    // 如果store中没有，使用node attributes的初始值（仅在初始化时）
+    console.log(`CodeBlockView ${cellId}: 使用node attributes初始值`)
     return {
       id: cellId,
       type: 'code',
@@ -164,7 +170,7 @@ const CodeBlockView = ({
       enableEdit: enableEdit !== false,
       language: language || 'python',
     }
-  }, [cellId, code, outputs, enableEdit, language, cells])
+  }, [cellId, cells]) // 只依赖cellId和cells，不依赖node attributes
 
   // 处理删除
   const handleDelete = useCallback(() => {
