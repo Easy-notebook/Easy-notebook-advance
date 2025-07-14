@@ -236,7 +236,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
     const codeContainerRef = useRef(null);
     const isCurrentCell = currentCellId === cell.id;
 
-    // 快捷键：Ctrl+Enter 执行、Alt+↑/↓ 切换上下单元格
+    // 快捷键：Ctrl+Enter 执行、Alt+↑/↓ 切换上下单元格、Delete/Backspace 删除空单元格
     const handleKeyDown = useCallback(
         (event) => {
             if (event.ctrlKey && event.key === 'Enter') {
@@ -265,9 +265,19 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                         }
                     }, 0);
                 }
+            } else if (
+                (event.key === 'Delete' || event.key === 'Backspace') &&
+                (!cell.content || cell.content.trim() === '') &&
+                onDelete
+            ) {
+                event.preventDefault();
+                // 添加20毫秒延迟防止误操作
+                setTimeout(() => {
+                    onDelete(cell.id);
+                }, 20);
             }
         },
-        [cell.id, cells, handleExecute, setCurrentCell, setEditingCellId]
+        [cell.id, cell.content, cells, handleExecute, setCurrentCell, setEditingCellId, onDelete]
     );
 
     // 渲染输出
