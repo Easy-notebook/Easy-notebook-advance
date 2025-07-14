@@ -208,6 +208,21 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
     const handleChange = useCallback(
         (value) => {
             updateCell(cell.id, value);
+            
+            // Debug: 输出完整的notebook store状态
+            const state = useStore.getState();
+            console.log('=== CodeCell内容修改 Debug Info ===');
+            console.log('Cell ID:', cell.id);
+            console.log('New Value:', value);
+            console.log('完整的cells数组:', state.cells.map((c, index) => ({
+                index,
+                id: c.id,
+                type: c.type,
+                content: c.content.substring(0, 50) + (c.content.length > 50 ? '...' : ''),
+                position: index
+            })));
+            console.log('当前修改的cell在数组中的位置:', state.cells.findIndex(c => c.id === cell.id));
+            console.log('=====================================');
         },
         [cell.id, updateCell]
     );

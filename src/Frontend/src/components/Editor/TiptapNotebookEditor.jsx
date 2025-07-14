@@ -10,17 +10,12 @@ import {
   Code, 
   Heading1, 
   Heading2,
-  Heading3,
   List,
   ListOrdered,
   Quote,
   Terminal
 } from 'lucide-react'
 
-/**
- * 全局的Tiptap Notebook编辑器
- * 提供所见即所得的编辑体验，自动将代码块转换为CodeCell组件
- */
 const TiptapNotebookEditor = forwardRef(({ 
   className = "",
   placeholder = "Start writing your notebook... Type ```python to create a code block",
@@ -29,11 +24,7 @@ const TiptapNotebookEditor = forwardRef(({
   
   const { 
     cells, 
-    updateCell, 
-    deleteCell, 
-    addCell,
     setCells,
-    updateCellOutputs
   } = useStore()
 
   // 防止循环更新的标志
@@ -81,6 +72,34 @@ const TiptapNotebookEditor = forwardRef(({
       // 防止循环更新
       if (isInternalUpdate.current) return
       
+      // 检查变化是否发生在代码块内
+      const isCodeBlockChange = transaction.steps.some(step => {
+        if (step.from !== undefined && step.to !== undefined) {
+          const $from = editor.state.doc.resolve(step.from)
+          const $to = editor.state.doc.resolve(step.to)
+          
+          // 检查变化位置是否在可执行代码块内
+          for (let depth = $from.depth; depth >= 0; depth--) {
+            const node = $from.node(depth)
+            if (node.type.name === 'executable-code-block') {
+              return true
+            }
+          }
+          for (let depth = $to.depth; depth >= 0; depth--) {
+            const node = $to.node(depth)
+            if (node.type.name === 'executable-code-block') {
+              return true
+            }
+          }
+        }
+        return false
+      })
+      
+      // 如果变化发生在代码块内，不进行同步
+      if (isCodeBlockChange) {
+        return
+      }
+      
       // 检查是否是格式化操作（如粗体、斜体等）
       const isFormattingOperation = transaction.steps.some(step => 
         step.jsonID === 'addMark' || 
@@ -97,18 +116,66 @@ const TiptapNotebookEditor = forwardRef(({
         const html = editor.getHTML()
         const newCells = convertHtmlToCells(html)
         
-        // 更精确的变化检测
-        const cellsChanged = newCells.length !== cells.length || 
-          newCells.some((cell, index) => {
+        // 简化比较：只关心结构和markdown内容变化
+        const hasStructuralChange = newCells.length !== cells.length ||
+          newCells.some((newCell, index) => {
             const existingCell = cells[index]
-            return !existingCell || 
-                   cell.content !== existingCell.content || 
-                   cell.type !== existingCell.type
+            if (!existingCell) return true
+            
+            // 类型变化
+            if (newCell.type !== existingCell.type) return true
+            
+            // Markdown内容变化
+            if (newCell.type === 'markdown' && newCell.content !== existingCell.content) return true
+            
+            // 代码块只检查ID是否匹配（占位符模式）
+            if (newCell.type === 'code' && newCell.isPlaceholder && newCell.id !== existingCell.id) return true
+            
+            return false
           })
         
-        if (cellsChanged) {
+        if (hasStructuralChange) {
           isInternalUpdate.current = true
-          setCells(newCells)
+          
+          console.log('=== TiptapNotebookEditor 结构变化 Debug Info ===');
+          console.log('原有cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+          console.log('新解析cells:', newCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+          
+          // 智能合并：用占位符替换为现有代码块，只更新markdown
+          const mergedCells = newCells.map((newCell, index) => {
+            if (newCell.type === 'code' && newCell.isPlaceholder) {
+              // 查找现有的代码块
+              const existingCodeCell = cells.find(cell => 
+                cell.type === 'code' && cell.id === newCell.id
+              )
+              if (existingCodeCell) {
+                console.log(`代码块位置 ${index}: 保持现有代码块 ${existingCodeCell.id}`);
+                return existingCodeCell // 完全保持现有代码块
+              } else {
+                console.log(`代码块位置 ${index}: 警告 - 找不到ID为 ${newCell.id} 的代码块`);
+                // 如果找不到对应的代码块，创建一个空的
+                return {
+                  id: newCell.id,
+                  type: 'code',
+                  content: '',
+                  outputs: [],
+                  enableEdit: true,
+                  language: 'python',
+                }
+              }
+            } else if (newCell.type === 'markdown') {
+              // Markdown cell 使用新解析的内容
+              return newCell
+            } else {
+              // 其他情况保持原样
+              return newCell
+            }
+          })
+          
+          console.log('合并后cells:', mergedCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+          console.log('===============================================');
+          
+          setCells(mergedCells)
           setTimeout(() => {
             isInternalUpdate.current = false
           }, 50)
@@ -150,54 +217,47 @@ const TiptapNotebookEditor = forwardRef(({
     }
   }, [editor])
 
-  // 同步外部cells变化到编辑器（智能增量更新）
+  // 同步外部cells变化到编辑器 - 只处理需要同步到tiptap的变化
   useEffect(() => {
     if (editor && cells && !isInternalUpdate.current) {
       const lastCells = lastCellsRef.current
       
-      // 检查是否有实质性变化
-      const hasSignificantChange = cells.length !== lastCells.length ||
+      // 只检查影响tiptap显示的变化：
+      // 1. markdown cell的内容变化
+      // 2. 新增/删除 cell（结构变化）
+      // 3. cell类型变化
+      const needsTiptapUpdate = cells.length !== lastCells.length ||
         cells.some((cell, index) => {
           const lastCell = lastCells[index]
-          return !lastCell || 
-                 cell.content !== lastCell.content || 
-                 cell.type !== lastCell.type
+          if (!lastCell) return true // 新增cell
+          
+          // 类型变化
+          if (cell.type !== lastCell.type) return true
+          
+          // 只有markdown cell的内容变化才需要更新tiptap
+          if (cell.type === 'markdown' && cell.content !== lastCell.content) return true
+          
+          // code cell的内容变化不需要更新tiptap
+          return false
         })
       
-      if (hasSignificantChange) {
-        // 如果变化很小（比如只是一个cell的小修改），尝试局部更新
-        if (Math.abs(cells.length - lastCells.length) <= 1) {
-          // 小幅变化，保持光标位置
-          const { from, to } = editor.state.selection
-          isInternalUpdate.current = true
-          
-          const expectedHtml = convertCellsToHtml(cells)
-          editor.commands.setContent(expectedHtml, false)
-          
-          // 恢复光标位置
-          setTimeout(() => {
-            try {
-              const docSize = editor.state.doc.content.size
-              const safeFrom = Math.min(from, docSize)
-              const safeTo = Math.min(to, docSize)
-              editor.commands.setTextSelection({ from: safeFrom, to: safeTo })
-            } catch (e) {
-              // 静默处理错误
-            }
-            isInternalUpdate.current = false
-          }, 5)
-        } else {
-          // 大幅变化，简单替换内容
-          isInternalUpdate.current = true
-          const expectedHtml = convertCellsToHtml(cells)
-          editor.commands.setContent(expectedHtml, false)
-          setTimeout(() => {
-            isInternalUpdate.current = false
-          }, 10)
-        }
+      if (needsTiptapUpdate) {
+        console.log('=== 外部cells变化，需要更新tiptap ===');
+        console.log('原有cells:', lastCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+        console.log('新的cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+        
+        isInternalUpdate.current = true
+        const expectedHtml = convertCellsToHtml(cells)
+        editor.commands.setContent(expectedHtml, false)
+        
+        setTimeout(() => {
+          isInternalUpdate.current = false
+        }, 10)
         
         // 更新缓存
         lastCellsRef.current = cells
+        
+        console.log('=== tiptap内容已更新 ===');
       }
     }
   }, [cells, editor])
@@ -210,20 +270,29 @@ const TiptapNotebookEditor = forwardRef(({
       return '<p></p>' // 空内容
     }
 
-    return cells.map(cell => {
+    console.log('=== convertCellsToHtml 转换 ===');
+    console.log('输入cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+
+    const htmlParts = cells.map((cell, index) => {
       if (cell.type === 'code') {
-        // 代码cell转换为可执行代码块
+        // 代码cell转换为可执行代码块，确保包含正确的ID和位置信息
+        console.log(`转换代码块 ${index}: ID=${cell.id}`);
         return `<div data-type="executable-code-block" data-language="${cell.language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}"></div>`
       } else if (cell.type === 'markdown') {
         // markdown cell转换为HTML
+        console.log(`转换markdown ${index}: 内容长度=${(cell.content || '').length}`);
         return convertMarkdownToHtml(cell.content || '')
       }
       return ''
-    }).join('\n')
+    })
+
+    const result = htmlParts.join('\n')
+    console.log('=== convertCellsToHtml 完成 ===');
+    return result
   }
 
   /**
-   * 将HTML内容转换为cells数组
+   * 将HTML内容转换为cells数组 - 只处理markdown内容，保持现有code cell
    */
   function convertHtmlToCells(html) {
     if (!html || html === '<p></p>') {
@@ -232,7 +301,7 @@ const TiptapNotebookEditor = forwardRef(({
 
     const parser = new DOMParser()
     const doc = parser.parseFromString(html, 'text/html')
-    const cells = []
+    const newCells = []
     let currentMarkdownContent = []
 
     // 遍历所有节点
@@ -243,7 +312,7 @@ const TiptapNotebookEditor = forwardRef(({
           if (currentMarkdownContent.length > 0) {
             const markdownText = currentMarkdownContent.join('\n').trim()
             if (markdownText) {
-              cells.push({
+              newCells.push({
                 id: generateCellId(),
                 type: 'markdown',
                 content: convertHtmlToMarkdown(markdownText),
@@ -254,20 +323,12 @@ const TiptapNotebookEditor = forwardRef(({
             currentMarkdownContent = []
           }
 
-          // 创建代码cell
-          const cellId = node.getAttribute('data-cell-id') || generateCellId()
-          const code = decodeURIComponent(node.getAttribute('data-code') || '')
-          const language = node.getAttribute('data-language') || 'python'
-          const outputs = JSON.parse(decodeURIComponent(node.getAttribute('data-outputs') || '[]'))
-          const enableEdit = node.getAttribute('data-enable-edit') !== 'false'
-
-          cells.push({
+          // 对于代码块，只记录位置占位符，不创建新的cell
+          const cellId = node.getAttribute('data-cell-id')
+          newCells.push({
             id: cellId,
             type: 'code',
-            content: code,
-            outputs: outputs,
-            enableEdit: enableEdit,
-            language: language,
+            isPlaceholder: true, // 标记为占位符
           })
         } else {
           // 普通HTML内容，累积到markdown内容中
@@ -283,7 +344,7 @@ const TiptapNotebookEditor = forwardRef(({
     if (currentMarkdownContent.length > 0) {
       const markdownText = currentMarkdownContent.join('\n').trim()
       if (markdownText) {
-        cells.push({
+        newCells.push({
           id: generateCellId(),
           type: 'markdown',
           content: convertHtmlToMarkdown(markdownText),
@@ -293,7 +354,7 @@ const TiptapNotebookEditor = forwardRef(({
       }
     }
 
-    return cells
+    return newCells
   }
 
   /**

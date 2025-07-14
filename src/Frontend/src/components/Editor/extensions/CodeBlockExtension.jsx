@@ -133,7 +133,7 @@ export const CodeBlockExtension = Node.create({
 })
 
 // CodeBlock视图组件 - 使用现有的CodeCell
-import React, { useCallback, useMemo, useEffect, useState } from 'react'
+import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react'
 import { NodeViewWrapper } from '@tiptap/react'
 import CodeCell from '../CodeCell'
 import useStore from '../../../store/notebookStore'
@@ -149,27 +149,67 @@ const CodeBlockView = ({
   const { cells, updateCell, deleteCell, addCell } = useStore()
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // 创建虚拟cell对象，完全兼容现有CodeCell
-  const virtualCell = useMemo(() => ({
-    id: cellId,
-    type: 'code',
-    content: code || '',
-    outputs: outputs || [],
-    enableEdit: enableEdit !== false,
-    language: language || 'python',
-  }), [cellId, code, outputs, enableEdit, language])
+  // 创建虚拟cell对象，从store中获取最新内容
+  const virtualCell = useMemo(() => {
+    const existingCell = cells.find(cell => cell.id === cellId)
+    if (existingCell) {
+      return existingCell
+    }
+    // 如果store中没有，使用node attributes的初始值
+    return {
+      id: cellId,
+      type: 'code',
+      content: code || '',
+      outputs: outputs || [],
+      enableEdit: enableEdit !== false,
+      language: language || 'python',
+    }
+  }, [cellId, code, outputs, enableEdit, language, cells])
 
   // 处理删除
   const handleDelete = useCallback(() => {
     deleteNode()
   }, [deleteNode])
 
-  // 确保cell在store中存在，并保持同步
+  // 防止重复插入的引用
+  const hasTriedToAdd = useRef(false)
+  
+  // 确保cell在store中存在（仅初始化一次，避免重复插入）
   useEffect(() => {
+    // 如果已经尝试过添加，直接返回
+    if (hasTriedToAdd.current) return
+    
     const existingCell = cells.find(cell => cell.id === cellId)
     
     if (!existingCell) {
-      // 如果cell不存在，创建一个新的
+      console.log(`=== CodeBlockView 检测到新的代码块，准备初始化 ===`);
+      console.log(`Cell ID: ${cellId}`);
+      
+      // 标记已尝试添加，防止重复
+      hasTriedToAdd.current = true
+      
+      // 计算当前CodeBlock在文档中的位置
+      const pos = getPos()
+      let insertIndex = cells.length // 默认添加到末尾
+      
+      if (pos !== undefined && editor) {
+        // 简单计算：统计当前位置之前有多少个块级元素
+        const doc = editor.state.doc
+        let blockCount = 0
+        
+        doc.nodesBetween(0, pos, (node, nodePos) => {
+          if (node.isBlock && nodePos < pos && node.type.name !== 'doc') {
+            blockCount++
+          }
+        })
+        
+        // 确保索引不超过当前cells数组长度
+        insertIndex = Math.min(blockCount, cells.length)
+      }
+      
+      console.log(`计算位置: ${insertIndex}, tiptap pos: ${pos}`);
+      
+      // 创建新的cell
       const newCell = {
         id: cellId,
         type: 'code',
@@ -178,30 +218,21 @@ const CodeBlockView = ({
         enableEdit: enableEdit !== false,
         language: language || 'python',
       }
-      addCell(newCell)
+      
+      console.log(`正在添加新cell到位置 ${insertIndex}`);
+      addCell(newCell, insertIndex)
+      setIsInitialized(true)
+      
+      console.log(`=== CodeBlockView 初始化完成 ===`);
     } else {
-      // 如果cell存在但内容不同，更新attributes
-      if (existingCell.content !== code) {
-        updateAttributes({ code: existingCell.content })
-      }
-      if (JSON.stringify(existingCell.outputs) !== JSON.stringify(outputs)) {
-        updateAttributes({ outputs: existingCell.outputs })
-      }
+      console.log(`Cell ${cellId} 已存在于store中，跳过初始化`);
+      setIsInitialized(true)
     }
-  }, [cellId, code, outputs, enableEdit, language, cells, addCell, updateAttributes])
+  }, [cellId]) // 只依赖cellId，避免因cells变化而重复执行
 
-  // 监听cell内容变化，同步到node attributes
-  useEffect(() => {
-    const existingCell = cells.find(cell => cell.id === cellId)
-    if (existingCell) {
-      if (existingCell.content !== code) {
-        updateAttributes({ code: existingCell.content })
-      }
-      if (JSON.stringify(existingCell.outputs) !== JSON.stringify(outputs)) {
-        updateAttributes({ outputs: existingCell.outputs })
-      }
-    }
-  }, [cells, cellId, code, outputs, updateAttributes])
+  // 注意：不再监听cell内容变化同步到node attributes
+  // 这样避免了代码编辑时触发tiptap的onUpdate事件
+  // CodeCell的内容变化只在store中管理，不同步回tiptap节点
 
   return (
     <NodeViewWrapper 
