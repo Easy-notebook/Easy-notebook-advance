@@ -150,206 +150,326 @@ const TiptapNotebookEditor = forwardRef(({
 
     addProseMirrorPlugins() {
       return [
-        new Plugin({
-          key: new PluginKey('markdownTableDetection'),
-          state: {
-            init() {
-              return {
-                // State machine states: 'idle', 'header_detected', 'complete'
-                state: 'idle',
-                headerText: '',
-                headerPos: null,
-              }
-            },
-            apply(tr, value, oldState, newState) {
-              // Reset state if document changed significantly
-              if (tr.docChanged && tr.steps.length > 0) {
-                // Check if we should reset the state
-                const selection = tr.selection
-                const $pos = selection.$from
+        (() => {
+          const plugin = new Plugin({
+            key: new PluginKey('markdownTableDetection'),
+            state: {
+              init() {
+                return {
+                  // State machine states: 'idle', 'header_detected', 'complete'
+                  state: 'idle',
+                  headerText: '',
+                  headerPos: null,
+                }
+              },
+              apply(tr, pluginState) {
+                // Ensure value is defined
+                if (!pluginState) {
+                  pluginState = {
+                    state: 'idle',
+                    headerText: '',
+                    headerPos: null,
+                  }
+                }
                 
-                if ($pos.parent.type.name === 'paragraph') {
-                  const text = $pos.parent.textContent
+                // Reset state if document changed significantly
+                if (tr.docChanged && tr.steps.length > 0) {
+                  // Check if we should reset the state
+                  const selection = tr.selection
+                  const $pos = selection.$from
                   
-                  // State transitions
-                  if (value.state === 'idle') {
-                    // Check if current line is a header
-                    if (/^\s*\|([^|\n]+\|)+\s*$/.test(text)) {
-                      console.log('[FSM] Header detected:', text)
-                      return {
-                        state: 'header_detected',
-                        headerText: text.trim(),
-                        headerPos: $pos.before($pos.depth),
+                  if ($pos.parent.type.name === 'paragraph') {
+                    const text = $pos.parent.textContent
+                    
+                    // State transitions
+                    if (pluginState.state === 'idle') {
+                      // Check if current line is a header
+                      if (/^\s*\|([^|\n]+\|)+\s*$/.test(text)) {
+                        console.log('[FSM] Header detected:', text)
+                        return {
+                          state: 'header_detected',
+                          headerText: text.trim(),
+                          headerPos: $pos.before($pos.depth),
+                        }
                       }
-                    }
-                  } else if (value.state === 'header_detected') {
-                    // Check if current line is a separator
-                    if (/^\s*\|(\s*[-:]+\s*\|)+\s*$/.test(text)) {
-                      console.log('[FSM] Separator detected, table complete')
-                      return {
-                        state: 'complete',
-                        headerText: value.headerText,
-                        headerPos: value.headerPos,
+                    } else if (pluginState.state === 'header_detected') {
+                      // Check if current line is a separator
+                      if (/^\s*\|(\s*[-:]+\s*\|)+\s*$/.test(text)) {
+                        console.log('[FSM] Separator detected, table complete')
+                        // Immediately trigger the conversion
+                        const { view } = plugin.spec
+                        if (view) {
+                          const savedHeaderText = pluginState.headerText
+                          const savedHeaderPos = pluginState.headerPos
+                          setTimeout(() => {
+                            try {
+                              const state = view.state
+                              const $currentPos = state.selection.$from
+                              
+                              if ($currentPos.parent.type.name === 'paragraph') {
+                                const separatorText = $currentPos.parent.textContent.trim()
+                                const headerText = savedHeaderText || ''
+                                
+                                // Simply update the content to trigger conversion
+                                const markdownContent = `${headerText}\n${separatorText}`
+                                const { tr } = state
+                                
+                                // Get the positions
+                                const headerStart = savedHeaderPos || 0
+                                const separatorEnd = $currentPos.after($currentPos.depth)
+                                
+                                if (headerStart >= 0 && separatorEnd > headerStart) {
+                                  // Create a text node with the markdown
+                                  const textNode = state.schema.text(markdownContent)
+                                  const paragraph = state.schema.nodes.paragraph.create(null, textNode)
+                                  
+                                  // Replace both paragraphs with a single paragraph containing the table markdown
+                                  view.dispatch(
+                                    tr.replaceWith(headerStart, separatorEnd, paragraph)
+                                  )
+                                }
+                              }
+                            } catch (e) {
+                              console.error('[FSM] Error converting table:', e)
+                            }
+                          }, 0)
+                        }
+                        
+                        // Reset state after triggering conversion
+                        return { state: 'idle', headerText: '', headerPos: null }
+                      } else if (!/^\s*\|/.test(text)) {
+                        // Not a table continuation, reset
+                        console.log('[FSM] Reset - not a table')
+                        return { state: 'idle', headerText: '', headerPos: null }
                       }
-                    } else if (!/^\s*\|/.test(text)) {
-                      // Not a table continuation, reset
-                      console.log('[FSM] Reset - not a table')
-                      return { state: 'idle', headerText: '', headerPos: null }
                     }
                   }
                 }
-              }
-              
-              return value
-            }
-          },
-          props: {
-            handleTextInput(view, from, to, text) {
-              // Let the state machine handle detection
-              return false
-            },
-            
-            handleKeyDown(view, event) {
-              // Handle Shift+Enter in table to add new row
-              if (event.shiftKey && event.key === 'Enter') {
-                const { state, dispatch } = view
-                const { selection } = state
                 
-                // Check if we're inside a table
-                const { $from } = selection
-                for (let d = $from.depth; d > 0; d--) {
-                  const node = $from.node(d)
-                  if (node.type.name === 'table') {
-                    // Find current row
-                    let currentRowIndex = -1
-                    let currentTable = node
-                    let tablePos = $from.before(d)
+                return pluginState || { state: 'idle', headerText: '', headerPos: null }
+              }
+            },
+            spec: {
+              view: null,
+            },
+            props: {
+              view(editorView) {
+                // Store reference to view in plugin spec
+                plugin.spec.view = editorView
+                return {
+                  destroy() {
+                    plugin.spec.view = null
+                  }
+                }
+              },
+              handleTextInput(view, from, to, text) {
+                // Let the state machine handle detection
+                return false
+              },
+              
+              handleKeyDown(view, event) {
+                // Handle Shift+Enter in table to add new row
+                if (event.shiftKey && event.key === 'Enter') {
+                  const { state, dispatch } = view
+                  const { selection } = state
+                  
+                  // Check if we're inside a table
+                  const { $from } = selection
+                  for (let d = $from.depth; d > 0; d--) {
+                    const node = $from.node(d)
+                    if (node.type.name === 'table') {
+                      // Find current row
+                      let currentRowIndex = -1
+                      let currentTable = node
+                      let tablePos = $from.before(d)
+                      
+                      // Find which row we're in
+                      node.forEach((row, offset, index) => {
+                        const rowPos = tablePos + offset + 1
+                        if (rowPos <= $from.pos && $from.pos <= rowPos + row.nodeSize) {
+                          currentRowIndex = index
+                        }
+                      })
+                      
+                      if (currentRowIndex >= 0) {
+                        // Create new row with same number of cells
+                        const currentRow = node.child(currentRowIndex)
+                        const cellCount = currentRow.childCount
+                        const cells = []
+                        
+                        for (let i = 0; i < cellCount; i++) {
+                          // Always use tableCell for new rows (not tableHeader)
+                          const cellType = state.schema.nodes.tableCell
+                          const cell = cellType.create(null, state.schema.nodes.paragraph.create())
+                          cells.push(cell)
+                        }
+                        
+                        const newRow = state.schema.nodes.tableRow.create(null, cells)
+                        
+                        // Insert after current row
+                        const tr = state.tr
+                        const insertPos = tablePos + 1
+                        let accumulatedSize = 0
+                        
+                        for (let i = 0; i <= currentRowIndex; i++) {
+                          accumulatedSize += node.child(i).nodeSize
+                        }
+                        
+                        tr.insert(insertPos + accumulatedSize, newRow)
+                        
+                        // Move cursor to first cell of new row
+                        const newRowPos = insertPos + accumulatedSize + 1
+                        tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newRowPos + 1)))
+                        
+                        dispatch(tr)
+                        event.preventDefault()
+                        return true
+                      }
+                    }
+                  }
+                }
+                
+                // Handle Shift+Delete to delete current row
+                if (event.shiftKey && (event.key === 'Delete' || event.key === 'Backspace')) {
+                  const { state, dispatch } = view
+                  const { selection } = state
+                  
+                  // Check if we're inside a table
+                  const { $from } = selection
+                  for (let d = $from.depth; d > 0; d--) {
+                    const node = $from.node(d)
+                    if (node.type.name === 'table') {
+                      // Don't delete if only one row left (excluding header)
+                      const dataRowCount = node.childCount - 1 // Subtract header row
+                      if (dataRowCount <= 0) {
+                        event.preventDefault()
+                        return true
+                      }
+                      
+                      // Find current row
+                      let currentRowIndex = -1
+                      let tablePos = $from.before(d)
+                      
+                      // Find which row we're in
+                      node.forEach((row, offset, index) => {
+                        const rowPos = tablePos + offset + 1
+                        if (rowPos <= $from.pos && $from.pos <= rowPos + row.nodeSize) {
+                          currentRowIndex = index
+                        }
+                      })
+                      
+                      // Don't delete header row
+                      if (currentRowIndex === 0) {
+                        event.preventDefault()
+                        return true
+                      }
+                      
+                      if (currentRowIndex > 0) {
+                        const tr = state.tr
+                        
+                        // Calculate the position of the row to delete
+                        let rowStartPos = tablePos + 1
+                        for (let i = 0; i < currentRowIndex; i++) {
+                          rowStartPos += node.child(i).nodeSize
+                        }
+                        const rowEndPos = rowStartPos + node.child(currentRowIndex).nodeSize
+                        
+                        // Delete the row
+                        tr.delete(rowStartPos, rowEndPos)
+                        
+                        // Move cursor to previous row if possible
+                        const newPos = Math.max(rowStartPos - 1, tablePos + 1)
+                        tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newPos)))
+                        
+                        dispatch(tr)
+                        event.preventDefault()
+                        return true
+                      }
+                    }
+                  }
+                }
+                
+                // Enter key handling - check state machine
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  const { state } = view
+                  const pluginState = this.getState(state)
+                  
+                  if (pluginState && pluginState.state === 'complete') {
+                    console.log('[FSM] Creating table from state machine')
+                    const { selection } = state
+                    const $pos = selection.$from
                     
-                    // Find which row we're in
-                    node.forEach((row, offset, index) => {
-                      const rowPos = tablePos + offset + 1
-                      if (rowPos <= $from.pos && $from.pos <= rowPos + row.nodeSize) {
-                        currentRowIndex = index
-                      }
-                    })
-                    
-                    if (currentRowIndex >= 0) {
-                      // Create new row with same number of cells
-                      const currentRow = node.child(currentRowIndex)
-                      const cellCount = currentRow.childCount
-                      const cells = []
+                    if ($pos.parent.type.name === 'paragraph') {
+                      const separatorText = $pos.parent.textContent.trim()
+                      const headerText = pluginState.headerText
                       
-                      for (let i = 0; i < cellCount; i++) {
-                        // Always use tableCell for new rows (not tableHeader)
-                        const cellType = state.schema.nodes.tableCell
-                        const cell = cellType.create(null, state.schema.nodes.paragraph.create())
-                        cells.push(cell)
-                      }
+                      const tableMarkdown = `${headerText}\n${separatorText}`
+                      const tableData = parseMarkdownTable(tableMarkdown)
+                      const tableNode = createTiptapTable(state.schema, tableData)
                       
-                      const newRow = state.schema.nodes.tableRow.create(null, cells)
+                      const { tr } = state
+                      const replaceFrom = pluginState.headerPos
+                      const replaceTo = $pos.after($pos.depth)
                       
-                      // Insert after current row
-                      const tr = state.tr
-                      const insertPos = tablePos + 1
-                      let accumulatedSize = 0
+                      view.dispatch(
+                        tr.replaceWith(replaceFrom, replaceTo, tableNode)
+                      )
                       
-                      for (let i = 0; i <= currentRowIndex; i++) {
-                        accumulatedSize += node.child(i).nodeSize
-                      }
-                      
-                      tr.insert(insertPos + accumulatedSize, newRow)
-                      
-                      // Move cursor to first cell of new row
-                      const newRowPos = insertPos + accumulatedSize + 1
-                      tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newRowPos + 1)))
-                      
-                      dispatch(tr)
                       event.preventDefault()
                       return true
                     }
                   }
+                  return false
                 }
-              }
+              },
               
-              // Enter key handling - check state machine
-              if (event.key === 'Enter' && !event.shiftKey) {
-                const { state } = view
-                const pluginState = this.getState(state)
+              handlePaste(view, event, slice) {
+                const text = slice.content.textBetween(0, slice.content.size, '\n')
+                const tablePattern = /\|[^\n]+\|[^]*?\n\|\s*[-:]+\s*[-|:\s]*\|/
                 
-                if (pluginState && pluginState.state === 'complete') {
-                  console.log('[FSM] Creating table from state machine')
-                  const { selection } = state
-                  const $pos = selection.$from
+                if (tablePattern.test(text)) {
+                  const lines = text.split('\n')
+                  let tableStart = -1
+                  let tableEnd = -1
                   
-                  if ($pos.parent.type.name === 'paragraph') {
-                    const separatorText = $pos.parent.textContent.trim()
-                    const headerText = pluginState.headerText
-                    
-                    const tableMarkdown = `${headerText}\n${separatorText}`
+                  // Find table boundaries
+                  for (let i = 0; i < lines.length - 1; i++) {
+                    if (/^\s*\|([^|]*\|)+\s*$/.test(lines[i]) && 
+                        /^\s*\|(\s*[-:]+\s*\|)+\s*$/.test(lines[i + 1])) {
+                      tableStart = i
+                      tableEnd = i + 1
+                      
+                      // Include data rows
+                      for (let j = i + 2; j < lines.length; j++) {
+                        if (/^\s*\|([^|]*\|)+\s*$/.test(lines[j])) {
+                          tableEnd = j
+                        } else {
+                          break
+                        }
+                      }
+                      break
+                    }
+                  }
+                  
+                  if (tableStart >= 0) {
+                    const tableLines = lines.slice(tableStart, tableEnd + 1)
+                    const tableMarkdown = tableLines.join('\n')
                     const tableData = parseMarkdownTable(tableMarkdown)
-                    const tableNode = createTiptapTable(state.schema, tableData)
+                    const tableNode = createTiptapTable(view.state.schema, tableData)
                     
-                    const { tr } = state
-                    const replaceFrom = pluginState.headerPos
-                    const replaceTo = $pos.after($pos.depth)
+                    const { tr } = view.state
+                    view.dispatch(tr.replaceSelectionWith(tableNode))
                     
-                    view.dispatch(
-                      tr.replaceWith(replaceFrom, replaceTo, tableNode)
-                    )
-                    
-                    event.preventDefault()
                     return true
                   }
                 }
+                
                 return false
               }
-            },
-            
-            handlePaste(view, event, slice) {
-              const text = slice.content.textBetween(0, slice.content.size, '\n')
-              const tablePattern = /\|[^\n]+\|[^]*?\n\|\s*[-:]+\s*[-|:\s]*\|/
-              
-              if (tablePattern.test(text)) {
-                const lines = text.split('\n')
-                let tableStart = -1
-                let tableEnd = -1
-                
-                // Find table boundaries
-                for (let i = 0; i < lines.length - 1; i++) {
-                  if (/^\s*\|([^|]*\|)+\s*$/.test(lines[i]) && 
-                      /^\s*\|(\s*[-:]+\s*\|)+\s*$/.test(lines[i + 1])) {
-                    tableStart = i
-                    tableEnd = i + 1
-                    
-                    // Include data rows
-                    for (let j = i + 2; j < lines.length; j++) {
-                      if (/^\s*\|([^|]*\|)+\s*$/.test(lines[j])) {
-                        tableEnd = j
-                      } else {
-                        break
-                      }
-                    }
-                    break
-                  }
-                }
-                
-                if (tableStart >= 0) {
-                  const tableLines = lines.slice(tableStart, tableEnd + 1)
-                  const tableMarkdown = tableLines.join('\n')
-                  const tableData = parseMarkdownTable(tableMarkdown)
-                  const tableNode = createTiptapTable(view.state.schema, tableData)
-                  
-                  const { tr } = view.state
-                  view.dispatch(tr.replaceSelectionWith(tableNode))
-                  
-                  return true
-                }
-              }
-              
-              return false
             }
-          }
-        })
+          });
+          return plugin;
+        })()
       ]
     }
   })
@@ -552,47 +672,6 @@ const TiptapNotebookEditor = forwardRef(({
       }).run()
     }
   }, [editor])
-
-  // Table manipulation functions
-  const addTableRow = useCallback(() => {
-    if (editor && editor.can().addRowAfter()) {
-      editor.chain().focus().addRowAfter().run()
-    }
-  }, [editor])
-  
-  // Add keyboard shortcuts
-  useEffect(() => {
-    if (!editor) return
-    
-    const handleKeyDown = (event) => {
-      // Shift+Enter to add row when in table
-      if (event.shiftKey && event.key === 'Enter') {
-        const { selection } = editor.state
-        const node = selection.$anchor.node(selection.$anchor.depth)
-        
-        // Check if we're in a table cell
-        let inTable = false
-        for (let i = selection.$anchor.depth; i >= 0; i--) {
-          if (selection.$anchor.node(i).type.name === 'table') {
-            inTable = true
-            break
-          }
-        }
-        
-        if (inTable) {
-          event.preventDefault()
-          addTableRow()
-          return false
-        }
-      }
-    }
-    
-    editor.view.dom.addEventListener('keydown', handleKeyDown)
-    
-    return () => {
-      editor.view.dom.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [editor, addTableRow])
 
   // 同步外部cells变化到编辑器 - 只处理需要同步到tiptap的变化
   useEffect(() => {
