@@ -315,24 +315,34 @@ const TiptapNotebookEditor = forwardRef(({
     const newCells = []
     let currentMarkdownContent = []
 
+    // Helper function to flush accumulated content
+    const flushMarkdownContent = () => {
+      if (currentMarkdownContent.length > 0) {
+        const markdownText = currentMarkdownContent.join('\n').trim()
+        if (markdownText) {
+          newCells.push({
+            id: generateCellId(),
+            type: 'markdown',
+            content: convertHtmlToMarkdown(markdownText),
+            outputs: [],
+            enableEdit: true,
+          })
+        }
+        currentMarkdownContent = []
+      }
+    }
+
+    // Check if an element is a heading
+    const isHeading = (element) => {
+      return element.tagName && /^H[1-6]$/.test(element.tagName.toUpperCase())
+    }
+
     // 遍历所有节点
     Array.from(doc.body.childNodes).forEach(node => {
       if (node.nodeType === Node.ELEMENT_NODE) {
         if (node.getAttribute('data-type') === 'executable-code-block') {
           // 如果有累积的markdown内容，先创建markdown cell
-          if (currentMarkdownContent.length > 0) {
-            const markdownText = currentMarkdownContent.join('\n').trim()
-            if (markdownText) {
-              newCells.push({
-                id: generateCellId(),
-                type: 'markdown',
-                content: convertHtmlToMarkdown(markdownText),
-                outputs: [],
-                enableEdit: true,
-              })
-            }
-            currentMarkdownContent = []
-          }
+          flushMarkdownContent()
 
           // 对于代码块，只记录位置占位符，不创建新的cell
           const cellId = node.getAttribute('data-cell-id')
@@ -341,6 +351,21 @@ const TiptapNotebookEditor = forwardRef(({
             type: 'code',
             isPlaceholder: true, // 标记为占位符
           })
+        } else if (isHeading(node)) {
+          // 如果是标题，先清空累积的内容，然后为标题创建独立的cell
+          flushMarkdownContent()
+          
+          // 为标题创建独立的markdown cell
+          const headingMarkdown = convertHtmlToMarkdown(node.outerHTML)
+          if (headingMarkdown.trim()) {
+            newCells.push({
+              id: generateCellId(),
+              type: 'markdown',
+              content: headingMarkdown,
+              outputs: [],
+              enableEdit: true,
+            })
+          }
         } else {
           // 普通HTML内容，累积到markdown内容中
           currentMarkdownContent.push(node.outerHTML)
@@ -352,18 +377,7 @@ const TiptapNotebookEditor = forwardRef(({
     })
 
     // 处理剩余的markdown内容
-    if (currentMarkdownContent.length > 0) {
-      const markdownText = currentMarkdownContent.join('\n').trim()
-      if (markdownText) {
-        newCells.push({
-          id: generateCellId(),
-          type: 'markdown',
-          content: convertHtmlToMarkdown(markdownText),
-          outputs: [],
-          enableEdit: true,
-        })
-      }
-    }
+    flushMarkdownContent()
 
     return newCells
   }
