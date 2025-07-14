@@ -146,7 +146,7 @@ const CodeBlockView = ({
   getPos
 }) => {
   const { language, code, cellId, outputs, enableEdit } = node.attrs
-  const { cells, updateCell, deleteCell, addCell } = useStore()
+  const { cells, updateCell, deleteCell, addCell, setCurrentCell, setEditingCellId } = useStore()
   const [isInitialized, setIsInitialized] = useState(false)
 
   // 创建虚拟cell对象，从store中获取最新内容
@@ -203,8 +203,8 @@ const CodeBlockView = ({
           }
         })
         
-        // 确保索引不超过当前cells数组长度
-        insertIndex = Math.min(blockCount, cells.length)
+        // 修正：插入位置需要-1，因为当前代码块本身也算在内
+        insertIndex = Math.max(0, Math.min(blockCount - 1, cells.length))
       }
       
       console.log(`计算位置: ${insertIndex}, tiptap pos: ${pos}`);
@@ -221,9 +221,22 @@ const CodeBlockView = ({
       
       console.log(`正在添加新cell到位置 ${insertIndex}`);
       addCell(newCell, insertIndex)
-      setIsInitialized(true)
       
-      console.log(`=== CodeBlockView 初始化完成 ===`);
+      // 设置新建的codecell为当前活跃cell
+      setCurrentCell(cellId)
+      
+      // 延迟聚焦到代码编辑器
+      setTimeout(() => {
+        // 在下一个渲染周期中查找并聚焦代码编辑器
+        const codeElement = document.querySelector(`[data-cell-id="${cellId}"] .cm-editor .cm-content`)
+        if (codeElement) {
+          codeElement.focus()
+          console.log(`已聚焦到新建的代码块 ${cellId}`)
+        }
+      }, 100)
+      
+      setIsInitialized(true)
+      console.log(`=== CodeBlockView 初始化完成，已设置为活跃cell ===`);
     } else {
       console.log(`Cell ${cellId} 已存在于store中，跳过初始化`);
       setIsInitialized(true)
