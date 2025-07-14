@@ -13,8 +13,16 @@ import {
   List,
   ListOrdered,
   Quote,
-  Terminal
+  Terminal,
+  Table as TableIcon
 } from 'lucide-react'
+
+import Table from '@tiptap/extension-table'
+import TableCell from '@tiptap/extension-table-cell'
+import TableHeader from '@tiptap/extension-table-header'
+import TableRow from '@tiptap/extension-table-row'
+import { Extension } from '@tiptap/react'
+import { Plugin, PluginKey } from 'prosemirror-state'
 
 const TiptapNotebookEditor = forwardRef(({ 
   className = "",
@@ -47,6 +55,305 @@ const TiptapNotebookEditor = forwardRef(({
     return content
   }, [cells.length]) // 只在cells数量变化时重新计算，避免内容变化导致重新初始化
 
+  function isMarkdownTable(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2) return false;
+    if (!lines[0].startsWith('|') || !lines[0].endsWith('|')) return false;
+    if (!lines[1].startsWith('|') || !lines[1].endsWith('|')) return false;
+    const separatorCells = lines[1].slice(1, -1).split('|').map(c => c.trim());
+    if (!separatorCells.every(c => /^[ -]*$/.test(c) && c.includes('-'))) return false;
+    for (let i = 2; i < lines.length; i++) {
+      if (!lines[i].startsWith('|') || !lines[i].endsWith('|')) return false;
+    }
+    return true;
+  }
+
+  function parseMarkdownTable(text) {
+    console.log('[parseMarkdownTable] Input text:', text);
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    console.log('[parseMarkdownTable] Lines:', lines);
+    
+    // Parse headers - split by | and handle the fact that split creates empty strings at start/end
+    const headerParts = lines[0].split('|').map(h => h.trim());
+    console.log('[parseMarkdownTable] Header parts after split:', headerParts);
+    const headerCells = [];
+    for (let i = 0; i < headerParts.length; i++) {
+      // Skip first and last empty parts (from leading/trailing |)
+      if (i === 0 && headerParts[i] === '') continue;
+      if (i === headerParts.length - 1 && headerParts[i] === '') continue;
+      headerCells.push(headerParts[i]);
+    }
+    
+    // Parse data rows (skip separator line at index 1)
+    const rows = [];
+    for (let i = 2; i < lines.length; i++) {
+      const parts = lines[i].split('|').map(c => c.trim());
+      const cells = [];
+      for (let j = 0; j < parts.length; j++) {
+        // Skip first and last empty parts (from leading/trailing |)
+        if (j === 0 && parts[j] === '') continue;
+        if (j === parts.length - 1 && parts[j] === '') continue;
+        cells.push(parts[j]);
+      }
+      if (cells.length > 0) {
+        rows.push(cells);
+      }
+    }
+    
+    console.log('[parseMarkdownTable] Headers:', headerCells);
+    console.log('[parseMarkdownTable] Rows:', rows);
+    
+    return { headers: headerCells, rows };
+  }
+
+  function createTiptapTable(schema, { headers, rows }) {
+    console.log('[createTiptapTable] Creating table with:', { headers, rows });
+    
+    const makeParagraph = (text) => {
+      if (text && text.length > 0) {
+        return schema.nodes.paragraph.create(null, schema.text(text));
+      }
+      // empty paragraph
+      return schema.nodes.paragraph.create();
+    };
+
+    const headerCells = headers.map(h =>
+      schema.nodes.tableHeader.create(null, makeParagraph(h))
+    );
+    console.log('[createTiptapTable] Created header cells:', headerCells.length);
+
+    const headerRow = schema.nodes.tableRow.create(null, headerCells);
+
+    // Ensure each row has same number of cells as headers
+    const normalizedRows = rows.length ? rows : [[]];
+    const bodyRows = normalizedRows.map(row => {
+      const cellsData = [...row];
+      // pad missing cells
+      while (cellsData.length < headers.length) {
+        cellsData.push('');
+      }
+      const cells = cellsData.map(cell =>
+        schema.nodes.tableCell.create(null, makeParagraph(cell))
+      );
+      return schema.nodes.tableRow.create(null, cells);
+    });
+    console.log('[createTiptapTable] Created body rows:', bodyRows.length);
+
+    const tableNode = schema.nodes.table.create(null, [headerRow, ...bodyRows]);
+    console.log('[createTiptapTable] Final table node:', tableNode);
+    return tableNode;
+  }
+
+  // Simple table detection extension using only ProseMirror plugins
+  const MarkdownTableExtension = Extension.create({
+    name: 'markdownTableAuto',
+
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: new PluginKey('markdownTableDetection'),
+          state: {
+            init() {
+              return {
+                // State machine states: 'idle', 'header_detected', 'complete'
+                state: 'idle',
+                headerText: '',
+                headerPos: null,
+              }
+            },
+            apply(tr, value, oldState, newState) {
+              // Reset state if document changed significantly
+              if (tr.docChanged && tr.steps.length > 0) {
+                // Check if we should reset the state
+                const selection = tr.selection
+                const $pos = selection.$from
+                
+                if ($pos.parent.type.name === 'paragraph') {
+                  const text = $pos.parent.textContent
+                  
+                  // State transitions
+                  if (value.state === 'idle') {
+                    // Check if current line is a header
+                    if (/^\s*\|([^|\n]+\|)+\s*$/.test(text)) {
+                      console.log('[FSM] Header detected:', text)
+                      return {
+                        state: 'header_detected',
+                        headerText: text.trim(),
+                        headerPos: $pos.before($pos.depth),
+                      }
+                    }
+                  } else if (value.state === 'header_detected') {
+                    // Check if current line is a separator
+                    if (/^\s*\|(\s*[-:]+\s*\|)+\s*$/.test(text)) {
+                      console.log('[FSM] Separator detected, table complete')
+                      return {
+                        state: 'complete',
+                        headerText: value.headerText,
+                        headerPos: value.headerPos,
+                      }
+                    } else if (!/^\s*\|/.test(text)) {
+                      // Not a table continuation, reset
+                      console.log('[FSM] Reset - not a table')
+                      return { state: 'idle', headerText: '', headerPos: null }
+                    }
+                  }
+                }
+              }
+              
+              return value
+            }
+          },
+          props: {
+            handleTextInput(view, from, to, text) {
+              // Let the state machine handle detection
+              return false
+            },
+            
+            handleKeyDown(view, event) {
+              // Handle Shift+Enter in table to add new row
+              if (event.shiftKey && event.key === 'Enter') {
+                const { state, dispatch } = view
+                const { selection } = state
+                
+                // Check if we're inside a table
+                const { $from } = selection
+                for (let d = $from.depth; d > 0; d--) {
+                  const node = $from.node(d)
+                  if (node.type.name === 'table') {
+                    // Find current row
+                    let currentRowIndex = -1
+                    let currentTable = node
+                    let tablePos = $from.before(d)
+                    
+                    // Find which row we're in
+                    node.forEach((row, offset, index) => {
+                      const rowPos = tablePos + offset + 1
+                      if (rowPos <= $from.pos && $from.pos <= rowPos + row.nodeSize) {
+                        currentRowIndex = index
+                      }
+                    })
+                    
+                    if (currentRowIndex >= 0) {
+                      // Create new row with same number of cells
+                      const currentRow = node.child(currentRowIndex)
+                      const cellCount = currentRow.childCount
+                      const cells = []
+                      
+                      for (let i = 0; i < cellCount; i++) {
+                        // Always use tableCell for new rows (not tableHeader)
+                        const cellType = state.schema.nodes.tableCell
+                        const cell = cellType.create(null, state.schema.nodes.paragraph.create())
+                        cells.push(cell)
+                      }
+                      
+                      const newRow = state.schema.nodes.tableRow.create(null, cells)
+                      
+                      // Insert after current row
+                      const tr = state.tr
+                      const insertPos = tablePos + 1
+                      let accumulatedSize = 0
+                      
+                      for (let i = 0; i <= currentRowIndex; i++) {
+                        accumulatedSize += node.child(i).nodeSize
+                      }
+                      
+                      tr.insert(insertPos + accumulatedSize, newRow)
+                      
+                      // Move cursor to first cell of new row
+                      const newRowPos = insertPos + accumulatedSize + 1
+                      tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newRowPos + 1)))
+                      
+                      dispatch(tr)
+                      event.preventDefault()
+                      return true
+                    }
+                  }
+                }
+              }
+              
+              // Enter key handling - check state machine
+              if (event.key === 'Enter' && !event.shiftKey) {
+                const { state } = view
+                const pluginState = this.getState(state)
+                
+                if (pluginState && pluginState.state === 'complete') {
+                  console.log('[FSM] Creating table from state machine')
+                  const { selection } = state
+                  const $pos = selection.$from
+                  
+                  if ($pos.parent.type.name === 'paragraph') {
+                    const separatorText = $pos.parent.textContent.trim()
+                    const headerText = pluginState.headerText
+                    
+                    const tableMarkdown = `${headerText}\n${separatorText}`
+                    const tableData = parseMarkdownTable(tableMarkdown)
+                    const tableNode = createTiptapTable(state.schema, tableData)
+                    
+                    const { tr } = state
+                    const replaceFrom = pluginState.headerPos
+                    const replaceTo = $pos.after($pos.depth)
+                    
+                    view.dispatch(
+                      tr.replaceWith(replaceFrom, replaceTo, tableNode)
+                    )
+                    
+                    event.preventDefault()
+                    return true
+                  }
+                }
+                return false
+              }
+            },
+            
+            handlePaste(view, event, slice) {
+              const text = slice.content.textBetween(0, slice.content.size, '\n')
+              const tablePattern = /\|[^\n]+\|[^]*?\n\|\s*[-:]+\s*[-|:\s]*\|/
+              
+              if (tablePattern.test(text)) {
+                const lines = text.split('\n')
+                let tableStart = -1
+                let tableEnd = -1
+                
+                // Find table boundaries
+                for (let i = 0; i < lines.length - 1; i++) {
+                  if (/^\s*\|([^|]*\|)+\s*$/.test(lines[i]) && 
+                      /^\s*\|(\s*[-:]+\s*\|)+\s*$/.test(lines[i + 1])) {
+                    tableStart = i
+                    tableEnd = i + 1
+                    
+                    // Include data rows
+                    for (let j = i + 2; j < lines.length; j++) {
+                      if (/^\s*\|([^|]*\|)+\s*$/.test(lines[j])) {
+                        tableEnd = j
+                      } else {
+                        break
+                      }
+                    }
+                    break
+                  }
+                }
+                
+                if (tableStart >= 0) {
+                  const tableLines = lines.slice(tableStart, tableEnd + 1)
+                  const tableMarkdown = tableLines.join('\n')
+                  const tableData = parseMarkdownTable(tableMarkdown)
+                  const tableNode = createTiptapTable(view.state.schema, tableData)
+                  
+                  const { tr } = view.state
+                  view.dispatch(tr.replaceSelectionWith(tableNode))
+                  
+                  return true
+                }
+              }
+              
+              return false
+            }
+          }
+        })
+      ]
+    }
+  })
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -73,6 +380,13 @@ const TiptapNotebookEditor = forwardRef(({
         placeholder,
         emptyEditorClass: 'is-editor-empty',
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      MarkdownTableExtension,
     ],
     
     content: initialContent,
@@ -85,25 +399,36 @@ const TiptapNotebookEditor = forwardRef(({
       
       // 检查变化是否发生在代码块内
       const isCodeBlockChange = transaction.steps.some(step => {
-        if (step.from !== undefined && step.to !== undefined) {
-          const $from = editor.state.doc.resolve(step.from)
-          const $to = editor.state.doc.resolve(step.to)
-          
-          // 检查变化位置是否在可执行代码块内
-          for (let depth = $from.depth; depth >= 0; depth--) {
-            const node = $from.node(depth)
-            if (node.type.name === 'executable-code-block') {
-              return true
+        try {
+          if (step.from !== undefined && step.to !== undefined) {
+            // Ensure positions are within document bounds
+            const docSize = editor.state.doc.content.size
+            if (step.from > docSize || step.to > docSize) {
+              return false
+            }
+            
+            const $from = editor.state.doc.resolve(Math.min(step.from, docSize))
+            const $to = editor.state.doc.resolve(Math.min(step.to, docSize))
+            
+            // 检查变化位置是否在可执行代码块内
+            for (let depth = $from.depth; depth >= 0; depth--) {
+              const node = $from.node(depth)
+              if (node.type.name === 'executable-code-block') {
+                return true
+              }
+            }
+            for (let depth = $to.depth; depth >= 0; depth--) {
+              const node = $to.node(depth)
+              if (node.type.name === 'executable-code-block') {
+                return true
+              }
             }
           }
-          for (let depth = $to.depth; depth >= 0; depth--) {
-            const node = $to.node(depth)
-            if (node.type.name === 'executable-code-block') {
-              return true
-            }
-          }
+          return false
+        } catch (e) {
+          console.warn('Error checking code block change:', e)
+          return false
         }
-        return false
       })
       
       // 如果变化发生在代码块内，不进行同步
@@ -227,6 +552,47 @@ const TiptapNotebookEditor = forwardRef(({
       }).run()
     }
   }, [editor])
+
+  // Table manipulation functions
+  const addTableRow = useCallback(() => {
+    if (editor && editor.can().addRowAfter()) {
+      editor.chain().focus().addRowAfter().run()
+    }
+  }, [editor])
+  
+  // Add keyboard shortcuts
+  useEffect(() => {
+    if (!editor) return
+    
+    const handleKeyDown = (event) => {
+      // Shift+Enter to add row when in table
+      if (event.shiftKey && event.key === 'Enter') {
+        const { selection } = editor.state
+        const node = selection.$anchor.node(selection.$anchor.depth)
+        
+        // Check if we're in a table cell
+        let inTable = false
+        for (let i = selection.$anchor.depth; i >= 0; i--) {
+          if (selection.$anchor.node(i).type.name === 'table') {
+            inTable = true
+            break
+          }
+        }
+        
+        if (inTable) {
+          event.preventDefault()
+          addTableRow()
+          return false
+        }
+      }
+    }
+    
+    editor.view.dom.addEventListener('keydown', handleKeyDown)
+    
+    return () => {
+      editor.view.dom.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [editor, addTableRow])
 
   // 同步外部cells变化到编辑器 - 只处理需要同步到tiptap的变化
   useEffect(() => {
@@ -388,6 +754,31 @@ const TiptapNotebookEditor = forwardRef(({
   function convertMarkdownToHtml(markdown) {
     if (!markdown) return '<p></p>'
     
+    // Check if markdown contains table syntax
+    const lines = markdown.split('\n')
+    const tableRegex = /^\s*\|(.+)\|\s*$/
+    const separatorRegex = /^\s*\|(\s*[-:]+\s*\|)+\s*$/
+    
+    // Look for table patterns
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (tableRegex.test(lines[i]) && separatorRegex.test(lines[i + 1])) {
+        // Found a table, convert it to HTML
+        const tableHtml = convertMarkdownTableToHtml(lines, i)
+        if (tableHtml) {
+          // Replace the table lines with HTML
+          const beforeTable = lines.slice(0, i).join('\n')
+          const afterTable = lines.slice(tableHtml.endIndex + 1).join('\n')
+          
+          let result = ''
+          if (beforeTable) result += convertMarkdownToHtml(beforeTable)
+          result += tableHtml.html
+          if (afterTable) result += convertMarkdownToHtml(afterTable)
+          
+          return result
+        }
+      }
+    }
+    
     // 处理行内格式化
     function processInlineFormatting(text) {
       return text
@@ -449,6 +840,56 @@ const TiptapNotebookEditor = forwardRef(({
     return htmlParagraphs.join('')
   }
 
+  // Helper function to convert markdown table to HTML
+  function convertMarkdownTableToHtml(lines, startIndex) {
+    const headerLine = lines[startIndex]
+    const separatorLine = lines[startIndex + 1]
+    
+    // Parse header
+    const headers = headerLine.split('|')
+      .map(h => h.trim())
+      .filter(h => h !== '')
+    
+    // Find data rows
+    const rows = []
+    let endIndex = startIndex + 1
+    
+    for (let i = startIndex + 2; i < lines.length; i++) {
+      if (/^\s*\|(.+)\|\s*$/.test(lines[i])) {
+        const cells = lines[i].split('|')
+          .map(c => c.trim())
+          .filter(c => c !== '')
+        rows.push(cells)
+        endIndex = i
+      } else {
+        break
+      }
+    }
+    
+    // Generate HTML
+    let html = '<table>'
+    
+    // Header row
+    html += '<tr>'
+    headers.forEach(h => {
+      html += `<th>${h}</th>`
+    })
+    html += '</tr>'
+    
+    // Data rows
+    rows.forEach(row => {
+      html += '<tr>'
+      row.forEach(cell => {
+        html += `<td>${cell}</td>`
+      })
+      html += '</tr>'
+    })
+    
+    html += '</table>'
+    
+    return { html, endIndex }
+  }
+
   /**
    * HTML到Markdown转换 - 支持格式化标记
    */
@@ -500,6 +941,24 @@ const TiptapNotebookEditor = forwardRef(({
             return children
           case 'br':
             return '\n'
+          case 'table':
+            const rows = [];
+            Array.from(node.querySelectorAll('tr')).forEach(tr => {
+              const rowMarkdown = '| ' + Array.from(tr.querySelectorAll('td, th')).map(cell => {
+                return processNode(cell).trim();
+              }).join(' | ') + ' |';
+              rows.push(rowMarkdown);
+            });
+            if (rows.length === 0) return '';
+            const colCount = rows[0].split('|').length - 2;
+            const separator = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
+            rows.splice(1, 0, separator);
+            return rows.join('\n');
+          case 'tr':
+            return Array.from(node.childNodes).map(processNode).join('');
+          case 'td':
+          case 'th':
+            return Array.from(node.childNodes).map(processNode).join('');
           default:
             return children
         }
@@ -524,6 +983,10 @@ const TiptapNotebookEditor = forwardRef(({
    */
   function generateCellId() {
     return `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  function stripZWS(str) {
+    return str.replace(/[\u200B-\u200D\uFEFF]/g, '');
   }
 
 
@@ -623,6 +1086,14 @@ const TiptapNotebookEditor = forwardRef(({
         >
           <Terminal size={14} />
         </button>
+        <div className="w-px h-4 bg-gray-600 mx-1" />
+        <button
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          className="p-2 rounded hover:bg-gray-700"
+          title="Insert Table"
+        >
+          <TableIcon size={14} />
+        </button>
       </BubbleMenu>
 
       {/* 主编辑器内容 */}
@@ -632,7 +1103,7 @@ const TiptapNotebookEditor = forwardRef(({
       />
 
       {/* 简单的占位符样式 */}
-      <style jsx>{`
+      <style>{`
         .tiptap-notebook-editor .is-editor-empty:first-child::before {
           color: #9CA3AF;
           content: attr(data-placeholder);
@@ -644,6 +1115,33 @@ const TiptapNotebookEditor = forwardRef(({
         /* 可执行代码块样式 */
         .executable-code-block-wrapper {
           margin: 1.5em 0;
+        }
+       
+        /* 表格样式 */
+        .tiptap-notebook-editor table {
+          border-collapse: collapse;
+          margin: 1em 0;
+          width: 100%;
+        }
+        
+        .tiptap-notebook-editor th,
+        .tiptap-notebook-editor td {
+          border: 1px solid #ddd;
+          padding: 0.5em;
+          text-align: left;
+        }
+        
+        .tiptap-notebook-editor th {
+          background-color: #f5f5f5;
+          font-weight: bold;
+        }
+        
+        .tiptap-notebook-editor tr:nth-child(even) {
+          background-color: #f9f9f9;
+        }
+        
+        .tiptap-notebook-editor .selectedCell {
+          background-color: #e6f3ff;
         }
       `}</style>
     </div>
