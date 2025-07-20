@@ -659,38 +659,67 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const latexNodes = []
     let latexCounter = 0
     
-    // 先提取块级LaTeX
-    processedText = processedText.replace(/\$\$([^$]+)\$\$/g, (match, formula) => {
-      const placeholder = `__LATEX_BLOCK_${latexCounter}__`
-      latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="true"></div>`
-      console.log('提取块级LaTeX:', formula.trim())
-      latexCounter++
-      return placeholder
+    // 按行处理，判断LaTeX是否独占一行
+    const lines = processedText.split('\n')
+    const processedLines = lines.map(line => {
+      let processedLine = line
+      
+      // 检查是否整行只有一个LaTeX公式（可能有前后空格）
+      const blockLatexMatch = line.trim().match(/^\$\$([^$]+)\$\$$/)
+      if (blockLatexMatch) {
+        const placeholder = `__LATEX_BLOCK_${latexCounter}__`
+        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${blockLatexMatch[1].trim()}" data-display-mode="true"></div>`
+        console.log('提取独占行的块级LaTeX:', blockLatexMatch[1].trim())
+        latexCounter++
+        return placeholder
+      }
+      
+      const inlineBlockLatexMatch = line.trim().match(/^\$([^$]+)\$$/)
+      if (inlineBlockLatexMatch) {
+        const placeholder = `__LATEX_BLOCK_${latexCounter}__`
+        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${inlineBlockLatexMatch[1].trim()}" data-display-mode="true"></div>`
+        console.log('提取独占行的行内LaTeX（显示为块级）:', inlineBlockLatexMatch[1].trim())
+        latexCounter++
+        return placeholder
+      }
+      
+      // 处理行内的LaTeX（$$...$$格式但不独占行）
+      processedLine = processedLine.replace(/\$\$([^$]+)\$\$/g, (match, formula) => {
+        const placeholder = `__LATEX_INLINE_${latexCounter}__`
+        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`
+        console.log('提取行内的$$LaTeX:', formula.trim())
+        latexCounter++
+        return placeholder
+      })
+      
+      // 处理行内的LaTeX（$...$格式）
+      processedLine = processedLine.replace(/\$([^$]+)\$/g, (match, formula) => {
+        const placeholder = `__LATEX_INLINE_${latexCounter}__`
+        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`
+        console.log('提取行内的$LaTeX:', formula.trim())
+        latexCounter++
+        return placeholder
+      })
+      
+      return processedLine
     })
     
-    // 再提取行内LaTeX
-    processedText = processedText.replace(/\$([^$]+)\$/g, (match, formula) => {
-      const placeholder = `__LATEX_INLINE_${latexCounter}__`
-      latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`
-      console.log('提取行内LaTeX:', formula.trim())
-      latexCounter++
-      return placeholder
-    })
+    processedText = processedLines.join('\n')
     
     // Check if markdown contains table syntax
-    const lines = processedText.split('\n')
+    const tableLines = processedText.split('\n')
     const tableRegex = /^\s*\|(.+)\|\s*$/
     const separatorRegex = /^\s*\|(\s*[-:]+\s*\|)+\s*$/
     
     // Look for table patterns
-    for (let i = 0; i < lines.length - 1; i++) {
-      if (tableRegex.test(lines[i]) && separatorRegex.test(lines[i + 1])) {
+    for (let i = 0; i < tableLines.length - 1; i++) {
+      if (tableRegex.test(tableLines[i]) && separatorRegex.test(tableLines[i + 1])) {
         // Found a table, convert it to HTML
-        const tableHtml = convertMarkdownTableToHtml(lines, i)
+        const tableHtml = convertMarkdownTableToHtml(tableLines, i)
         if (tableHtml) {
           // Replace the table lines with HTML
-          const beforeTable = lines.slice(0, i).join('\n')
-          const afterTable = lines.slice(tableHtml.endIndex + 1).join('\n')
+          const beforeTable = tableLines.slice(0, i).join('\n')
+          const afterTable = tableLines.slice(tableHtml.endIndex + 1).join('\n')
           
           let result = ''
           if (beforeTable) result += convertMarkdownToHtml(beforeTable)
