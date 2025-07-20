@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { useMemo } from 'react';
 import 'katex/dist/katex.min.css';
 import useStore from '../../store/notebookStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -84,6 +85,77 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ alt, src, title }) => (
   </div>
 );
 
+// ─── 优化的表格组件，支持更好的性能和渲染 ───────
+interface MarkdownTableProps {
+  children: React.ReactNode;
+  [key: string]: any;
+}
+
+const MarkdownTable: React.FC<MarkdownTableProps> = ({ children, ...props }) => (
+  <div className="table-container" style={{ overflowX: 'auto', margin: '1rem 0' }}>
+    <table 
+      {...props} 
+      style={{ 
+        borderCollapse: 'collapse', 
+        width: '100%', 
+        minWidth: '300px' 
+      }}
+    >
+      {children}
+    </table>
+  </div>
+);
+
+// ─── 表格行组件优化 ───────
+interface MarkdownTableRowProps {
+  children: React.ReactNode;
+  [key: string]: any;
+}
+
+const MarkdownTableRow: React.FC<MarkdownTableRowProps> = ({ children, ...props }) => (
+  <tr {...props}>{children}</tr>
+);
+
+// ─── 表格单元格组件优化 ───────
+interface MarkdownTableCellProps {
+  children: React.ReactNode;
+  [key: string]: any;
+}
+
+const MarkdownTableCell: React.FC<MarkdownTableCellProps> = ({ children, ...props }) => (
+  <td 
+    {...props}
+    style={{
+      padding: '8px 12px',
+      border: '1px solid #e2e8f0',
+      ...props.style
+    }}
+  >
+    {children}
+  </td>
+);
+
+// ─── 表格头组件优化 ───────
+interface MarkdownTableHeadProps {
+  children: React.ReactNode;
+  [key: string]: any;
+}
+
+const MarkdownTableHead: React.FC<MarkdownTableHeadProps> = ({ children, ...props }) => (
+  <th 
+    {...props}
+    style={{
+      padding: '12px',
+      border: '1px solid #e2e8f0',
+      backgroundColor: '#f8fafc',
+      fontWeight: 600,
+      ...props.style
+    }}
+  >
+    {children}
+  </th>
+);
+
 const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
   const {
     addCell,
@@ -102,6 +174,16 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
   const isEditing = editingCellId === cell.id;
   const hasContent = cell.content.trim().length > 0;
   const cellShowButtons = showButtons[cell.id] || false;
+  
+  // 优化的 Markdown 组件配置，包含表格支持
+  const markdownComponents = useMemo(() => ({
+    code: CodeBlock,
+    img: MarkdownImage,
+    table: MarkdownTable,
+    tr: MarkdownTableRow,
+    td: MarkdownTableCell,
+    th: MarkdownTableHead,
+  }), []);
 
   // 双击切换编辑模式
   const toggleEditing = useCallback(() => {
@@ -311,12 +393,8 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
                     rehypePlugins={[rehypeKatex]}
-                    components={{
-                      code: CodeBlock,
-                      img: MarkdownImage,
-                    }}
+                    components={markdownComponents}
                   >
-                    {/* {cell.content || 'Double click to edit...'} */}
                     {cell.content}
                   </ReactMarkdown>
                 </div>
