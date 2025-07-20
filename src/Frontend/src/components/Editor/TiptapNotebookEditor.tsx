@@ -467,8 +467,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   const insertLaTeX = useCallback(() => {
     if (editor) {
       editor.chain().focus().setLaTeX({
-        code: '',
-        displayMode: true
+        latex: '',
+        displayMode: true // 默认为块级模式
       }).run()
     }
   }, [editor])
@@ -603,6 +603,20 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             language: language,
             code: code
           })
+        } else if (node.getAttribute('data-type') === 'latex-block') {
+          // 处理LaTeX节点
+          flushMarkdownContent()
+          
+          console.log('发现LaTeX节点:', node);
+          
+          // LaTeX节点直接累积到markdown内容中，保持原始格式
+          const latex = node.getAttribute('data-latex') || ''
+          const displayMode = node.getAttribute('data-display-mode') === 'true'
+          
+          if (latex) {
+            const latexMarkdown = displayMode ? `$$${latex}$$` : `$${latex}$`
+            currentMarkdownContent.push(latexMarkdown)
+          }
         } else if (isHeading(node)) {
           // 如果是标题，先清空累积的内容，然后为标题创建独立的cell
           flushMarkdownContent()
@@ -635,13 +649,36 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   }
 
   /**
-   * Markdown到HTML转换 - 支持格式化标记
+   * Markdown到HTML转换 - 支持格式化标记和LaTeX
    */
   function convertMarkdownToHtml(markdown) {
     if (!markdown) return '<p></p>'
     
+    // 处理LaTeX语法 - 分步骤处理避免嵌套问题
+    let processedText = markdown
+    const latexNodes = []
+    let latexCounter = 0
+    
+    // 先提取块级LaTeX
+    processedText = processedText.replace(/\$\$([^$]+)\$\$/g, (match, formula) => {
+      const placeholder = `__LATEX_BLOCK_${latexCounter}__`
+      latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="true"></div>`
+      console.log('提取块级LaTeX:', formula.trim())
+      latexCounter++
+      return placeholder
+    })
+    
+    // 再提取行内LaTeX
+    processedText = processedText.replace(/\$([^$]+)\$/g, (match, formula) => {
+      const placeholder = `__LATEX_INLINE_${latexCounter}__`
+      latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`
+      console.log('提取行内LaTeX:', formula.trim())
+      latexCounter++
+      return placeholder
+    })
+    
     // Check if markdown contains table syntax
-    const lines = markdown.split('\n')
+    const lines = processedText.split('\n')
     const tableRegex = /^\s*\|(.+)\|\s*$/
     const separatorRegex = /^\s*\|(\s*[-:]+\s*\|)+\s*$/
     
@@ -674,7 +711,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     }
     
     // 按段落分割
-    const paragraphs = markdown.split('\n\n')
+    const paragraphs = processedText.split('\n\n')
     
     const htmlParagraphs = paragraphs.map(paragraph => {
       const lines = paragraph.split('\n')
@@ -723,7 +760,20 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       return `<p>${processedLines}</p>`
     })
     
-    return htmlParagraphs.join('')
+    let result = htmlParagraphs.join('')
+    
+    // 恢复LaTeX节点占位符
+    for (let i = 0; i < latexCounter; i++) {
+      result = result.replace(`__LATEX_BLOCK_${i}__`, latexNodes[i])
+      result = result.replace(`__LATEX_INLINE_${i}__`, latexNodes[i])
+    }
+    
+    console.log('转换完成，包含LaTeX节点数:', latexCounter)
+    if (latexCounter > 0) {
+      console.log('最终HTML包含LaTeX:', result.includes('data-type="latex-block"'))
+    }
+    
+    return result
   }
 
   // Helper function to convert markdown table to HTML
@@ -1125,22 +1175,22 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           margin: 1rem 0;
         }
         
-        .latex-wrapper {
+        /* LaTeX 扩展样式 */
+        .latex-markdown-wrapper {
+          margin: 1rem 0;
+        }
+        
+        .latex-editor {
           margin: 0.5rem 0;
+        }
+        
+        .latex-display {
+          margin: 1rem 0;
           position: relative;
         }
         
         .latex-placeholder {
           margin: 1rem 0;
-        }
-        
-        .latex-display.block {
-          margin: 1rem 0;
-          text-align: center;
-        }
-        
-        .latex-display.inline {
-          display: inline;
         }
         
         .katex-rendered {
@@ -1150,6 +1200,35 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         .katex-display {
           text-align: center;
           margin: 1rem 0;
+        }
+        
+        /* LaTeX 文本颜色修复 */
+        .latex-preview .katex-rendered {
+          color: inherit !important;
+        }
+        
+        .latex-preview .katex-rendered * {
+          color: inherit !important;
+        }
+        
+        .latex-preview .katex {
+          color: inherit !important;
+        }
+        
+        .latex-preview .katex .base {
+          color: inherit !important;
+        }
+        
+        .latex-preview .katex .mathdefault,
+        .latex-preview .katex .mathit,
+        .latex-preview .katex .mathrm,
+        .latex-preview .katex .mathbf,
+        .latex-preview .katex .mathcal,
+        .latex-preview .katex .mathfrak,
+        .latex-preview .katex .mathscr,
+        .latex-preview .katex .mathsf,
+        .latex-preview .katex .mathtt {
+          color: inherit !important;
         }
       `}</style>
     </div>

@@ -2,7 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { InputRule } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import React, { useState, useRef, useEffect } from 'react'
-import { Upload, X, RotateCcw, Edit3, Eye } from 'lucide-react'
+import { Upload, X, Edit3 } from 'lucide-react'
 
 // React组件来渲染图片节点
 const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
@@ -109,7 +109,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
   }
 
   return (
-    <NodeViewWrapper className="image-markdown-wrapper">
+    <NodeViewWrapper className="image-markdown-wrapper color-black">
       {isEditing ? (
         // 简约编辑模式：源码编辑器 + 直接实时预览
         <div className="image-editor">
@@ -122,7 +122,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
             onKeyDown={handleKeyDown}
             onBlur={saveEdit}
             placeholder="![图片描述](图片URL)"
-            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 bg-white"
+            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 text-black fit-content"
           />
           
           {/* 实时预览图片 */}

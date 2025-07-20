@@ -1,70 +1,119 @@
-import { Node, mergeAttributes } from '@tiptap/core'
-import { InputRule } from '@tiptap/core'
+import { Node, mergeAttributes, InputRule } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
-import React, { useState, useEffect, useRef } from 'react'
-import { Edit3, Eye, X, Copy } from 'lucide-react'
+import { Plugin, PluginKey } from 'prosemirror-state'
+import React, { useState, useRef, useEffect } from 'react'
+import { Edit3, X, Copy } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 
 // 直接导入katex
 import katex from 'katex'
 
-// LaTeX渲染组件
+// 添加LaTeX样式
+const latexStyles = `
+  .latex-markdown-wrapper .katex-rendered {
+    color: black !important;
+    width: fit-content;
+  }
+  
+  .latex-markdown-wrapper .katex-display {
+    margin: 0.5em auto;
+    text-align: center;
+    width: fit-content;
+  }
+  
+  .latex-markdown-wrapper .katex {
+    color: black !important;
+  }
+  
+  .latex-markdown-wrapper .katex * {
+    color: black !important;
+  }
+  
+  .latex-editor input {
+    color: black !important;
+  }
+`
+
+// 注入样式
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style')
+  styleSheet.type = 'text/css'
+  styleSheet.innerText = latexStyles
+  document.head.appendChild(styleSheet)
+}
+
+// LaTeX组件
 const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
   const [isEditing, setIsEditing] = useState(false)
-  const [tempCode, setTempCode] = useState(node.attrs.code || '')
+  const [tempLatex, setTempLatex] = useState('')
   const [renderedHtml, setRenderedHtml] = useState('')
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  const { latex, displayMode } = node.attrs
 
-  const { code, displayMode } = node.attrs
+  // 初始化编辑状态
+  useEffect(() => {
+    console.log('LaTeX组件初始化，latex:', latex, 'displayMode:', displayMode)
+    if (latex) {
+      setTempLatex(latex)
+      setIsEditing(false) // 有内容时默认显示模式
+    } else {
+      setTempLatex('')
+      setIsEditing(true) // 新节点默认进入编辑模式
+    }
+  }, [latex])
 
   // 渲染LaTeX
   useEffect(() => {
-    const renderLatex = () => {
+    const renderLatex = (code) => {
       if (!code) {
         setRenderedHtml('')
-        setIsLoading(false)
+        setError('')
         return
       }
 
       try {
-        setIsLoading(true)
+        console.log('渲染LaTeX:', code, '显示模式:', displayMode)
+        
+        // 测试KaTeX是否可用
+        if (typeof katex === 'undefined') {
+          throw new Error('KaTeX未加载')
+        }
         
         const html = katex.renderToString(code, {
           displayMode: displayMode,
           throwOnError: false,
-          errorColor: '#cc0000',
+          errorColor: '#dc2626',
           strict: 'warn',
-          trust: false,
-          macros: {
-            '\\f': '#1f(#2)',
-          },
+          trust: false
         })
         
+        console.log('LaTeX渲染成功:', html.length, '字符')
+        console.log('HTML内容预览:', html.substring(0, 200))
         setRenderedHtml(html)
         setError('')
       } catch (err) {
+        console.error('LaTeX渲染错误:', err)
         setError(err.message || 'LaTeX渲染错误')
         setRenderedHtml('')
-      } finally {
-        setIsLoading(false)
       }
     }
 
-    renderLatex()
-  }, [code, displayMode])
+    // 渲染tempLatex（编辑时）和latex（显示时）
+    const codeToRender = isEditing ? tempLatex : latex
+    renderLatex(codeToRender)
+  }, [tempLatex, latex, displayMode, isEditing])
 
   // 开始编辑
   const startEditing = () => {
     setIsEditing(true)
-    const currentCode = code || ''
-    setTempCode(currentCode)
+    const currentLatex = latex || ''
+    setTempLatex(currentLatex)
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus()
-        // 将游标设置到文本末尾
-        const length = currentCode.length
+        const length = currentLatex.length
         textareaRef.current.setSelectionRange(length, length)
       }
     }, 0)
@@ -72,19 +121,17 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
 
   // 保存编辑
   const saveEdit = () => {
-    updateAttributes({ code: tempCode })
+    updateAttributes({
+      latex: tempLatex,
+    })
     setIsEditing(false)
   }
 
   // 取消编辑
   const cancelEdit = () => {
-    setTempCode(code || '')
+    const currentLatex = latex || ''
+    setTempLatex(currentLatex)
     setIsEditing(false)
-  }
-
-  // 复制LaTeX代码
-  const copyCode = () => {
-    navigator.clipboard.writeText(code || '')
   }
 
   // 处理键盘事件
@@ -98,57 +145,48 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
     }
   }
 
-  // 如果没有代码，显示输入界面
-  if (!code && !isEditing) {
-    return (
-      <NodeViewWrapper className="latex-wrapper">
-        <div 
-          className="latex-placeholder border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors cursor-pointer"
-          onClick={startEditing}
-        >
-          <div className="flex flex-col items-center">
-            <div className="text-2xl mb-2">∑</div>
-            <p className="text-gray-600">点击添加 LaTeX 数学公式</p>
-            <p className="text-sm text-gray-400 mt-1">支持行内和块级数学公式</p>
-          </div>
-        </div>
-      </NodeViewWrapper>
-    )
+  // 复制LaTeX代码
+  const copyLatex = () => {
+    const latexText = displayMode ? `$$${latex}$$` : `$${latex}$`
+    navigator.clipboard.writeText(latexText)
   }
 
+  console.log('LaTeX组件渲染状态:', { isEditing, latex, tempLatex, renderedHtml: !!renderedHtml, error })
+
   return (
-    <NodeViewWrapper className="latex-wrapper relative group">
+    <NodeViewWrapper className="latex-markdown-wrapper">
       {isEditing ? (
-        // 简约编辑模式：源码编辑器 + 直接实时预览
+        // 编辑模式：源码编辑器 + 实时预览
         <div className="latex-editor">
-          {/* 简约的LaTeX源码编辑器 */}
+          {/* LaTeX源码编辑器 */}
           <input
             ref={textareaRef}
             type="text"
-            value={tempCode}
-            onChange={(e) => setTempCode(e.target.value)}
+            value={tempLatex}
+            onChange={(e) => setTempLatex(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={saveEdit}
-            placeholder="输入 LaTeX 公式，如: x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}"
-            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 bg-white"
+            placeholder="输入 LaTeX 公式，如: E = mc^2"
+            className="p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 bg-white text-black"
+            style={{ 
+              width: `${Math.max(200, tempLatex.length * 8 + 40)}px`,
+              minWidth: '200px',
+              maxWidth: '100%'
+            }}
           />
           
-          {/* 实时预览公式 */}
-          {tempCode ? (
+          {/* 实时预览LaTeX */}
+          {tempLatex ? (
             <div className="mt-3">
-              {isLoading ? (
-                <div className="flex items-center justify-center p-4">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-                  <span className="text-gray-500 text-sm">渲染中...</span>
-                </div>
-              ) : error ? (
-                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+              {error ? (
+                <div className="p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
                   ⚠️ LaTeX 错误: {error}
                 </div>
               ) : (
                 <div 
                   dangerouslySetInnerHTML={{ __html: renderedHtml }}
                   className={`katex-rendered ${displayMode ? 'katex-display text-center' : 'inline-block'}`}
+                  style={{ color: 'black' }}
                 />
               )}
             </div>
@@ -158,7 +196,7 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
             </div>
           )}
           
-          {/* 切换显示模式的按钮 */}
+          {/* 模式切换按钮 */}
           <div className="mt-2 flex items-center justify-between">
             <button
               onClick={() => updateAttributes({ displayMode: !displayMode })}
@@ -169,50 +207,70 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
           </div>
         </div>
       ) : (
-        // 显示模式
-        <div className={`latex-display ${displayMode ? 'block text-center my-4' : 'inline'}`}>
-          {isLoading ? (
-            <div className="inline-flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-              <span className="text-gray-500 text-sm">渲染中...</span>
-            </div>
-          ) : error ? (
-            <div className="inline-flex items-center text-red-500 bg-red-50 px-2 py-1 rounded">
-              <span className="text-sm">LaTeX 错误: {error}</span>
+        // 显示模式：显示渲染后的LaTeX + 工具栏
+        <div className="latex-display relative group">
+          {latex ? (
+            <div className="relative">
+              {/* 显示渲染后的LaTeX */}
+              {renderedHtml ? (
+                <div 
+                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  onClick={startEditing}
+                  className={`katex-rendered ${displayMode ? 'katex-display text-center my-4' : 'inline-block'} cursor-pointer hover:opacity-90 transition-opacity`}
+                  style={{ 
+                    color: 'black',
+                    width: 'fit-content',
+                    display: displayMode ? 'block' : 'inline-block',
+                    margin: displayMode ? '0 auto' : '0'
+                  }}
+                  title="点击编辑公式"
+                />
+              ) : error ? (
+                <div className="p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+                  ⚠️ LaTeX 错误: {error}
+                </div>
+              ) : (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded text-gray-600 text-sm">
+                  正在渲染LaTeX...
+                </div>
+              )}
+              
+              {/* 悬浮工具栏 */}
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={startEditing}
+                  className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
+                  title="编辑"
+                >
+                  <Edit3 size={14} />
+                </button>
+                <button
+                  onClick={copyLatex}
+                  className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
+                  title="复制"
+                >
+                  <Copy size={14} />
+                </button>
+                <button
+                  onClick={() => deleteNode()}
+                  className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
+                  title="删除"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
           ) : (
+            // 空状态
             <div 
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+              className="latex-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
               onClick={startEditing}
-              className={`katex-rendered ${displayMode ? 'katex-display' : ''} cursor-pointer hover:opacity-80 transition-opacity`}
-              title="点击编辑公式"
-            />
+            >
+              <div className="text-4xl text-gray-400 mb-4">∑</div>
+              <p className="text-gray-600 mb-2">点击添加 LaTeX 公式</p>
+              <p className="text-sm text-gray-400">支持数学公式渲染</p>
+            </div>
           )}
-          
-          {/* 悬浮工具栏 */}
-          <div className="absolute top-0 right-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-sm rounded border p-1">
-            <button
-              onClick={startEditing}
-              className="p-1 hover:bg-gray-100 rounded"
-              title="编辑公式"
-            >
-              <Edit3 size={12} />
-            </button>
-            <button
-              onClick={copyCode}
-              className="p-1 hover:bg-gray-100 rounded"
-              title="复制代码"
-            >
-              <Copy size={12} />
-            </button>
-            <button
-              onClick={() => deleteNode()}
-              className="p-1 hover:bg-gray-100 rounded text-red-500"
-              title="删除公式"
-            >
-              <X size={12} />
-            </button>
-          </div>
         </div>
       )}
     </NodeViewWrapper>
@@ -221,7 +279,7 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
 
 // 定义LaTeX节点
 export const LaTeXExtension = Node.create({
-  name: 'latex',
+  name: 'latexBlock',
   
   group: 'block',
   
@@ -229,7 +287,7 @@ export const LaTeXExtension = Node.create({
 
   addAttributes() {
     return {
-      code: {
+      latex: {
         default: '',
       },
       displayMode: {
@@ -241,13 +299,23 @@ export const LaTeXExtension = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'div[data-type="latex"]',
+        tag: 'div[data-type="latex-block"]',
+        getAttrs: (element) => ({
+          latex: element.getAttribute('data-latex'),
+          displayMode: element.getAttribute('data-display-mode') === 'true',
+        }),
       },
     ]
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes({ 'data-type': 'latex' }, HTMLAttributes)]
+    return [
+      'div',
+      mergeAttributes({ 'data-type': 'latex-block' }, {
+        'data-latex': HTMLAttributes.latex,
+        'data-display-mode': HTMLAttributes.displayMode,
+      }),
+    ]
   },
 
   addNodeView() {
@@ -265,37 +333,109 @@ export const LaTeXExtension = Node.create({
     }
   },
 
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('latexPaste'),
+        props: {
+          handlePaste: (view, event, slice) => {
+            const text = event.clipboardData?.getData('text/plain') || ''
+            console.log('粘贴事件，文本:', text)
+            
+            if (text && (text.includes('$$') || text.includes('$'))) {
+              console.log('检测到LaTeX内容:', text)
+              
+              // 检查块级LaTeX
+              const blockMatch = text.match(/\$\$([^$]+)\$\$/)
+              if (blockMatch) {
+                console.log('插入块级LaTeX:', blockMatch[1])
+                event.preventDefault()
+                
+                const { state } = view
+                const { tr } = state
+                const { from, to } = tr.selection
+                
+                // 删除选中内容
+                if (from !== to) {
+                  tr.delete(from, to)
+                }
+                
+                const latexNode = this.type.create({
+                  latex: blockMatch[1].trim(),
+                  displayMode: true
+                })
+                tr.insert(from, latexNode)
+                view.dispatch(tr)
+                return true
+              }
+              
+              // 检查行内LaTeX
+              const inlineMatch = text.match(/\$([^$]+)\$/)
+              if (inlineMatch) {
+                console.log('插入行内LaTeX:', inlineMatch[1])
+                event.preventDefault()
+                
+                const { state } = view
+                const { tr } = state
+                const { from, to } = tr.selection
+                
+                // 删除选中内容
+                if (from !== to) {
+                  tr.delete(from, to)
+                }
+                
+                const latexNode = this.type.create({
+                  latex: inlineMatch[1].trim(),
+                  displayMode: false
+                })
+                tr.insert(from, latexNode)
+                view.dispatch(tr)
+                return true
+              }
+            }
+            
+            return false
+          }
+        }
+      })
+    ]
+  },
+
   addInputRules() {
     return [
-      // 简化的LaTeX规则 - 输入 $$formula$$ 后按空格
+      // 块级LaTeX规则 - 输入 $$formula$$ 后按空格
       new InputRule({
-        find: /\$\$(.+?)\$\$ $/,
+        find: /\$\$([^$]+)\$\$ $/,
         handler: ({ state, range, match }) => {
+          console.log('InputRule触发 - 块级LaTeX:', match[1])
           const { tr } = state
           const start = range.from
           const end = range.to - 1 // 排除空格
           
-          tr.replaceWith(start, end, this.type.create({
-            code: match[1].trim(),
+          const latexNode = this.type.create({
+            latex: match[1].trim(),
             displayMode: true
-          }))
+          })
           
+          tr.replaceWith(start, end, latexNode)
           return tr
         }
       }),
-      // 行内LaTeX规则 - 输入 $formula$ 后按空格  
+      // 行内LaTeX规则 - 输入 $formula$ 后按空格
       new InputRule({
-        find: /\$(.+?)\$ $/,
+        find: /\$([^$]+)\$ $/,
         handler: ({ state, range, match }) => {
+          console.log('InputRule触发 - 行内LaTeX:', match[1])
           const { tr } = state
           const start = range.from
           const end = range.to - 1 // 排除空格
           
-          tr.replaceWith(start, end, this.type.create({
-            code: match[1].trim(),
+          const latexNode = this.type.create({
+            latex: match[1].trim(),
             displayMode: false
-          }))
+          })
           
+          tr.replaceWith(start, end, latexNode)
           return tr
         }
       })
