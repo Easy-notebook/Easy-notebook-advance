@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
+import { useState, useEffect, useCallback, memo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import CodeCell from '../Editor/CodeCell';
@@ -35,6 +36,8 @@ const VUE_SECONDARY = '#35495E';
 const ModeToggle = memo(({ viewMode, onModeChange }) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = useRef(null);
+  const [buttonRect, setButtonRect] = useState(null);
 
   const modes = [
     { id: 'complete', label: 'Create Mode', name: t('modeToggle.completeMode') },
@@ -44,25 +47,51 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
 
   const selectedMode = modes.find(mode => mode.id === viewMode);
 
+  // 更新按钮位置
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setButtonRect(rect);
+    }
+  }, [isOpen]);
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (buttonRef.current && !buttonRef.current.contains(event.target)) {
+        // 检查点击的是否是下拉菜单内的元素
+        const dropdown = document.querySelector('[data-dropdown-menu]');
+        if (!dropdown || !dropdown.contains(event.target)) {
+          setIsOpen(false);
+        }
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+
   return (
-    <div className="relative w-full max-w-md z-99999">
+    <div className="relative w-full max-w-md">
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50"
         style={{
-          whiteSpace: 'nowrap', // 保证按钮内容不换行
+          whiteSpace: 'nowrap',
         }}
       >
         <span
           style={{
             font: '18px ui-sans-serif, -apple-system, system-ui',
-            zIndex: 99999,
             fontWeight: 600,
             height: '24px',
             letterSpacing: 'normal',
             lineHeight: '28px',
             overflowClipMargin: 'content-box',
-            whiteSpace: 'nowrap', // 保证mode名称不换行
+            whiteSpace: 'nowrap', 
             display: 'inline-block',
             verticalAlign: 'middle', 
           }}
@@ -78,14 +107,27 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
         </svg>
       </button>
 
-      {isOpen && (
-        <div className="absolute w-full mt-1 bg-white rounded-lg shadow-lg z-10">
+      {isOpen && buttonRect && createPortal(
+        <div 
+          data-dropdown-menu
+          className="bg-white rounded-lg shadow-lg border border-gray-200"
+          style={{ 
+            position: 'fixed',
+            top: buttonRect.bottom + 4,
+            left: buttonRect.left,
+            width: buttonRect.width,
+            zIndex: 999999,
+            minWidth: '200px'
+          }}
+        >
           {modes.map(mode => (
             <button
               key={mode.id}
               onClick={() => { onModeChange(mode.id); setIsOpen(false); }}
               className={`w-full text-left p-3 flex items-center justify-between transition-colors ${viewMode === mode.id ? 'bg-white/90' : 'hover:bg-white/80'}`}
-              style={{ whiteSpace: 'nowrap' }}
+              style={{ 
+                whiteSpace: 'nowrap'
+              }}
             >
               <span
                 className="text-lg font-medium"
@@ -98,7 +140,8 @@ const ModeToggle = memo(({ viewMode, onModeChange }) => {
               {viewMode === mode.id && <span style={{ color: VUE_PRIMARY, marginLeft: 8 }}>✓</span>}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

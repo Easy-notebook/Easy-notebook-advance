@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2, Eye, Edit3 } from 'lucide-react';
 import useStore from '../../store/notebookStore';
-import { v4 as uuidv4 } from 'uuid';
 
 interface Cell {
   id: string;
@@ -157,7 +156,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
             <div className="flex-grow w-full">
               {isEditing ? (
                 // 编辑模式：简约的源码编辑器 + 实时预览
-                <div className="image-editor">
+                <div className="image-editor text-black">
                   <input
                     ref={inputRef}
                     type="text"
@@ -166,7 +165,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
                     onKeyDown={handleKeyDown}
                     onBlur={handleBlur}
                     placeholder="![图片描述](图片URL)"
-                    className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 bg-white"
+                    className="text-black w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400"
                   />
                   
                   {/* 实时预览图片 */}
@@ -187,7 +186,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
                       )}
                       
                       {previewData.alt && !imageError && (
-                        <div className="mt-2 text-sm text-gray-600 text-center italic">
+                        <div className="mt-2 text-sm text-center italic">
                           {previewData.alt}
                         </div>
                       )}
@@ -197,14 +196,10 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
                       ⚠️ 请检查 Markdown 语法: ![描述](URL)
                     </div>
                   ) : (
-                    <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-gray-500 text-sm">
+                    <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-sm">
                       输入图片的 Markdown 语法以查看预览
                     </div>
                   )}
-                  
-                  <div className="mt-2 text-xs text-gray-400">
-                    Enter/失去焦点保存 | Esc 取消
-                  </div>
                 </div>
               ) : (
                 // 显示模式：显示图片
@@ -223,7 +218,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
                       
                       {imageError && (
                         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg">
-                          <div className="text-center text-gray-500">
+                          <div className="text-center text-black-500">
                             <div className="text-sm">图片加载失败</div>
                             <div className="text-xs">{imageData.src}</div>
                           </div>
@@ -231,7 +226,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
                       )}
                       
                       {imageData.alt && !imageError && (
-                        <div className="mt-2 text-sm text-gray-600 text-center italic">
+                        <div className="mt-2 text-sm text-black-600 text-center italic">
                           {imageData.alt}
                         </div>
                       )}
@@ -242,14 +237,14 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
                       className="image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
                       onClick={startEditing}
                     >
-                      <div className="text-gray-600 mb-2">
+                      <div className="text-black-600 mb-2">
                         {hasContent ? '⚠️ Markdown 语法错误' : '点击添加图片'}
                       </div>
-                      <div className="text-sm text-gray-400">
+                      <div className="text-sm text-black-400">
                         格式: ![图片描述](图片URL)
                       </div>
                       {hasContent && (
-                        <div className="mt-2 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                        <div className="mt-2 font-mono text-xs text-black-500 bg-gray-50 p-2 rounded">
                           {cell.content}
                         </div>
                       )}

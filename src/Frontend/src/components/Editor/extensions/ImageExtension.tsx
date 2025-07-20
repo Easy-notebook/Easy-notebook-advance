@@ -157,10 +157,6 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
               输入图片的 Markdown 语法以查看预览
             </div>
           )}
-          
-          <div className="mt-2 text-xs text-gray-400">
-            Enter/失去焦点保存 | Esc 取消
-          </div>
         </div>
       ) : (
         // 显示模式：显示图片 + 工具栏

@@ -1,17 +1,12 @@
 import { Node, mergeAttributes } from '@tiptap/core'
+import { InputRule } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import React, { useState, useEffect, useRef } from 'react'
 import { Edit3, Eye, X, Copy } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 
-// 动态导入katex
-let katex: any = null
-const loadKatex = async () => {
-  if (!katex) {
-    katex = await import('katex')
-  }
-  return katex
-}
+// 直接导入katex
+import katex from 'katex'
 
 // LaTeX渲染组件
 const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
@@ -26,7 +21,7 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
 
   // 渲染LaTeX
   useEffect(() => {
-    const renderLatex = async () => {
+    const renderLatex = () => {
       if (!code) {
         setRenderedHtml('')
         setIsLoading(false)
@@ -35,9 +30,8 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
 
       try {
         setIsLoading(true)
-        const katexModule = await loadKatex()
         
-        const html = katexModule.default.renderToString(code, {
+        const html = katex.renderToString(code, {
           displayMode: displayMode,
           throwOnError: false,
           errorColor: '#cc0000',
@@ -64,9 +58,15 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
   // 开始编辑
   const startEditing = () => {
     setIsEditing(true)
-    setTempCode(code || '')
+    const currentCode = code || ''
+    setTempCode(currentCode)
     setTimeout(() => {
-      textareaRef.current?.focus()
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        // 将游标设置到文本末尾
+        const length = currentCode.length
+        textareaRef.current.setSelectionRange(length, length)
+      }
     }, 0)
   }
 
@@ -89,7 +89,7 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
 
   // 处理键盘事件
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
+    if (e.key === 'Enter') {
       e.preventDefault()
       saveEdit()
     } else if (e.key === 'Escape') {
@@ -119,50 +119,53 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
   return (
     <NodeViewWrapper className="latex-wrapper relative group">
       {isEditing ? (
-        // 编辑模式
-        <div className="latex-editor border rounded-lg p-3 bg-gray-50">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">
-              LaTeX 公式 {displayMode ? '(块级)' : '(行内)'}
-            </label>
-            <div className="flex gap-1">
-              <button
-                onClick={() => updateAttributes({ displayMode: !displayMode })}
-                className="px-2 py-1 text-xs border rounded hover:bg-gray-100"
-                title={displayMode ? '切换为行内公式' : '切换为块级公式'}
-              >
-                {displayMode ? '行内' : '块级'}
-              </button>
-            </div>
-          </div>
-          
-          <textarea
+        // 简约编辑模式：源码编辑器 + 直接实时预览
+        <div className="latex-editor">
+          {/* 简约的LaTeX源码编辑器 */}
+          <input
             ref={textareaRef}
+            type="text"
             value={tempCode}
             onChange={(e) => setTempCode(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入 LaTeX 公式，例如: x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}"
-            className="w-full h-24 p-2 border rounded font-mono text-sm resize-none focus:outline-none focus:border-blue-400"
+            onBlur={saveEdit}
+            placeholder="输入 LaTeX 公式，如: x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}"
+            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 bg-white"
           />
           
-          <div className="flex items-center justify-between mt-2">
-            <div className="text-xs text-gray-500">
-              Ctrl+Enter 保存 | Esc 取消
+          {/* 实时预览公式 */}
+          {tempCode ? (
+            <div className="mt-3">
+              {isLoading ? (
+                <div className="flex items-center justify-center p-4">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                  <span className="text-gray-500 text-sm">渲染中...</span>
+                </div>
+              ) : error ? (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+                  ⚠️ LaTeX 错误: {error}
+                </div>
+              ) : (
+                <div 
+                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  className={`katex-rendered ${displayMode ? 'katex-display text-center' : 'inline-block'}`}
+                />
+              )}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={cancelEdit}
-                className="px-3 py-1 text-sm border rounded hover:bg-gray-100"
-              >
-                取消
-              </button>
-              <button
-                onClick={saveEdit}
-                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                保存
-              </button>
+          ) : (
+            <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-gray-500 text-sm">
+              输入 LaTeX 公式以查看预览
             </div>
+          )}
+          
+          {/* 切换显示模式的按钮 */}
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              onClick={() => updateAttributes({ displayMode: !displayMode })}
+              className="text-xs text-blue-500 hover:text-blue-700"
+            >
+              {displayMode ? '切换为行内公式' : '切换为块级公式'}
+            </button>
           </div>
         </div>
       ) : (
@@ -180,7 +183,9 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
           ) : (
             <div 
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
-              className={`katex-rendered ${displayMode ? 'katex-display' : ''}`}
+              onClick={startEditing}
+              className={`katex-rendered ${displayMode ? 'katex-display' : ''} cursor-pointer hover:opacity-80 transition-opacity`}
+              title="点击编辑公式"
             />
           )}
           
@@ -262,34 +267,38 @@ export const LaTeXExtension = Node.create({
 
   addInputRules() {
     return [
-      // 双击 $$ 创建块级LaTeX
-      {
-        find: /\$\$(.+?)\$\$$/,
+      // 简化的LaTeX规则 - 输入 $$formula$$ 后按空格
+      new InputRule({
+        find: /\$\$(.+?)\$\$ $/,
         handler: ({ state, range, match }) => {
           const { tr } = state
           const start = range.from
-          const end = range.to
+          const end = range.to - 1 // 排除空格
           
           tr.replaceWith(start, end, this.type.create({
-            code: match[1],
+            code: match[1].trim(),
             displayMode: true
           }))
+          
+          return tr
         }
-      },
-      // 单个 $ 创建行内LaTeX
-      {
-        find: /\$(.+?)\$$/,
+      }),
+      // 行内LaTeX规则 - 输入 $formula$ 后按空格  
+      new InputRule({
+        find: /\$(.+?)\$ $/,
         handler: ({ state, range, match }) => {
           const { tr } = state
           const start = range.from
-          const end = range.to
+          const end = range.to - 1 // 排除空格
           
           tr.replaceWith(start, end, this.type.create({
-            code: match[1],
+            code: match[1].trim(),
             displayMode: false
           }))
+          
+          return tr
         }
-      }
+      })
     ]
   },
 })
