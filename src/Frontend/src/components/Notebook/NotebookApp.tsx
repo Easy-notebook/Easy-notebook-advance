@@ -5,6 +5,7 @@ import CodeCell from '../Editor/CodeCell';
 import MarkdownCell from '../Editor/MarkdownCell';
 import HybridCell from '../Editor/HybridCell';
 import FileCell from '../Editor/FileCell';
+import ImageCell from '../Editor/ImageCell';
 import OutlineSidebar from './LeftSideBar/OutlineSidebar';
 import ErrorAlert from '../UI/ErrorAlert';
 import { Play, PlusCircle, ArrowLeft, ArrowRight, Upload, BarChartHorizontalBig, TerminalSquare, Settings2, Sparkles } from 'lucide-react';
@@ -128,6 +129,13 @@ const CellDivider = memo(({ index, onAddCell, viewMode }) => {
           >
             <PlusCircle size={16} />
             {t('cell.addTextCell')}
+          </button>
+          <button
+            onClick={() => onAddCell('image', index)}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
+          >
+            <PlusCircle size={16} />
+            图片
           </button>
           <button
             onClick={() => onAddCell('file', index)}
@@ -529,6 +537,8 @@ const NotebookApp = () => {
         return <CodeCell key={cell.id} {...props} />;
       case 'markdown':
         return <MarkdownCell key={cell.id} {...props} />;
+      case 'image':
+        return <ImageCell key={cell.id} {...props} />;
       case 'file':
         return <FileCell key={cell.id} {...props} />;
       default:

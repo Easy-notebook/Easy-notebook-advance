@@ -1108,13 +1108,21 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         }
         
         /* 图片和LaTeX扩展样式 */
-        .image-upload-wrapper {
+        .image-markdown-wrapper {
           margin: 1rem 0;
         }
         
-        .image-wrapper {
+        .image-editor {
+          margin: 0.5rem 0;
+        }
+        
+        .image-display {
           margin: 1rem 0;
           position: relative;
+        }
+        
+        .image-placeholder {
+          margin: 1rem 0;
         }
         
         .latex-wrapper {

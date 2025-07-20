@@ -56,7 +56,12 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
     const currentMarkdown = markdown || generateMarkdown(alt || '', src || '')
     setTempMarkdown(currentMarkdown)
     setTimeout(() => {
-      textareaRef.current?.focus()
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        // 将游标设置到文本末尾
+        const length = currentMarkdown.length
+        textareaRef.current.setSelectionRange(length, length)
+      }
     }, 0)
   }
 
@@ -82,7 +87,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
 
   // 处理键盘事件
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
+    if (e.key === 'Enter') {
       e.preventDefault()
       saveEdit()
     } else if (e.key === 'Escape') {
@@ -106,71 +111,56 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
   return (
     <NodeViewWrapper className="image-markdown-wrapper">
       {isEditing ? (
-        // 编辑模式：显示源码编辑器 + 实时预览
-        <div className="image-editor border rounded-lg p-3 bg-gray-50">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">
-              Markdown 图片语法
-            </label>
-            <div className="flex gap-2">
-              <button
-                onClick={cancelEdit}
-                className="px-3 py-1 text-sm border rounded hover:bg-gray-100"
-              >
-                取消
-              </button>
-              <button
-                onClick={saveEdit}
-                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                保存
-              </button>
-            </div>
-          </div>
-          
-          {/* Markdown源码编辑器 */}
-          <textarea
+        // 简约编辑模式：源码编辑器 + 直接实时预览
+        <div className="image-editor">
+          {/* 简约的Markdown源码编辑器 */}
+          <input
             ref={textareaRef}
+            type="text"
             value={tempMarkdown}
             onChange={(e) => setTempMarkdown(e.target.value)}
             onKeyDown={handleKeyDown}
+            onBlur={saveEdit}
             placeholder="![图片描述](图片URL)"
-            className="w-full h-16 p-2 border rounded font-mono text-sm resize-none focus:outline-none focus:border-blue-400"
+            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 bg-white"
           />
           
-          <div className="text-xs text-gray-500 mt-1 mb-3">
-            Ctrl+Enter 保存 | Esc 取消 | 格式: ![描述](URL)
-          </div>
-          
-          {/* 实时预览 */}
-          {previewData.isValid && previewData.src && (
-            <div className="preview-section border-t pt-3">
-              <div className="text-sm font-medium text-gray-700 mb-2">实时预览:</div>
-              <div className="flex items-start gap-3">
-                <img
-                  src={previewData.src}
-                  alt={previewData.alt}
-                  onError={handleImageError}
-                  onLoad={handleImageLoad}
-                  className="max-w-full max-h-48 rounded border object-contain"
-                  style={{ maxWidth: '200px' }}
-                />
-                <div className="flex-1 text-sm text-gray-600">
-                  <div><strong>描述:</strong> {previewData.alt || '无'}</div>
-                  <div><strong>URL:</strong> {previewData.src}</div>
-                  {imageError && (
-                    <div className="text-red-500 mt-1">⚠️ 图片加载失败</div>
-                  )}
+          {/* 实时预览图片 */}
+          {previewData.isValid && previewData.src ? (
+            <div className="mt-3">
+              <img
+                src={previewData.src}
+                alt={previewData.alt}
+                onError={handleImageError}
+                onLoad={handleImageLoad}
+                className="max-w-full h-auto rounded-lg shadow-sm"
+              />
+              
+              {imageError && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+                  ⚠️ 图片加载失败: {previewData.src}
                 </div>
-              </div>
+              )}
+              
+              {previewData.alt && !imageError && (
+                <div className="mt-2 text-sm text-gray-600 text-center italic">
+                  {previewData.alt}
+                </div>
+              )}
+            </div>
+          ) : tempMarkdown ? (
+            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
+              ⚠️ 请检查 Markdown 语法: ![描述](URL)
+            </div>
+          ) : (
+            <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-gray-500 text-sm">
+              输入图片的 Markdown 语法以查看预览
             </div>
           )}
           
-          {tempMarkdown && !previewData.isValid && (
-            <div className="text-red-500 text-sm mt-2">
-              ⚠️ Markdown语法错误，请检查格式: ![描述](URL)
-            </div>
-          )}
+          <div className="mt-2 text-xs text-gray-400">
+            Enter/失去焦点保存 | Esc 取消
+          </div>
         </div>
       ) : (
         // 显示模式：显示图片 + 工具栏
@@ -183,7 +173,8 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
                 title={alt}
                 onError={handleImageError}
                 onLoad={handleImageLoad}
-                className="max-w-full h-auto rounded-lg shadow-sm"
+                onClick={startEditing}
+                className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
               />
               
               {imageError && (
