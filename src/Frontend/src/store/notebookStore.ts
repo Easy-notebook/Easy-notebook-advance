@@ -96,6 +96,7 @@ export interface ToastMessage {
  */
 export interface NotebookStoreState {
     notebookId: string | null;
+    notebookTitle: string; // 默认标题
     cells: Cell[];
     tasks: Task[];
     currentPhaseId: string | null;
@@ -144,6 +145,7 @@ export interface NotebookStoreActions {
     setMaxFiles: (maxFiles: number | null) => void;
     setIsRightSidebarCollapsed: (isRightSidebarCollapsed: boolean) => void;
     setNotebookId: (id: string | null) => void;
+    setNotebookTitle: (title: string) => void;
     setCurrentPhase: (phaseId: string | null) => void;
     setCurrentStepIndex: (index: number) => void;
     setCurrentCell: (cellId: string | null) => void;
@@ -296,7 +298,19 @@ const useStore = create<NotebookStore>(
   subscribeWithSelector((set, get) => ({
     // ================= 原有状态(不变) =================
     notebookId: null,
-    cells: [],
+    notebookTitle: 'Untitled', // 默认标题
+    cells: [
+      // 默认的H1标题cell，始终在第一位
+      {
+        id: 'default-title-cell',
+        type: 'markdown' as CellType,
+        content: '# Untitled',
+        outputs: [],
+        enableEdit: true,
+        phaseId: null,
+        metadata: { isDefaultTitle: true } // 标记为默认标题
+      }
+    ],
     tasks: [],
     currentPhaseId: null,
     currentStepIndex: 0,
@@ -342,6 +356,14 @@ const useStore = create<NotebookStore>(
     setIsRightSidebarCollapsed: (isRightSidebarCollapsed: boolean) =>
       set({ isRightSidebarCollapsed }),
     setNotebookId: (id: string | null) => set({ notebookId: id }),
+    setNotebookTitle: (title: string) => set((state) => ({
+      notebookTitle: title,
+      cells: state.cells.map((cell, index) => 
+        index === 0 && cell.metadata?.isDefaultTitle 
+          ? { ...cell, content: `# ${title}` }
+          : cell
+      )
+    })),
     setCurrentPhase: (phaseId: string | null) =>
       set({ currentPhaseId: phaseId, currentStepIndex: 0 }),
     setCurrentStepIndex: (index: number) => set({ currentStepIndex: index }),
@@ -524,6 +546,13 @@ const useStore = create<NotebookStore>(
       set(
         produce((state: NotebookStoreState) => {
           const cellToDelete = state.cells.find((c) => c.id === cellId);
+          
+          // 防止删除默认标题cell
+          if (cellToDelete?.metadata?.isDefaultTitle) {
+            console.log('Cannot delete default title cell');
+            return; // 直接返回，不删除
+          }
+          
           state.cells = state.cells.filter((cell) => cell.id !== cellId);
           state.tasks = parseMarkdownCells(state.cells);
 
@@ -566,10 +595,16 @@ const useStore = create<NotebookStore>(
         produce((state: NotebookStoreState) => {
           const cell = state.cells.find((c) => c.id === cellId);
           if (cell) {
-            cell.content =
-              typeof newContent === 'string'
-                ? newContent
-                : String(newContent || '');
+            const content = typeof newContent === 'string' ? newContent : String(newContent || '');
+            cell.content = content;
+            
+            // 如果是默认标题cell，同步更新notebookTitle
+            if (cell.metadata?.isDefaultTitle) {
+              // 提取H1标题文本，去掉"# "前缀
+              const titleMatch = content.match(/^#\s*(.*)$/);
+              const title = titleMatch ? titleMatch[1].trim() : content.replace(/^#\s*/, '').trim();
+              state.notebookTitle = title || 'Untitled';
+            }
           }
           state.tasks = parseMarkdownCells(state.cells);
         })

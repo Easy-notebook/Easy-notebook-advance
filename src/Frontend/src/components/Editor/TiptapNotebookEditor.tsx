@@ -4,6 +4,8 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { CodeBlockExtension } from './extensions/CodeBlockExtension'
 import SimpleTableExtension from './extensions/TableExtension'
+import ImageExtension from './extensions/ImageExtension'
+import LaTeXExtension from './extensions/LaTeXExtension'
 import useStore from '../../store/notebookStore'
 import { 
   Bold, 
@@ -15,7 +17,9 @@ import {
   ListOrdered,
   Quote,
   Terminal,
-  Table as TableIcon
+  Table as TableIcon,
+  Image as ImageIcon,
+  Sigma as FunctionIcon
 } from 'lucide-react'
 
 import Table from '@tiptap/extension-table'
@@ -48,6 +52,71 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     setCells,
   } = useStore()
 
+  // 动态游标样式扩展
+  const CursorStyleExtension = Extension.create({
+    name: 'cursorStyle',
+    
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: new PluginKey('cursorStyle'),
+          view(editorView) {
+            const updateCursorStyle = () => {
+              const { state } = editorView
+              const { selection } = state
+              const { from } = selection
+              
+              // 获取当前位置的节点
+              const $pos = state.doc.resolve(from)
+              const node = $pos.parent
+              
+              // 根据节点类型设置游标颜色
+              let caretColor = '#1f2937' // 默认颜色
+              
+              if (node.type.name === 'heading') {
+                const level = node.attrs.level
+                switch (level) {
+                  case 1:
+                    caretColor = '#3b82f6' // 蓝色 - H1/默认标题
+                    break
+                  case 2:
+                    caretColor = '#059669' // 绿色 - H2
+                    break
+                  case 3:
+                    caretColor = '#dc2626' // 红色 - H3
+                    break
+                  default:
+                    caretColor = '#7c3aed' // 紫色 - H4-H6
+                }
+              } else if (node.type.name === 'listItem') {
+                caretColor = '#f59e0b' // 橙色 - 列表项
+              } else if (node.type.name === 'blockquote') {
+                caretColor = '#6b7280' // 灰色 - 引用
+              } else if (node.type.name === 'codeBlock') {
+                caretColor = '#ef4444' // 红色 - 代码块
+              } else if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                caretColor = '#8b5cf6' // 紫色 - 表格
+              }
+              
+              // 应用样式到编辑器
+              const editorElement = editorView.dom
+              if (editorElement) {
+                editorElement.style.caretColor = caretColor
+              }
+            }
+            
+            // 初始设置
+            updateCursorStyle()
+            
+            return {
+              update: updateCursorStyle
+            }
+          }
+        })
+      ]
+    }
+  })
+
   // 防止循环更新的标志
   const isInternalUpdate = useRef(false)
   
@@ -63,7 +132,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   const initialContent = useMemo(() => {
     console.log('=== 计算initialContent ===');
     console.log('初始cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+    
     const content = convertCellsToHtml(cells)
+    
     console.log('初始HTML长度:', content.length);
     return content
   }, [cells.length]) // 只在cells数量变化时重新计算，避免内容变化导致重新初始化
@@ -147,6 +218,15 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       
       // 可执行代码块扩展
       CodeBlockExtension,
+      
+      // 动态游标样式扩展
+      CursorStyleExtension,
+      
+      // 图片支持
+      ImageExtension,
+      
+      // LaTeX支持
+      LaTeXExtension,
       
       // 占位符
       Placeholder.configure({
@@ -372,6 +452,23 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         cellId: `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         outputs: [],
         enableEdit: true,
+      }).run()
+    }
+  }, [editor])
+
+  // 插入图片的功能
+  const insertImage = useCallback(() => {
+    if (editor) {
+      editor.chain().focus().setImage({}).run()
+    }
+  }, [editor])
+
+  // 插入LaTeX的功能
+  const insertLaTeX = useCallback(() => {
+    if (editor) {
+      editor.chain().focus().setLaTeX({
+        code: '',
+        displayMode: true
       }).run()
     }
   }, [editor])
@@ -875,13 +972,31 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         >
           <Terminal size={14} />
         </button>
+        
         <div className="w-px h-4 bg-gray-600 mx-1" />
+        
         <button
           onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
           className="p-2 rounded hover:bg-gray-700"
           title="Insert Table"
         >
           <TableIcon size={14} />
+        </button>
+        
+        <button
+          onClick={insertImage}
+          className="p-2 rounded hover:bg-gray-700"
+          title="Insert Image"
+        >
+          <ImageIcon size={14} />
+        </button>
+        
+        <button
+          onClick={insertLaTeX}
+          className="p-2 rounded hover:bg-gray-700"
+          title="Insert LaTeX Formula"
+        >
+          <FunctionIcon size={14} />
         </button>
       </BubbleMenu>
 
@@ -931,6 +1046,102 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         
         .tiptap-notebook-editor .selectedCell {
           background-color: #e6f3ff;
+        }
+        
+        /* 基于cell类型的游标样式 */
+        .tiptap-notebook-editor .ProseMirror {
+          caret-color: #1f2937; /* 默认深色游标 */
+        }
+        
+        /* H1标题（默认标题）的游标样式 */
+        .tiptap-notebook-editor h1 {
+          caret-color: #3b82f6; /* 蓝色游标，在浅色文本上更明显 */
+          position: relative;
+        }
+        
+        .tiptap-notebook-editor h1:focus-within {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+          border-radius: 4px;
+        }
+        
+        /* H2-H6标题的游标样式 */
+        .tiptap-notebook-editor h2 {
+          caret-color: #059669;
+        }
+        
+        .tiptap-notebook-editor h3 {
+          caret-color: #dc2626;
+        }
+        
+        .tiptap-notebook-editor h4,
+        .tiptap-notebook-editor h5,
+        .tiptap-notebook-editor h6 {
+          caret-color: #7c3aed;
+        }
+        
+        /* 段落的游标样式 */
+        .tiptap-notebook-editor p {
+          caret-color: #374151;
+        }
+        
+        /* 列表的游标样式 */
+        .tiptap-notebook-editor ul li,
+        .tiptap-notebook-editor ol li {
+          caret-color: #f59e0b;
+        }
+        
+        /* 引用块的游标样式 */
+        .tiptap-notebook-editor blockquote {
+          caret-color: #6b7280;
+        }
+        
+        /* 代码块的游标样式 */
+        .tiptap-notebook-editor code {
+          caret-color: #ef4444;
+        }
+        
+        /* 表格的游标样式 */
+        .tiptap-notebook-editor table th,
+        .tiptap-notebook-editor table td {
+          caret-color: #8b5cf6;
+        }
+        
+        /* 图片和LaTeX扩展样式 */
+        .image-upload-wrapper {
+          margin: 1rem 0;
+        }
+        
+        .image-wrapper {
+          margin: 1rem 0;
+          position: relative;
+        }
+        
+        .latex-wrapper {
+          margin: 0.5rem 0;
+          position: relative;
+        }
+        
+        .latex-placeholder {
+          margin: 1rem 0;
+        }
+        
+        .latex-display.block {
+          margin: 1rem 0;
+          text-align: center;
+        }
+        
+        .latex-display.inline {
+          display: inline;
+        }
+        
+        .katex-rendered {
+          user-select: all;
+        }
+        
+        .katex-display {
+          text-align: center;
+          margin: 1rem 0;
         }
       `}</style>
     </div>

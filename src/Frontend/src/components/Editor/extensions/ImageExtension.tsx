@@ -1,0 +1,341 @@
+import { Node, mergeAttributes } from '@tiptap/core'
+import { InputRule } from '@tiptap/core'
+import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
+import React, { useState, useRef, useEffect } from 'react'
+import { Upload, X, RotateCcw, Edit3, Eye } from 'lucide-react'
+
+// React组件来渲染图片节点
+const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
+  const [isEditing, setIsEditing] = useState(false)
+  const [tempMarkdown, setTempMarkdown] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [error, setError] = useState('')
+  const [imageError, setImageError] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  const { src, alt, title, markdown } = node.attrs
+
+  // 初始化编辑状态
+  useEffect(() => {
+    if (markdown) {
+      setTempMarkdown(markdown)
+    } else if (src) {
+      setTempMarkdown(`![${alt || ''}](${src})`)
+    } else {
+      setTempMarkdown('![]()')
+      setIsEditing(true) // 新节点默认进入编辑模式
+    }
+  }, [])
+
+  // 解析markdown语法
+  const parseMarkdown = (markdownStr: string) => {
+    const match = markdownStr.match(/!\[([^\]]*)\]\(([^)]+)\)/)
+    if (match) {
+      return {
+        alt: match[1] || '',
+        src: match[2] || '',
+        isValid: true
+      }
+    }
+    return {
+      alt: '',
+      src: '',
+      isValid: false
+    }
+  }
+
+  // 生成markdown字符串
+  const generateMarkdown = (altText: string, srcUrl: string) => {
+    return `![${altText}](${srcUrl})`
+  }
+
+  // 开始编辑
+  const startEditing = () => {
+    setIsEditing(true)
+    const currentMarkdown = markdown || generateMarkdown(alt || '', src || '')
+    setTempMarkdown(currentMarkdown)
+    setTimeout(() => {
+      textareaRef.current?.focus()
+    }, 0)
+  }
+
+  // 保存编辑
+  const saveEdit = () => {
+    const parsed = parseMarkdown(tempMarkdown)
+    updateAttributes({
+      markdown: tempMarkdown,
+      src: parsed.src,
+      alt: parsed.alt,
+      title: parsed.alt
+    })
+    setIsEditing(false)
+    setImageError(false)
+  }
+
+  // 取消编辑
+  const cancelEdit = () => {
+    const currentMarkdown = markdown || generateMarkdown(alt || '', src || '')
+    setTempMarkdown(currentMarkdown)
+    setIsEditing(false)
+  }
+
+  // 处理键盘事件
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault()
+      saveEdit()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelEdit()
+    }
+  }
+
+  // 实时解析预览
+  const previewData = parseMarkdown(tempMarkdown)
+  
+  // 处理图片加载错误
+  const handleImageError = () => {
+    setImageError(true)
+  }
+
+  const handleImageLoad = () => {
+    setImageError(false)
+  }
+
+  return (
+    <NodeViewWrapper className="image-markdown-wrapper">
+      {isEditing ? (
+        // 编辑模式：显示源码编辑器 + 实时预览
+        <div className="image-editor border rounded-lg p-3 bg-gray-50">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium text-gray-700">
+              Markdown 图片语法
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={cancelEdit}
+                className="px-3 py-1 text-sm border rounded hover:bg-gray-100"
+              >
+                取消
+              </button>
+              <button
+                onClick={saveEdit}
+                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+          
+          {/* Markdown源码编辑器 */}
+          <textarea
+            ref={textareaRef}
+            value={tempMarkdown}
+            onChange={(e) => setTempMarkdown(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="![图片描述](图片URL)"
+            className="w-full h-16 p-2 border rounded font-mono text-sm resize-none focus:outline-none focus:border-blue-400"
+          />
+          
+          <div className="text-xs text-gray-500 mt-1 mb-3">
+            Ctrl+Enter 保存 | Esc 取消 | 格式: ![描述](URL)
+          </div>
+          
+          {/* 实时预览 */}
+          {previewData.isValid && previewData.src && (
+            <div className="preview-section border-t pt-3">
+              <div className="text-sm font-medium text-gray-700 mb-2">实时预览:</div>
+              <div className="flex items-start gap-3">
+                <img
+                  src={previewData.src}
+                  alt={previewData.alt}
+                  onError={handleImageError}
+                  onLoad={handleImageLoad}
+                  className="max-w-full max-h-48 rounded border object-contain"
+                  style={{ maxWidth: '200px' }}
+                />
+                <div className="flex-1 text-sm text-gray-600">
+                  <div><strong>描述:</strong> {previewData.alt || '无'}</div>
+                  <div><strong>URL:</strong> {previewData.src}</div>
+                  {imageError && (
+                    <div className="text-red-500 mt-1">⚠️ 图片加载失败</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {tempMarkdown && !previewData.isValid && (
+            <div className="text-red-500 text-sm mt-2">
+              ⚠️ Markdown语法错误，请检查格式: ![描述](URL)
+            </div>
+          )}
+        </div>
+      ) : (
+        // 显示模式：显示图片 + 工具栏
+        <div className="image-display relative group">
+          {src ? (
+            <div className="relative">
+              <img
+                src={src}
+                alt={alt}
+                title={alt}
+                onError={handleImageError}
+                onLoad={handleImageLoad}
+                className="max-w-full h-auto rounded-lg shadow-sm"
+              />
+              
+              {imageError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg">
+                  <div className="text-center text-gray-500">
+                    <X className="h-8 w-8 mx-auto mb-2" />
+                    <div className="text-sm">图片加载失败</div>
+                    <div className="text-xs">{src}</div>
+                  </div>
+                </div>
+              )}
+              
+              {/* 悬浮工具栏 */}
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={startEditing}
+                  className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
+                  title="编辑"
+                >
+                  <Edit3 size={14} />
+                </button>
+                <button
+                  onClick={() => deleteNode()}
+                  className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
+                  title="删除"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              
+              {/* 图片信息 */}
+              {alt && (
+                <div className="mt-2 text-sm text-gray-600 text-center italic">
+                  {alt}
+                </div>
+              )}
+            </div>
+          ) : (
+            // 空状态
+            <div 
+              className="image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
+              onClick={startEditing}
+            >
+              <Upload className="h-12 w-12 text-gray-400 mb-4 mx-auto" />
+              <p className="text-gray-600 mb-2">点击添加图片</p>
+              <p className="text-sm text-gray-400">支持 Markdown 语法: ![描述](URL)</p>
+            </div>
+          )}
+        </div>
+      )}
+    </NodeViewWrapper>
+  )
+}
+
+// 定义Image节点
+export const ImageExtension = Node.create({
+  name: 'markdownImage',
+  
+  group: 'block',
+  
+  atom: true,
+
+  addAttributes() {
+    return {
+      src: {
+        default: null,
+      },
+      alt: {
+        default: null,
+      },
+      title: {
+        default: null,
+      },
+      markdown: {
+        default: null,
+      },
+    }
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'img[src]',
+        getAttrs: (element) => ({
+          src: element.getAttribute('src'),
+          alt: element.getAttribute('alt'),
+          title: element.getAttribute('title'),
+          markdown: `![${element.getAttribute('alt') || ''}](${element.getAttribute('src') || ''})`
+        }),
+      },
+      {
+        tag: 'div[data-type="markdown-image"]',
+        getAttrs: (element) => ({
+          src: element.getAttribute('data-src'),
+          alt: element.getAttribute('data-alt'),
+          title: element.getAttribute('data-title'),
+          markdown: element.getAttribute('data-markdown'),
+        }),
+      },
+    ]
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes({ 'data-type': 'markdown-image' }, {
+        'data-src': HTMLAttributes.src,
+        'data-alt': HTMLAttributes.alt,
+        'data-title': HTMLAttributes.title,
+        'data-markdown': HTMLAttributes.markdown,
+      }),
+    ]
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageComponent)
+  },
+
+  addCommands() {
+    return {
+      setImage: (options) => ({ commands }) => {
+        return commands.insertContent({
+          type: this.name,
+          attrs: options,
+        })
+      },
+    }
+  },
+
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /!\[([^\]]*)\]\(([^)]+)\)$/,
+        handler: ({ state, range, match }) => {
+          const { tr } = state
+          const start = range.from
+          const end = range.to
+          
+          const alt = match[1] || ''
+          const src = match[2] || ''
+          const markdown = match[0]
+          
+          tr.replaceWith(start, end, this.type.create({
+            src,
+            alt,
+            title: alt,
+            markdown
+          }))
+        }
+      })
+    ]
+  },
+})
+
+export default ImageExtension

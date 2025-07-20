@@ -174,6 +174,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
   const isEditing = editingCellId === cell.id;
   const hasContent = cell.content.trim().length > 0;
   const cellShowButtons = showButtons[cell.id] || false;
+  const isDefaultTitle = cell.metadata?.isDefaultTitle === true;
   
   // 优化的 Markdown 组件配置，包含表格支持
   const markdownComponents = useMemo(() => ({
@@ -384,11 +385,19 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
                 />
               ) : (
                 <div
-                  className="text-lg leading-relaxed markdown-cell min-h-[25px] pb-0 mb-0 selection:bg-blue-200"
+                  className={`text-lg leading-relaxed markdown-cell min-h-[25px] pb-0 mb-0 selection:bg-blue-200 ${
+                    isDefaultTitle ? 'default-title-markdown' : ''
+                  }`}
                   onDoubleClick={toggleEditing}
                   onKeyDown={handleKeyDown}
                   tabIndex={0}
                   role="button"
+                  style={isDefaultTitle ? {
+                    color: '#9ca3af', // 浅色
+                    borderLeft: '4px solid #e5e7eb',
+                    paddingLeft: '1rem',
+                    marginBottom: '1.5rem'
+                  } : {}}
                 >
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
@@ -418,7 +427,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
                   <Eye size={14} />
                 </button>
               )}
-              {deleteCell && (cell.content!="# Untitled") &&(
+              {deleteCell && !isDefaultTitle && (cell.content!="# Untitled") &&(
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
