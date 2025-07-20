@@ -192,9 +192,9 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         }
     }, [processedOutputs.length]);
 
-    // DSLC 模式下输出调试日志
+    // DSLC 模式下输出调试日志（仅在开发模式下）
     useEffect(() => {
-        if (dslcMode && processedOutputs.length > 0) {
+        if (dslcMode && processedOutputs.length > 0 && process.env.NODE_ENV === 'development') {
             console.log('DSLC 模式下有输出:', cell.id, processedOutputs);
         }
     }, [dslcMode, processedOutputs, cell.id]);
@@ -230,21 +230,6 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     const handleChange = useCallback(
         (value) => {
             updateCell(cell.id, value);
-            
-            // Debug: 输出完整的notebook store状态
-            const state = useStore.getState();
-            console.log('=== CodeCell内容修改 Debug Info ===');
-            console.log('Cell ID:', cell.id);
-            console.log('New Value:', value);
-            console.log('完整的cells数组:', state.cells.map((c, index) => ({
-                index,
-                id: c.id,
-                type: c.type,
-                content: c.content.substring(0, 50) + (c.content.length > 50 ? '...' : ''),
-                position: index
-            })));
-            console.log('当前修改的cell在数组中的位置:', state.cells.findIndex(c => c.id === cell.id));
-            console.log('=====================================');
         },
         [cell.id, updateCell]
     );
@@ -464,43 +449,68 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         }
     }, [processedOutputs.length, isExpanded, contentHeight]);
 
-    // 当 cell 内容变化时重置用户切换状态
+    // 当 cell 内容发生较大变化时重置用户切换状态
+    const prevContentRef = useRef(cell.content);
     useEffect(() => {
-        setIsUserToggled(false);
+        const currentContent = cell.content || '';
+        const prevContent = prevContentRef.current || '';
+        
+        // 只有在内容发生显著变化时才重置（比如超过100个字符的差异）
+        const contentDiff = Math.abs(currentContent.length - prevContent.length);
+        if (contentDiff > 100 || (prevContent && !currentContent)) {
+            setIsUserToggled(false);
+        }
+        
+        prevContentRef.current = currentContent;
     }, [cell.content]);
 
-    // 使用 ResizeObserver 监听代码区域高度变化
+    // 使用 ResizeObserver 监听代码区域高度变化，添加防抖优化
     useEffect(() => {
         if (!codeBlockWrapperRef.current) return;
 
+        let timeoutId = null;
         const ro = new ResizeObserver((entries) => {
-            for (let entry of entries) {
-                const newHeight = entry.target.scrollHeight;
-                setContentHeight(newHeight);
-                if (!isUserToggled) {
-                    if (newHeight > EXPAND_THRESHOLD) {
-                        setIsExpanded(false);
-                    } else {
-                        setIsExpanded(true);
+            // 清除之前的定时器
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            
+            // 设置防抖延迟
+            timeoutId = setTimeout(() => {
+                for (let entry of entries) {
+                    const newHeight = entry.target.scrollHeight;
+                    setContentHeight(newHeight);
+                    if (!isUserToggled) {
+                        if (newHeight > EXPAND_THRESHOLD) {
+                            setIsExpanded(false);
+                        } else {
+                            setIsExpanded(true);
+                        }
                     }
                 }
-            }
+            }, 100); // 100ms 防抖延迟
         });
+        
         ro.observe(codeBlockWrapperRef.current);
 
         return () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             ro.disconnect();
         };
-    }, [cell.content, isUserToggled]);
+    }, [isUserToggled]);
 
     // 复制代码
     const handleCopyCode = useCallback(() => {
         navigator.clipboard.writeText(cell.content || '').then(
             () => {
-                console.log('Code copied to clipboard');
+                // 静默复制，不输出日志
             },
             (err) => {
-                console.error('Copy failed:', err);
+                if (process.env.NODE_ENV === 'development') {
+                    console.error('Copy failed:', err);
+                }
             }
         );
     }, [cell.content]);
@@ -671,14 +681,25 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                     willChange: 'max-height',
                                 }}
                             >
-                                {/* Copy button - only show on hover */}
+                                {/* Copy button - fixed position, show on hover */}
                                 <div 
-                                    className={`absolute top-2 right-2 z-10 flex flex-row gap-2 items-center transition-opacity duration-200 ${isHovering ? 'opacity-100' : 'opacity-0'}`}
+                                    className={`absolute top-2 right-2 z-10 transition-opacity duration-200 ${isHovering ? 'opacity-100' : 'opacity-0'}`}
+                                    style={{
+                                        minWidth: '48px',
+                                        minHeight: '28px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
                                 >
                                     <button
                                         onClick={handleCopyCode}
-                                        className="p-1.5 text-xs bg-gray-700/80 text-white rounded hover:bg-gray-600 transition-colors"
+                                        className="px-2 py-1 text-xs bg-gray-700/90 text-white rounded hover:bg-gray-600 transition-colors backdrop-blur-sm"
                                         title="Copy code"
+                                        style={{
+                                            minWidth: '44px',
+                                            textAlign: 'center'
+                                        }}
                                     >
                                         Copy
                                     </button>

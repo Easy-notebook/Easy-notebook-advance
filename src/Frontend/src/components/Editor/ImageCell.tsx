@@ -17,10 +17,8 @@ interface ImageCellProps {
 
 const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
   const {
-    cells,
     updateCell,
     deleteCell,
-    setCurrentCell,
     editingCellId,
     setEditingCellId,
     showButtons,
@@ -55,17 +53,6 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
 
   // 当前解析的图片数据
   const imageData = parseMarkdown(cell.content);
-
-  // 双击切换编辑模式
-  const toggleEditing = useCallback(() => {
-    if (!isEditing) {
-      setEditingCellId(cell.id);
-      setTempContent(cell.content);
-    } else {
-      updateCell(cell.id, tempContent);
-      setEditingCellId(null);
-    }
-  }, [isEditing, cell.id, cell.content, tempContent, setEditingCellId, updateCell]);
 
   // 开始编辑
   const startEditing = useCallback(() => {
