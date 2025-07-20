@@ -210,8 +210,100 @@ const CodeBlockView = ({
 
   // 处理删除
   const handleDelete = useCallback(() => {
-    deleteNode()
-  }, [deleteNode])
+    console.log('=== 删除代码块开始 ===');
+    console.log('删除的代码块ID:', cellId);
+    
+    if (editor && getPos) {
+      const pos = getPos();
+      const { tr } = editor.state;
+      
+      // 获取代码块在文档中的位置
+      const nodeStart = pos;
+      const nodeEnd = pos + node.nodeSize;
+      
+      console.log('代码块位置:', nodeStart, '-', nodeEnd);
+      
+      // 在删除之前，先找到上一个元素的位置
+      let targetPos = nodeStart;
+      let foundPreviousElement = false;
+      
+      // 尝试找到前一个可编辑的位置
+      if (nodeStart > 0) {
+        try {
+          // 逐步向前查找，找到合适的位置
+          for (let pos = nodeStart - 1; pos >= 0; pos--) {
+            const $pos = editor.state.doc.resolve(pos);
+            
+            // 如果找到了段落，移动到段落末尾
+            if ($pos.parent.type.name === 'paragraph') {
+              targetPos = $pos.end($pos.depth);
+              foundPreviousElement = true;
+              console.log('找到前一个段落，位置:', targetPos);
+              break;
+            }
+            
+            // 如果找到了其他块级元素，也可以作为目标
+            if ($pos.parent.isBlock && $pos.parent.type.name !== 'doc') {
+              targetPos = $pos.end($pos.depth);
+              foundPreviousElement = true;
+              console.log('找到前一个块级元素:', $pos.parent.type.name, '位置:', targetPos);
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn('查找前一个元素失败:', e);
+        }
+      }
+      
+      // 删除代码块
+      tr.delete(nodeStart, nodeEnd);
+      
+      // 调整删除后的位置
+      if (foundPreviousElement) {
+        // 确保位置在有效范围内
+        targetPos = Math.min(targetPos, tr.doc.content.size);
+      } else {
+        // 如果没找到前一个元素，设置到删除位置
+        targetPos = Math.min(nodeStart, tr.doc.content.size);
+      }
+      
+      // 确保位置不为负数
+      if (targetPos < 0) {
+        targetPos = 0;
+      }
+      
+      console.log('删除后文档大小:', tr.doc.content.size, '目标位置:', targetPos);
+      
+      // 设置光标位置
+      if (targetPos <= tr.doc.content.size) {
+        try {
+          const $finalPos = tr.doc.resolve(targetPos);
+          const selection = editor.state.selection.constructor.near($finalPos, -1);
+          tr.setSelection(selection);
+          
+          console.log('最终光标位置:', targetPos);
+        } catch (e) {
+          console.warn('设置光标位置失败:', e);
+          // 备用方案：设置到安全位置
+          try {
+            const safePos = Math.min(Math.max(0, targetPos), tr.doc.content.size);
+            const $safePos = tr.doc.resolve(safePos);
+            tr.setSelection(editor.state.selection.constructor.near($safePos));
+          } catch (e2) {
+            console.error('备用光标位置设置也失败:', e2);
+          }
+        }
+      }
+      
+      // 应用事务
+      editor.view.dispatch(tr);
+      
+      console.log('=== 删除代码块完成 ===');
+    } else {
+      // 备用方案
+      deleteNode();
+    }
+  }, [deleteNode, editor, getPos, cellId, node])
 
   // 防止重复插入的引用
   const hasTriedToAdd = useRef(false)
