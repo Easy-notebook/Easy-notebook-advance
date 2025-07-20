@@ -170,6 +170,42 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       // 防止循环更新
       if (isInternalUpdate.current) return
       
+      // 如果是InputRule创建的代码块，跳过处理避免冲突，但处理聚焦
+      if (transaction.getMeta('codeBlockInputRule')) {
+        console.log('跳过InputRule创建的代码块变化');
+        
+        // 获取新创建的代码块ID并聚焦
+        const newCodeCellId = transaction.getMeta('newCodeCellId');
+        if (newCodeCellId) {
+          console.log('准备聚焦到新代码块:', newCodeCellId);
+          
+          // 立即将新代码块设置为当前活跃cell（如果store可用）
+          const { setCurrentCell } = useStore.getState();
+          if (setCurrentCell) {
+            setCurrentCell(newCodeCellId);
+            console.log('已设置新代码块为当前活跃cell');
+          }
+          
+          // 延迟聚焦，等待组件渲染完成
+          setTimeout(() => {
+            const codeElement = document.querySelector(`[data-cell-id="${newCodeCellId}"] .cm-editor .cm-content`);
+            if (codeElement) {
+              codeElement.focus();
+              console.log('已聚焦到新代码块编辑器');
+            } else {
+              console.warn('未找到代码块编辑器元素');
+              // 如果找不到编辑器，尝试找到容器并触发焦点
+              const containerElement = document.querySelector(`[data-cell-id="${newCodeCellId}"]`);
+              if (containerElement) {
+                containerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                console.log('滚动到新代码块位置');
+              }
+            }
+          }, 200); // 增加延迟时间，确保组件完全渲染
+        }
+        return
+      }
+      
       // 检查变化是否发生在特殊块内（代码块或表格）
       const isSpecialBlockChange = transaction.steps.some(step => {
         try {
@@ -261,15 +297,29 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
                 console.log(`代码块位置 ${index}: 保持现有代码块 ${existingCodeCell.id}`);
                 return existingCodeCell // 完全保持现有代码块
               } else {
-                console.log(`代码块位置 ${index}: 警告 - 找不到ID为 ${newCell.id} 的代码块`);
-                // 如果找不到对应的代码块，创建一个空的
+                console.log(`代码块位置 ${index}: 创建新的代码块 ${newCell.id}`);
+                // 这是一个新创建的代码块，使用解析出的数据
+                let language = newCell.language || 'python'
+                let initialCode = newCell.code || ''
+                
+                // 尝试解码code内容
+                try {
+                  if (initialCode) {
+                    initialCode = decodeURIComponent(initialCode)
+                  }
+                } catch (e) {
+                  console.warn('Failed to decode initial code:', e)
+                }
+                
+                console.log(`新代码块语言: ${language}, 初始代码: "${initialCode}"`);
+                
                 return {
                   id: newCell.id,
                   type: 'code',
-                  content: '',
+                  content: initialCode,
                   outputs: [],
                   enableEdit: true,
-                  language: 'python',
+                  language: language,
                 }
               }
             } else if (newCell.type === 'markdown') {
@@ -442,12 +492,19 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           // 如果有累积的markdown内容，先创建markdown cell
           flushMarkdownContent()
 
-          // 对于代码块，只记录位置占位符，不创建新的cell
+          // 对于代码块，记录位置占位符
           const cellId = node.getAttribute('data-cell-id')
+          const language = node.getAttribute('data-language') || 'python'
+          const code = node.getAttribute('data-code') || ''
+          
+          console.log(`发现代码块: ${cellId}, 语言: ${language}`);
+          
           newCells.push({
             id: cellId,
             type: 'code',
             isPlaceholder: true, // 标记为占位符
+            language: language,
+            code: code
           })
         } else if (isHeading(node)) {
           // 如果是标题，先清空累积的内容，然后为标题创建独立的cell

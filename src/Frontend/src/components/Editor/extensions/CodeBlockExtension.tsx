@@ -109,22 +109,58 @@ export const CodeBlockExtension = Node.create({
   addInputRules() {
     return [
       {
-        find: /^```python$/,
+        // 匹配三个反引号后跟语言标识符，然后是回车
+        find: /```(python|javascript|js|typescript|ts|bash|shell)\s*$/,
         handler: ({ state, range, match }) => {
+          console.log('=== CodeBlockExtension InputRule Debug ===');
+          console.log('Match:', match);
+          console.log('Match[0] (full match):', match[0]);
+          console.log('Match[1] (language):', match[1]);
+          console.log('Range:', range);
+          console.log('Range.from:', range.from, 'Range.to:', range.to);
+          
+          const language = match[1] || 'python'
           const cellId = uuidv4()
           const { tr } = state
-          const start = range.from - match[0].length
+          
+          // range已经是匹配文本的正确范围，不需要重新计算
+          const start = range.from
           const end = range.to
+          
+          console.log('Calculated start:', start, 'end:', end);
+          console.log('Will delete length:', end - start);
+          console.log('Document content around range:', state.doc.textBetween(Math.max(0, start - 10), Math.min(state.doc.content.size, end + 10)));
+          
+          // 安全检查
+          if (start < 0 || end > state.doc.content.size || start > end) {
+            console.error('Invalid range calculated:', { start, end, docSize: state.doc.content.size });
+            return false; // 取消操作
+          }
 
-          // 删除触发文本并插入代码块
-          tr.replaceWith(start, end, this.type.create({
-            language: 'python',
+          // 创建代码块节点
+          const codeBlockNode = this.type.create({
+            language: language,
             code: '',
             cellId: cellId,
             outputs: [],
             enableEdit: true,
-          }))
-
+          })
+          
+          // 删除触发文本并插入代码块
+          tr.replaceWith(start, end, codeBlockNode)
+          
+          // 将光标移动到代码块后面（这样代码块组件可以接管焦点）
+          const newPos = start + codeBlockNode.nodeSize
+          if (newPos <= tr.doc.content.size) {
+            tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newPos)))
+          }
+          
+          // 添加标记，告诉onUpdate这是InputRule创建的变化，应该跳过处理
+          tr.setMeta('codeBlockInputRule', true);
+          // 添加cellId到meta，用于后续聚焦
+          tr.setMeta('newCodeCellId', cellId);
+          
+          console.log('=== InputRule 处理完成，cellId:', cellId, '===');
           return tr
         },
       },
@@ -180,74 +216,21 @@ const CodeBlockView = ({
   // 防止重复插入的引用
   const hasTriedToAdd = useRef(false)
   
-  // 确保cell在store中存在（仅初始化一次，避免重复插入）
+  // 检查cell是否在store中存在，如果不存在说明这是一个新创建的代码块
   useEffect(() => {
-    // 如果已经尝试过添加，直接返回
-    if (hasTriedToAdd.current) return
-    
     const existingCell = cells.find(cell => cell.id === cellId)
     
-    if (!existingCell) {
-      console.log(`=== CodeBlockView 检测到新的代码块，准备初始化 ===`);
-      console.log(`Cell ID: ${cellId}`);
-      
-      // 标记已尝试添加，防止重复
-      hasTriedToAdd.current = true
-      
-      // 计算当前CodeBlock在文档中的位置
-      const pos = getPos()
-      let insertIndex = cells.length // 默认添加到末尾
-      
-      if (pos !== undefined && editor) {
-        // 简单计算：统计当前位置之前有多少个块级元素
-        const doc = editor.state.doc
-        let blockCount = 0
-        
-        doc.nodesBetween(0, pos, (node, nodePos) => {
-          if (node.isBlock && nodePos < pos && node.type.name !== 'doc') {
-            blockCount++
-          }
-        })
-        
-        // 修正：插入位置需要-1，因为当前代码块本身也算在内
-        insertIndex = Math.max(0, Math.min(blockCount - 1, cells.length))
-      }
-      
-      console.log(`计算位置: ${insertIndex}, tiptap pos: ${pos}`);
-      
-      // 创建新的cell
-      const newCell = {
-        id: cellId,
-        type: 'code',
-        content: code || '',
-        outputs: outputs || [],
-        enableEdit: enableEdit !== false,
-        language: language || 'python',
-      }
-      
-      console.log(`正在添加新cell到位置 ${insertIndex}`);
-      addCell(newCell, insertIndex)
-      
-      // 设置新建的codecell为当前活跃cell
-      setCurrentCell(cellId)
-      
-      // 延迟聚焦到代码编辑器
-      setTimeout(() => {
-        // 在下一个渲染周期中查找并聚焦代码编辑器
-        const codeElement = document.querySelector(`[data-cell-id="${cellId}"] .cm-editor .cm-content`)
-        if (codeElement) {
-          codeElement.focus()
-          console.log(`已聚焦到新建的代码块 ${cellId}`)
-        }
-      }, 100)
-      
+    if (existingCell) {
+      console.log(`Cell ${cellId} 已存在于store中`);
       setIsInitialized(true)
-      console.log(`=== CodeBlockView 初始化完成，已设置为活跃cell ===`);
-    } else {
-      console.log(`Cell ${cellId} 已存在于store中，跳过初始化`);
-      setIsInitialized(true)
+      return
     }
-  }, [cellId]) // 只依赖cellId，避免因cells变化而重复执行
+    
+    // 如果cell不存在，说明这是通过Tiptap的InputRule创建的新代码块
+    // 此时不需要手动添加到store，因为TiptapNotebookEditor的onUpdate会处理
+    console.log(`Cell ${cellId} 不在store中，等待TiptapNotebookEditor同步处理`);
+    setIsInitialized(true)
+  }, [cellId, cells])
 
   // 注意：不再监听cell内容变化同步到node attributes
   // 这样避免了代码编辑时触发tiptap的onUpdate事件

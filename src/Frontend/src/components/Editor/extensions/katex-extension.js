@@ -1,6 +1,5 @@
 // src/extensions/katex-extension.js
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Plugin, PluginKey } from 'prosemirror-state';
 import katex from 'katex';
 
 export const KatexExtension = Node.create({

@@ -11,23 +11,44 @@ export const SimpleTableExtension = Extension.create({
         key: new PluginKey('simpleTableParser'),
         
         props: {
-          // 处理回车键，检测表格
+          // 处理键盘事件
           handleKeyDown(view, event) {
+            const { state } = view;
+            const { $from } = state.selection;
+            
+            // 检查是否在表格内
+            const isInTable = isInsideTable($from);
+            
             if (event.key === 'Enter' && !event.shiftKey) {
-              // 检查当前行是否是表格头
-              const { state } = view;
-              const { $from } = state.selection;
+              // 普通回车：检测表格头创建
               const currentText = $from.parent.textContent.trim();
-              
               console.log('Enter pressed, current text:', currentText);
               
-              // 如果当前行包含多个 | 并且看起来像表格头，立即创建表格
               if (isTableHeader(currentText)) {
                 console.log('Detected table header, creating table...');
-                event.preventDefault(); // 阻止默认回车行为
+                event.preventDefault();
                 createTableFromHeader(view, currentText);
                 return true;
               }
+            } else if (event.key === 'Enter' && event.shiftKey && isInTable) {
+              // Shift+Enter：在表格中创建新行
+              console.log('Shift+Enter in table, adding new row...');
+              event.preventDefault();
+              addTableRow(view);
+              return true;
+            } else if (((event.key === 'Backspace' && event.shiftKey) || (event.key === 'Delete' && event.shiftKey)) && isInTable) {
+              // Shift+Backspace (Mac向前删除) 或 Shift+Delete (其他系统向前删除)：删除当前行或整个表格
+              console.log('Shift+Delete/Backspace in table...');
+              event.preventDefault();
+              const isHeader = isInTableHeader($from);
+              if (isHeader) {
+                console.log('Deleting entire table...');
+                deleteEntireTable(view);
+              } else {
+                console.log('Deleting current row...');
+                deleteCurrentRow(view);
+              }
+              return true;
             }
             return false;
           },
@@ -202,6 +223,196 @@ function createTableFromParagraphs(view, headerPara, separatorPara) {
   const { tr } = state
   tr.replaceWith(startPos, endPos, table)
   view.dispatch(tr)
+}
+
+// 检查光标是否在表格内
+function isInsideTable($pos) {
+  for (let depth = $pos.depth; depth >= 0; depth--) {
+    const node = $pos.node(depth);
+    if (node.type.name === 'table') {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 检查光标是否在表格头内
+function isInTableHeader($pos) {
+  for (let depth = $pos.depth; depth >= 0; depth--) {
+    const node = $pos.node(depth);
+    if (node.type.name === 'tableHeader') {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 添加新的表格行
+function addTableRow(view) {
+  const { state } = view;
+  const { $from } = state.selection;
+  const { schema } = state;
+  
+  // 找到当前表格
+  let tableDepth = -1;
+  let tableRowDepth = -1;
+  
+  for (let depth = $from.depth; depth >= 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === 'table' && tableDepth === -1) {
+      tableDepth = depth;
+    }
+    if (node.type.name === 'tableRow' && tableRowDepth === -1) {
+      tableRowDepth = depth;
+    }
+  }
+  
+  if (tableDepth === -1 || tableRowDepth === -1) return;
+  
+  const table = $from.node(tableDepth);
+  const currentRow = $from.node(tableRowDepth);
+  
+  // 计算列数
+  let cellCount = 0;
+  currentRow.forEach(child => {
+    if (child.type.name === 'tableCell' || child.type.name === 'tableHeader') {
+      cellCount++;
+    }
+  });
+  
+  // 创建新行
+  const newCells = [];
+  for (let i = 0; i < cellCount; i++) {
+    newCells.push(
+      schema.nodes.tableCell.create(
+        null,
+        schema.nodes.paragraph.create()
+      )
+    );
+  }
+  const newRow = schema.nodes.tableRow.create(null, newCells);
+  
+  // 插入新行
+  const { tr } = state;
+  const rowEndPos = $from.after(tableRowDepth);
+  tr.insert(rowEndPos, newRow);
+  
+  // 将光标移动到新行的第一个单元格
+  const newCellPos = rowEndPos + 1 + 1; // newRow + firstCell
+  tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newCellPos)));
+  
+  view.dispatch(tr);
+}
+
+// 删除当前行
+function deleteCurrentRow(view) {
+  const { state } = view;
+  const { $from } = state.selection;
+  
+  // 找到当前行和表格
+  let tableRowDepth = -1;
+  let tableDepth = -1;
+  
+  for (let depth = $from.depth; depth >= 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === 'tableRow' && tableRowDepth === -1) {
+      tableRowDepth = depth;
+    }
+    if (node.type.name === 'table' && tableDepth === -1) {
+      tableDepth = depth;
+    }
+  }
+  
+  if (tableRowDepth === -1 || tableDepth === -1) {
+    console.log('Not in a table row, cannot delete');
+    return;
+  }
+  
+  const table = $from.node(tableDepth);
+  let rowCount = 0;
+  table.forEach(child => {
+    if (child.type.name === 'tableRow') {
+      rowCount++;
+    }
+  });
+  
+  // 如果只有一行（通常是头部行），删除整个表格
+  if (rowCount <= 1) {
+    console.log('Only one row left, deleting entire table');
+    deleteEntireTable(view);
+    return;
+  }
+  
+  console.log(`Deleting row, ${rowCount} rows in table`);
+  
+  // 删除行
+  const { tr } = state;
+  const rowStartPos = $from.before(tableRowDepth);
+  const rowEndPos = $from.after(tableRowDepth);
+  
+  console.log(`Deleting row from ${rowStartPos} to ${rowEndPos}`);
+  
+  tr.delete(rowStartPos, rowEndPos);
+  
+  // 调整光标位置到相邻行
+  try {
+    // 尝试移动到删除位置的下一行，如果没有则移动到上一行
+    let newPos = rowStartPos;
+    if (newPos < tr.doc.content.size) {
+      const $newPos = tr.doc.resolve(newPos);
+      if ($newPos.parent.type.name === 'table') {
+        // 在表格内找到第一个可编辑位置
+        for (let i = newPos; i < tr.doc.content.size; i++) {
+          const $pos = tr.doc.resolve(i);
+          if ($pos.parent.type.name === 'paragraph' && $pos.parent.parent?.type.name === 'tableCell') {
+            newPos = i;
+            break;
+          }
+        }
+      }
+    } else {
+      newPos = Math.max(0, tr.doc.content.size - 1);
+    }
+    
+    tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newPos)));
+  } catch (e) {
+    console.warn('Error positioning cursor after row deletion:', e);
+  }
+  
+  view.dispatch(tr);
+}
+
+// 删除整个表格
+function deleteEntireTable(view) {
+  const { state } = view;
+  const { $from } = state.selection;
+  
+  // 找到表格
+  let tableDepth = -1;
+  for (let depth = $from.depth; depth >= 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === 'table') {
+      tableDepth = depth;
+      break;
+    }
+  }
+  
+  if (tableDepth === -1) return;
+  
+  // 删除整个表格
+  const { tr } = state;
+  const tableStartPos = $from.before(tableDepth);
+  const tableEndPos = $from.after(tableDepth);
+  tr.delete(tableStartPos, tableEndPos);
+  
+  // 在表格位置插入空段落
+  const emptyParagraph = state.schema.nodes.paragraph.create();
+  tr.insert(tableStartPos, emptyParagraph);
+  
+  // 将光标移动到新段落
+  tr.setSelection(state.selection.constructor.near(tr.doc.resolve(tableStartPos + 1)));
+  
+  view.dispatch(tr);
 }
 
 export default SimpleTableExtension;
