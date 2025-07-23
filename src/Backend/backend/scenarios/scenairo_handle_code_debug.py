@@ -4,7 +4,7 @@ import asyncio
 import re
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from typing import AsyncGenerator, Dict, List, Union
+from typing import AsyncGenerator, Dict, List
 from collections import deque
 
 load_dotenv()
@@ -92,7 +92,7 @@ async def handle_code_debug(operation: dict) -> AsyncGenerator[str, None]:
         print("Operation", operation)
         
         client = AsyncOpenAI(api_key=os.getenv('OPENAI_API_KEY'),
-            base_url=os.getenv('OPENAI_API_BASE'))
+            base_url=os.getenv('BASE_URL'))
         
         # 使用DebugConverter处理操作
         converter = DebugConverter()

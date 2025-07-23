@@ -39,6 +39,11 @@ import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
 const ExpandableText = ({ text, maxLines = 3 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const toggleExpand = () => setIsExpanded(!isExpanded);
+  const { t } = useTranslation();
+
+  if (!text || text.trim() === '') {
+    return <div className="text-sm text-gray-400 italic">{t('rightSideBar.noContent')}</div>;
+  }
 
   const lines = text.split('\n');
   const exceedsMaxLines = lines.length > maxLines;
@@ -47,18 +52,41 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
     <div className="relative">
       <div
         className={`
-          text-sm text-gray-700/90 leading-relaxed tracking-wide
-          whitespace-pre-wrap transition-all duration-200 ease-in-out
-          ${!isExpanded && exceedsMaxLines ? 'line-clamp-3' : ''}
+          text-sm text-gray-700 leading-relaxed tracking-wide
+          transition-all duration-200 ease-in-out
           prose prose-sm max-w-none 
-          prose-headings:font-medium prose-headings:my-1
-          prose-p:my-0.5 prose-p:leading-6
-          prose-pre:bg-gray-50/50 prose-pre:rounded-md prose-pre:p-2 prose-pre:my-1
-          prose-code:text-theme-600 prose-code:bg-gray-50/50 prose-code:px-1 prose-code:rounded
-          prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0.5
+          prose-headings:font-medium prose-headings:my-1 prose-headings:text-gray-800
+          prose-p:my-0.5 prose-p:leading-6 prose-p:text-gray-700
+          prose-pre:bg-gray-100 prose-pre:rounded-md prose-pre:p-2 prose-pre:my-1 prose-pre:border
+          prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1 prose-code:rounded prose-code:text-xs
+          prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0.5 prose-li:text-gray-700
+          prose-strong:text-gray-800 prose-em:text-gray-600
+          prose-blockquote:border-l-gray-300 prose-blockquote:text-gray-600
+          ${!isExpanded && exceedsMaxLines ? 'overflow-hidden' : ''}
         `}
+        style={{
+          maxHeight: !isExpanded && exceedsMaxLines ? `${maxLines * 1.5}em` : 'none',
+          WebkitLineClamp: !isExpanded && exceedsMaxLines ? maxLines : 'none',
+          display: !isExpanded && exceedsMaxLines ? '-webkit-box' : 'block',
+          WebkitBoxOrient: !isExpanded && exceedsMaxLines ? 'vertical' : 'initial'
+        }}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]}
+          components={{
+            p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+            code: ({ children, className }) => {
+              const isInline = !className;
+              return isInline ? (
+                <code className="bg-blue-50 text-blue-700 px-1 py-0.5 rounded text-xs font-mono">
+                  {children}
+                </code>
+              ) : (
+                <code className={className}>{children}</code>
+              );
+            }
+          }}
+        >
           {text}
         </ReactMarkdown>
       </div>
@@ -66,9 +94,19 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
       {exceedsMaxLines && (
         <button
           onClick={toggleExpand}
-          className="mt-2 text-xs font-medium text-theme-600 hover:text-theme-800 transition-colors duration-300"
+          className="mt-2 text-xs font-medium text-theme-600 hover:text-theme-800 transition-colors duration-300 flex items-center gap-1"
         >
-          {isExpanded ? 'Collapse Details' : 'View Details'}
+          {isExpanded ? (
+            <>
+              <ChevronUp size={12} />
+              {t('rightSideBar.collapseDetails')}
+            </>
+          ) : (
+            <>
+              <ChevronDown size={12} />
+              {t('rightSideBar.viewDetails')}
+            </>
+          )}
         </button>
       )}
     </div>
@@ -76,72 +114,72 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
 };
 
 // 获取事件类型对应的标签
-const getEventLabel = (type) => {
+const getEventLabel = (type, t) => {
   const labelConfig = {
     [EVENT_TYPES.USER_ASK_QUESTION]: {
-      text: 'Question',
+      text: t('rightSideBar.eventTypes.question'),
       color: 'bg-theme-100 text-theme-800'
     },
     [EVENT_TYPES.USER_NEW_INSTRUCTION]: {
-      text: 'Instruction',
+      text: t('rightSideBar.eventTypes.instruction'),
       color: 'bg-green-100 text-green-800'
     },
     [EVENT_TYPES.USER_FILE_UPLOAD]: {
-      text: 'Upload',
+      text: t('rightSideBar.eventTypes.upload'),
       color: 'bg-purple-100 text-purple-800'
     },
     [EVENT_TYPES.AI_UNDERSTANDING]: {
-      text: 'Understanding',
+      text: t('rightSideBar.eventTypes.understanding'),
       color: 'bg-yellow-100 text-yellow-800'
     },
     [EVENT_TYPES.AI_EXPLAINING_PROCESS]: {
-      text: 'Explaining',
+      text: t('rightSideBar.eventTypes.explaining'),
       color: 'bg-indigo-100 text-indigo-800'
     },
     [EVENT_TYPES.AI_WRITING_CODE]: {
-      text: 'Coding',
+      text: t('rightSideBar.eventTypes.coding'),
       color: 'bg-green-100 text-green-800'
     },
     [EVENT_TYPES.AI_RUNNING_CODE]: {
-      text: 'Running',
+      text: t('rightSideBar.eventTypes.running'),
       color: 'bg-pink-100 text-pink-800'
     },
     [EVENT_TYPES.AI_ANALYZING_RESULTS]: {
-      text: 'Analysis',
+      text: t('rightSideBar.eventTypes.analysis'),
       color: 'bg-teal-100 text-teal-800'
     },
     [EVENT_TYPES.AI_FIXING_BUGS]: {
-      text: 'debug',
+      text: t('rightSideBar.eventTypes.debug'),
       color: 'bg-red-100 text-red-800'
     },
     [EVENT_TYPES.AI_CRITICAL_THINKING]: {
-      text: 'Thinking',
+      text: t('rightSideBar.eventTypes.thinking'),
       color: 'bg-orange-100 text-orange-800'
     },
     [EVENT_TYPES.AI_REPLYING_QUESTION]: {
-      text: 'Reply',
+      text: t('rightSideBar.eventTypes.reply'),
       color: 'bg-theme-100 text-theme-800'
     },
     [EVENT_TYPES.AI_FIXING_CODE]: {
-      text: 'Debug',
+      text: t('rightSideBar.eventTypes.debug'),
       color: 'bg-gray-100 text-gray-800'
     },
     [EVENT_TYPES.SYSTEM_EVENT]: {
-      text: 'System',
+      text: t('rightSideBar.eventTypes.system'),
       color: 'bg-gray-100 text-gray-800'
     },
     [EVENT_TYPES.AI_GENERATING_CODE]: {
-      text: 'Editing',
+      text: t('rightSideBar.eventTypes.editing'),
       color: 'bg-blue-100 text-blue-800'
     },
     [EVENT_TYPES.AI_GENERATING_TEXT]: {
-      text: 'Editing',
+      text: t('rightSideBar.eventTypes.editing'),
       color: 'bg-purple-100 text-purple-800'
     }
   };
 
   return labelConfig[type] || {
-    text: 'Event',
+    text: t('rightSideBar.eventTypes.event'),
     color: 'bg-theme-100 text-theme-800'
   };
 };
@@ -264,6 +302,7 @@ const AIAgentSidebar = () => {
   } = useAIAgentStore();
   // 追踪哪些合并组是展开状态
   const [expandedGroups, setExpandedGroups] = useState({});
+  const { t } = useTranslation();
 
   const { getCurrentStepCellsIDs, viewMode } = useStore();
 
@@ -334,12 +373,25 @@ const AIAgentSidebar = () => {
   }, []);
   
   const qasToShow = useMemo(() => {
-    return qaList.filter(qa =>
-      ((viewMode && qa.viewMode === viewMode && viewMode === 'step') &&
-        (getCurrentStepCellsIDs().includes(qa.cellId))) ||
-      (viewMode && qa.viewMode === viewMode && viewMode === 'complete') ||
-      (viewMode && qa.viewMode === viewMode && viewMode === 'dslc')
-    );
+    return qaList.filter(qa => {
+      // 如果QA没有viewMode，说明是旧数据，显示在所有模式下
+      if (!qa.viewMode) {
+        return true;
+      }
+      
+      // 匹配当前视图模式
+      if (qa.viewMode !== viewMode) {
+        return false;
+      }
+      
+      // 如果是step模式，需要检查cell ID
+      if (viewMode === 'step') {
+        return getCurrentStepCellsIDs().includes(qa.cellId);
+      }
+      
+      // complete 和 dslc 模式显示所有匹配的QA
+      return true;
+    });
   }, [qaList, viewMode, getCurrentStepCellsIDs]);
 
   const handleJumpToQA = useCallback((qaId) => {
@@ -375,8 +427,8 @@ const AIAgentSidebar = () => {
             type={action.type}
             onProcess={action.onProcess}
           />
-          <span className={`text-xs ${getEventLabel(action.type).color}`}>
-            {getEventLabel(action.type).text}
+          <span className={`text-xs ${getEventLabel(action.type, t).color}`}>
+            {getEventLabel(action.type, t).text}
           </span>
           {!isOriginal && action.count > 1 && (
             <button
@@ -413,12 +465,12 @@ const AIAgentSidebar = () => {
             className="flex items-center gap-1 text-xs text-theme-600 hover:text-theme-800 mt-2 transition-colors duration-300"
           >
             <MessageSquare size={16} />
-            <span>Linked to Q&A {action.relatedQAIds.join(', ')}</span>
+            <span>{t('rightSideBar.linkedToQA')} {action.relatedQAIds.join(', ')}</span>
           </button>
         )}
       </div>
     );
-  }, [expandedGroups, toggleGroup, handleJumpToQA]);
+  }, [expandedGroups, toggleGroup, handleJumpToQA, t]);
 
   return (
     <>
@@ -458,7 +510,9 @@ const AIAgentSidebar = () => {
                   {expandedGroups[action.id] && action.count > 1 && (
                     <div className="space-y-3 mt-2 pb-2">
                       {action.originalActions.slice(1).map((origAction, origIndex) => (
-                        renderActionItem(origAction, true, origIndex, action.originalActions.length - 1)
+                        <div key={`${origAction.id}-${origIndex}`}>
+                          {renderActionItem(origAction, true, origIndex, action.originalActions.length - 1)}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -469,42 +523,61 @@ const AIAgentSidebar = () => {
 
           {activeView === 'qa' && (
             <div className="space-y-4 py-4">
-              {qasToShow.map((qa, index) => (
-                <div
-                  key={qa.id}
-                  id={qa.id}
-                  className={`flex ${qa.type === 'user' ? 'justify-start' : 'justify-end'}`}
-                >
-                  <div
-                    className={`
-                      relative p-4 rounded-lg shadow-sm max-w-md transition-all duration-300
-                      ${index === 0
-                        ? 'bg-white/10 ring-1 ring-theme-200'
-                        : qa.type === 'user'
-                          ? 'bg-white/10 text-left hover:bg-white/10'
-                          : 'bg-white/10 text-right hover:bg-white/10'
-                      }
-                    `}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-semibold text-gray-700">
-                        [{qasToShow.length - index}]
-                      </span>
-                      <EventIcon
-                        type={
-                          qa.type === 'assistant'
-                            ? EVENT_TYPES.AI_REPLYING_QUESTION
-                            : EVENT_TYPES.USER_ASK_QUESTION
-                        }
-                        onProcess={qa.onProcess}
-                      />
-                      <span className="text-xs text-gray-500">{qa.timestamp}</span>
-                    </div>
-
-                    <ExpandableText text={qa.content} maxLines={3} />
-                  </div>
+              {qasToShow.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">{t('rightSideBar.noChatMessages')}</p>
+                  <p className="text-xs mt-1">{t('rightSideBar.startConversation')}</p>
                 </div>
-              ))}
+              ) : (
+                qasToShow.map((qa, index) => (
+                  <div
+                    key={qa.id}
+                    id={qa.id}
+                    className={`flex ${qa.type === 'user' ? 'justify-start' : 'justify-end'}`}
+                  >
+                    <div
+                      className={`
+                        relative p-4 rounded-lg shadow-sm max-w-sm transition-all duration-300
+                        ${index === 0
+                          ? 'bg-white/20 ring-1 ring-theme-200'
+                          : qa.type === 'user'
+                            ? 'bg-blue-50 text-left hover:bg-blue-100'
+                            : 'bg-gray-50 text-left hover:bg-gray-100'
+                        }
+                      `}
+                    >
+                      <div className={`flex items-center gap-2 mb-2 ${
+                        qa.type === 'user' ? 'justify-start' : 'justify-start'
+                      }`}>
+                        <span className="text-xs font-semibold text-gray-700">
+                          [{qasToShow.length - index}]
+                        </span>
+                        <EventIcon
+                          type={
+                            qa.type === 'assistant'
+                              ? EVENT_TYPES.AI_REPLYING_QUESTION
+                              : EVENT_TYPES.USER_ASK_QUESTION
+                          }
+                          onProcess={qa.onProcess}
+                        />
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          qa.type === 'user' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {qa.type === 'user' ? t('rightSideBar.you') : t('rightSideBar.ai')}
+                        </span>
+                        <span className="text-xs text-gray-500">{qa.timestamp}</span>
+                      </div>
+
+                      <div className="text-left">
+                        <ExpandableText text={qa.content} maxLines={5} />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -516,7 +589,7 @@ const AIAgentSidebar = () => {
               "
             >
               <Loader2 className="animate-spin" size={24} />
-              <span className="font-medium">Processing your request...</span>
+              <span className="font-medium">{t('rightSideBar.processing')}</span>
             </div>
           )}
         </div>

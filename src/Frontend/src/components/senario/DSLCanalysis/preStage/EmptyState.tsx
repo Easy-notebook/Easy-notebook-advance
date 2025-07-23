@@ -18,6 +18,7 @@ import {
     Loader,
     FileText,
     X,
+    ArrowRight,
 } from 'lucide-react';
 import { useAIPlanningContextStore } from '../store/aiPlanningContext'
 
@@ -30,7 +31,7 @@ import { notebookApiIntegration } from '../../../../services/notebookServices';
 import usePreStageStore from '../store/preStageStore';
 import { generalResponse } from '../stages/StageGeneralFunction';
 
-const AICommandInput = () => {
+const AICommandInput = ({ files, setFiles }) => {
     const { t } = useTranslation();
     // 这里根据自己的 store 改成正确的引入
     const {
@@ -41,6 +42,8 @@ const AICommandInput = () => {
         qaList,
         addQA,
     } = useAIAgentStore();
+    
+    const isUploading = usePreStageStore(state => state.isUploading);
     const {
         currentCellId,
         viewMode,
@@ -53,8 +56,6 @@ const AICommandInput = () => {
 
     const [input, setInput] = useState('');
     const [isFocused, setIsFocused] = useState(false);
-    const [files, setFiles] = useState([]);
-    const [isUploading, setIsUploading] = useState(false);
     const textareaRef = useRef(null);
     const fileInputRef = useRef(null);
 
@@ -233,52 +234,89 @@ const AICommandInput = () => {
     }, []);
 
     return (
-        <div className="relative mb-6">
+        <div className="relative mb-6 max-w-4xl mx-auto px-4 sm:px-0">
+            {/* 已上传文件列表 */}
+            {files.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                    {files.map(file => (
+                        <div 
+                            key={file.id} 
+                            className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm"
+                        >
+                            <FileText className="w-4 h-4 text-gray-500" />
+                            <span className="truncate max-w-[200px] sm:max-w-xs text-gray-700">{file.name}</span>
+                            <button
+                                onClick={() => removeFile(file.id)}
+                                className="ml-1 text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-red-300 rounded"
+                                aria-label={`Remove ${file.name}`}
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* 输入框容器 */}
             <div
                 className={`
-                    relative rounded-3xl transition-all duration-200
-                    border-0 margin-0 p-0
-                    ${isFocused ? 'shadow-lg' : 'shadow-sm'}
-                    ${input.startsWith('/') ? 'bg-slate-50' : 'bg-white'}
-
-                    focus:outline-none border-2 transition-all duration-200
-                    ${isFocused ? 'border-theme-400' : 'border-gray-200'}
-                    ${input.startsWith('/') ? 'font-mono' : 'font-normal'}
+                    relative rounded-2xl transition-all duration-300 ease-out
+                    bg-white border shadow-sm overflow-hidden
+                    ${isFocused 
+                        ? 'shadow-lg border-gray-300 ring-1 ring-gray-200 scale-[1.02]' 
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                    }
+                    ${input.startsWith('/') ? 'bg-blue-50/50 border-blue-200' : 'bg-white'}
                 `}
             >
-                {/* 左侧图标 */}
-                <div className="absolute left-0 top-7 -translate-y-1/2 px-3">
-                    <Sparkles
-                        className={`
-                            w-5 h-5 transition-colors duration-200
-                            ${input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
-                        `}
-                    />
-                </div>
+                {/* 左侧工具栏 */}
+                <div className="absolute left-3 sm:left-4 bottom-3 sm:bottom-4 flex items-center gap-2">
+                    {/* AI图标 */}
+                    <div className="flex items-center justify-center" aria-hidden="true">
+                        <Sparkles
+                            className={`
+                                w-5 h-5 transition-all duration-300
+                                ${input.startsWith('/') 
+                                    ? 'text-blue-500 animate-pulse' 
+                                    : isFocused 
+                                        ? 'text-gray-600' 
+                                        : 'text-gray-400'
+                                }
+                            `}
+                        />
+                    </div>
 
-                <button
-                    type="button"
-                    onClick={onFileUpload}
-                    disabled={isUploading}
-                    className={`
-                        absolute left-10 top-7 -translate-y-1/2
-                        flex items-center justify-center px-2 py-1.5 rounded-full
-                        transition-all duration-200
-                        ${isUploading 
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer'}
-                    `}
-                >
-                    <Upload className="w-4 h-4" />
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        className="hidden"
-                        multiple
-                    />
-                </button>
+                    {/* 上传按钮 */}
+                    <button
+                        type="button"
+                        onClick={onFileUpload}
+                        disabled={isUploading}
+                        className={`
+                            flex items-center justify-center w-8 h-8 rounded-lg
+                            transition-all duration-200
+                            focus:outline-none focus:ring-2 focus:ring-gray-300
+                            ${isUploading 
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700 cursor-pointer'}
+                        `}
+                        aria-label="Upload files"
+                    >
+                        {isUploading ? (
+                            <Loader className="w-4 h-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                            <Upload className="w-4 h-4" aria-hidden="true" />
+                        )}
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                            className="hidden"
+                            multiple
+                            accept=".csv,.xlsx,.xls,.jpg,.png,.jpeg,.gif,.pdf,.doc,.docx,.ppt,.pptx,.txt,.md"
+                            aria-label="Upload files"
+                        />
+                    </button>
+                </div>
 
                 {/* 文本输入区域 */}
                 <textarea
@@ -294,76 +332,67 @@ const AICommandInput = () => {
                             : t('emptyState.questionPlaceholder')
                     }
                     className={`
-                        w-full h-full pl-20 pr-36 py-3 pt-4 rounded-3xl
+                        w-full pl-14 sm:pl-16 pr-12 sm:pr-16 py-4 bg-transparent
                         text-base placeholder:text-gray-400
-                        resize-none leading-6
-                        focus:outline-none focus:ring-0
+                        resize-none leading-6 min-h-[56px]
+                        focus:outline-none focus:ring-0 border-0
+                        ${input.startsWith('/') ? 'font-mono' : 'font-normal'}
                     `}
                     rows={1}
                     style={{
                         wordWrap: 'break-word',
                         whiteSpace: 'pre-wrap',
                     }}
+                    aria-label={
+                        input.startsWith('/') 
+                            ? 'Command input' 
+                            : 'Message input'
+                    }
                 />
 
-                {/* 提交按钮 */}
-                <button
-                    type="button"
-                    onClick={() => {
-                        if (input.trim()) {
-                            handleSubmit(input.trim());
-                            setInput('');
-                        }
-                    }}
-                    disabled={!input.trim()}
-                    className={`
-                        absolute right-2 top-7 -translate-y-1/2
-                        flex items-center gap-1.5 px-4 py-1.5 rounded-full
-                        transition-all duration-200 text-sm font-medium
-                        ${input.trim()
-                            ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'}
-                    `}
-                >
-                    <SendHorizontal className="w-4 h-4" />
-                    {input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
-                </button>
+                {/* 右侧发送按钮 */}
+                <div className="absolute right-3 sm:right-4 bottom-3 sm:bottom-4">
+                    <button
+                        type="submit"
+                        onClick={() => {
+                            if (input.trim()) {
+                                handleSubmit(input.trim());
+                                setInput('');
+                            }
+                        }}
+                        disabled={!input.trim()}
+                        className={`
+                            flex items-center justify-center w-8 h-8 rounded-lg
+                            transition-all duration-200
+                            focus:outline-none focus:ring-2 focus:ring-offset-2
+                            ${input.trim()
+                                ? 'bg-gray-900 hover:bg-gray-800 text-white cursor-pointer transform hover:scale-105 focus:ring-gray-500'
+                                : 'bg-gray-100 text-gray-400 cursor-not-allowed focus:ring-gray-300'}
+                        `}
+                        aria-label={input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
+                    >
+                        <SendHorizontal className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                </div>
 
                 {/* Shift + Enter 提示 */}
                 {isFocused && (
-                    <div className="absolute -top-5 right-2 text-xs text-gray-400 bg-white px-2">
+                    <div className="absolute -top-8 right-4 text-xs text-gray-500 bg-white/90 backdrop-blur-sm px-2 py-1 rounded shadow-sm">
                         {t('emptyState.pressShiftEnter')}
                     </div>
                 )}
-            {/* 已上传文件列表 */}
-            {files.length > 0 && (
-                <div className="pl-2 mb-2 flex flex-wrap gap-2">
-                    {files.map(file => (
-                        <div 
-                            key={file.id} 
-                            className="flex items-center gap-1.5 bg-gray-100 rounded-3xl px-3 py-1.5 text-sm"
-                        >
-                            <FileText className="w-4 h-4 text-gray-500" />
-                            <span className="truncate max-w-xs">{file.name}</span>
-                            <button
-                                onClick={() => removeFile(file.id)}
-                                className="ml-1 text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
             </div>
             
 
             {/* 模式提示 */}
             {input && (
-                <div className="mt-2 ml-10">
+                <div className="mt-3 flex items-center justify-center animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div
                         className={`
-                            ${input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
+                            text-xs px-3 py-1 rounded-full border transition-all duration-300
+                            ${input.startsWith('/') 
+                                ? 'text-blue-600 bg-blue-50 border-blue-200 shadow-sm' 
+                                : 'text-gray-600 bg-gray-50 border-gray-200'}
                         `}
                     >
                         {input.startsWith('/') ? `⌘ ${t('emptyState.commandMode')}` : `💭 ${t('emptyState.questionMode')}`}
@@ -372,6 +401,224 @@ const AICommandInput = () => {
             )}
         </div>
     );
+};
+
+/**
+ * 问题建议选择组件
+ */
+const ProblemSuggestionPanel = ({ 
+    onSelectProblem, 
+    onCustomProblem, 
+    onConfirmProblem,
+    selectedProblem,
+    customProblem,
+    setCustomProblem,
+    datasetBackground,
+    setDatasetBackground,
+    showBackgroundInput,
+    setShowBackgroundInput,
+    setShowProblemSuggestions
+}) => {
+    const { t } = useTranslation();
+    const choiceMap = usePreStageStore(state => state.choiceMap);
+    const currentFile = usePreStageStore(state => state.currentFile);
+    
+    const [step, setStep] = useState('select'); // 'select', 'background', 'confirm'
+    
+    const handleProblemSelect = (problem) => {
+        onSelectProblem(problem);
+        setStep('background');
+    };
+    
+    const handleCustomSubmit = () => {
+        if (customProblem.trim()) {
+            onCustomProblem(customProblem.trim());
+            setStep('background');
+        }
+    };
+    
+    const handleBackgroundSubmit = () => {
+        setStep('confirm');
+    };
+    
+    const handleFinalConfirm = () => {
+        onConfirmProblem();
+    };
+    
+    if (step === 'select') {
+        return (
+            <div className="max-w-4xl mx-auto px-4 py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="text-center mb-8">
+                    <div className="flex items-center justify-between mb-4">
+                        <button
+                            onClick={() => setShowProblemSuggestions(false)}
+                            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                            <ArrowRight className="w-4 h-4 rotate-180" />
+                            {t('emptyState.backToMain')}
+                        </button>
+                        <div></div> {/* 占位符保持居中 */}
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {t('emptyState.chooseAnalysisType')}
+                    </h2>
+                    <p className="text-gray-600">
+                        {t('emptyState.fileUploaded')} <span className="font-medium">{currentFile?.name}</span>
+                    </p>
+                </div>
+                
+                {/* 建议问题列表 */}
+                <div className="grid gap-4 mb-8">
+                    {choiceMap.map((choice, index) => (
+                        <button
+                            key={index}
+                            onClick={() => handleProblemSelect(choice)}
+                            className="group p-6 bg-white border-2 border-gray-200 rounded-2xl text-left hover:border-blue-300 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02]"
+                        >
+                            <div className="flex items-start gap-4">
+                                <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                                    <Sparkles className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="font-semibold text-gray-800 mb-2">
+                                        {choice.problem_name}
+                                    </h3>
+                                    <p className="text-gray-600 text-sm">
+                                        {choice.problem_description}
+                                    </p>
+                                </div>
+                                <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                            </div>
+                        </button>
+                    ))}
+                </div>
+                
+                {/* 自定义问题输入 */}
+                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-2xl p-6">
+                    <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <PlusCircle className="w-5 h-5" />
+                        {t('emptyState.customProblem')}
+                    </h3>
+                    <div className="flex gap-3">
+                        <input
+                            type="text"
+                            value={customProblem}
+                            onChange={(e) => setCustomProblem(e.target.value)}
+                            placeholder={t('emptyState.customProblemPlaceholder')}
+                            className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 transition-colors"
+                            onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
+                        />
+                        <button
+                            onClick={handleCustomSubmit}
+                            disabled={!customProblem.trim()}
+                            className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                                customProblem.trim()
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700 transform hover:scale-105'
+                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            }`}
+                        >
+                            {t('emptyState.confirm')}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
+    if (step === 'background') {
+        return (
+            <div className="max-w-2xl mx-auto px-4 py-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                <div className="text-center mb-8">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {t('emptyState.addDatasetBackground')}
+                    </h2>
+                    <p className="text-gray-600">
+                        {t('emptyState.backgroundOptional')}
+                    </p>
+                </div>
+                
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-6">
+                    <textarea
+                        value={datasetBackground}
+                        onChange={(e) => setDatasetBackground(e.target.value)}
+                        placeholder={t('emptyState.backgroundPlaceholder')}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none h-32 transition-colors"
+                    />
+                </div>
+                
+                <div className="flex gap-4 justify-center">
+                    <button
+                        onClick={handleBackgroundSubmit}
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-colors"
+                    >
+                        {t('emptyState.skip')}
+                    </button>
+                    <button
+                        onClick={handleBackgroundSubmit}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors transform hover:scale-105"
+                    >
+                        {t('emptyState.continue')}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+    
+    if (step === 'confirm') {
+        const problemText = selectedProblem 
+            ? `${selectedProblem.problem_name}: ${selectedProblem.problem_description}`
+            : customProblem;
+            
+        return (
+            <div className="max-w-2xl mx-auto px-4 py-8 animate-in fade-in slide-in-from-left-4 duration-500">
+                <div className="text-center mb-8">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {t('emptyState.confirmProblem')}
+                    </h2>
+                    <p className="text-gray-600">
+                        {t('emptyState.reviewSettings')}
+                    </p>
+                </div>
+                
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-8 space-y-4">
+                    <div>
+                        <h4 className="font-semibold text-gray-800 mb-2">{t('emptyState.analysisType')}</h4>
+                        <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{problemText}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 className="font-semibold text-gray-800 mb-2">{t('emptyState.dataFile')}</h4>
+                        <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{currentFile?.name}</p>
+                    </div>
+                    
+                    {datasetBackground && (
+                        <div>
+                            <h4 className="font-semibold text-gray-800 mb-2">{t('emptyState.datasetBackground')}</h4>
+                            <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{datasetBackground}</p>
+                        </div>
+                    )}
+                </div>
+                
+                <div className="flex gap-4 justify-center">
+                    <button
+                        onClick={() => setStep('select')}
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-colors"
+                    >
+                        {t('emptyState.goBack')}
+                    </button>
+                    <button
+                        onClick={handleFinalConfirm}
+                        className="px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors transform hover:scale-105 flex items-center gap-2"
+                    >
+                        <Sparkles className="w-5 h-5" />
+                        {t('emptyState.startAnalysis')}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+    
+    return null;
 };
 
 /**
@@ -641,6 +888,12 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
     const { t, i18n } = useTranslation();
     const [isDragging, setIsDragging] = useState(false);
     const [dragCounter, setDragCounter] = useState(0);
+    const [showProblemSuggestions, setShowProblemSuggestions] = useState(false);
+    const [selectedProblem, setSelectedProblem] = useState(null);
+    const [customProblem, setCustomProblem] = useState('');
+    const [datasetBackground, setDatasetBackground] = useState('');
+    const [showBackgroundInput, setShowBackgroundInput] = useState(false);
+    const [files, setFiles] = useState([]);
     const { setViewMode } = useStore();
     const abortControllerRef = useRef(new AbortController());
     const isUploading = usePreStageStore(state => state.isUploading);
@@ -661,9 +914,48 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
         usePreStageStore.getState().updateChoiceMap(choiceMap["message"]);
     }, [i18n.language]);
 
+    const handleProblemSelect = useCallback((problem) => {
+        setSelectedProblem(problem);
+        usePreStageStore.getState().setSelectedProblem(
+            problem.target,
+            problem.problem_description,
+            problem.problem_name
+        );
+    }, []);
+
+    const handleCustomProblem = useCallback((problemText) => {
+        setCustomProblem(problemText);
+        usePreStageStore.getState().setSelectedProblem(
+            'custom',
+            problemText,
+            'Custom Analysis'
+        );
+    }, []);
+
+    const handleConfirmProblem = useCallback(() => {
+        const currentFile = usePreStageStore.getState().currentFile;
+        const problem_description = usePreStageStore.getState().problem_description;
+        const problem_name = usePreStageStore.getState().problem_name;
+        
+        // 添加变量到规划上下文
+        useAIPlanningContextStore.getState().addVariable('csv_file_path', currentFile?.name);
+        useAIPlanningContextStore.getState().addVariable('problem_description', problem_description);
+        useAIPlanningContextStore.getState().addVariable('context_description', datasetBackground);
+        useAIPlanningContextStore.getState().addVariable('problem_name', problem_name);
+        
+        // 设置背景信息到store
+        if (datasetBackground) {
+            usePreStageStore.getState().setDatasetInfo(datasetBackground);
+        }
+        
+        // 跳转到DSLC模式
+        setViewMode('dslc');
+        onFileUpload(currentFile, { status: 'ok' });
+    }, [datasetBackground, setViewMode, onFileUpload]);
+
     const handleFileUploadProcess = useCallback(async (file) => {
         if (!file || isUploading) return;
-
+        
         await usePreStageStore.getState().setCurrentFile(file);
         await usePreStageStore.getState().changeIsUploading();
 
@@ -676,11 +968,11 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
                 maxFileSize: 100 * 1024 * 1024 // 100MB
             };
             await useCodeStore.getState().initializeKernel();
+            
             const result = await notebookApiIntegration.uploadFiles(
                 useStore.getState().notebookId,
                 [file],
-                uploadConfig,
-                abortControllerRef.current.signal
+                uploadConfig
             );
 
             if (result && result.status === 'ok') {
@@ -688,9 +980,22 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
                 await usePreStageStore.getState().setCsvFilePath(file.name);
                 await useAIPlanningContextStore.getState().resetAIPlanningContext();
                 await useAIPlanningContextStore.getState().addVariable('csv_file_path', file.name);
+                
+                // 添加文件到显示列表
+                const newFile = {
+                    id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    url: URL.createObjectURL(file),
+                    file
+                };
+                setFiles(prev => [...prev, newFile]);
+                
                 await setPreProblem();
-                onFileUpload(file, result);
-                setViewMode('dslc');
+                setShowProblemSuggestions(true);
+                // onFileUpload(file, result);
+                // setViewMode('dslc');
             } else {
                 console.error('Upload failed with result:', result);
                 alert('File upload failed, please try again');
@@ -789,16 +1094,28 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
                 <Header />
 
                 {isUploading ?
-                    <div>
-                        <Loader className="w-5 h-5 mr-2 animate-spin" />
-                        {t('emptyState.uploading')}
+                    <div className="flex items-center justify-center">
+                        <Loader className="w-6 h-6 mr-3 animate-spin text-blue-600" />
+                        <span className="text-gray-700 text-lg">
+                            {t('emptyState.uploading')}
+                        </span>
                     </div>
-                    : < div >
-                        {/* <UploadSection
-                            onFileUpload={handleFileUpload}
-                            isUploading={isUploading}
-                        /> */}
-                        <AICommandInput />
+                    : showProblemSuggestions ?
+                        <ProblemSuggestionPanel
+                            onSelectProblem={handleProblemSelect}
+                            onCustomProblem={handleCustomProblem}
+                            onConfirmProblem={handleConfirmProblem}
+                            selectedProblem={selectedProblem}
+                            customProblem={customProblem}
+                            setCustomProblem={setCustomProblem}
+                            datasetBackground={datasetBackground}
+                            setDatasetBackground={setDatasetBackground}
+                            showBackgroundInput={showBackgroundInput}
+                            setShowBackgroundInput={setShowBackgroundInput}
+                            setShowProblemSuggestions={setShowProblemSuggestions}
+                        />
+                    : <div>
+                        <AICommandInput files={files} setFiles={setFiles} />
 
                         <Divider />
 

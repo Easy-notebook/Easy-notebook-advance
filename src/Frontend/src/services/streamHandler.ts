@@ -245,7 +245,8 @@ export const handleStreamResponse = async (
             console.log('初始化流式响应:', data);
             const qid = data.data?.payload?.QId || data.payload?.QId;
             if (qid !== undefined && qid !== null) {
-                await globalUpdateInterface.initStreamingAnswer(qid.toString());
+                const qidStr = Array.isArray(qid) ? qid[0] : qid.toString();
+                await globalUpdateInterface.initStreamingAnswer(qidStr);
             } else {
                 console.error('Missing QId in stream data:', data);
             }
@@ -257,7 +258,8 @@ export const handleStreamResponse = async (
             const contentQid = data.data?.payload?.QId || data.payload?.QId;
             const content = data.data?.payload?.content || data.payload?.content;
             if (contentQid !== undefined && contentQid !== null && content) {
-                await globalUpdateInterface.addContentToAnswer(contentQid.toString(), content.toString());
+                const qidStr = Array.isArray(contentQid) ? contentQid[0] : contentQid.toString();
+                await globalUpdateInterface.addContentToAnswer(qidStr, content.toString());
             } else {
                 console.error('Missing QId or content in stream data:', data);
             }
@@ -268,7 +270,8 @@ export const handleStreamResponse = async (
             console.log('结束流式响应:', data);
             const finishQid = data.data?.payload?.QId || data.payload?.QId;
             if (finishQid !== undefined && finishQid !== null) {
-                await globalUpdateInterface.finishStreamingAnswer(finishQid.toString());
+                const qidStr = Array.isArray(finishQid) ? finishQid[0] : finishQid.toString();
+                await globalUpdateInterface.finishStreamingAnswer(qidStr);
             } else {
                 console.error('Missing QId in stream data:', data);
             }

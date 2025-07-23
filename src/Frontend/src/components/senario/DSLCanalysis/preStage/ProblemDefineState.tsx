@@ -150,7 +150,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         if (!selectedChoiceRef) {
             console.error('Could not find matching problem description for:', option);
             // 提供回退选项
-            pushMessage('assistant', 'Sorry, there was an issue with your selection. Please try again or describe your problem.');
+            pushMessage('assistant', t('problemDefine.selectionError'));
             return;
         }
 
@@ -161,9 +161,13 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
             selectedChoiceRef.problem_name
         );
 
+        const selectedMessage = selectedChoiceRef.problem_name 
+            ? t('problemDefine.youHaveSelected', { problemName: selectedChoiceRef.problem_name })
+            : t('problemDefine.youSelectedAnalysis');
+        
         pushMessage(
             'assistant',
-            `${selectedChoiceRef.problem_name ? `You have selected ${selectedChoiceRef.problem_name}` : 'You have selected your analysis'}.\n\n${t('problemDefine.addBackground')}`,
+            `${selectedMessage}.\n\n${t('problemDefine.addBackground')}`,
             [t('problemDefine.skip'), t('problemDefine.addDatasetInfo')],
             handleDatasetInfoChoiceRef.current,
         );
@@ -208,7 +212,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         const selectedProblem = choiceMap?.find(choice => 
             choice && choice.target === target
         );
-        const problemName = selectedProblem?.problem_name || 'Analysis';
+        const problemName = selectedProblem?.problem_name || t('problemDefine.defaultAnalysisName');
         usePreStageStore.getState().setProblemName(problemName);
         usePreStageStore.getState().setSelectedProblem(target, problem_description, problemName);
 
@@ -257,7 +261,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                 .map(item => item.problem_description) || [];
             
             if (problemOptions.length === 0) {
-                pushMessage('assistant', 'Sorry, no analysis options are available. Let\'s restart the workflow.');
+                pushMessage('assistant', t('problemDefine.noOptionsAvailable'));
                 resetWorkflow();
                 return;
             }
@@ -294,7 +298,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         const selectedChoice = choiceMap?.find(choice => choice?.problem_description === option);
         if (!selectedChoice) {
             console.error('Could not find matching problem description for:', option);
-            pushMessage('assistant', 'Sorry, there was an issue with your selection. Please try again.');
+            pushMessage('assistant', t('problemDefine.selectionIssue'));
             return;
         }
 
@@ -305,9 +309,13 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
             selectedChoice.problem_description
         );
 
+        const selectedMessage = selectedChoice.problem_name 
+            ? t('problemDefine.youSelected', { problemName: selectedChoice.problem_name })
+            : t('problemDefine.youSelectedDefault');
+        
         pushMessage(
             'assistant',
-            `${selectedChoice.problem_name ? `You selected ${selectedChoice.problem_name}` : 'You selected your analysis'}.
+            `${selectedMessage}.
 ${t('problemDefine.addBackground')}`,
             [t('problemDefine.skip'), t('problemDefine.addDatasetInfo')],
             handleDatasetInfoChoiceRef.current,

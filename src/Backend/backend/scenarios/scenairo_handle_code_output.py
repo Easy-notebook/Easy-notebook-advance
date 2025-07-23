@@ -86,7 +86,7 @@ async def handle_code_output(operation: dict) -> AsyncGenerator[str, None]:
         print("Operation", operation)
         
         client = AsyncOpenAI(api_key=os.getenv('OPENAI_API_KEY'),
-            base_url=os.getenv('OPENAI_API_BASE'))
+            base_url=os.getenv('BASE_URL'))
         
         # 使用DebugConverter处理操作
         converter = DebugConverter()

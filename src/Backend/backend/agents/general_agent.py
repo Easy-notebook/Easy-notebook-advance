@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 from collections import deque
-from typing import AsyncGenerator, Dict, List, Any
+from typing import AsyncGenerator, List
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -24,7 +24,7 @@ class GeneralAgent:
         初始化代理，创建 AsyncOpenAI 客户端
         """
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-        self.base_url = base_url or os.getenv('OPENAI_API_BASE')
+        self.base_url = base_url or os.getenv('BASE_URL')
         self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
         self.engine = engine
         self.role = role

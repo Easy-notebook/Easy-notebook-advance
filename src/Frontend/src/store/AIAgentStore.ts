@@ -83,7 +83,7 @@ export interface AIAgentActions {
     setActionProcess: (actionId: string, onProcess: boolean) => void;
 
     // Q&A CRUD
-    addQA: (qa: Omit<QAItem, 'id' | 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => void;
+    addQA: (qa: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => void;
     removeQA: (qaId: string) => void;
     updateQA: (qaId: string, updates: Partial<QAItem>) => void;
     setQAProcess: (qaId: string, onProcess: boolean) => void;
@@ -162,12 +162,12 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
     },
 
     // Q&A CRUD
-    addQA: (qa: Omit<QAItem, 'id' | 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => {
+    addQA: (qa: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => {
         set((state) => ({
             qaList: [
                 {
                     ...qa,
-                    id: `qa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    id: qa.id || `qa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                     timestamp: new Date().toTimeString().split(' ')[0],
                     onProcess: qa.onProcess || false
                 },

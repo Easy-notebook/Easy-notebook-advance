@@ -15,7 +15,7 @@ async def handle_user_command(operation: dict) -> AsyncGenerator[str, None]:
         # 使用异步OpenAI客户端
         client = AsyncOpenAI(
             api_key=os.getenv('OPENAI_API_KEY'),
-            base_url=os.getenv('OPENAI_API_BASE')
+            base_url=os.getenv('BASE_URL')
         )    
         
         messages = [
