@@ -70,7 +70,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 csv_path=csv_file_path,
                 context_description=context_description
             )
-            generated_code, _ = self.chat_with_memory(input_data,None)
+            generated_code = self.chat_without_memory(input_data)
             self.logger.info("Successfully generated dimension check code")
             return generated_code
         except Exception as e:
@@ -82,14 +82,11 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
             result=result,
             context_description=context_description
         )
-        response, _ = self.chat_with_memory(request,None)
-        if response=="no problem":
+        response = self.chat_without_memory(request)
+        if response == "no problem":
             return "no problem"
         parsed_json = self.parse_llm_json(response)
-        if parsed_json:
-            return parsed_json
-        else:
-            return "no problem"
+        return parsed_json if parsed_json else "no problem"
     
     def check_for_invalid_values_cli(self, result, context_description, variable_descriptions):
         """
@@ -101,13 +98,10 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
             variable_descriptions=variable_descriptions
         )
         response = self.chat_without_memory(request)
-        if response=="no problem":
+        if response == "no problem":
             return "no problem"
         parsed_json = self.parse_llm_json(response)
-        if parsed_json:
-            return parsed_json
-        else:
-            return "no problem"
+        return parsed_json if parsed_json else "no problem"
         
     def generate_missing_value_analysis_code_cli(self, csv_file_path, missing_data_str):
         input_data = MISSING_VALUE_CODE_TEMPLATE_2.format(
@@ -129,13 +123,10 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
             data_unit=data_unit
         )
         response = self.chat_without_memory(request)
-        if response=="no problem":
+        if response == "no problem":
             return "no problem"
         parsed_json = self.parse_llm_json(response)
-        if parsed_json:
-            return parsed_json
-        else:
-            return "no problem"
+        return parsed_json if parsed_json else "no problem"
     
     def generate_data_integrity_check_code_cli(self, csv_file_path):
         request = DATA_INTEGRITY_CHECK_TEMPLATE_2.format(
@@ -156,13 +147,10 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
             integrity_result=result,
         )
         response = self.chat_without_memory(request)
-        if response=="no problem":
+        if response == "no problem":
             return "no problem"
         parsed_json = self.parse_llm_json(response)
-        if parsed_json:
-            return parsed_json
-        else:
-            return "no problem"
+        return parsed_json if parsed_json else "no problem"
 
     def generate_hypothesis_validation_code(self, csv_file_path, hypothesis):
         """
@@ -175,7 +163,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 hypothesis=hypothesis['hypothesis'],
                 validation_method=hypothesis['verification_method']
             )
-            generated_code, _ = self.chat_with_memory(input_data,None)
+            generated_code = self.chat_without_memory(input_data)
             self.logger.info("Successfully generated hypothesis validation code")
             return generated_code
         except Exception as e:
@@ -192,14 +180,14 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 validation_result=validation_result
             )
 
-            response, _ = self.chat_with_memory(input_data,None)
+            response = self.chat_without_memory(input_data)
             updated_hypothesis = self.parse_llm_json(response)
             if updated_hypothesis:
                 self.logger.info("Successfully analyzed hypothesis validation results")
                 return updated_hypothesis
             else:
                 self.logger.warning("Failed to analyze hypothesis validation results")
-                return None
+                return "Failed to analysis hypothesis validation results"
         except Exception as e:
             self.logger.error(f"Error analyzing hypothesis validation: {str(e)}")
             raise
@@ -235,10 +223,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
         )
         response = self.chat_without_memory(input_data)
         parsed_json = self.parse_llm_json(response)
-        if parsed_json:
-            return parsed_json
-        else:
-            return "no problem"
+        return parsed_json if parsed_json else "no problem"
         
     def generate_eda_code_cli(self, csv_file_path, question, data_info, data_preview):
         input_data = EDA_CODE_TEMPLATE_2.format(
@@ -286,7 +271,9 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                     if key.startswith("问题"):
                         self.logger.info(f"Processing question: {question}")
 
-                        generated_code = self.generate_eda_code(csv_file_path, question)
+                        # TODO: This method needs data_info and data_preview parameters
+                        # generated_code = self.generate_eda_code_cli(csv_file_path, question, data_info, data_preview)
+                        generated_code = None
                         if not generated_code:
                             self.logger.warning(f"Failed to generate code for question: {question}")
                             updated_questions.append({
@@ -314,10 +301,10 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                                 'image_analysis': '\n'.join(image_analysis_results)
                             }
 
-                            updated_question = self.analyze_eda_result(
+                            updated_question = self.analyze_eda_result_cli(
                                 question=question,
                                 result=combined_result['text_result'],
-                                image_analysis=combined_result['image_analysis']
+                                attempt=combined_result['image_analysis']
                             )
                             updated_questions.append(updated_question)
                             self.logger.info(f"Successfully processed question: {question}")
@@ -360,7 +347,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 data_preview=', '.join(data.columns)
             )
 
-            response, _ = self.chat_with_memory(input_data, None)
+            response = self.chat_without_memory(input_data)
             self.logger.info("Successfully generated PCS evaluation code")
             return response
         except Exception as e:
@@ -385,7 +372,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 csv_path=csv_file_path,
                 problem_description=question
             )
-            response, _ = self.chat_with_memory(input_data, None)
+            response = self.chat_without_memory(input_data)
             response_json = self.parse_llm_json(response)
 
             if response_json and isinstance(response_json, list):
@@ -423,7 +410,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 csv_path=csv_file_path,
                 discrete_vars=discrete_info
             )
-            response, _ = self.chat_with_memory(input_data, None)
+            response = self.chat_without_memory(input_data)
             code_match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
 
             if not code_match:
@@ -462,91 +449,77 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 first_10_rows=first_10_str,
                 random_10_rows=random_10_str
             )
-            response, _ = self.chat_with_memory(input_data, None)
+            response = self.chat_without_memory(input_data)
             self.logger.info("Successfully compared data samples")
             return response
         except Exception as e:
             self.logger.error(f"Error loading and comparing data: {str(e)}")
             return f"Error occurred while loading and comparing data: {str(e)}"
         
+    def _execute_single_task(self, task_name, csv_file_path):
+        """执行单个清理任务"""
+        if task_name == 'Dimension Analysis':
+            dimension_check_code = self.generate_dimension_check_code(csv_file_path, self.context_description)
+            dimension_check_result = self.execute_generated_code(dimension_check_code)
+            return self.analyze_data_dimension_cli(dimension_check_result, self.context_description)
+        
+        elif task_name == 'Invalid Value Analysis':
+            data = pd.read_csv(csv_file_path)
+            data_describe = data.select_dtypes('number').describe().to_string()
+            return self.check_for_invalid_values_cli(data_describe, self.context_description, self.var_json)
+        
+        elif task_name == 'Missing Value Analysis':
+            data = pd.read_csv(csv_file_path)
+            missing_ratio = data.isnull().mean().to_string()
+            missing_value_code = self.generate_missing_value_analysis_code_cli(csv_file_path, missing_ratio)
+            missing_value_result = self.execute_generated_code(missing_value_code)
+            return self.analyze_missing_values_result_cli(missing_value_result, missing_ratio, self.check_unit)
+        
+        elif task_name == 'Data Integrity Analysis':
+            data_integrity_code = self.generate_data_integrity_check_code_cli(csv_file_path)
+            data_integrity_result = self.execute_generated_code(data_integrity_code)
+            return self.analyze_and_generate_fillna_operations_cli(data_integrity_result)
+        
+        else:
+            raise ValueError(f"Unknown task: {task_name}")
+    
     def execute_cleaning_tasks(self, task_list, csv_file_path):
         """
-        根据任务列表依次执行数据清理任务，包括问题列表生成和清理项生成。
-        
-        Parameters:
-            task_list (list): 包含任务名称的任务列表。
-            csv_file_path (str): 数据文件路径。
+        根据任务列表依次执行数据清理任务。
         
         Returns:
-            list: 合并后的清理操作项 JSON 列表。
-            list: 错误日志记录。
+            tuple: (cleaning_operations, error_logs)
         """
         self.logger.info(f"Starting execution of {len(task_list)} cleaning tasks")
-        problem_list = []  # 存储问题列表
-        cleaning_operations = []  # 存储清理操作项
-        error_logs = []  # 错误日志记录
+        problem_list, cleaning_operations, error_logs = [], [], []
 
         for task in task_list:
             task_name = task.get('task_name')
             self.logger.info(f"Processing task: {task_name}")
 
             try:
-                if task_name == 'Dimension Analysis':
-                    self.logger.info("Executing dimension analysis task")
-                    dimension_check_code = self.generate_dimension_check_code(csv_file_path=csv_file_path, context_description=self.context_description)
-                    dimension_check_result = self.execute_generated_code(dimension_check_code)
-                    dimension_problems = self.analyze_data_dimension(dimension_check_result, self.context_description)
-                    if isinstance(dimension_problems, list):
-                        self.logger.info(f"Found {len(dimension_problems)} dimension-related problems")
-                        problem_list.extend(dimension_problems)
-
-                elif task_name == 'Invalid Value Analysis':
-                    self.logger.info("Executing invalid value analysis task")
-                    invalid_value_problems = self.check_for_invalid_values(csv_file_path=csv_file_path)
-                    if isinstance(invalid_value_problems, list):
-                        self.logger.info(f"Found {len(invalid_value_problems)} invalid value problems")
-                        problem_list.extend(invalid_value_problems)
-
-                elif task_name == 'Missing Value Analysis':
-                    self.logger.info("Executing missing value analysis task")
-                    missing_value_code = self.generate_missing_value_analysis_code(csv_file_path=csv_file_path)
-                    missing_value_result = self.execute_generated_code(missing_value_code)
-                    missing_value_cleaning = self.analyze_missing_values_result(missing_value_result, csv_file_path=csv_file_path)
-                    if isinstance(missing_value_cleaning, list):
-                        self.logger.info(f"Generated {len(missing_value_cleaning)} missing value cleaning operations")
-                        cleaning_operations.extend(missing_value_cleaning)
-
-                elif task_name == 'Data Integrity Analysis':
-                    self.logger.info("Executing data integrity analysis task")
-                    data_integrity_code = self.generate_data_integrity_check_code(csv_file_path=csv_file_path)
-                    data_integrity_result = self.execute_generated_code(data_integrity_code)
-                    data_integrity_cleaning = self.analyze_and_generate_fillna_operations(data_integrity_result)
-                    if isinstance(data_integrity_cleaning, list):
-                        self.logger.info(f"Generated {len(data_integrity_cleaning)} data integrity cleaning operations")
-                        cleaning_operations.extend(data_integrity_cleaning)
-
-                else:
-                    error_message = f"Task {task_name} not implemented or unknown"
-                    self.logger.warning(error_message)
-                    error_logs.append({"task_name": task_name, "error_message": error_message})
-
+                result = self._execute_single_task(task_name, csv_file_path)
+                if isinstance(result, list):
+                    if task_name in ['Dimension Analysis', 'Invalid Value Analysis']:
+                        problem_list.extend(result)
+                    else:
+                        cleaning_operations.extend(result)
+                        
             except Exception as e:
                 error_message = f"Error in task {task_name}: {str(e)}"
                 self.logger.error(error_message)
                 error_logs.append({"task_name": task_name, "error_message": error_message})
 
-        # 根据问题列表生成清理操作项
+        # 从问题列表生成清理操作
         if problem_list:
             try:
-                self.logger.info("Generating cleaning operations from problem list")
-                problem_cleaning_operations = self.generate_cleaning_operations(problem_list)
-                if isinstance(problem_cleaning_operations, list):
-                    self.logger.info(f"Generated {len(problem_cleaning_operations)} additional cleaning operations")
-                    cleaning_operations.extend(problem_cleaning_operations)
+                request = CLEANING_OPERATIONS_TEMPLATE_2.format(problem_list=json.dumps(problem_list, ensure_ascii=False, indent=2))
+                response = self.chat_without_memory(request)
+                problem_operations = self.parse_llm_json(response) if response != "no problem" else "no problem"
+                if isinstance(problem_operations, list):
+                    cleaning_operations.extend(problem_operations)
             except Exception as e:
-                error_message = f"Error generating cleaning operations from problem list: {str(e)}"
-                self.logger.error(error_message)
-                error_logs.append({"task_name": "根据问题列表生成清理操作项", "error_message": error_message})
+                error_logs.append({"task_name": "Problem Operations", "error_message": str(e)})
 
         return cleaning_operations, error_logs
     
@@ -581,40 +554,7 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
         dimension_problems = self.analyze_data_dimension(dimension_check_result, context_description)
         return dimension_problems
     
-    def missing_value_analysis_cli(self,csv_file_path, missing_data_str=None, missing_value_check_result=None, check_unit=None):
-        """
-        执行缺失值分析任务。
 
-        参数:
-            csv_file_path (str): 数据文件路径。
-            missing_data_str (str): 缺失值分析结果。
-            missing_value_check_result (str): 缺失值分析结果。
-            check_unit (str): 检查单位。
-        """
-        if missing_value_check_result is None and csv_file_path is not None and missing_data_str is not None:
-            missing_value_code = self.generate_missing_value_analysis_code_cli(csv_file_path=csv_file_path, missing_data_str=missing_data_str)
-            # 检查是否有```python```
-            if re.search(r"```python", missing_value_code):
-                # 提取```python和```之间的内容   
-                code_match = re.search(r"```python\n(.*?)```", missing_value_code, flags=re.DOTALL) 
-                if code_match:
-                    return code_match.group(1).strip()
-                else:
-                    code_match = re.search(r"```python\n(.*)", missing_value_code, flags=re.DOTALL)
-                    if code_match:
-                        return code_match.group(1).strip()  
-            else:
-                return missing_value_code
-        
-        missing_value_problems = self.analyze_missing_values_result_cli(result=missing_value_check_result, missing_data_str=missing_data_str, data_unit=check_unit)
-        return missing_value_problems
-
-    def analyze_image(self, image_path: str, prompt: str = "请分析这个图片") -> str:
-        """分析图片内容"""
-        return self.image_tool.run(tool_input={
-            "image_path": image_path,
-            "prompt": prompt
-        })
 
     def generate_eda_summary(self, eda_results):
         """
@@ -633,11 +573,102 @@ class DataCleaningAndEDA_Agent(BaseDSLC_Agent):
                 problem_description=self.problem_description
             )
             
-            response, _ = self.chat_with_memory(input_data, None)
+            response = self.chat_without_memory(input_data)
             self.logger.info("Successfully generated EDA summary")
             return response if response else "无法生成有效的EDA分析总结。"
         except Exception as e:
             self.logger.error(f"Error generating EDA summary: {str(e)}")
             return "无法生成有效的EDA分析总结。"
+
+    def analyze_eda_result_cli(self, question, action, eda_result):
+        """
+        分析单个EDA问题的结果并生成结论
+        
+        参数：
+        - question: EDA问题
+        - action: 执行的分析动作
+        - eda_result: 执行结果
+        
+        返回值：
+        - 分析结论文本
+        """
+        self.logger.info(f"Analyzing EDA result for question: {question}")
+        try:
+            # 使用简化的模板来分析结果
+            prompt = f"""
+基于以下EDA问题和执行结果，请提供简洁的分析结论：
+
+问题：{question}
+执行动作：{action}
+执行结果：
+{eda_result}
+
+请提供一个简洁明了的分析结论（1-2句话）：
+"""
+            
+            response = self.chat_without_memory(prompt)
+            self.logger.info("Successfully analyzed EDA result")
+            return response if response else "分析完成，但无法生成具体结论。"
+        except Exception as e:
+            self.logger.error(f"Error analyzing EDA result: {str(e)}")
+            return "分析完成，但无法生成具体结论。"
+
+    def generate_eda_summary_cli(self, eda_results, problem_description, context_description):
+        """
+        CLI方法：根据所有EDA结果生成综合总结
+        
+        参数：
+        - eda_results: EDA结果列表
+        - problem_description: 问题描述
+        - context_description: 上下文描述
+        
+        返回值：
+        - 综合EDA总结文本
+        """
+        self.logger.info("Generating comprehensive EDA summary")
+        try:
+            # 构建总结提示
+            results_text = ""
+            if eda_results:
+                for i, result in enumerate(eda_results, 1):
+                    if isinstance(result, dict):
+                        question = result.get('question', '未知问题')
+                        conclusion = result.get('conclusion', '无结论')
+                        results_text += f"{i}. 问题：{question}\n   结论：{conclusion}\n\n"
+                    elif isinstance(result, list):
+                        for subresult in result:
+                            if isinstance(subresult, dict):
+                                question = subresult.get('question', '未知问题')
+                                conclusion = subresult.get('conclusion', '无结论')
+                                results_text += f"{i}. 问题：{question}\n   结论：{conclusion}\n\n"
+            
+            prompt = f"""
+基于以下探索性数据分析的结果，请生成一个综合的数据分析总结报告：
+
+**项目背景：**
+{problem_description}
+
+**数据背景：**
+{context_description}
+
+**EDA分析结果：**
+{results_text}
+
+请生成一个结构化的EDA总结报告，包括：
+1. 数据概况
+2. 主要发现
+3. 数据质量评估
+4. 关键洞察
+5. 后续建议
+
+要求：使用markdown格式，内容要专业且易于理解。
+"""
+            
+            response = self.chat_without_memory(prompt)
+            self.logger.info("Successfully generated comprehensive EDA summary")
+            return response if response else "无法生成有效的综合EDA总结。"
+        except Exception as e:
+            self.logger.error(f"Error generating comprehensive EDA summary: {str(e)}")
+            return "无法生成有效的综合EDA总结。"
 
 

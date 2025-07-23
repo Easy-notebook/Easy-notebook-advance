@@ -55,15 +55,17 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, []);
 
-    const getMessageClassNames = useCallback((role) => {
+    const getMessageClassNames = useCallback((role, messageStage) => {
         const base = 'rounded-2xl px-4 py-3 w-fit shadow-md';
+        
+        // 自定义问题环节使用更宽的宽度，所有消息框都增大
+        const maxWidth = (messageStage === 'free_input') ? 'max-w-[85%]' : 'max-w-[60%]';
+        
         if (role === 'user')
-            return `${base} bg-white backdrop-blur-lg border border-theme-200 max-w-[40%]`;
+            return `${base} bg-white backdrop-blur-lg border border-theme-200 ${maxWidth} text-base`;
         if (role === 'system')
-            return `${base} bg-white bg-opacity-20 backdrop-blur-lg rounded-full shadow-gray-300 max-w-[40%]`;
-        // if (role === 'assistant')
-        //     return `${base} bg-white/90 text-gray-800 border border-theme-200 shadow-theme-200 max-w-[40%]`;
-        return `${base} bg-white bg-opacity-20 backdrop-blur-lg shadow-gray-300 max-w-[40%]`;
+            return `${base} bg-white bg-opacity-20 backdrop-blur-lg rounded-full shadow-gray-300 ${maxWidth} text-base`;
+        return `${base} bg-white bg-opacity-20 backdrop-blur-lg shadow-gray-300 ${maxWidth} text-base`;
     }, []);
     const generateId = () => Math.random().toString(36).substring(2, 11);
 
@@ -72,9 +74,9 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         setSlideDirection(Math.random() > 0.5 ? 'right' : 'left');
         setMessages((prev) => [
             ...prev,
-            { id: generateId(), role, content, options, onSelect },
+            { id: generateId(), role, content, options, onSelect, stage },
         ]);
-    }, []);
+    }, [stage]);
 
     /* ─────────── Refs for Handlers ─────────── */
     const handleInitialChoiceRef = useRef(null);
@@ -374,6 +376,7 @@ ${t('problemDefine.addBackground')}`,
                                 <div
                                     className={`${getMessageClassNames(
                                         m.role,
+                                        m.stage
                                     )} animate-slide-in-${m.role === 'user'
                                         ? slideDirection
                                         : slideDirection === 'right'

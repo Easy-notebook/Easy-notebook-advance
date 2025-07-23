@@ -10,6 +10,15 @@ async def generate_data_cleaning_sequence_step3(
     state = state or {}
         
     step_template = StepTemplate(step, state)
+    
+    if step_template.event("start"):
+        step_template.add_text("### Step 3: Missing Value Analysis") \
+                    .add_text("I will analyze missing values in the dataset to identify data quality issues.") \
+                    .next_thinking_event(event_tag="check_data_info",
+                                        textArray=["Data Cleaning Agent is working...","Checking data information..."])
+        
+        return step_template.end_event()
+    
     problem_description = step_template.get_variable("problem_description")
     context_description = step_template.get_variable("context_description")
     unit_check = step_template.get_variable("unit_check")
@@ -17,7 +26,6 @@ async def generate_data_cleaning_sequence_step3(
     hypothesis = step_template.get_variable("pcs_hypothesis")
     csv_file_path = step_template.get_variable("csv_file_path")
 
-    
     clean_agent = DataCleaningAndEDA_Agent(llm=llm,
                                         problem_description=problem_description,
                                         context_description=context_description,
@@ -25,101 +33,122 @@ async def generate_data_cleaning_sequence_step3(
                                         var_json=variables,
                                         hyp_json=hypothesis)
     
-    if step_template.event("start"):
-        step_template.add_text("### Step3: Missing Value Analysis") \
+    if step_template.think_event("check_data_info"):
+        step_template.add_text("## Data Information Overview") \
+                    .add_text("First, let me check the basic information about our dataset:") \
                     .add_code(
                             f"""import pandas as pd
 data = pd.read_csv('{csv_file_path}')
 print(data.info())
 """) \
-                    .exe_code_cli(mark_finnish="glance at current data info.") \
-                    .next_event("glance at current data info.")
+                    .exe_code_cli() \
+                    .next_thinking_event(event_tag="analyze_missing_values",
+                                        textArray=["Data Cleaning Agent is analyzing...","Analyzing missing values..."])
         
         return step_template.end_event()
     
-    if step_template.event("glance at current data info."):
+    if step_template.think_event("analyze_missing_values"):
         
         dataInfo = step_template.get_current_effect()
-        step_template.add_variable("data_info",dataInfo) 
+        step_template.add_variable("data_info", dataInfo)
         
-        step_template.add_text("I have generated the missing value check code and get the result, let's see:") \
+        step_template.add_text("## Missing Value Analysis") \
+                    .add_text("Now let me check for missing values in each column:") \
                     .add_code(
-f"""
+f"""import pandas as pd
 data = pd.read_csv("{csv_file_path}")
 missing_data = data.isna().sum() / len(data.index)
-missing_data_sorted = missing_data.sort_values()    
+missing_data_sorted = missing_data.sort_values(ascending=False)    
 missing_data_str = missing_data_sorted.to_string()
+print("Missing value percentages by column (sorted):")
 print(missing_data_str)
 """ 
                     ) \
-                    .exe_code_cli(
-                        event_tag="finished_get_missing_value_code_execution",
-                        mark_finnish="finished get the missing value check code"
-                    )
+                    .exe_code_cli() \
+                    .next_thinking_event(event_tag="generate_missing_value_visualization",
+                                        textArray=["Data Cleaning Agent is working...","Generating missing value visualization..."])
                     
         return step_template.end_event()
     
-    
-    if step_template.event("finished_get_missing_value_code_execution"):    
+    if step_template.think_event("generate_missing_value_visualization"):
+        
         missing_value_str = step_template.get_current_effect()
-        missing_value_code = clean_agent.missing_value_analysis_cli(csv_file_path, missing_value_str)
+        step_template.add_variable("missing_value_str", missing_value_str)
         
-        step_template.add_variable("missing_value_str",missing_value_str) \
-                    .add_text("I am generating the missing value check code for visualizing the missing value, please wait...") \
-                    .next_thinking_event(event_tag="finnish_generate_missing_value_check_code",
-                                    textArray=["Data Cleaning and EDA Agent is thinking...","generating the missing value check code..."])
+        # Generate missing value visualization code
+        missing_value_code = clean_agent.generate_missing_value_analysis_code_cli(
+            csv_file_path=csv_file_path, 
+            missing_data_str=missing_value_str
+        )
+        
+        step_template.add_text("## Missing Value Visualization") \
+                    .add_text("Let me create visualizations to better understand the missing value patterns:") \
+                    .add_code(missing_value_code) \
+                    .exe_code_cli() \
+                    .next_thinking_event(event_tag="analyze_missing_value_results",
+                                        textArray=["Data Cleaning Agent is analyzing...","Analyzing missing value patterns..."])
                     
         return step_template.end_event()
-
     
-    # if step_template.think_event("finnish_generate_missing_value_check_code"):    
-    #     missing_value_str = step_template.get_current_effect()
-    #     missing_value_code = clean_agent.missing_value_analysis_cli(csv_file_path, missing_value_str)
+    if step_template.think_event("analyze_missing_value_results"):
         
-    #     step_template.add_variable("missing_value_str",missing_value_str) \
-    #                 .add_text("I have generated the missing value check code and get the result, let's see:") \
-    #                 .add_code(missing_value_code) \
-    #                 .exe_code_cli(
-    #                     event_tag="finished_missing_value_check_code_execution",
-    #                 )
-                    
-    #     return step_template.end_event()
-    
-    if step_template.event("finnish_generate_missing_value_check_code"):
-    # if step_template.event("finished_get_missing_value_code_execution"):
-        # missing_value_str = step_template.get_variable("missing_value_str")
         missing_value_check_result = step_template.get_current_effect()
-        # missing_value_problems = clean_agent.missing_value_analysis_cli(csv_file_path, missing_value_str, missing_value_check_result, unit_check)
-        missing_value_problems = clean_agent.missing_value_analysis_cli(csv_file_path, "", missing_value_check_result, unit_check)
         
+        # Analyze missing value results
+        missing_value_problems = clean_agent.analyze_missing_values_result_cli(
+            result=missing_value_check_result, 
+            missing_data_str=step_template.get_variable("missing_value_str"), 
+            data_unit=unit_check
+        )
         
         if missing_value_problems == "no problem":
-            step_template.add_text("I have checked the missing value problems, and there is no problem with the data.") \
-                        .add_text("Let's proceed to the next step.")
+            step_template.add_text("## ✅ Missing Value Analysis Complete") \
+                        .add_text("**Good news!** The analysis shows no significant missing value problems in the dataset.") \
+                        .add_text("🎯 **Ready to proceed to the next step.**")
         else:
             markdown_str = step_template.to_tableh(missing_value_problems)
             
-            step_template.add_text("according to the missing value analysis result, we know there are some problems with the data:") \
-                        .add_variable("missing_value_problems",missing_value_problems) \
+            step_template \
+                        .add_variable("missing_value_problems", missing_value_problems) \
+                        .add_text("## ⚠️ Missing Value Issues Identified") \
+                        .add_text("The analysis revealed the following missing value problems that need to be addressed:") \
                         .add_text(markdown_str) \
                         .next_thinking_event(event_tag="generate_cleaning_operations",
-                                        textArray=["Data Cleaning and EDA Agent is thinking...","generating cleaning operations..."])
+                                        textArray=["Data Cleaning Agent is working...","Generating cleaning operations..."])
+        
         return step_template.end_event()    
     
     if step_template.think_event("generate_cleaning_operations"):
+        
         one_of_issue, issue_left = step_template.pop_last_sub_variable("missing_value_problems")
         data_info = step_template.get_variable("data_info")
         
         if one_of_issue:
-            step_template.add_code(clean_agent.generate_cleaning_code_cli(csv_file_path, one_of_issue, context_description, variables, unit_check, data_info,"missing_value_resolved.csv")) \
-                        .update_variable("csv_file_path","missing_value_resolved.csv") \
-                        .exe_code_cli(mark_finnish="finished generate cleaning operations")                       
+            step_template.add_text(f"### Resolving Issue: {one_of_issue.get('problem', 'Missing Value Issue')}") \
+                        .add_text("Generating cleaning code to resolve this specific issue:") \
+                        .add_code(clean_agent.generate_cleaning_code_cli(
+                            csv_file_path, 
+                            one_of_issue, 
+                            context_description, 
+                            variables, 
+                            unit_check, 
+                            data_info,
+                            "missing_value_resolved.csv"
+                        )) \
+                        .update_variable("csv_file_path", "missing_value_resolved.csv") \
+                        .exe_code_cli()                       
+            
             if issue_left:
                 step_template.next_thinking_event(event_tag="generate_cleaning_operations",
-                                        textArray=["Data Cleaning and EDA Agent is thinking...","generating cleaning operations..."])
+                                        textArray=["Data Cleaning Agent is working...","Processing next cleaning operation..."])
+            else:
+                step_template.add_text("") \
+                           .add_text("✅ **All missing value issues have been resolved!**") \
+                           .add_text("🎯 **Ready to proceed to the next data integrity check.**")
                 
         else:
-            step_template.add_text("Maybe there is no problem with the data missing value, let's proceed to the next step.")
+            step_template.add_text("✅ **No missing value problems found.**") \
+                        .add_text("🎯 **Ready to proceed to the next step.**")
             
         return step_template.end_event()
     

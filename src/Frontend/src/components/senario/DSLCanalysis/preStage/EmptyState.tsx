@@ -638,7 +638,7 @@ export const Footer = () => {
  * 负责组合以上组件，并处理拖拽上传逻辑
  */
 const EmptyState = ({ onAddCell, onFileUpload }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [isDragging, setIsDragging] = useState(false);
     const [dragCounter, setDragCounter] = useState(0);
     const { setViewMode } = useStore();
@@ -654,11 +654,12 @@ const EmptyState = ({ onAddCell, onFileUpload }) => {
             {
                 "column_info": fileColumns,
                 "dataset_info": datasetInfo
-            }
+            },
+            i18n.language
         );
         // console.log("choiceMap", choiceMap);
         usePreStageStore.getState().updateChoiceMap(choiceMap["message"]);
-    }, []);
+    }, [i18n.language]);
 
     const handleFileUploadProcess = useCallback(async (file) => {
         if (!file || isUploading) return;

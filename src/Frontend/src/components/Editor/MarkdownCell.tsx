@@ -373,11 +373,21 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
                   height="auto"
                   extensions={[markdown(), EditorView.lineWrapping]}
                   onChange={handleChange}
-                  className="border rounded text-lg bg-white"
+                  className="border rounded text-lg bg-transparent"
                   style={{
                     fontSize: '20px',
                     lineHeight: '2.0',
                     width: '100%',
+                    border: 'none',
+                    boxShadow: 'none',
+                    backgroundColor: 'transparent',
+                    padding: '0',
+                    '& .cm-editor': {
+                      border: 'none',
+                      boxShadow: 'none',
+                      backgroundColor: 'transparent',
+                      padding: '0',
+                    },
                   }}
                   onKeyDown={handleKeyDown}
                   onBlur={handleBlur}

@@ -66,14 +66,14 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
     return (
         <div
             ref={menuRef}
-            className="absolute bg-white rounded shadow-md py-1 z-50 border border-gray-200"
+            className="absolute bg-white rounded-lg shadow-lg py-2 z-50 border border-theme-200 animate-fade-in"
             style={{ top: y, left: x, minWidth: '180px' }}
         >
             {file?.type === 'file' && (
                 <>
                     {isPreviewable && (
                         <button
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
+                            className="w-full text-left px-4 py-2 hover:bg-theme-50 flex items-center transition-colors duration-200 rounded-md mx-1"
                             onClick={() => {
                                 onPreview(file);
                                 onClose();
@@ -84,7 +84,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
                         </button>
                     )}
                     <button
-                        className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
+                        className="w-full text-left px-4 py-2 hover:bg-theme-50 flex items-center transition-colors duration-200 rounded-md mx-1"
                         onClick={() => {
                             onDownload(file);
                             onClose();
@@ -94,7 +94,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
                         <span>Download</span>
                     </button>
                     <button
-                        className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600 flex items-center"
+                        className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center transition-colors duration-200 rounded-md mx-1"
                         onClick={() => {
                             onDelete(file);
                             onClose();
@@ -107,7 +107,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
             )}
             {/* Directory-specific actions if needed in the future */}
             <button
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center"
+                className="w-full text-left px-4 py-2 hover:bg-theme-50 flex items-center transition-colors duration-200 rounded-md mx-1"
                 onClick={onClose}
             >
                 <X size={16} className="mr-2" />
@@ -207,7 +207,7 @@ const FileTreeItem = memo(({
             <div
                 className="
                 flex items-center py-1 cursor-pointer
-                text-gray-700 hover:bg-gray-100
+                text-gray-700 hover:bg-theme-50 transition-colors duration-200
                 "
                 style={{ paddingLeft }}
                 onClick={handleClick}
@@ -223,20 +223,20 @@ const FileTreeItem = memo(({
             >
                 {/* Directory expand/collapse arrow */}
                 {item.type === 'directory' && (
-                    <div className="mr-1">
+                    <div className="mr-1 transition-transform duration-200">
                         {isExpanded
-                            ? <ChevronDown size={20} className="text-gray-500" />
-                            : <ChevronRight size={20} className="text-gray-500" />
+                            ? <ChevronDown size={16} className="text-theme-600" />
+                            : <ChevronRight size={16} className="text-theme-600" />
                         }
                     </div>
                 )}
 
                 {/* File icon alignment */}
-                <div className={`mr-2 ${item.type !== 'directory' ? 'ml-4' : ''}`}>
+                <div className={`mr-2 ${item.type !== 'directory' ? 'ml-4' : ''} transition-colors duration-200`}>
                     {item.type === 'directory'
                         ? (isExpanded
-                            ? <FolderOpen size={20} className="text-theme-800" />
-                            : <Folder size={20} className="text-theme-800" />
+                            ? <FolderOpen size={18} className="text-theme-700" />
+                            : <Folder size={18} className="text-theme-700" />
                         )
                         : getFileIcon(item.name)
                     }
@@ -244,7 +244,11 @@ const FileTreeItem = memo(({
 
                 {/* File or folder name */}
                 <span
-                    className={`truncate text-sm font-bold ${item.type === 'directory' ? 'text-theme-800' : ''}`}
+                    className={`truncate text-sm font-medium transition-colors duration-200 ${
+                        item.type === 'directory' 
+                            ? 'text-theme-800 hover:text-theme-900' 
+                            : 'text-gray-700 hover:text-theme-700'
+                    }`}
                     title={item.name}
                 >
                     {item.name}
@@ -618,7 +622,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
     if (isLoading && !files) {
         return (
             <div className="py-4 px-3 flex justify-center items-center h-full">
-                <div className="animate-pulse text-gray-500">Loading files...</div>
+                <div className="animate-pulse text-theme-600">Loading files...</div>
             </div>
         );
     }
@@ -636,26 +640,26 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
             {/* Drag & drop instruction overlay - appears when dragging over */}
             {(draggedOver || uploadState.uploading) ? null : (
-                <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center opacity-0 hover:opacity-20 transition-opacity duration-300 bg-gray-100 border border-dashed border-gray-300">
+                <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity duration-300 bg-theme-50 border border-dashed border-theme-300 rounded-lg">
                     <div className="text-center">
-                        <p className="text-gray-500">Drag and drop files here to upload</p>
+                        <p className="text-theme-600 text-sm font-medium">Drag and drop files here to upload</p>
                     </div>
                 </div>
             )}
 
             {/* Upload status overlay */}
             {uploadState.uploading && (
-                <div className="absolute inset-0 bg-white bg-opacity-80 z-10 flex flex-col justify-center items-center">
-                    <div className="mb-2 text-theme-800">Uploading files...</div>
-                    <div className="w-64 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="absolute inset-0 bg-white bg-opacity-90 backdrop-blur-sm z-10 flex flex-col justify-center items-center rounded-lg border border-theme-200">
+                    <div className="mb-3 text-theme-800 font-medium">Uploading files...</div>
+                    <div className="w-64 h-3 bg-theme-100 rounded-full overflow-hidden shadow-inner">
                         <div
-                            className="h-full bg-theme-800 rounded-full"
+                            className="h-full bg-gradient-to-r from-theme-500 to-theme-600 rounded-full transition-all duration-300"
                             style={{ width: `${uploadState.progress}%` }}
                         ></div>
                     </div>
-                    <div className="mt-2">{uploadState.progress}%</div>
+                    <div className="mt-2 text-theme-700 font-semibold">{uploadState.progress}%</div>
                     <button
-                        className="mt-4 px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+                        className="mt-4 px-4 py-2 bg-theme-100 text-theme-700 rounded-lg hover:bg-theme-200 transition-colors duration-200 font-medium"
                         onClick={handleCancelUpload}
                     >
                         Cancel
@@ -665,34 +669,34 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
             {/* Loading indicator for preview operations */}
             {previewLoading && (
-                <div className="absolute inset-0 bg-white bg-opacity-60 z-10 flex items-center justify-center">
-                    <div className="animate-pulse text-theme-800">Loading preview...</div>
+                <div className="absolute inset-0 bg-white bg-opacity-70 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+                    <div className="animate-pulse text-theme-700 font-medium">Loading preview...</div>
                 </div>
             )}
 
             {/* File tree header with refresh button */}
-            {projectName && (<div className="flex justify-between items-center px-3 mb-3 ml-4 mt-2">
-                <h2 className="text-lg font-semibold text-theme-800">
+            {projectName && (<div className="flex justify-between items-center px-3 mb-3 ml-2 mt-3">
+                <h2 className="text-lg font-bold text-theme-800">
                     {projectName}
                 </h2>
                 <button
-                    className="p-1 rounded hover:bg-gray-200 text-theme-800"
+                    className="p-2 rounded-lg hover:bg-theme-100 text-theme-700 transition-colors duration-200"
                     onClick={fetchFileListWrapper}
                     title="Refresh file list"
                 >
-                    <RefreshCw size={12} />
+                    <RefreshCw size={14} />
                 </button>
             </div>)}
 
             {/* Drop zone indicator */}
             {draggedOver && (
-                <div className="absolute inset-0 border-2 border-dashed border-theme-500 bg-theme-100 bg-opacity-20 z-0"></div>
+                <div className="absolute inset-0 border-2 border-dashed border-theme-400 bg-theme-50 bg-opacity-60 z-0 rounded-lg animate-pulse"></div>
             )}
 
             {/* File tree content */}
             {fileTree.length === 0 ? (
                 <div className="flex justify-center items-center h-full w-full">
-                    <p className="text-gray-500">Drag and drop files here to upload.</p>
+                    <p className="text-theme-600 text-sm font-medium">Drag and drop files here to upload.</p>
                 </div>
             ) : (
                 <div>
@@ -712,9 +716,9 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
             {projectName && (<div
                 className="
-                flex items-center py-1 cursor-pointer
-                text-gray-700 hover:bg-gray-100
-                px-3
+                flex items-center py-2 cursor-pointer
+                text-gray-700 hover:bg-theme-50 transition-colors duration-200
+                px-3 rounded-lg mx-2 mb-2
                 "
                 onClick={() => {
                     if (usePreviewStore.getState().previewMode === 'file') {
@@ -722,12 +726,12 @@ const FileTree = memo(({ notebookId, projectName }) => {
                     } 
                 }}
             >
-                <div className={`max-w-full max-h-[70vh] mx-auto ml-3 mr-2`}>
-                    <img src={"./icon.svg"} className="w-10 h-10" />
+                <div className={`mr-3`}>
+                    <img src={"./icon.svg"} className="w-8 h-8" />
                 </div>
                 {/* File or folder name */}
                 <span
-                    className="truncate text-sm font-bold"
+                    className="truncate text-sm font-bold text-theme-800"
                 >
                     {projectName + ".easynb"}
                 </span>
@@ -758,8 +762,8 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
             {/* Error display */}
             {previewError && (
-                <div className="absolute bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                    <p>{previewError}</p>
+                <div className="absolute bottom-4 right-4 bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg shadow-md animate-fade-in">
+                    <p className="text-sm font-medium">{previewError}</p>
                 </div>
             )}
 

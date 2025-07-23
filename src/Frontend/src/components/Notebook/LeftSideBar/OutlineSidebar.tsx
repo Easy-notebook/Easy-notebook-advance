@@ -61,7 +61,8 @@ const PhaseSection = memo(({
   onToggle,
   onStepSelect,
   isActive,
-  currentStepId
+  currentStepId,
+  isTitle
 }) => {
   const handleStepClick = useCallback((stepId) => {
     onStepSelect(phase.id, stepId);
@@ -94,17 +95,25 @@ const PhaseSection = memo(({
             ${currentStepId === introStep.id ? 'border-2 border-theme-500 shadow-[0_2px_8px_rgba(0,0,0,0.1)]' : ''}
           `}
         >
-          <div className={`
+          {!isTitle && (<>
+            <div className={`
             w-10 rounded-xl flex items-center justify-center
             ${StatusStyles.colors[isActive ? 'in-progress' : 'pending']}
             transition-all duration-300
             before:absolute before:inset-0 before:rounded-xl before:bg-gradient-to-b before:from-white/5 before:to-transparent
           `}>
-            <IconComponent size={16} />
-          </div>
-          <div className="flex-1 min-w-0 flex items-center ml-2">
-            <h3 className="font-bold tracking-wide text-base text-black">{phase.title}</h3>
-          </div>
+              <IconComponent size={16} />
+            </div>
+            <div className="flex-1 min-w-0 flex items-center ml-2">
+              <h3 className="font-bold tracking-wide text-base text-black">{phase.title}</h3>
+            </div></>)}
+
+          {isTitle && (
+            <h2 className="pl-2 text-lg font-semibold text-theme-800">
+              {phase.title}
+            </h2>
+          )}
+
           {regularSteps.length > 0 && (
             <div className="relative px-1.5">
               {isExpanded ? (
@@ -344,16 +353,13 @@ const OutlineSidebar = ({
             <FileTree notebookId={notebookId} projectName={projectName} />
           </div>
         ) : (
-          // 大纲视图（原有逻辑）
-          <div className="py-2.5">
+          <div className="py-0.5">
             {tasks.map((task) => (
               <div key={task.id} className="mb-5">
-                <h2 className="pl-7 px-3 text-lg font-semibold text-theme-800 mb-3">
-                  {task.title}
-                </h2>
-                {task.phases.map((phase) => (
+                {task.phases.map((phase, index) => (
                   <PhaseSection
                     key={phase.id}
+                    isTitle={index === 0}
                     phase={phase}
                     isExpanded={expandedSections[phase.id]}
                     onToggle={() => toggleSection(phase.id)}
