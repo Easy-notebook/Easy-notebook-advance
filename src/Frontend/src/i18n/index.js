@@ -18,7 +18,6 @@ i18n
       }
     },
     fallbackLng: 'zh', // Default language is Chinese
-    debug: process.env.NODE_ENV === 'development',
     interpolation: {
       escapeValue: false,
     }

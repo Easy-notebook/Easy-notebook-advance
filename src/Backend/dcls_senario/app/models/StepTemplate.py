@@ -3,12 +3,13 @@ from app.core.config import SHOT_TYPES
 from app.utils.helpers import generate_step_actions
 
 class StepTemplate:
-    def __init__(self, step: Dict[str, Any], state: Dict[str, Any]):
+    def __init__(self, step: Dict[str, Any], state: Dict[str, Any],lang:str="en"):
         self.step = step
         self.state = state.copy()  # 复制上下文，避免直接修改传入的对象
         self.actions: List[Dict[str, Any]] = []
         self.todo_list: List[str] = list(self.state.get("toDoList", []))
-    
+        self.lang = lang
+
     def _get_context(self) -> Dict[str, Any]:
         """返回包含当前待办事项的上下文"""
         return {**self.state, "toDoList": self.todo_list}

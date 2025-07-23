@@ -23,6 +23,7 @@ import {
   ChevronUp,
   Edit
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -46,8 +47,15 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
     <div className="relative">
       <div
         className={`
-          text-sm text-gray-700 whitespace-pre-wrap transition-all duration-300
+          text-sm text-gray-700/90 leading-relaxed tracking-wide
+          whitespace-pre-wrap transition-all duration-200 ease-in-out
           ${!isExpanded && exceedsMaxLines ? 'line-clamp-3' : ''}
+          prose prose-sm max-w-none 
+          prose-headings:font-medium prose-headings:my-1
+          prose-p:my-0.5 prose-p:leading-6
+          prose-pre:bg-gray-50/50 prose-pre:rounded-md prose-pre:p-2 prose-pre:my-1
+          prose-code:text-theme-600 prose-code:bg-gray-50/50 prose-code:px-1 prose-code:rounded
+          prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0.5
         `}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -214,6 +222,7 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
 const ViewSwitcher = () => {
   const { activeView, setActiveView } = useAIAgentStore();
   const { setIsRightSidebarCollapsed } = useStore();
+  const { t } = useTranslation();
 
   return (
     <div className="flex gap-3 text-lg items-center w-full justify-between">
@@ -231,7 +240,7 @@ const ViewSwitcher = () => {
             `}
           >
             {view === 'script' ? <Clock className="w-5 h-5" /> : <LucideMessageCircle className="w-5 h-5" />}
-            {view === 'script' ? 'history' : 'Chat'}
+            {view === 'script' ? t('rightSideBar.history') : t('rightSideBar.chat')}
           </button>
         ))}
       </div>
@@ -253,7 +262,6 @@ const AIAgentSidebar = () => {
     qaList,
     setActiveView,
   } = useAIAgentStore();
-
   // 追踪哪些合并组是展开状态
   const [expandedGroups, setExpandedGroups] = useState({});
 

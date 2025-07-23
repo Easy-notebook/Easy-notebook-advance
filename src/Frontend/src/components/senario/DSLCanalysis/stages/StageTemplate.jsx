@@ -5,6 +5,7 @@ import GeneratingIndicator from '../UI/GeneratingIndicator';
 import { useScriptStore } from '../store/useScriptStore';
 import { useAIPlanningContextStore } from '../store/aiPlanningContext';
 import constants from './constants';
+import { useTranslation } from 'react-i18next';
 
 // ==================== Operation Queue Class (Plan Executor) ====================
 class OperationQueue {
@@ -144,6 +145,7 @@ const StageTemplate = ({ config, onComplete }) => {
     const [autoAdvance, setAutoAdvance] = useState(true);
     const [isReturnVisit, setIsReturnVisit] = useState(false);
     const [historyLoaded, setHistoryLoaded] = useState(false);
+    const { i18n } = useTranslation();
 
     // Save the latest step configuration and stageId
     const stepsRef = useRef(steps);
@@ -270,6 +272,7 @@ const StageTemplate = ({ config, onComplete }) => {
 
         let response;
         try {
+            console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!lang: ",i18n.language)
             response = await fetch(constants.API.SEQUENCE_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -278,7 +281,8 @@ const StageTemplate = ({ config, onComplete }) => {
                     stage_id: stageId,
                     step_index: stepIndex,
                     state: getContext(),
-                    stream: true
+                    stream: true,
+                    lang: i18n.language
                 })
             });
 
@@ -472,7 +476,7 @@ const StageTemplate = ({ config, onComplete }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [executeAction, stageId, isReturnVisit, isStageComplete, getContext, setContext]);
+    }, [executeAction, stageId, isReturnVisit, isStageComplete, getContext, setContext,i18n.language]);
 
     // ---------- loadStep: Pre-update the current step and mark it as loaded to ensure the new stepId takes effect promptly ----------
     const loadStep = useCallback(async (stepIndex) => {

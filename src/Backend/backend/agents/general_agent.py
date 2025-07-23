@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 from collections import deque
-from typing import AsyncGenerator, Dict, List, Any
+from typing import AsyncGenerator, List
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -19,7 +19,8 @@ class GeneralAgent:
                 api_key: str = None, 
                 base_url: str = None, 
                 engine: str = "o4-mini", 
-                role: str = "You are AI Agent behind easyremote notebook.") -> None:
+                role: str = "You are AI Agent behind easyremote notebook.",
+                lang: str = "en") -> None:
         """
         初始化代理，创建 AsyncOpenAI 客户端
         """
@@ -28,6 +29,7 @@ class GeneralAgent:
         self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
         self.engine = engine
         self.role = role
+        self.lang = lang
 
     async def handle_user_questions(
         self, 

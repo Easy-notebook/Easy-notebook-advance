@@ -7,12 +7,12 @@ from agents.general_agent import GeneralAgent
 
 load_dotenv()
 
-async def handle_user_questions(operation: Dict[str, Any]) -> AsyncGenerator[str, None]:
+async def handle_user_questions(operation: Dict[str, Any], lang: str = "en") -> AsyncGenerator[str, None]:
     """
     处理用户问题并生成流式回答
     """
     try:
-        agent = GeneralAgent()
+        agent = GeneralAgent(lang=lang)
         print(operation)
 
         related_cells = operation.get("payload", {}).get("related_cells", [])

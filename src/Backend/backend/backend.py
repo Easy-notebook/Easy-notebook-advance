@@ -146,6 +146,7 @@ class UploadFileRequest(BaseModel):
 class SendOperationRequest(BaseModel):
     notebook_id: str
     operation: Dict[str, Any]
+    lang: str = Field(default="en")
 
 class GetFileRequest(BaseModel):
     notebook_id: str
@@ -372,13 +373,18 @@ async def send_operation_endpoint(send_operation_request: SendOperationRequest, 
     log_request(db, endpoint="/send_operation", notebook_id=send_operation_request.notebook_id)
     notebook_id = send_operation_request.notebook_id
     operation = send_operation_request.operation
+    lang = send_operation_request.lang
     logger.info(f"Received operation for notebook {notebook_id}: {operation}")
     return StreamingResponse(
-        generate_response(operation),
+        generate_response(operation, lang=lang),
         media_type="application/json",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用nginx缓冲
+            "X-Content-Type-Options": "nosniff",
         }
     )
 
@@ -503,10 +509,24 @@ def cleanup_old_notebooks():
 # 主入口
 # ========================
 if __name__ == "__main__":
+    # 设置环境变量以禁用输出缓冲
+    os.environ["PYTHONUNBUFFERED"] = "1"
+    
+    # 流式输出优化的启动配置
     uvicorn.run(
         app,
         host="0.0.0.0",
         port=18600,
         log_level="info",
-        access_log=True
+        access_log=True,
+        reload=False,  # 生产环境关闭热重载
+        use_colors=False,
+        # 流式输出优化配置
+        timeout_keep_alive=30,
+        timeout_graceful_shutdown=5,
+        limit_concurrency=100,
+        limit_max_requests=1000,
+        # 禁用缓冲以提高流式输出性能
+        http="httptools",  # 使用高性能HTTP解析器
+        loop="uvloop" if os.name != 'nt' else "asyncio",  # Windows使用asyncio，Linux/macOS使用uvloop
     )

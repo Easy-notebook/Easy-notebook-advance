@@ -107,9 +107,9 @@ const AgentThinkingIndicator = ({
                 style={{
                     background: `linear-gradient(90deg, 
                     rgba(255,255,255,0) 0%, 
-                    rgba(201,63,107,0.08) 20%, 
-                    rgba(201,63,107,0.12) 50%, 
-                    rgba(201,63,107,0.08) 80%, 
+                    rgba(65,184,131,0.08) 20%, 
+                    rgba(52,144,220,0.12) 50%, 
+                    rgba(101,116,205,0.08) 80%, 
                     rgba(255,255,255,0) 100%)`,
                     backgroundSize: '200% 100%',
                     backgroundPosition: `${gradientPosition}% 0%`
@@ -121,7 +121,7 @@ const AgentThinkingIndicator = ({
                 <div className="inline-flex items-center px-3 py-1 rounded-full"
                     style={{
                         backgroundColor: 'rgba(255, 255, 255, 0.6)',
-                        border: '1px solid #c93f6b',
+                        border: '1px solid #41B883',
                         opacity: opacity,
                         transition: 'opacity 0.3s ease'
                     }}>
@@ -131,8 +131,8 @@ const AgentThinkingIndicator = ({
                             <div
                                 className="absolute inset-0 border-2 rounded-full border-transparent"
                                 style={{
-                                    borderLeftColor: '#c93f6b',
-                                    borderTopColor: '#c93f6b',
+                                    borderLeftColor: '#41B883',
+                                    borderTopColor: '#3490DC',
                                     transform: `rotate(${rotation}deg)`
                                 }}
                             />
@@ -143,7 +143,7 @@ const AgentThinkingIndicator = ({
                     <div className="flex items-center">
                         <span
                             className="text-xs font-medium"
-                            style={{ color: '#c93f6b' }}
+                            style={{ color: '#41B883' }}
                         >
                             {displayText()}
                             <span className="inline-block ml-1">
@@ -154,7 +154,7 @@ const AgentThinkingIndicator = ({
                         {/* 显示思考时间 */}
                         <span
                             className="text-xs ml-2 font-medium"
-                            style={{ color: '#c93f6b' }}
+                            style={{ color: '#3490DC' }}
                         >
                             {seconds}s
                         </span>

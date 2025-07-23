@@ -1,7 +1,7 @@
 {
   "modeToggle": {
-    "completeMode": "Complete Mode",
-    "stepMode": "Step Mode"
+    "completeMode": "Create Mode",
+    "stepMode": "Demo Mode"
   },
   "cell": {
     "addCodeCell": "Add Code Cell",
@@ -62,6 +62,8 @@
       "baseUrl": "Base URL",
       "apiTimeout": "API Timeout (ms)",
       "save": "Save",
+      "change": "Change",
+      "set": "Set",
       "placeholders": {
         "apiKey": "Enter your API key",
         "baseUrl": "https://api.example.com/v1",
@@ -91,10 +93,14 @@
       "tabSizeDesc": "Number of spaces for tabs"
     }
   },
+  "rightSideBar": {
+    "history": "History",
+    "chat": "Chat"
+  },
   "emptyState": {
     "title": "Easy-notebook-EnvInsight",
     "commandPlaceholder": "Type a command...",
-    "questionPlaceholder": "Ask anything about data science...",
+    "questionPlaceholder": "Ask anything about environment regulation...",
     "commandMode": "Command mode",
     "questionMode": "Question mode",
     "executeBtnText": "Execute",
@@ -112,6 +118,7 @@
   },
   "problemDefine": {
     "selectAnalysis": "Please select the type of analysis you want to perform, or describe the problem you want to solve:",
+    "selectedProblem": "You have selected {{problemName}}",
     "customProblem": "Custom Problem Description",
     "addBackground": "Would you like to add background info about the dataset?",
     "skip": "Skip",
@@ -123,7 +130,7 @@
     "infoCanceled": "Dataset information input canceled.",
     "infoEmpty": "Dataset information cannot be empty.",
     "infoAdded": "Dataset info added:",
-    "confirmSettings": "Please confirm your settings:\n- **Problem:** {problem}\n- **Target:** {target}\n{datasetInfo}\n\nIs this correct?",
+    "confirmSettings": "Please confirm your settings:\n- **Problem:** {{problem}}\n{{datasetInfo}}\n\nIs this correct?",
     "confirmAndStart": "Confirm and Start Analysis",
     "adjustSettings": "Adjust Settings",
     "whatAdjust": "What would you like to adjust?",
@@ -135,6 +142,7 @@
     "problemInput": "Describe your problem or requirements...",
     "followUpQuestion": "Ask follow-up questions about the results...",
     "processing": "Processing...",
-    "selectOptions": "Please select from the options above"
+    "selectOptions": "Please select from the options above",
+    "customAnalysis": "Custom Analysis"
   }
 } 

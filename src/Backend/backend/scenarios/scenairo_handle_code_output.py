@@ -79,7 +79,7 @@ class DebugConverter:
             
         return self.messages
 
-async def handle_code_output(operation: dict) -> AsyncGenerator[str, None]:
+async def handle_code_output(operation: dict, lang: str = "en") -> AsyncGenerator[str, None]:
     """处理代码执行结果，使用OpenAI API分析输出"""
     try:
         print("Operation received code_output")
@@ -102,7 +102,7 @@ async def handle_code_output(operation: dict) -> AsyncGenerator[str, None]:
         messages.extend(chat_messages)
         
         # 使用buffer来累积响应
-        buffer = deque(maxlen=50)
+        buffer = deque(maxlen=20)  # 减小缓冲区大小
         
         # 使用OpenAI流式处理来生成分析
         async for response in handle_openai_stream(client, messages, buffer):
@@ -149,7 +149,7 @@ async def handle_openai_stream(
             buffer.append(content)
             
             current_time = asyncio.get_event_loop().time()
-            if current_time - last_flush_time >= 0.1 or len(buffer) >= 40:
+            if current_time - last_flush_time >= 0.05 or len(buffer) >= 15:  # 50ms或缓冲>=15字符时刷新
                 combined_content = ''.join(buffer)
                 buffer.clear()
                 last_flush_time = current_time
@@ -164,9 +164,8 @@ async def handle_openai_stream(
                         "index": index
                     }
                 }) + "\n"
-                
-                await asyncio.sleep(0.01)
         
+        # 发送剩余的缓冲区内容
         if buffer:
             combined_content = ''.join(buffer)
             yield json.dumps({

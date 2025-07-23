@@ -1,6 +1,8 @@
 import constants from './constants';
 
-export const generalResponse = async (issue, context) => {
+
+export const generalResponse = async (issue, context,lang) => {
+    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!lang: ",lang)
     try {
         const response = await fetch(constants.API.GENERATE_API_URL, {
             method: 'POST',
@@ -10,6 +12,7 @@ export const generalResponse = async (issue, context) => {
             body: JSON.stringify({ 
                 issue: issue,
                 context: context,
+                lang: lang
             })
         });
         

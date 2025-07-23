@@ -34,7 +34,7 @@ ALLOWED_MIME_TYPES = {
 
 # Kernel Execution Manager
 class KernelExecutionManager:
-    def __init__(self, kernel_name: str = 'python3', work_dir: str = None):
+    def __init__(self, kernel_name: str = 'python', work_dir: str = None):
         self.kernel_name = kernel_name
         self.km = None
         self.kc = None
@@ -226,7 +226,7 @@ class KernelExecutionManager:
                         msg = await asyncio.get_event_loop().run_in_executor(
                             None, 
                             self.kc.get_iopub_msg, 
-                            1  # 1 second timeout
+                            0.1  # 减少超时时间到100ms，提高响应速度
                         )
                         
                         if msg['parent_header'].get('msg_id') != msg_id:

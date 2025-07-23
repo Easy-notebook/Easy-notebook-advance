@@ -1,7 +1,7 @@
 {
   "modeToggle": {
-    "completeMode": "完整模式",
-    "stepMode": "步骤模式"
+    "completeMode": "创建模式",
+    "stepMode": "演示模式"
   },
   "cell": {
     "addCodeCell": "添加代码单元格",
@@ -63,6 +63,8 @@
       "baseUrl": "基础 URL",
       "apiTimeout": "API 超时 (毫秒)",
       "save": "保存",
+      "change": "修改",
+      "set": "设置",
       "placeholders": {
         "apiKey": "输入你的 API 密钥",
         "baseUrl": "https://api.example.com/v1",
@@ -92,10 +94,14 @@
       "tabSizeDesc": "制表符的空格数量"
     }
   },
+  "rightSideBar": {
+    "history": "历史",
+    "chat": "对话"
+  },
   "emptyState": {
     "title": "环境规制问题分析平台",
     "commandPlaceholder": "输入命令...",
-    "questionPlaceholder": "询问有关数据科学的任何问题...",
+    "questionPlaceholder": "询问有关环境规制的任何问题...",
     "commandMode": "命令模式",
     "questionMode": "问题模式",
     "executeBtnText": "执行",
@@ -113,6 +119,7 @@
   },
   "problemDefine": {
     "selectAnalysis": "请选择您要执行的分析类型，或描述您要解决的问题：",
+    "selectedProblem": "您已选择 {{problemName}}",
     "customProblem": "自定义问题描述",
     "addBackground": "您是否想添加有关数据集的背景信息？",
     "skip": "跳过",
@@ -124,7 +131,7 @@
     "infoCanceled": "数据集信息输入已取消。",
     "infoEmpty": "数据集信息不能为空。",
     "infoAdded": "已添加数据集信息：",
-    "confirmSettings": "请确认您的设置：\n- **问题：** {problem}\n- **目标：** {target}\n{datasetInfo}\n\n这些设置正确吗？",
+    "confirmSettings": "请确认您的设置：\n- **问题：** {{problem}}\n{{datasetInfo}}\n\n这些设置正确吗？",
     "confirmAndStart": "确认并开始分析",
     "adjustSettings": "调整设置",
     "whatAdjust": "您想调整什么？",
@@ -136,6 +143,7 @@
     "problemInput": "描述您的问题或需求...",
     "followUpQuestion": "询问有关结果的后续问题...",
     "processing": "处理中...",
-    "selectOptions": "请从上面的选项中选择"
+    "selectOptions": "请从上面的选项中选择",
+    "customAnalysis": "自定义分析"
   }
 } 

@@ -250,22 +250,26 @@ const SettingsPage = () => {
                                 name="apiKey"
                                 value={apiSettingsState.apiKey}
                                 onChange={handleApiSettingsChange}
-                                placeholder={t('settings.api.placeholders.apiKey')}
-                                className={apiError ? 'border-red-500' : ''}
+                                placeholder={settings.apiKey ? '••••••••••••••••' : t('settings.api.placeholders.apiKey')}
+                                className={`${apiError ? 'border-red-500' : ''} rounded-full`}
                             />
                             <button
                                 onClick={handleApiKeySave}
-                                className="px-4 py-3 bg-theme-500 text-white rounded-md hover:bg-theme-600"
+                                className="
+                                px-4 py-3 
+                                bg-theme-500 
+                                text-white 
+                                rounded-full hover:bg-theme-600 whitespace-nowrap"
                             >
-                                {t('settings.api.save')}
+                                {settings.apiKey ? t('settings.api.change') : t('settings.api.set')}
                             </button>
                         </div>
                         {apiError && (
                             <p className="text-sm text-red-500 mt-1">{apiError}</p>
                         )}
-                        {settings.apiKey && (
+                        {/* {settings.apiKey && (
                             <p className="text-sm text-green-600 mt-1">{t('settings.api.keyStored')}</p>
-                        )}
+                        )} */}
                     </div>
                     <div>
                         <label className="block text-lg font-medium text-gray-700 mb-2">{t('settings.api.baseUrl')}</label>

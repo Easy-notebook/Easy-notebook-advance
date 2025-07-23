@@ -39,7 +39,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
     const target = usePreStageStore(state => state.selectedTarget);
     const dataBackground = usePreStageStore(state => state.dataBackground);
     const problem_name = usePreStageStore(state => state.problem_name);
-    
+
     const setSelectedProblem = usePreStageStore(state => state.setSelectedProblem);
     const setDatasetInfoStore = usePreStageStore(state => state.setDatasetInfo);
 
@@ -55,15 +55,17 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, []);
 
-    const getMessageClassNames = useCallback((role) => {
+    const getMessageClassNames = useCallback((role, messageStage) => {
         const base = 'rounded-2xl px-4 py-3 w-fit shadow-md';
+        
+        // 自定义问题环节使用更宽的宽度，所有消息框都增大
+        const maxWidth = (messageStage === 'free_input') ? 'max-w-[85%]' : 'max-w-[60%]';
+        
         if (role === 'user')
-            return `${base} bg-white backdrop-blur-lg border border-theme-200 max-w-[40%]`;
+            return `${base} bg-white backdrop-blur-lg border border-theme-200 ${maxWidth} text-base`;
         if (role === 'system')
-            return `${base} bg-white bg-opacity-20 backdrop-blur-lg rounded-full shadow-gray-300 max-w-[40%]`;
-        // if (role === 'assistant')
-        //     return `${base} bg-white/90 text-gray-800 border border-theme-200 shadow-theme-200 max-w-[40%]`;
-        return `${base} bg-white bg-opacity-20 backdrop-blur-lg shadow-gray-300 max-w-[40%]`;
+            return `${base} bg-white bg-opacity-20 backdrop-blur-lg rounded-full shadow-gray-300 ${maxWidth} text-base`;
+        return `${base} bg-white bg-opacity-20 backdrop-blur-lg shadow-gray-300 ${maxWidth} text-base`;
     }, []);
     const generateId = () => Math.random().toString(36).substring(2, 11);
 
@@ -72,9 +74,9 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         setSlideDirection(Math.random() > 0.5 ? 'right' : 'left');
         setMessages((prev) => [
             ...prev,
-            { id: generateId(), role, content, options, onSelect },
+            { id: generateId(), role, content, options, onSelect, stage },
         ]);
-    }, []);
+    }, [stage]);
 
     /* ─────────── Refs for Handlers ─────────── */
     const handleInitialChoiceRef = useRef(null);
@@ -132,8 +134,38 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         setInput('');
         setLoading(true);
 
+        // 1. 如果是在 free_input 阶段，处理自定义问题
+        if (stage === 'free_input') {
+            // 延迟到「loading」结束后执行
+            setTimeout(() => {
+                setLoading(false);
+
+                // 把自定义问题写入 store
+                usePreStageStore.getState().setSelectedProblem(
+                    null,  // target
+                    text,  // problem_description
+                    text   // problem_name - 使用输入文本作为问题名称
+                );
+
+                // 推出下一步：询问数据背景（和 handleInitialChoice 里类似）
+                pushMessage(
+                    'assistant',
+                    t('problemDefine.addBackground'),
+                    [t('problemDefine.skip'), t('problemDefine.addDatasetInfo')],
+                    handleDatasetInfoChoiceRef.current
+                );
+                setStage('dataBackground');
+            }, 1200);
+
+            return;
+        }
+
+        // 2. 其它阶段走原有逻辑
         setTimeout(() => setLoading(false), 1200);
-    }, [input, loading, pushMessage, triggerBounce]);
+    }, [
+        input, loading, stage, triggerBounce, pushMessage, t,
+        handleDatasetInfoChoiceRef,
+    ]);
 
     const handleInitialChoice = useCallback((option) => {
         if (option === t('problemDefine.customProblem')) {
@@ -154,14 +186,14 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
 
         // 使用store的setter更新问题类型和目标
         usePreStageStore.getState().setSelectedProblem(
-            selectedChoiceRef.target, 
+            selectedChoiceRef.target,
             selectedChoiceRef.problem_description,
             selectedChoiceRef.problem_name
         );
 
         pushMessage(
             'assistant',
-            `${selectedChoiceRef.problem_name ? `You have selected ${selectedChoiceRef.problem_name}` : 'You have selected your analysis'}.\n\n${t('problemDefine.addBackground')}`,
+            `${selectedChoiceRef.problem_name ? t('problemDefine.selectedProblem', { problemName: selectedChoiceRef.problem_name }) : t('problemDefine.selectedAnalysis')}.\n\n${t('problemDefine.addBackground')}`,
             [t('problemDefine.skip'), t('problemDefine.addDatasetInfo')],
             handleDatasetInfoChoiceRef.current,
         );
@@ -197,23 +229,26 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
     }, [datasetInfoInput, pushMessage, setDatasetInfoStore, t]);
 
     const showConfirmation = useCallback(() => {
-        if (!target) {
+        // 对于自定义问题，target可能为空，此时不要返回
+        if (!target && !problem_description) {
             setTimeout(() => showConfirmationRef.current(), 20);
             return;
         }
 
         // 获取当前选中问题的name，添加空值检查
-        const selectedProblem = choiceMap?.find(choice => 
+        const selectedProblem = choiceMap?.find(choice =>
             choice && choice.target === target
         );
-        const problemName = selectedProblem?.problem_name || 'Analysis';
+        const problemName = selectedProblem?.problem_name || problem_description || 'Analysis';
         usePreStageStore.getState().setProblemName(problemName);
-        usePreStageStore.getState().setSelectedProblem(target, problem_description, problemName);
+        
+        // 确保即使是自定义问题也能正确设置
+        if (target || problem_description) {
+            usePreStageStore.getState().setSelectedProblem(target, problem_description, problemName);
+        }
 
-        const datasetInfo = dataBackground ? `- **Dataset Background:** ${dataBackground}` : '';
         const confirmText = t('problemDefine.confirmSettings', {
             problem: problem_description || 'Custom problem analysis',
-            target: target,
             datasetInfo: dataBackground ? `- **Dataset Background:** ${dataBackground}` : ''
         });
 
@@ -239,12 +274,16 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
             addVariable('problem_description', problem_description);
             addVariable('context_description', dataBackground);
             addVariable('problem_name', problem_name);
-            if (problem_name) {
-                console.log("problem_name", problem_name);
+            
+            // 确保problem_name存在，对于自定义问题可能使用problem_description作为名称
+            if (problem_name || problem_description) {
+                console.log("problem_name", problem_name || problem_description);
                 confirmProblem();
             }
             else {
                 console.log("problem_name is empty");
+                // 如果实在没有问题名称，也允许继续
+                confirmProblem();
             }
         }
     }, [pushMessage, confirmProblem, fileName, addVariable, problem_description, dataBackground, problem_name, t]);
@@ -253,13 +292,13 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         if (option === t('problemDefine.changeType')) {
             const problemOptions = choiceMap?.filter(item => item?.problem_description)
                 .map(item => item.problem_description) || [];
-            
+
             if (problemOptions.length === 0) {
                 pushMessage('assistant', 'Sorry, no analysis options are available. Let\'s restart the workflow.');
                 resetWorkflow();
                 return;
             }
-            
+
             pushMessage(
                 'assistant',
                 t('problemDefine.selectNewType'),
@@ -298,8 +337,8 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
 
         // 使用store的setter更新问题类型和目标
         setSelectedProblem(
-            selectedChoice.problem_type, 
-            selectedChoice.target, 
+            selectedChoice.problem_type,
+            selectedChoice.target,
             selectedChoice.problem_description
         );
 
@@ -341,31 +380,32 @@ ${t('problemDefine.addBackground')}`,
             isInitializedRef.current = true;
 
             // 使用订阅的状态获取选项
-            const problem_options = choiceMap.map((item) => item.problem_description);
+            const problem_options = [...choiceMap.map((item) => item.problem_description), t('problemDefine.customProblem')];
             const assistantMessage = {
                 id: generateId(),
                 role: 'assistant',
                 content: t('problemDefine.selectAnalysis'),
                 options: problem_options,
-                onSelect: handleInitialChoiceRef.current
+                onSelect: handleInitialChoiceRef.current,
+                stage: 'intro'
             };
             setTimeout(() => {
                 setMessages([assistantMessage]);
                 setStage('intro');
             }, 0);
         }
-    }, [ messages.length, choiceMap, t]);
+    }, [messages.length, choiceMap, t]);
 
     /* ─────────── JSX ─────────── */
     return (
         <div className="h-full w-full overflow-hidden flex items-center justify-center relative">
             <div
                 className={`relative overflow-hidden ${bounce ? 'animate-bounce-small' : ''
-                    } transition-all duration-500 ease-in-out`}
+                    } transition-all duration-500 ease-in-out w-[90%] max-w-4xl`}
             >
                 <div className="flex flex-col">
                     {/* Chat area */}
-                    <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 max-h-[70vh]">
+                    <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 max-h-[75vh]">
                         {messages.map((m, idx) => (
                             <div
                                 key={m.id}
@@ -374,6 +414,7 @@ ${t('problemDefine.addBackground')}`,
                                 <div
                                     className={`${getMessageClassNames(
                                         m.role,
+                                        m.stage
                                     )} animate-slide-in-${m.role === 'user'
                                         ? slideDirection
                                         : slideDirection === 'right'
@@ -388,14 +429,14 @@ ${t('problemDefine.addBackground')}`,
 
                                     {m.options && m.options.length > 0 && (
                                         <div
-                                            className="mt-3 flex flex-wrap gap-2 border-t border-white/20 pt-2 animate-fade-in"
+                                            className="mt-4 flex flex-wrap gap-3 border-t border-white/20 pt-3 animate-fade-in"
                                             style={{ animationDelay: '0.3s' }}
                                         >
                                             {m.options.map((opt, i) => (
                                                 <button
                                                     key={opt}
                                                     onClick={() => handleSelect(m.id, opt, m.onSelect)}
-                                                    className={`px-3 py-1.5 text-xs rounded-2xl text-theme-700 transition-all duration-300 transform hover:scale-105 ${m.role === 'user'
+                                                    className={`px-4 py-2 text-sm rounded-2xl text-theme-700 transition-all duration-300 transform hover:scale-105 ${m.role === 'user'
                                                         ? 'bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 hover:shadow-md'
                                                         : 'border border-theme-200 hover:shadow-md hover:from-theme-100 hover:to-theme-200'
                                                         } animate-bounce-in`}
@@ -463,9 +504,9 @@ ${t('problemDefine.addBackground')}`,
                     </div>
 
                     {/* Input area */}
-                    <div className="border-t border-theme-100 bg-white/70 backdrop-blur-sm px-4 py-3 rounded-b-2xl">
+                    <div className="border-t border-theme-100 bg-white/70 backdrop-blur-sm px-5 py-4 rounded-b-2xl">
                         {(stage === 'free_input' || stage === 'done') && !showDataInfoInput ? (
-                            <form onSubmit={handleSubmit} className="flex space-x-3 items-center animate-fade-in">
+                            <form onSubmit={handleSubmit} className="flex space-x-4 items-center animate-fade-in">
                                 <input
                                     type="text"
                                     value={input}
@@ -473,7 +514,7 @@ ${t('problemDefine.addBackground')}`,
                                     placeholder={
                                         stage === 'free_input' ? t('problemDefine.problemInput') : t('problemDefine.followUpQuestion')
                                     }
-                                    className="flex-1 px-4 py-2 border border-theme-200 rounded-full focus:outline-none focus:ring-2 focus:ring-theme-500/50 focus:border-theme-400 text-sm transition-all duration-300 bg-white/80 shadow-inner hover:shadow"
+                                    className="flex-1 px-5 py-3 border border-theme-200 rounded-full focus:outline-none focus:ring-2 focus:ring-theme-500/50 focus:border-theme-400 text-base transition-all duration-300 bg-white/80 shadow-inner hover:shadow"
                                     disabled={loading}
                                     aria-label="chat input"
                                     autoFocus
@@ -481,13 +522,13 @@ ${t('problemDefine.addBackground')}`,
                                 <button
                                     type="submit"
                                     disabled={loading || !input.trim()}
-                                    className={`rounded-full w-10 h-10 flex items-center justify-center transition-all duration-300 ${loading || !input.trim()
+                                    className={`rounded-full w-12 h-12 flex items-center justify-center transition-all duration-300 ${loading || !input.trim()
                                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-theme-500 to-purple-500 text-white shadow-md hover:shadow-lg transform hover:scale-110'
+                                        : 'bg-theme-500 text-white shadow-md hover:shadow-lg transform hover:scale-110'
                                         }`}
                                     aria-label="submit"
                                 >
-                                    <Send size={18} className={`${!loading && input.trim() ? 'animate-pulse' : ''}`} />
+                                    <Send size={20} className={`${!loading && input.trim() ? 'animate-pulse' : ''}`} />
                                 </button>
                             </form>
                         ) : !showDataInfoInput ? (

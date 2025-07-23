@@ -41,7 +41,6 @@ Requirements:
 2. For feature creation/transformation methods, specify that transformations should be applied to all potential predictor variables, excluding ID-type columns.
 
 Output Requirements:
-- Response must be in English only
 - Provide detailed justifications for why each method is appropriate for this project
 
 Output Format:
@@ -64,7 +63,6 @@ Input Data:
 
 Output Requirements:
 - Provide up to three modeling methods in JSON format ordered from best to worst
-- IMPORTANT: Response must be in English only
 - Include detailed implementation descriptions for each method
 - you could not write ordered list, should write <br> to break line
 

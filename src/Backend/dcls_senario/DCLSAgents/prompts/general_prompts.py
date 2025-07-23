@@ -13,7 +13,7 @@ Each map must:
 1. Use one column from column_info as its "target".  
 2. Describe the problem in "problem_description" using dataset_info.  
 3. Provide a short, distinctive "problem_name".  
-4. your output must be in JSON format, not other text, in english.
+4. your output must be in JSON format, not other text.
 
 Output  
 Return **only** a JSON array of three objects, with **double quotes** around all keys and string values:

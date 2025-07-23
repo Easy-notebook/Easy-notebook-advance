@@ -144,7 +144,10 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
         }
     }, [isDslcCommand, dslcMode, cell.id, cell.content, updateCell, executeCell]);
 
-    // 输出处理
+    // 添加一个新的状态来跟踪输出变化
+    const [outputUpdateKey, setOutputUpdateKey] = useState(0);
+
+    // 修改输出处理逻辑
     const processedOutputs = useMemo(() => {
         if (cell.outputs && Array.isArray(cell.outputs)) {
             return cell.outputs
@@ -156,7 +159,18 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                 }));
         }
         return [];
-    }, [cell.outputs]);
+    }, [cell.outputs]); // 添加 outputUpdateKey 作为依赖
+
+    // 添加输出变化监听
+    useEffect(() => {
+        if (isExecuting) {
+            const interval = setInterval(() => {
+                setOutputUpdateKey(prev => prev + 1);
+            }, 100); // 每100ms检查一次输出变化
+
+            return () => clearInterval(interval);
+        }
+    }, [isExecuting]);
 
     // 输出动画控制状态
     const [outputVisible, setOutputVisible] = useState(false);
@@ -392,14 +406,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                 <Play className="w-4 h-4" />
             </button>
         );
-    }, [
-        isExecuting,
-        isCancelling,
-        elapsedTime,
-        handleCancel,
-        handleExecute,
-        formatElapsedTime,
-    ]);
+    }, [isExecuting, isCancelling, elapsedTime, handleCancel, handleExecute, formatElapsedTime]);
 
     // —— 展开/收缩逻辑 ——  
     const EXPAND_THRESHOLD = 200; // 阈值高度
@@ -591,7 +598,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                                         useStore.getState().setCurrentCell(cell.id);
                                         sendCurrentCellExecuteCodeError_should_debug();
                                     }}
-                                    className="px-2 py-1 bg-cyan-500 text-white rounded-md relative transition-all duration-300 ease-in-out hover:bg-cyan-600 hover:ring-2 hover:ring-cyan-300 hover:ring-offset-2 focus:outline-none focus:ring-2 focus:ring-cyan-400 shadow-lg"
+                                    className="px-2 py-1 bg-theme-600 text-white rounded-md relative transition-all duration-300 ease-in-out hover:bg-theme-700 hover:ring-2 hover:ring-theme-300 hover:ring-offset-2 focus:outline-none focus:ring-2 focus:ring-theme-400 shadow-lg"
                                     title="AI Debug"
                                 >
                                     <span className="flex items-center gap-1">
@@ -729,7 +736,7 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                                 (processedOutputs.length > 0 && (
                                     <div
                                         className={`p-4 rounded-b-lg space-y-4 output-container relative transition-all duration-300 ease-in-out ${outputVisible ? 'opacity-100' : 'opacity-0'}`}
-                                        key={`output-${processedOutputs.length}`}
+                                        key={`output-${processedOutputs.length}-${outputUpdateKey}`}
                                     >
                                         <div className="relative">
                                             {isExecuting && cellMode !== DISPLAY_MODES.OUTPUT_ONLY && (
@@ -739,21 +746,19 @@ const CodeCell = ({ cell, onDelete, isStepMode = false, dslcMode = false, finish
                                                 </div>
                                             )}
 
-                                            {
-                                                processedOutputs.map((output, index) => (
-                                                    <div
-                                                        key={output.key}
-                                                        className="transition-all duration-300"
-                                                        style={{
-                                                            opacity: outputVisible ? 1 : 0,
-                                                            transform: outputVisible ? 'translateY(0)' : 'translateY(8px)',
-                                                            transition: `opacity 300ms ease-out ${index * 50}ms, transform 300ms ease-out ${index * 50}ms`
-                                                        }}
-                                                    >
-                                                        {renderOutput(output)}
-                                                    </div>
-                                                ))
-                                            }
+                                            {processedOutputs.map((output, index) => (
+                                                <div
+                                                    key={`${output.key}-${outputUpdateKey}`}
+                                                    className="transition-all duration-300"
+                                                    style={{
+                                                        opacity: outputVisible ? 1 : 0,
+                                                        transform: outputVisible ? 'translateY(0)' : 'translateY(8px)',
+                                                        transition: `opacity 300ms ease-out ${index * 50}ms, transform 300ms ease-out ${index * 50}ms`
+                                                    }}
+                                                >
+                                                    {renderOutput(output)}
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 ))}

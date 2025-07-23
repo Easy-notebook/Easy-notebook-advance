@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 
 class SequenceRequest(BaseModel):
@@ -7,6 +7,7 @@ class SequenceRequest(BaseModel):
     state: Dict[str, Any] = Field(default_factory=dict, description="全局上下文，可包含checklist、plan、thinking等信息")
     stream: bool = Field(default=True, description="是否启用流式输出")
     notebook_id: Optional[str] = None
+    lang: str = Field(default='en', description="语言")
 
 class FeedbackRequest(BaseModel):
     stage_id: str
@@ -38,7 +39,7 @@ class FeedbackResponse(BaseModel):
 class GenerateRequest(BaseModel):
     issue: str
     context: Any
-
+    lang: str = Field(default='en', description="语言")
 class GenerateResponse(BaseModel):
     status: str
     message: List[Dict[str, Any]]

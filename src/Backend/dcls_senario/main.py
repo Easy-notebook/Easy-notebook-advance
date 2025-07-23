@@ -6,6 +6,10 @@ import uvicorn
 from app.api.endpoints import planner_router
 from app.core.config import log_config
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # 配置日志
 logging.config.dictConfig(log_config)
 logger = logging.getLogger("app")

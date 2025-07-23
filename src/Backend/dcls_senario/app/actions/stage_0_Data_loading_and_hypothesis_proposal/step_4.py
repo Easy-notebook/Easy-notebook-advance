@@ -1,48 +1,77 @@
 from typing import Dict, Any, Optional
-from app.core.config import llm, ProblemDefinitionAndDataCollectionAgent
+from DCLSAgents import ProblemDefinitionAndDataCollectionAgent
 from app.models.StepTemplate import StepTemplate
 
 async def generate_data_loading_and_hypothesis_proposal_step_4(
     step: Dict[str, Any], 
     state: Optional[Dict[str, Any]] = None,
-    stream: bool = False
+    lang: str = "en"
 ) -> Dict[str, Any]:
     state = state or {}
     
-    # 初始化场景内agent（如果需要）
-    problem_definition_agent = ProblemDefinitionAndDataCollectionAgent(llm=llm)
+    problem_definition_agent = ProblemDefinitionAndDataCollectionAgent(lang=lang)
     
-    step_template = StepTemplate(step, state)
+    step_template = StepTemplate(step, state, lang)
     
     
-    if step_template.event("start"):
-        step_template.add_text("### Step 3: Variable Relevance Analysis") \
-                    .add_text("I need to analyze the data variables") \
-                    .next_thinking_event(event_tag="relative_analysis_thinking",
-                                    textArray=["Problem Definition Agent is thinking...","analyzing the data variables..."], 
-                                    agentName="Problem Definition Agent", 
-                                    customText="") \
-                    
-        return step_template.end_event()
-    
-    if step_template.think_event("relative_analysis_thinking"):
-        variables = step_template.get_variable("variables")
-        preview = step_template.get_variable("preview")
-        problem_description = step_template.get_variable("problem_description")
-        context_description = step_template.get_variable("context_description")
-
-        relative_analysis = problem_definition_agent.evaluate_variable_relevance_cli(
-            variables=variables,
-            preview=preview,
-            problem_description=problem_description,
-            context_description=context_description
-        )
-
-        step_template.add_text("Based on the variable analysis, we have the following information:") \
-                    .add_variable("relative_analysis",relative_analysis) \
-                    .add_text(relative_analysis) \
+    if lang == "zh":
+        if step_template.event("start"):
+            step_template.add_text("### 步骤4: 变量相关性分析") \
+                        .add_text("我需要分析数据变量") \
+                        .next_thinking_event(event_tag="relative_analysis_thinking",
+                                        textArray=["问题定义代理正在思考...","分析数据变量..."], 
+                                        agentName="问题定义代理", 
+                                        customText="") \
+                        
+            return step_template.end_event()
         
-        return step_template.end_event()
-    
+        if step_template.think_event("relative_analysis_thinking"):
+            variables = step_template.get_variable("variables")
+            preview = step_template.get_variable("preview")
+            problem_description = step_template.get_variable("problem_description")
+            context_description = step_template.get_variable("context_description")
+
+            relative_analysis = problem_definition_agent.evaluate_variable_relevance_cli(
+                variables=variables,
+                preview=preview,
+                problem_description=problem_description,
+                context_description=context_description
+            )
+
+            step_template.add_text("根据变量分析，我们得到以下信息:") \
+                        .add_variable("relative_analysis",relative_analysis) \
+                        .add_text(relative_analysis) \
+            
+            return step_template.end_event()
+    else:    
+        if step_template.event("start"):
+            step_template.add_text("### Step 3: Variable Relevance Analysis") \
+                        .add_text("I need to analyze the data variables") \
+                        .next_thinking_event(event_tag="relative_analysis_thinking",
+                                        textArray=["Problem Definition Agent is thinking...","analyzing the data variables..."], 
+                                        agentName="Problem Definition Agent", 
+                                        customText="") \
+                        
+            return step_template.end_event()
+        
+        if step_template.think_event("relative_analysis_thinking"):
+            variables = step_template.get_variable("variables")
+            preview = step_template.get_variable("preview")
+            problem_description = step_template.get_variable("problem_description")
+            context_description = step_template.get_variable("context_description")
+
+            relative_analysis = problem_definition_agent.evaluate_variable_relevance_cli(
+                variables=variables,
+                preview=preview,
+                problem_description=problem_description,
+                context_description=context_description
+            )
+
+            step_template.add_text("Based on the variable analysis, we have the following information:") \
+                        .add_variable("relative_analysis",relative_analysis) \
+                        .add_text(relative_analysis) \
+            
+            return step_template.end_event()
+        
     return None
     

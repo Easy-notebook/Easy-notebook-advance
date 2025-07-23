@@ -67,7 +67,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
     return (
         <div
             ref={menuRef}
-            className="absolute bg-white rounded shadow-md py-1 z-50 border border-gray-200"
+            className="absolute bg-white rounded shadow-md z-50 border border-gray-200"
             style={{ top: y, left: x, minWidth: '180px' }}
         >
             {file?.type === 'file' && (
@@ -293,7 +293,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
     const { t } = useTranslation();
 
     // Access preview store
-    const {error: previewError, isLoading: previewLoading } = usePreviewStore();
+    const { error: previewError, isLoading: previewLoading } = usePreviewStore();
 
     // Upload configuration wrapped in useMemo to prevent recreation on every render
     const uploadConfig = useMemo(() => ({
@@ -420,12 +420,12 @@ const FileTree = memo(({ notebookId, projectName }) => {
         } catch (err) {
             console.error('Error previewing file:', err);
         }
-    },[]);
+    }, []);
 
     // Handle file selection using the preview store
     const handleFileSelect = useCallback(async (file) => {
         console.log('File selected:', file);
-        
+
         if (!file) {
             console.error('File selection error: file is null');
             return;
@@ -692,25 +692,19 @@ const FileTree = memo(({ notebookId, projectName }) => {
             )}
 
             {/* File tree content */}
-            {fileTree.length === 0 ? (
-                <div className="flex justify-center items-center h-full w-full">
-                    <p className="text-gray-500">{t('LeftSideBar.dragFiles')}</p>
-                </div>
-            ) : (
-                <div>
-                    {fileTree.map((item, index) => (
-                        <FileTreeItem
-                            key={`${item.type}-${item.name}-${index}`}
-                            item={item}
-                            onFileSelect={handleFileSelect}
-                            notebookId={notebookId}
-                            onContextMenu={handleContextMenu}
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                        />
-                    ))}
-                </div>
-            )}
+            <div>
+                {fileTree.map((item, index) => (
+                    <FileTreeItem
+                        key={`${item.type}-${item.name}-${index}`}
+                        item={item}
+                        onFileSelect={handleFileSelect}
+                        notebookId={notebookId}
+                        onContextMenu={handleContextMenu}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                    />
+                ))}
+            </div>
 
             {projectName && (<div
                 className="
@@ -721,11 +715,11 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 onClick={() => {
                     if (usePreviewStore.getState().previewMode === 'file') {
                         usePreviewStore.getState().changePreviewMode();
-                    } 
+                    }
                 }}
             >
                 <div className={`max-w-full max-h-[70vh] mx-auto ml-3 mr-2`}>
-                    <img src={"./icon.svg"} className="w-10 h-10" />
+                    <img src={"./icon.svg"} className="w-7 h-7" />
                 </div>
                 {/* File or folder name */}
                 <span

@@ -196,4 +196,5 @@ export const handleStreamResponse = async (data, showToast) => {
             break;
         }
     }
+    await new Promise(resolve => setTimeout(resolve, 10));
 };

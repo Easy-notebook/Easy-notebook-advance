@@ -3,85 +3,22 @@ the information we know:
 1. the problem description: {problem_description}
 2. the context description: {context_description}
 """
-# DATA_CLEANING_TEMPLATE = """你是一个数据科学专家，专注于清理数据集清洗、创建数据清理的操作项函数以及EDA分析。你将根据我的数据和我要完成的任务列出一个或者多个数据清理的操作项，并进行EDA分析。你的所有任务将使用中文完成。
-
-# 1. 数据科学名词的定义：
-#    1. 数据清洗：
-#       数据清洗是修改数据的过程，使其尽可能明确，并能被你的计算机正确解释。每个数据集可能有许多不同的清洁版本，因此建议编写一个函数，让你可以创建多个清洁数据集的替代版本，从而使你能够研究你的下游结果是否对你所做的任何判断保持稳定。
-#    2. 预处理：
-#       预处理是将清洁数据修改为适合应用于某个特定算法或分析的过程。与数据清洗一样，预处理涉及进行判断，建议编写一个带有各种判断选项作为参数的预处理函数，使你能够研究下游结果对预处理判断的稳定性。
-#    3. 操作项：
-#       数据清洗和预处理的操作项是你对数据进行清洗和预处理所做的独特修改。这些操作项是根据从背景领域信息、数据收集过程以及对数据的初步探索中发现的问题和模糊性确定的。每个数据集都有自己独特的一组操作项，每个操作项可能包括多个判断选项。
-#    4. 探索性和解释性数据分析：
-#       探索性数据分析(EDA)是指探索数据以识别其包含的模式和关系。我们建议使用基于问答的工作流程（在领域知识和项目目标的指导下）来创建各种相关的"粗略"的数据可视化和数值汇总。在识别出最有趣和相关的模式和趋势后，解释性数据分析则是修饰图表的过程，用于向外部观众传达特别有洞察力的探索性发现。
-
-# 2. 相关技术分析说明和可能的操作方法：
-#    1. 针对识别无效或不一致值的技术：
-#       1. 探索方法：
-#          • 查看数据中随机选择的行以及连续的行（例如，前10行和后10行）。你看到什么意外的东西了吗？
-#          • 打印出每个数值列的最小值（最小值）、最大值（最大值）和平均值。根据你对变量测量内容的理解，这些值是否有意义？
-#          • 查看每个数值变量分布的直方图。这可以帮助你直观地识别任何奇怪或不一致的值。
-#          • 打印出分类变量的唯一值（去除重复的取值）。查看这些类别有意义吗？
-#    2. 针对识别和处理缺失值的技术：
-#       1. 识别缺失值的探索方法：
-#          • 打印每个数值列的最小值和最大值。这些值在任何方面是否看起来异常？
-#          • 打印分类变量的唯一值。是否有任何分类值对应于缺失值（例如，是否有"unknown"或"missing"等级别）？
-#          • 制作每个连续变量的直方图，以揭示异常值（例如，如果有大量的"99"值，那么这些值可能对应于缺失值）。
-#          • 打印每列中缺失值的数量（和比例）。
-#          • 可视化缺失数据的模式（例如，使用热图）。
-#       2. 预处理缺失值的操作项：
-#          • 基于领域知识和数据本身的数据单位对缺失值用特定方法插补。
-#          • 移除缺失值比例超过特定阈值的变量/列。这个阈值需要根据具体数据科学情况判断。
-#    3. 针对数据完整性检查的技术：
-#      1. 识别数据是否完整的技术:
-#          • 检查每个观测单位在数据中恰好出现一次。 
-#          • 检查数据中的行数是否符合你的预期，例如，基于数据文档。如果行数少于预期，这可能表明你的数据不完整。
-#      2. 预处理数据完整性的操作项：
-#          • 如果数据中缺少任何观测单位，则将其添加到数据中，并用缺失值填充未知条目。
-#    4. 常见的数据探索性分析（EDA）方法：
-#       • 单个变量的典型汇总值：平均值和中位数
-#       • 直方图和箱线图
-#       • 变量的"离散程度"：方差和标准差
-#       • 两个变量之间的线性关系：协方差和相关系数
-#       • 散点图
-#       • 对数尺度
-#       • 相关系数热图
-
-# 3. 在审查数据的背景和领域信息过程中，我们分析出以下信息：
-#    数据科学项目描述: {problem_description}
-#    数据背景描述: {context_description}
-#    观测单位: {check_unit}
-#    数据变量描述: {var_json}
-#    设计的hypothesis: {hyp_json}
-# """
 
 # 1. 数据加载与验证
-DATA_LOADING_TEMPLATE = """任务：数据加载与验证
-任务描述：检查数据是否正确加载，比较前10行与随机10行，确认数据一致性。
+DIMENSION_CHECK_TEMPLATE = """Task: Data Dimension Check Code Generation
+Task Description: Generate Python code to check data dimensions based on the scientific project description, data background description, observation units, and variable descriptions. Verify if the data dimensions meet expectations, identify any logical issues that contradict the data background, and check if the actual number of years exceeds the range described in the data background. Store all analysis results in the variable 'result', which should contain data analysis information rather than just textual conclusions.
 
-输入数据：
-1. 数据的前十行内容: {first_10_rows}
-2. 数据的随机十行内容: {random_10_rows}
+Input Data:
+1. CSV file path: {csv_path}
+2. Data background information: {context_description}
 
-输出数据：
-确认数据是否正确加载，以文本格式提供。
-"""
-
-# 2. 数据维度检查代码生成
-DIMENSION_CHECK_TEMPLATE = """任务：数据维度检查代码生成
-任务描述：生成用于检查数据维度的Python代码，根据已有的科学项目描述、数据背景描述、观测单位、数据变量描述检查数据维度是否符合预期，以及是否有违背数据背景的逻辑问题，数据的真实年份数量是否超出数据背景描述的范围。请把所有分析结果存在变量 result 中，result变量中最好包含数据的分析信息而不是只有文字结论。
-
-输入数据：
-1. CSV文件路径: {csv_path}
-2. 数据背景信息: {context_description}
-
-输出数据：
-Python代码，格式如下：
+Output Data:
+Python code in the following format:
 ```python
 import pandas as pd
-data = pd.read_csv('路径')
+data = pd.read_csv('{csv_path}')
 result = ""
-# 检查维度的代码
+# check the data dimension
 print(result)
 ```
 """
@@ -122,7 +59,6 @@ INSTRUCTIONS:
 OUTPUT FORMAT:
 - If problems exist, return a JSON array of problems
 - If no problems exist, simply return "No data quality issues detected"
-- All responses must be in English
 
 JSON STRUCTURE:
 ```json
@@ -316,162 +252,21 @@ JSON格式的分析结果：
 ```
 """
 
-# 12. 数据清理函数生成
-DATA_CLEANING_FUNCTION_TEMPLATE = """任务：数据清理函数生成
-任务描述：根据提供的清理操作项列表，生成一个数据清理 Python 函数。对于插补数据，请注意插补的逻辑。比如对于 国家-年的数据应该按照国家对每个变量进行插补。函数应该允许对每个操作项的工具函数参数进行自定义设置。
-
-输入数据：
-1. CSV文件路径: {csv_path}
-2. 数据背景描述: {context_description}
-3. 变量描述: {var_descriptions}
-4. 数据单位: {check_unit}
-5. 数据信息: {data_info}
-6. 清理操作项列表: {cleaning_operations}
-
-可用的工具函数：
-{tools}
-
-工具函数描述：
-{tool_descriptions}
-
-输出要求：
-实现一个具有多个可选参数的数据处理函数，需满足以下功能要求：
-- 工具函数已经默认导入，你给出的代码不需要重新import。
-- 函数应能调用预定义的工具函数进行数据处理，必要时可扩展实现其他处理函数。每次调用工具函数后需要使用变量接收返回的数据框，以保证数据处理的连续性。
-- 函数需区分必要的数据清理步骤和可选的数据预处理步骤。数据完整性处理优先执行，随后执行数据清理，最后执行数据预处理
-- 通过布尔类型参数控制各项处理操作的执行
-- 对于函数fill_missing和handle_outliers的调用，应该允许通过参数字典自定义其参数设置
-- 处理后的数据文件存储路径规则：
-  - 位置：原始文件目录下的 'clean_dataset' 子目录（不存在则创建）
-  - 示例：原始文件 '/path/data.csv' -> 处理后文件 '/path/clean_dataset/cleaned_data.csv'
-  - 注意：数据集的保存操作应在函数调用后进行，而不是在函数内部实现
-- 必须包含可选参数 `remove_with_missing`：控制是否在所有数据清理操作完成后，按照数据结构移除数据集中仍然包含缺失值的行。此参数默认为 True，设置为 True 时将生成一个完全没有缺失值的数据集。
-- 必须包含可选参数 `convert_categorical`：控制是否将分类变量转换为数值编码，编码方式最好使用类别编码，不保存原始列，不需要对需要预测的变量进行转换。
-- 函数参数命名需避免与工具函数参数重名，以防止参数冲突
-- 在代码的最后直接调用该函数，不要使用if __name__ == "__main__"，在调用部分储存数据集，并将数据集地址储存在result变量中
-- 函数应返回处理后的DataFrame
-- 根据操作项，如果对某几个变量有相同方法的fill_missing或者handle_outliers操作，则把这几个变量合并成变量组。
-- fill_missing和handle_outliers的布尔值参数控制是否进行填充和异常值处理，fill_missing_params和outlier_params是字典参数，在调用部分根据操作项的建议方法进行填充方法和阈值。
-- handle_outliers的strategy参数默认是clip
-- 如果数据集中存在ID type的变量，请不要删除
-
-格式示例：
-```python
-def clean_data(data_path, 
-    [可选的操作项参数],
-    remove_with_missing=True,
-    convert_categorical=True,
-    [工具函数的参数字典，fill_missing_params=None, outlier_params=None]
-  ):
-    data = pd.read_csv(data_path)
-    
-    [根据操作项编写相关代码]
-    
-    # 数据清理步骤
-    if fill_missing:
-        for method, columns in fill_missing_params.items():
-            if isinstance(columns, str):
-                columns = [columns]
-            params = {{'method': method}}
-            data = fill_missing_values_tools(data, target_columns=columns, **params)
-
-    if handle_outliers:
-        for group_params in outlier_params:
-            method = group_params.get('method', 'iqr')
-            columns = group_params.get('columns', [])
-            sensitivity = group_params.get('sensitivity', 'medium')
-            params = {{'method': method, 'strategy': 'clip', 'sensitivity': sensitivity}}
-            data = handle_outliers_tools(data, target_columns=columns, **params)
-    
-    [处理缺失值和数值化离散数据]
-    
-    return data
-
-import os
-data_path = [csv文件路径]
-
-[按照操作项中的缺失值填补和异常值处理合并同类操作定义多个变量组group1,group2,group3...]
-fill_missing_params = [根据操作项填充默认参数]
-outlier_params = [根据操作项填充method参数,请注意，这个参数不含有clip]
-
-'''
-例子（这部分是给你参考，生成的代码中不要出现：
-group1 = ['GDP', 'CPI', '人均收入']
-group2 = ['失业率', '通货膨胀率']
-group3 = ['人口数量']
-group = ['GDP', 'CPI']
-
-fill_missing_params = {{
-    'bfill': group_linear,
-    'ffill': group_ffill,
-    'mean': group_mean
-}}
-
-outlier_params = [
-  {{'method': 'iqr', 'columns': group_outliers}}
-]
-'''
-
-
-cleaned_data = clean_data(
-    data_path=data_path,
-    [可选的操作项参数],
-    remove_with_missing=True,
-    convert_categorical=True,
-    [工具函数的参数字典，fill_missing_params=None, outlier_params=None]
-)
-
-# 保存清理后的数据集
-output_dir = os.path.join(os.path.dirname(data_path), 'clean_dataset')
-os.makedirs(output_dir, exist_ok=True)
-[数据集的命名不仅要体现函数参数，也要体现工具函数参数]
-output_path = os.path.join(output_dir, [生成的文件名])
-cleaned_data.to_csv(output_path, index=False)
-result = output_path
-```
-"""
-
 DATA_CLEANING_FUNCTION_TEMPLATE_2 = """you are a data cleaning expert, you need to generate the data cleaning python script for the data.
 
 input data:
 1. csv file path: {csv_path}
 2. context description: {context_description}
-3. var_descriptions: {var_descriptions} # 变量描述，例如列名、预期类型、含义、取值范围等
-4. check_unit: {check_unit} # 是否需要检查和统一单位 (例如 True/False 或具体要求)
-5. data_info: {data_info} # 数据的基本信息，例如 df.info() 和 df.describe() 的输出
-6. cleaning_operations: {cleaning_operations} # 需要执行的具体清洗操作列表或描述
-7. save_path: {save_path} # 清洗后数据的保存路径
+3. var_descriptions: {var_descriptions} # variable descriptions, including the column name, expected type, meaning, and value range.
+4. check_unit: {check_unit} # whether to check and unify the units (e.g., True/False or specific requirements)
+5. data_info: {data_info} # basic information of the data, such as df.info() and df.describe() outputs
+6. cleaning_operations: {cleaning_operations} # specific cleaning operations to be executed
+7. save_path: {save_path} # the path to save the cleaned data
 
 your output should be:
 a python script that can be run directly, and the cleaned data will be saved to the save_path.
 """
 
-
-# 13. EDA问题生成
-EDA_QUESTIONS_TEMPLATE = """任务：数据探索性分析（EDA）问题生成
-任务描述：根据清理后的数据和数据科学项目描述，生成具体的探索性数据分析问题。
-
-注意：
-1. 不要提出超过三个问题。
-2. 对于预测问题，问题可以涉及数据的特征提取，比如分析所有相关变量与响应变量的相关关系。
-3.由于提供的数据集是清理后的数据集，eda问题中的列名可能存在一定的变化，请注意使用正确的列名。
-
-输入数据：
-1. 数据科学项目描述: {problem_description}
-2. 清理后的数据结构信息: {data_structure}
-3. 清理后的数据变量预览: {data_preview}
-
-输出数据：
-JSON格式的EDA问题列表（JSON 格式，包含问题及其简要描述）：
-```json
-[
-  {{
-    "问题1": "问题1描述",
-    "结论": "等待后续解决"
-  }}
-]
-```
-"""
 
 EDA_QUESTIONS_TEMPLATE_2 = """You are a data science consultant specializing in exploratory data analysis. Your task is to generate strategic EDA questions that will extract valuable insights from the dataset.
 
@@ -490,7 +285,6 @@ REQUIREMENTS:
 - Generate exactly 3 high-impact EDA questions
 - Each question must address a distinct analytical aspect
 - The questions should be more specific and actionable about the data,do not include any missing value or outlier analysis.
-- Questions must be in English
 - Questions should be specific, actionable, and directly related to the problem
 - Each question must include both the analytical objective and a suggested methodology
 - Use the exact column names from the provided data preview
@@ -538,6 +332,114 @@ REQUIREMENTS:
 - desired_height_pixels = 512
 - dpi = 100 
 
+Matplotlib代码生成规范 - 中文字体兼容
+核心原则：生成的代码必须兼容中文字体设置
+❌ 禁止使用的代码模式
+python# 1. 禁止使用 sns.set() - 会重置所有matplotlib设置
+sns.set(style="whitegrid")
+
+# 2. 禁止使用 sns.set() 的任何全局设置
+sns.set(context="notebook", style="darkgrid")
+sns.set_theme()  # 也会重置设置
+
+# 3. 禁止直接重置matplotlib设置
+plt.rcdefaults()  # 除非立即重新设置中文字体
+✅ 推荐使用的代码模式
+python# 1. 使用 sns.set_style() 而不是 sns.set()
+sns.set_style("whitegrid")  # 只设置样式，不重置字体
+
+# 2. 使用 sns.set_palette() 设置颜色
+sns.set_palette("husl")
+
+# 3. 使用 with 语句进行临时设置
+with sns.axes_style("darkgrid"):
+    plt.plot(x, y)
+    plt.show()
+
+# 4. 直接在绘图函数中设置样式参数
+sns.scatterplot(data=df, x='x', y='y', style='category')
+
+# 5. 使用matplotlib原生样式
+plt.style.use('seaborn-v0_8-whitegrid')  # 新版seaborn样式
+生成代码的标准模板
+python# 标准的matplotlib绘图代码模板
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
+
+# 1. 样式设置（安全方式）
+sns.set_style("whitegrid")  # 或其他样式
+# sns.set_palette("husl")  # 如需要
+
+# 2. 创建图形
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# 3. 绘图代码
+# ... 你的绘图逻辑 ...
+
+# 4. 标签和标题设置
+plt.title('图表标题')
+plt.xlabel('X轴标签')
+plt.ylabel('Y轴标签')
+
+# 5. 布局和保存
+plt.tight_layout()
+plt.savefig('output.png', dpi=300, bbox_inches='tight')
+plt.show()
+具体的替代方案
+替代 sns.set(style="whitegrid")
+python# ❌ 错误方式
+sns.set(style="whitegrid")
+
+# ✅ 正确方式
+sns.set_style("whitegrid")
+替代 sns.set(context="notebook")
+python# ❌ 错误方式
+sns.set(context="notebook")
+
+# ✅ 正确方式
+sns.set_context("notebook")
+替代复合设置
+python# ❌ 错误方式
+sns.set(style="whitegrid", context="notebook", palette="husl")
+
+# ✅ 正确方式
+sns.set_style("whitegrid")
+sns.set_context("notebook")
+sns.set_palette("husl")
+Seaborn绘图函数的安全使用
+python# 这些seaborn函数是安全的，不会重置字体设置
+sns.scatterplot(data=df, x='x', y='y')
+sns.lineplot(data=df, x='x', y='y')
+sns.barplot(data=df, x='category', y='value')
+sns.boxplot(data=df, x='category', y='value')
+sns.heatmap(data=corr_matrix)
+sns.pairplot(df)
+sns.distplot(df['column'])
+sns.violinplot(data=df, x='category', y='value')
+特殊情况处理
+当必须重置设置时
+python# 如果必须使用会重置的函数，立即重新设置字体
+plt.rcdefaults()
+# 立即重新设置中文字体
+plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False
+使用上下文管理器
+python# 推荐使用上下文管理器进行临时设置
+with plt.style.context('seaborn-v0_8-whitegrid'):
+    plt.plot(x, y)
+    plt.title('中文标题')
+    plt.show()
+代码生成检查清单
+生成matplotlib代码时，确保：
+
+不使用 sns.set()
+使用 sns.set_style() 替代
+使用 sns.set_context() 和 sns.set_palette() 分别设置
+避免使用 plt.rcdefaults() 除非立即重设字体
+优先使用具体的绘图函数而不是全局设置
+
 YOUR RESPONSE SHOULD BE:
 ```python
 # Comprehensive EDA for: {question}
@@ -566,7 +468,7 @@ INPUTS:
 3. Analysis results: {result}
 
 OUTPUT REQUIREMENTS:
-- Write in clear, technical English
+- Write in clear, technical
 - Focus ONLY on statistically significant findings
 - Prioritize insights directly applicable to feature engineering
 - Identify specific variable relationships, patterns, or anomalies

@@ -1,9 +1,3 @@
-import os
-from pathlib import Path
-
-# 项目根目录
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
 # 日志配置
 log_config = {
     "version": 1,
@@ -28,7 +22,6 @@ log_config = {
 
 DEBUG_MODE = True
 DEBUG_DELAY_MULTIPLIER = 10
-# 定义操作类型
 class SHOT_TYPES:
     DIALOGUE = 'dialogue'     # 对话（文本内容）
     ACTION = 'action'         # 动作（代码描述）
@@ -38,7 +31,6 @@ class SHOT_TYPES:
     ERROR = 'error'           # error_message
     THINKING = 'thinking'     # 思考
 
-# 阶段和步骤配置（前后端保持一致）
 STAGES = {
     "data-loading-and-hypothesis-proposal": {
             "id": "data-loading-and-hypothesis-proposal",
@@ -172,18 +164,3 @@ STAGES = {
             }]
     }
 } 
-
-from langchain_community.llms import Ollama
-from langchain_openai import ChatOpenAI
-from langchain.memory import ConversationBufferMemory, ConversationSummaryBufferMemory,ConversationBufferWindowMemory
-from DCLSAgents.agents import (ProblemDefinitionAndDataCollectionAgent, DataCleaningAndEDA_Agent, 
-                    PCSAgent, PredictionAndInferenceAgent, 
-                    ResultsEvaluationAgent, ResultsCommunicationAgent)
-import os
-
-#gpt
-llm = ChatOpenAI(
-    api_key="sk-iLOmdIAzvILZxzlY94AdC46e7bE145089aD6Fe7bAc3e7489",
-    base_url="https://openkey.cloud/v1",
-    model="gpt-4o"
-)

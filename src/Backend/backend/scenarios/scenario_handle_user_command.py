@@ -9,7 +9,7 @@ from functools import partial
 
 load_dotenv()
 
-async def handle_user_command(operation: dict) -> AsyncGenerator[str, None]:
+async def handle_user_command(operation: dict, lang: str = "en") -> AsyncGenerator[str, None]:
     """处理用户命令，使用OpenAI API生成代码"""
     try:
         # 使用异步OpenAI客户端
@@ -44,7 +44,7 @@ async def handle_user_command(operation: dict) -> AsyncGenerator[str, None]:
         }) + "\n"
 
         # 使用带缓冲的流式处理
-        buffer = deque(maxlen=50)  # 设置合适的缓冲区大小
+        buffer = deque(maxlen=20)  # 减小缓冲区大小
         async for response in handle_openai_stream(client, messages, command_id, buffer):
             yield response
             
@@ -94,7 +94,7 @@ async def handle_openai_stream(
             
             # 检查是否需要刷新缓冲区
             current_time = asyncio.get_event_loop().time()
-            if current_time - last_flush_time >= 0.1 or len(buffer) >= 40:  # 100ms或缓冲接近满时刷新
+            if current_time - last_flush_time >= 0.05 or len(buffer) >= 15:  # 50ms或缓冲>=15字符时刷新
                 combined_content = ''.join(buffer)
                 buffer.clear()
                 last_flush_time = current_time
@@ -111,9 +111,6 @@ async def handle_openai_stream(
                         "index": index
                     }
                 }) + "\n"
-                
-                # 添加小延迟避免阻塞
-                await asyncio.sleep(0.01)
         
         # 发送剩余的缓冲区内容
         if buffer:

@@ -415,6 +415,7 @@ p {
     }
 
     * {
+        scrollbar-width: thin;
         scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
     }
 }
