@@ -65,7 +65,50 @@ const AICommandInput = ({ files, setFiles }) => {
                 setIsLoading(true);
                 const timestamp = new Date().toLocaleTimeString();
 
-                if (command.startsWith('/')) {
+                // 检查是否有CSV文件
+                const hasCsvFile = files.some(file => 
+                    file.name.toLowerCase().endsWith('.csv') || 
+                    file.name.toLowerCase().endsWith('.xlsx') || 
+                    file.name.toLowerCase().endsWith('.xls')
+                );
+
+                if (hasCsvFile) {
+                    // 如果有CSV文件，进入VDS数据分析模式
+                    setActiveView('qa');
+                    const qaId = `qa-${uuidv4()}`;
+                    const qaData = {
+                        id: qaId,
+                        type: 'user',
+                        timestamp,
+                        content: `VDS数据分析模式：${command}`,
+                        resolved: false,
+                        relatedActionId: null,
+                        cellId: currentCellId,
+                        viewMode: 'vds', // 设置为VDS模式
+                        onProcess: true,
+                        attachedFiles: files,
+                    };
+                    addQA(qaData);
+
+                    const action = createUserAskQuestionAction(`VDS数据分析：${command}`, qaId, currentCellId, files);
+                    useAIAgentStore.getState().addAction(action);
+
+                    useOperatorStore.getState().sendOperation(notebookId, {
+                        type: 'vds_data_analysis',
+                        payload: {
+                            content: command,
+                            QId: [qaId],
+                            current_view_mode: 'vds',
+                            current_phase_id: currentPhaseId,
+                            current_step_index: currentStepIndex,
+                            related_qas: qaList,
+                            related_actions: actions,
+                            related_cells: getCurrentViewCells(),
+                            files: files,
+                            analysis_mode: 'vds'
+                        },
+                    });
+                } else if (command.startsWith('/')) {
                     // Command 模式
                     setActiveView('script');
                     const commandId = `action-${Date.now()}`;
@@ -327,9 +370,15 @@ const AICommandInput = ({ files, setFiles }) => {
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                     placeholder={
-                        input.startsWith('/')
-                            ? t('emptyState.commandPlaceholder')
-                            : t('emptyState.questionPlaceholder')
+                        files.some(file => 
+                            file.name.toLowerCase().endsWith('.csv') || 
+                            file.name.toLowerCase().endsWith('.xlsx') || 
+                            file.name.toLowerCase().endsWith('.xls')
+                        )
+                            ? 'VDS数据分析模式 - 描述你想对数据进行的分析...'
+                            : input.startsWith('/')
+                                ? t('emptyState.commandPlaceholder')
+                                : t('emptyState.questionPlaceholder')
                     }
                     className={`
                         w-full pl-14 sm:pl-16 pr-12 sm:pr-16 py-4 bg-transparent
@@ -390,12 +439,27 @@ const AICommandInput = ({ files, setFiles }) => {
                     <div
                         className={`
                             text-xs px-3 py-1 rounded-full border transition-all duration-300
-                            ${input.startsWith('/') 
-                                ? 'text-blue-600 bg-blue-50 border-blue-200 shadow-sm' 
-                                : 'text-gray-600 bg-gray-50 border-gray-200'}
+                            ${files.some(file => 
+                                file.name.toLowerCase().endsWith('.csv') || 
+                                file.name.toLowerCase().endsWith('.xlsx') || 
+                                file.name.toLowerCase().endsWith('.xls')
+                            )
+                                ? 'text-green-600 bg-green-50 border-green-200 shadow-sm'
+                                : input.startsWith('/') 
+                                    ? 'text-blue-600 bg-blue-50 border-blue-200 shadow-sm' 
+                                    : 'text-gray-600 bg-gray-50 border-gray-200'}
                         `}
                     >
-                        {input.startsWith('/') ? `⌘ ${t('emptyState.commandMode')}` : `💭 ${t('emptyState.questionMode')}`}
+                        {files.some(file => 
+                            file.name.toLowerCase().endsWith('.csv') || 
+                            file.name.toLowerCase().endsWith('.xlsx') || 
+                            file.name.toLowerCase().endsWith('.xls')
+                        ) 
+                            ? `📊 VDS数据分析模式` 
+                            : input.startsWith('/') 
+                                ? `⌘ ${t('emptyState.commandMode')}` 
+                                : `💭 ${t('emptyState.questionMode')}`
+                        }
                     </div>
                 </div>
             )}

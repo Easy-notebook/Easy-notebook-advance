@@ -373,7 +373,7 @@ const AIAgentSidebar = () => {
   }, []);
   
   const qasToShow = useMemo(() => {
-    return qaList.filter(qa => {
+    const filtered = qaList.filter(qa => {
       // 如果QA没有viewMode，说明是旧数据，显示在所有模式下
       if (!qa.viewMode) {
         return true;
@@ -392,6 +392,12 @@ const AIAgentSidebar = () => {
       // complete 和 dslc 模式显示所有匹配的QA
       return true;
     });
+    
+    console.log('QA filtering - Total QAs:', qaList.length, 'Filtered QAs:', filtered.length, 'Current viewMode:', viewMode);
+    console.log('All QAs:', qaList.map(qa => ({ id: qa.id, viewMode: qa.viewMode, cellId: qa.cellId, content: qa.content.substring(0, 50) })));
+    console.log('Filtered QAs:', filtered.map(qa => ({ id: qa.id, viewMode: qa.viewMode, cellId: qa.cellId, content: qa.content.substring(0, 50) })));
+    
+    return filtered;
   }, [qaList, viewMode, getCurrentStepCellsIDs]);
 
   const handleJumpToQA = useCallback((qaId) => {
