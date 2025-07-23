@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, memo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import CodeCell from '../Editor/CodeCell';
@@ -9,10 +8,8 @@ import FileCell from '../Editor/FileCell';
 import ImageCell from '../Editor/ImageCell';
 import OutlineSidebar from './LeftSideBar/OutlineSidebar';
 import ErrorAlert from '../UI/ErrorAlert';
-import { Play, PlusCircle, ArrowLeft, ArrowRight, Upload, BarChartHorizontalBig, TerminalSquare, Settings2, Sparkles } from 'lucide-react';
 import useStore from '../../store/notebookStore';
 import { findCellsByStep } from '../../utils/markdownParser';
-import ExportToFile from './FunctionBar/ExportToFile';
 import { createExportHandlers } from '../../utils/exportToFile/exportUtils';
 import { useToast } from '../UI/Toast';
 import AIAgentSidebar from './RightSideBar/AIAgentSidebar';
@@ -21,281 +18,12 @@ import CommandInput from './FunctionBar/AITerminal';
 import { useAIAgentStore } from '../../store/AIAgentStore';
 import usePreviewStore from '../../store/previewStore';
 import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
-import DSLCPipeline from '../senario/DSLCanalysis/Pipeline';
 import useSettingsStore from '../../store/settingsStore';
 import SettingsPage from '../senario/settingState';
-import CompleteMode from '../senario/BasicMode/CompleteMode';
-import StepMode from '../senario/BasicMode/StepMode';
 import PreviewApp from './Display/PreviewApp';
-import LanguageSwitcher from '../../i18n/LanguageSwitcher';
-import TiptapNotebookEditor from '../Editor/TiptapNotebookEditor';
+import Header from './MainContainer/Header';
+import MainContent from './MainContainer/MainContent';
 
-const VUE_PRIMARY = '#41B883';
-const VUE_SECONDARY = '#35495E';
-
-const ModeToggle = memo(({ viewMode, onModeChange }) => {
-  const { t } = useTranslation();
-  const [isOpen, setIsOpen] = useState(false);
-  const buttonRef = useRef(null);
-  const [buttonRect, setButtonRect] = useState(null);
-
-  const modes = [
-    { id: 'complete', label: 'Create Mode', name: t('modeToggle.completeMode') },
-    { id: 'step', label: 'Demo Mode', name: t('modeToggle.stepMode') },
-    { id: 'wysiwyg', label: 'WYSIWYG Mode', name: t('modeToggle.wysiwygMode') },
-  ];
-
-  const selectedMode = modes.find(mode => mode.id === viewMode);
-
-  // 更新按钮位置
-  useEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setButtonRect(rect);
-    }
-  }, [isOpen]);
-
-  // 点击外部关闭下拉菜单
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (buttonRef.current && !buttonRef.current.contains(event.target)) {
-        // 检查点击的是否是下拉菜单内的元素
-        const dropdown = document.querySelector('[data-dropdown-menu]');
-        if (!dropdown || !dropdown.contains(event.target)) {
-          setIsOpen(false);
-        }
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
-
-  return (
-    <div className="relative w-full max-w-md">
-      <button
-        ref={buttonRef}
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50"
-        style={{
-          whiteSpace: 'nowrap',
-        }}
-      >
-        <span
-          style={{
-            font: '18px ui-sans-serif, -apple-system, system-ui',
-            fontWeight: 600,
-            height: '24px',
-            letterSpacing: 'normal',
-            lineHeight: '28px',
-            overflowClipMargin: 'content-box',
-            whiteSpace: 'nowrap', 
-            display: 'inline-block',
-            verticalAlign: 'middle', 
-          }}
-          className="theme-grad-text"
-        >
-          {selectedMode?.name}
-        </span>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
-          className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
-          <path fillRule="evenodd" clipRule="evenodd"
-            d="M5.29289 9.29289C5.68342 8.90237 6.31658 8.90237 6.70711 9.29289L12 14.5858L17.2929 9.29289C17.6834 8.90237 18.3166 8.90237 18.7071 9.29289C19.0976 9.68342 19.0976 10.3166 18.7071 10.7071L12.7071 16.7071C12.5196 16.8946 12.2652 17 12 17C11.7348 17 11.4804 16.8946 11.2929 16.7071L5.29289 10.7071C4.90237 10.3166 4.90237 9.68342 5.29289 9.29289Z"
-            fill="currentColor" />
-        </svg>
-      </button>
-
-      {isOpen && buttonRect && createPortal(
-        <div 
-          data-dropdown-menu
-          className="bg-white rounded-lg shadow-lg border border-gray-200"
-          style={{ 
-            position: 'fixed',
-            top: buttonRect.bottom + 4,
-            left: buttonRect.left,
-            width: buttonRect.width,
-            zIndex: 999999,
-            minWidth: '200px'
-          }}
-        >
-          {modes.map(mode => (
-            <button
-              key={mode.id}
-              onClick={() => { onModeChange(mode.id); setIsOpen(false); }}
-              className={`w-full text-left p-3 flex items-center justify-between transition-colors ${viewMode === mode.id ? 'bg-white/90' : 'hover:bg-white/80'}`}
-              style={{ 
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <span
-                className="text-lg font-medium"
-                style={{
-                  color: viewMode === mode.id ? VUE_PRIMARY : VUE_SECONDARY,
-                }}
-              >
-                {mode.name}
-              </span>
-              {viewMode === mode.id && <span style={{ color: VUE_PRIMARY, marginLeft: 8 }}>✓</span>}
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-});
-
-const CellDivider = memo(({ index, onAddCell, viewMode }) => {
-  const { t } = useTranslation();
-  const [isHovered, setIsHovered] = useState(false);
-
-  return (
-    <div
-      className="h-2 group relative my-2 w-full max-w-screen-xl mx-auto"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {isHovered && viewMode === 'complete' && (
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 backdrop-blur-md shadow-lg rounded-2xl p-2 z-10">
-          <button
-            onClick={() => onAddCell('code', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <PlusCircle size={16} />
-            {t('cell.addCodeCell')}
-          </button>
-          <button
-            onClick={() => onAddCell('markdown', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <PlusCircle size={16} />
-            {t('cell.addTextCell')}
-          </button>
-          <button
-            onClick={() => onAddCell('image', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <PlusCircle size={16} />
-            图片
-          </button>
-          <button
-            onClick={() => onAddCell('file', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <Sparkles size={16} />
-            {t('cell.aiGenerate')}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-});
-
-const StepNavigation = memo(({
-  currentPhase,
-  currentStepIndex,
-  totalSteps,
-  onPrevious,
-  onNext,
-  onPreviousPhase,
-  onNextPhase,
-  isFirstPhase,
-  isLastPhase
-}) => {
-  const { t } = useTranslation();
-  const isFirstStep = currentStepIndex === 0;
-  const isLastStep = currentStepIndex === totalSteps - 1;
-
-  const baseBtn = "flex items-center gap-2 px-6 py-2.5 rounded-full font-medium transition-all duration-200 shadow-lg";
-  const enabledStyle = `bg-white/80 backdrop-blur-md hover:bg-white/90`;
-  const disabledStyle = `bg-white/60 text-gray-400`;
-
-  const renderPreviousButton = () => {
-    if (isFirstStep) {
-      if (!isFirstPhase) {
-        return (
-          <button 
-            onClick={onPreviousPhase} 
-            className={`${baseBtn} ${enabledStyle}`}
-            style={{ color: VUE_PRIMARY }}
-          > 
-            <ArrowLeft size={16}/> {t('navigation.prevStage')}
-          </button>
-        );
-      }
-      return <button className={`${baseBtn} ${disabledStyle}`}>{t('navigation.topOfAll')}</button>;
-    }
-    return (
-      <button 
-        onClick={onPrevious} 
-        className={`${baseBtn} ${enabledStyle}`}
-        style={{ color: VUE_PRIMARY }}
-      > 
-        <ArrowLeft size={16}/> {t('navigation.prevStep')}
-      </button>
-    );
-  };
-
-  const renderNextButton = () => {
-    const nextBtnStyle = {
-      backgroundColor: `${VUE_PRIMARY}90`,
-      color: 'white',
-    };
-    
-    if (isLastStep) {
-      if (!isLastPhase) {
-        return (
-          <button 
-            onClick={onNextPhase} 
-            className={`${baseBtn}`}
-            style={nextBtnStyle}
-          >
-            {t('navigation.nextStage')} <ArrowRight size={16}/>
-          </button>
-        );
-      }
-      return <button className={`${baseBtn} ${disabledStyle}`}>{t('navigation.endOfAll')}</button>;
-    }
-    return (
-      <button 
-        onClick={onNext} 
-        className={`${baseBtn}`}
-        style={nextBtnStyle}
-      >
-        {t('navigation.nextStep')} <ArrowRight size={16}/>
-      </button>
-    );
-  };
-
-  return (
-    <div className="h-20 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md" style={{ borderColor: `${VUE_SECONDARY}33` }}>
-      <div className="flex items-center gap-2">
-        {renderPreviousButton()}
-      </div>
-
-      <div className="flex flex-col items-center gap-2">
-        <span className="text-lg font-semibold" style={{ color: VUE_SECONDARY }}>
-          {currentPhase?.title}
-        </span>
-        <div className="flex items-center gap-3">
-          {totalSteps > 0 && Array.from({ length: totalSteps }).map((_, idx) => (
-            <div
-              key={idx}
-              className={`h-2 w-2 rounded-full transition duration-200 ${idx === currentStepIndex ? '' : 'bg-gray-200/50'}`}
-              style={idx === currentStepIndex ? { backgroundColor: VUE_PRIMARY } : {}}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        {renderNextButton()}
-      </div>
-    </div>
-  );
-});
 
 // Main NotebookApp component
 const NotebookApp = () => {
@@ -629,64 +357,6 @@ const NotebookApp = () => {
   /**
    * 渲染内容区域。
    */
-  const renderContent = useCallback(() => {
-    if (cells.length === 0 || viewMode === 'dslc') {
-      return <DSLCPipeline onAddCell={handleAddCell}
-        className="w-full h-full"
-      />;
-    }
-
-    if (viewMode === 'step') {
-      return (
-        <StepMode
-          tasks={tasks}
-          currentPhaseId={currentPhaseId}
-          currentStepIndex={currentStepIndex}
-          cells={cells}
-          findCellsByStep={findCellsByStep}
-          renderCell={renderCell}
-          renderStepNavigation={renderStepNavigation}
-        />
-      );
-    }
-
-    if (viewMode === 'wysiwyg') {
-      return (
-        <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 my-auto">
-          <div className="h-10 w-full"></div>
-          <div className="relative">
-            <TiptapNotebookEditor
-              className="w-full"
-              placeholder="Start writing your notebook... Type ```python to create a code block"
-              readOnly={false}
-            />
-          </div>
-          <div className="h-20 w-full"></div>
-        </div>
-      );
-    }
-
-    const visibleCells = getCurrentViewCells();
-    return (
-      <CompleteMode
-        visibleCells={visibleCells}
-        handleAddCell={handleAddCell}
-        viewMode={viewMode}
-        renderCell={renderCell}
-        CellDivider={CellDivider}
-      />
-    );
-  }, [
-    cells,
-    viewMode,
-    currentPhaseId,
-    currentStepIndex,
-    tasks,
-    getCurrentViewCells,
-    handleAddCell,
-    renderCell,
-    renderStepNavigation,
-  ]);
 
   // 滚动到最后添加的单元格
   useEffect(() => {
@@ -782,74 +452,39 @@ const NotebookApp = () => {
         <CommandInput
           onClick={() => setShowCommandInput(true)}
         />
-        <header className="h-16 flex items-center justify-between px-3 bg-white/80 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            {isCollapsed && <button onClick={settingstore.openSettings} className="p-3 rounded-lg hover:bg-white/90 transition-colors"><Settings2 size={16} /></button>}
-            <ModeToggle viewMode={viewMode} onModeChange={handleModeChange} />
-            <LanguageSwitcher />
-          </div>
-
-          <div className="flex items-center gap-3">
-            {
-              !(cells.length === 0 || viewMode === 'dslc') &&
-              <>
-                <button
-                  onClick={handleRunAll}
-                  className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
-                  disabled={cells.length === 0 || isExecuting}
-                  style={{ color: VUE_SECONDARY }}
-                >
-                  <Play size={16} />
-                  {isExecuting ? t('fileOperations.running') : t('fileOperations.runAll')}
-                </button>
-
-                <ExportToFile
-                  disabled={cells.length === 0}
-                  onExportJson={handleExportJson}
-                  onExportDocx={exportDocx}
-                  onExportPdf={exportPdf}
-                  onExportMarkdown={exportMarkdown}
-                />
-              </>
-            }
-            <button
-              onClick={triggerFileInput}
-              className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
-              style={{ color: VUE_SECONDARY }}
-            >
-              <Upload size={16} />
-              {t('fileOperations.import')}
-            </button>
-            <input
-              type="file"
-              accept=".ipynb,application/json"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleImport}
-            />
-
-            <div className='flex items-center gap-2'>
-              {!(cells.length === 0 || viewMode === 'dslc') && <button
-                className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
-                onClick={() => { setShowCommandInput(true); }}
-                style={{ color: VUE_PRIMARY }}
-              >
-                <TerminalSquare size={16} />
-              </button>}
-              <button
-                onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
-                className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
-                style={{ color: VUE_PRIMARY, backgroundColor: `${VUE_PRIMARY}15` }}
-              >
-                <BarChartHorizontalBig size={16} />
-              </button>
-            </div>
-          </div>
-        </header>
+        <Header
+          viewMode={viewMode}
+          isCollapsed={isCollapsed}
+          cells={cells}
+          isExecuting={isExecuting}
+          isRightSidebarCollapsed={isRightSidebarCollapsed}
+          onModeChange={handleModeChange}
+          onRunAll={handleRunAll}
+          onExportJson={handleExportJson}
+          onExportDocx={exportDocx}
+          onExportPdf={exportPdf}
+          onExportMarkdown={exportMarkdown}
+          onTriggerFileInput={triggerFileInput}
+          onHandleImport={handleImport}
+          onShowCommandInput={() => setShowCommandInput(true)}
+          onToggleRightSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+          onOpenSettings={settingstore.openSettings}
+          fileInputRef={fileInputRef}
+        />
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-blue-200 bg-white w-full h-full">
           {isShowingFileExplorer && <PreviewApp />}
           <div className={`${isShowingFileExplorer ? 'hidden' : 'block'} w-full h-full `}>
-            {renderContent()}
+            <MainContent
+              cells={cells}
+              viewMode={viewMode}
+              tasks={tasks}
+              currentPhaseId={currentPhaseId}
+              currentStepIndex={currentStepIndex}
+              getCurrentViewCells={getCurrentViewCells}
+              handleAddCell={handleAddCell}
+              renderCell={renderCell}
+              renderStepNavigation={renderStepNavigation}
+            />
           </div>
         </div>
 

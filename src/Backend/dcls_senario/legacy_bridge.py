@@ -5,7 +5,7 @@ Legacy Bridge - 向后兼容性桥接层
 
 import os
 import sys
-from typing import Dict, Any, Optional
+from typing import Dict, List
 import logging
 
 # Add current directory to path for imports

@@ -384,3 +384,100 @@ from tools.ml_tools import *
         
         self.logger.error(f"Failed to complete stability analysis after {max_retries} attempts")
         return f"在{max_retries}次尝试后未能生成有效的稳定性分析结果。"
+    
+    def generate_stability_strategy_cli(self, eda_summary, model_training_strategy):
+        """CLI method for generating stability analysis strategy"""
+        try:
+            input_data = f"""Based on the EDA findings and model training strategy:
+EDA Summary: {json.dumps(eda_summary, ensure_ascii=False)}
+Model Training Strategy: {json.dumps(model_training_strategy, ensure_ascii=False)}
+
+Problem: {self.problem_description}
+Context: {self.context_description}
+
+Generate a comprehensive stability analysis strategy that includes:
+1. Data variation approaches for robustness testing
+2. Model stability evaluation framework
+3. Performance consistency metrics
+4. Risk assessment methodology
+5. Validation procedures for different data scenarios
+
+Return as a structured stability analysis plan."""
+            
+            response = self.execute(input_data)
+            strategy = self.parse_llm_json(response)
+            
+            if strategy:
+                return strategy
+            else:
+                return [{"error": "Could not generate stability strategy"}]
+        except Exception as e:
+            return [{"error": f"Error generating stability strategy: {str(e)}"}]
+    
+    def generate_dataset_variations_cli(self, stability_strategy, csv_file_path, model_training_code):
+        """CLI method for generating dataset variations for stability analysis"""
+        try:
+            # Read basic dataset info
+            df = pd.read_csv(csv_file_path)
+            dataset_info = {
+                "rows": len(df),
+                "columns": list(df.columns),
+                "dtypes": df.dtypes.to_dict()
+            }
+            
+            input_data = f"""Based on the stability strategy and dataset characteristics:
+Stability Strategy: {json.dumps(stability_strategy, ensure_ascii=False)}
+Dataset Info: {json.dumps(dataset_info, ensure_ascii=False, default=str)}
+Model Training Code: {model_training_code}
+
+Problem: {self.problem_description}
+Context: {self.context_description}
+
+Generate a comprehensive plan for creating dataset variations that includes:
+1. Data sampling strategies
+2. Feature perturbation methods
+3. Noise injection approaches
+4. Outlier handling variations
+5. Missing data scenarios
+6. Cross-validation splits
+
+Return as a structured dataset variation plan with specific parameters for each variation type."""
+            
+            response = self.execute(input_data)
+            variations = self.parse_llm_json(response)
+            
+            if variations:
+                return variations
+            else:
+                return [{"error": "Could not generate dataset variations"}]
+        except Exception as e:
+            return [{"error": f"Error generating dataset variations: {str(e)}"}]
+    
+    def generate_dataset_variations_code_cli(self, csv_file_path, dataset_variations):
+        """CLI method for generating code to create dataset variations"""
+        try:
+            input_data = f"""Generate Python code to create dataset variations based on the plan:
+CSV File Path: {csv_file_path}
+Dataset Variations Plan: {json.dumps(dataset_variations, ensure_ascii=False)}
+
+Problem: {self.problem_description}
+Context: {self.context_description}
+
+Generate Python code that:
+1. Loads the original dataset
+2. Creates multiple variations based on the plan parameters
+3. Saves variations to separate files
+4. Returns summary of created variations
+5. Includes proper error handling
+
+Return the code wrapped in ```python``` tags."""
+            
+            response = self.execute(input_data)
+            # Extract code from markdown if present
+            code_match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
+            if code_match:
+                return code_match.group(1).strip()
+            else:
+                return response
+        except Exception as e:
+            return f"# Error generating dataset variations code: {str(e)}"

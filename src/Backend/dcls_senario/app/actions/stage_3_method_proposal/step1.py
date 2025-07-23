@@ -48,7 +48,7 @@ async def generate_method_proposal_sequence_step1(
     
     if step_template.think_event("generate_model_methods"):
         
-        model_methods = prediction_agent.suggest_model_methods_cli()
+        model_methods = prediction_agent.suggest_modeling_methods_cli()
         
         model_methods_table = step_template.to_tableh(model_methods)
         

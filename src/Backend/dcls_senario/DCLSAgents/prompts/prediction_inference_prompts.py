@@ -305,3 +305,214 @@ RESULT_SUMMARY_TEMPLATE = """任务：模型评估结果总结
 [类似格式]
 ```
 """
+
+# 训练策略生成模板
+TRAINING_EVALUATION_STRATEGY_TEMPLATE = """Based on the problem description, context, and EDA summary:
+Problem: {problem_description}
+Context: {context_description}
+EDA Summary: {eda_summary}
+
+Feature Engineering Methods: {feature_methods}
+Modeling Methods: {modeling_methods}
+
+Generate a comprehensive training and evaluation strategy that includes:
+1. Data preprocessing steps
+2. Feature engineering pipeline
+3. Model selection and tuning approach
+4. Cross-validation strategy
+5. Evaluation metrics
+6. Model comparison framework
+
+Return as a structured list of strategy components."""
+
+# 多方法模型训练代码生成模板
+COMPREHENSIVE_MODEL_TRAINING_CODE_TEMPLATE = """Task: Comprehensive Model Training and Evaluation Code Generation
+Task Description: Generate Python code for training and evaluating multiple models with multiple feature engineering approaches.
+
+Input Data:
+Training Strategy: {training_strategy}
+CSV File Path: {csv_file_path}
+Response Variable Analysis: {response_variable_analysis}
+
+Problem: {problem_description}
+Context: {context_description}
+EDA Summary: {eda_summary}
+
+Code Requirements:
+1. **Data Preparation:**
+   - Load the CSV data from: {csv_file_path}
+   - Split data into training and testing sets (80/20 split)  
+   - Separate response variable from predictor variables using response variable analysis
+
+2. **Directory Structure Setup:**
+   - Create output directories in the same folder as the CSV file:
+     * models/ folder for saving trained models
+     * plots/ folder for visualizations  
+     * logs/ folder for training logs
+     * results/ folder for evaluation results
+
+3. **Feature Engineering Pipeline:**
+   - Apply ALL feature engineering methods from the training strategy
+   - Use different feature counts (e.g., 10, 20, 30 features) to create multiple feature sets
+   - Ensure proper scaling for training and test sets
+   - Create a feature pool with all engineered features
+
+4. **Feature Selection:**
+   - Implement feature selection for each target feature count
+   - Generate 3 different feature sets with different numbers of features
+   - Store selected feature lists for each combination
+
+5. **Model Training and Evaluation:**
+   - Train ALL modeling methods from the training strategy
+   - For each model, test with each feature set (3 feature sets per model)
+   - **Save each trained model** to models/ folder with naming: model_name_features_N.pkl
+   - Calculate comprehensive performance metrics (accuracy, precision, recall, F1, etc.)
+   - Include cross-validation for robust evaluation
+   - **Log training process** to logs/ folder
+
+6. **Results Organization:**
+   - Store results in structured format with model name, feature count, feature list, and metrics
+   - Generate visualizations (confusion matrix, ROC curves, feature importance plots)
+   - Save plots to plots/ folder with clear naming
+   - **Save detailed results** to results/ folder as JSON and CSV
+
+7. **Model and Data Persistence:**
+   - Save all trained models with pickle
+   - Save feature transformers/scalers for future use
+   - Save training/test splits for reproducibility
+   - Log model performance and training details
+
+8. **Output Format:**
+   - Return a list of dictionaries with format:
+     [{{'model': 'model_name', 'feature_count': n, 'features': [...], 'metrics': {{}}, 'model_path': 'path/to/saved/model.pkl'}}]
+   - Include evaluation results for all model-feature combinations
+   - Include paths to saved models and result files
+
+9. **Function Structure:**
+   - Create function: def train_and_evaluate_models(csv_path: str) -> list
+   - Function should be self-contained and take only the CSV path as input
+   - Return comprehensive results including file paths
+
+10. **Error Handling:**
+    - Include proper try-catch blocks
+    - Handle different data types (categorical/continuous response variables)
+    - Validate data integrity
+    - Log all errors to logs/ folder
+
+Generate complete, executable Python code wrapped in ```python``` tags.
+The code should handle multiple models and multiple feature engineering approaches systematically."""
+
+# 训练结果分析模板
+TRAINING_RESULTS_ANALYSIS_TEMPLATE = """Based on the training results and strategy:
+Training Results: {training_results}
+Training Strategy: {training_strategy}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Analyze the training results and provide:
+1. Model performance comparison
+2. Feature engineering effectiveness
+3. Best performing models identification
+4. Performance metrics analysis
+5. Recommendations for model selection
+
+Return as a structured analysis report."""
+
+# 稳定性分析总结模板
+STABILITY_ANALYSIS_SUMMARY_TEMPLATE = """Based on batch evaluation results:
+Batch Evaluation Strategy: {batch_evaluation_strategy}
+Evaluation Approach: {evaluation_approach}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate a comprehensive stability analysis summary that includes:
+1. Model performance consistency across datasets
+2. Stability metrics and variance analysis
+3. Robustness assessment
+4. Risk factors identification
+5. Reliability recommendations
+
+Return as a structured analysis report."""
+
+# 批量评估策略模板
+BATCH_EVALUATION_STRATEGY_TEMPLATE = """Based on the stability analysis requirements:
+Stability Strategy: {stability_strategy}
+Dataset Variations: {dataset_variations}
+Model Training Code: {model_training_code}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate a comprehensive batch evaluation strategy that includes:
+1. Evaluation framework design
+2. Performance metrics selection
+3. Batch processing approach
+4. Results aggregation method
+5. Statistical analysis plan
+
+Return as a structured evaluation strategy."""
+
+# 批量评估代码生成模板
+BATCH_EVALUATION_CODE_TEMPLATE = """Based on the batch evaluation strategy:
+{batch_evaluation_strategy}
+
+Original CSV File Path: {csv_file_path}
+Model Training Code Reference: {model_training_code}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate Python code for batch model evaluation that implements the strategy.
+The code should:
+1. **Load Dataset Variations:** Load all dataset variations from the stability_analysis/ folder
+2. **Load Trained Models:** Load models from the models/ folder created by training code
+3. **Batch Evaluation:** Apply loaded models to all dataset variations
+4. **Results Aggregation:** Collect and aggregate results across all combinations
+5. **Statistical Analysis:** Perform statistical comparison of results
+6. **Output Organization:** Save results to batch_evaluation_results/ folder
+
+Code Requirements:
+- Use the original CSV file path to locate related files: {csv_file_path}
+- Find dataset variations in: [csv_dir]/stability_analysis/
+- Find trained models in: [csv_dir]/models/
+- Save batch results to: [csv_dir]/batch_evaluation_results/
+- Return structured results including file paths and performance metrics
+
+Return the code wrapped in ```python``` tags."""
+
+# 评估报告模板生成模板
+EVALUATION_REPORT_TEMPLATE_GENERATION = """Based on the stability analysis:
+{stability_summary}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate a comprehensive evaluation report template in markdown format that includes:
+1. Executive summary section
+2. Methodology overview
+3. Results presentation framework
+4. Performance metrics tables
+5. Stability analysis section
+6. Conclusions and recommendations
+
+Return as a markdown template that can be filled with actual results."""
+
+# 批量评估结果分析模板
+BATCH_EVALUATION_RESULTS_ANALYSIS_TEMPLATE = """Based on the batch evaluation results:
+Batch Results: {batch_results}
+Evaluation Strategy: {evaluation_strategy}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Analyze the batch evaluation results and provide:
+1. Model performance consistency across datasets
+2. Stability metrics and variance analysis
+3. Best and worst performing variations identification
+4. Statistical significance of differences
+5. Robustness assessment
+6. Recommendations for model reliability
+
+Return as a structured batch analysis report."""

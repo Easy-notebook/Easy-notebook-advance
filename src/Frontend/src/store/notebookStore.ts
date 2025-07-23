@@ -17,7 +17,7 @@ export type CellType = 'code' | 'markdown' | 'Hybrid' | 'image';
 /**
  * 视图模式类型
  */
-export type ViewMode = 'complete' | 'step';
+export type ViewMode = 'complete' | 'step' | 'wysiwyg';
 
 /**
  * 上传模式类型

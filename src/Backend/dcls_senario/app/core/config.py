@@ -167,6 +167,87 @@ STAGES = {
                 "description": "Propose models for data analysis",
                 "stepId": "model_proposal_step1"
             }]
+    },
+    "model_training_and_evaluation": {
+        "id": "model_training_and_evaluation",
+        "title": "Model Training and Evaluation",
+        "description": "Train and evaluate machine learning models",
+        "steps": [
+            {
+                "id": "step0",
+                "title": "Response Variable Identification",
+                "description": "Identify the target variable for prediction",
+                "stepId": "model_training_and_evaluation_step0"
+            },
+            {
+                "id": "step1",
+                "title": "Feature Engineering Methods",
+                "description": "Suggest appropriate feature engineering techniques",
+                "stepId": "model_training_and_evaluation_step1"
+            },
+            {
+                "id": "step2",
+                "title": "Modeling Methods Suggestion",
+                "description": "Suggest appropriate machine learning models",
+                "stepId": "model_training_and_evaluation_step2"
+            },
+            {
+                "id": "step3",
+                "title": "Model Training and Evaluation",
+                "description": "Train and evaluate combined models",
+                "stepId": "model_training_and_evaluation_step3"
+            }
+        ]
+    },
+    "stability_analysis": {
+        "id": "stability_analysis", 
+        "title": "Stability Analysis",
+        "description": "Analyze model stability across different data variations",
+        "steps": [
+            {
+                "id": "step0",
+                "title": "Execute Stability Analysis",
+                "description": "Generate multiple dataset variations for stability testing",
+                "stepId": "stability_analysis_step0"
+            },
+            {
+                "id": "step1",
+                "title": "Batch Model Evaluation",
+                "description": "Evaluate models across all dataset variations",
+                "stepId": "stability_analysis_step1"
+            },
+            {
+                "id": "step2",
+                "title": "Evaluation Results Summary",
+                "description": "Summarize and analyze batch evaluation results",
+                "stepId": "stability_analysis_step2"
+            }
+        ]
+    },
+    "results_evaluation": {
+        "id": "results_evaluation",
+        "title": "Results Evaluation", 
+        "description": "Final evaluation and validation of model results",
+        "steps": [
+            {
+                "id": "step0",
+                "title": "Results Agent Initialization",
+                "description": "Initialize results evaluation agent with model summaries",
+                "stepId": "results_evaluation_step0"
+            },
+            {
+                "id": "step1", 
+                "title": "Test Dataset Generation",
+                "description": "Generate and execute test dataset variations",
+                "stepId": "results_evaluation_step1"
+            },
+            {
+                "id": "step2",
+                "title": "Final Model Evaluation", 
+                "description": "Execute comprehensive final model evaluation",
+                "stepId": "results_evaluation_step2"
+            }
+        ]
     }
 } 
 

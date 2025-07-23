@@ -243,46 +243,35 @@ class BaseDSLC_Agent():
         
         for attempt in range(max_retries):
             try:
-                # 创建临时的对话消息列表
+                # Use direct Oracle API without langchain
                 if system_setting:
-                    messages = [SystemMessage(content=system_setting), HumanMessage(content=prompt)]
+                    full_prompt = f"System: {system_setting}\n\nUser: {prompt}"
                 else:
-                    messages = [HumanMessage(content=prompt)]
-                chat_prompt = ChatPromptTemplate.from_messages(messages)
-                chain = chat_prompt | self.llm
-                total_prompt_length = sum(len(message.content) for message in messages)
+                    full_prompt = prompt
+                
+                # Use Oracle directly for chat without memory
+                if self.oracle:
+                    response = self.oracle.chat(full_prompt)
+                    return response
+                
+                # Fallback error if no Oracle available
+                raise Exception("No Oracle available for chat")
+                
+                total_prompt_length = len(full_prompt)
                 if total_prompt_length > 120000:
                     try:
                         with open("debug.log", "w", encoding="utf-8") as debug_log:
-                            debug_log.write("Chain content before reassigning:\n")
-                            debug_log.write(repr(chain))
+                            debug_log.write("Prompt content before processing:\n")
+                            debug_log.write(repr(full_prompt))
                     except Exception as e:
-                        self.logger.error(f"Error writing chain debug info to debug.log: {e}")
+                        self.logger.error(f"Error writing prompt debug info to debug.log: {e}")
                     self.logger.warning("Prompt length exceeds 120000 characters.")
-                    chain = chat_prompt | ChatOpenAI(
-                                            api_key="sk-iLOmdIAzvILZxzlY94AdC46e7bE145089aD6Fe7bAc3e7489",
-                                            base_url="https://openkey.cloud/v1",
-                                            model="o4-mini",
-                                            temperature=1
-                                        )
-                                                            
-                if stream_output:
-                    # 使用流式输出
-                    full_response = ""
-                    for chunk in chain.stream({}):
-                        if hasattr(chunk, 'content'):
-                            chunk_content = chunk.content
-                        else:
-                            chunk_content = chunk
-                        full_response += chunk_content
-                        print(chunk_content, end="", flush=True)
-                else:
-                    response = chain.invoke({})
-                    full_response = response.content
                 
-                return full_response
+                # This should not be reached since Oracle should handle the request above
+                self.logger.error("Reached unreachable code in chat_without_memory")
+                return "Error: Unable to process request"
                 
-            except openai.AuthenticationError as e:
+            except Exception as e:
                 if "无效的令牌" in str(e):
                     if attempt == max_retries - 1:
                         self.logger.error(f"Authentication failed after {max_retries} attempts: {str(e)}")

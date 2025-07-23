@@ -106,3 +106,198 @@ MODEL_EVALUATION_TEMPLATE = """任务：生成模型评估代码
 [完整的python代码]
 ```
 """
+
+# 结果评估框架生成模板
+RESULTS_EVALUATION_FRAMEWORK_TEMPLATE = """Based on stability analysis results and report template:
+Stability Summary: {stability_summary}
+Report Template: {report_template}
+
+Problem: {problem_description}
+Context: {context_description}
+Best Results: {best_five_result}
+
+Generate a comprehensive results evaluation framework that includes:
+1. Evaluation criteria and metrics
+2. Validation methodology
+3. Quality assessment standards
+4. Performance benchmarks
+5. Report generation guidelines
+
+Return as a structured evaluation framework."""
+
+# 测试数据集策略模板
+TEST_DATASET_STRATEGY_TEMPLATE = """Based on the evaluation framework:
+Evaluation Framework: {evaluation_framework}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate a comprehensive test dataset strategy that includes:
+1. Test data generation approaches
+2. Dataset validation criteria
+3. Quality control measures
+4. Coverage requirements
+5. Sampling strategies
+
+Return as a structured test dataset strategy."""
+
+# 测试数据集生成计划模板
+TEST_DATASETS_PLAN_TEMPLATE = """Based on the test strategy and evaluation framework:
+CSV File Path: {csv_file_path}
+Test Strategy: {test_strategy}
+Evaluation Framework: {evaluation_framework}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate a detailed plan for creating test datasets that includes:
+1. Specific dataset variations to create
+2. Generation parameters and settings
+3. Validation procedures for each dataset
+4. Expected outcomes and quality metrics
+5. Implementation timeline
+
+Return as a structured test datasets generation plan."""
+
+# 测试验证代码模板
+TEST_VALIDATION_CODE_TEMPLATE = """Based on the test generation plan:
+Test Generation Plan: {test_generation_plan}
+Original CSV File Path: {csv_file_path}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate Python code for test dataset generation and validation that implements the plan.
+
+Code Requirements:
+1. **File Path Management:**
+   - Use original CSV path: {csv_file_path}
+   - Create test_datasets/ folder in same directory as CSV
+   - Generate multiple test dataset variations
+
+2. **Test Dataset Generation:**
+   - Create variations based on the generation plan
+   - Save each test dataset with descriptive names
+   - Log generation process and validation results
+
+3. **Quality Validation:**
+   - Validate data integrity for each generated dataset
+   - Check statistical properties vs original data
+   - Save validation reports to test_datasets/validation_reports/
+
+4. **Output Organization:**
+   - Save test datasets to: [csv_dir]/test_datasets/
+   - Save validation logs to: [csv_dir]/test_datasets/validation_reports/
+   - Return list of generated dataset paths and validation results
+
+5. **Function Structure:**
+   - Create function: def generate_test_datasets(csv_path: str) -> dict
+   - Return: {{'generated_datasets': [...], 'validation_results': [...], 'summary': {{...}}}}
+
+The code should create multiple test dataset variations and validate their quality.
+Return the code wrapped in ```python``` tags."""
+
+# 最终评估策略模板
+FINAL_EVALUATION_STRATEGY_TEMPLATE = """Based on evaluation components:
+Evaluation Framework: {evaluation_framework}
+Test Plan: {test_plan}
+Validation Code: {validation_code}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate a comprehensive final evaluation strategy that includes:
+1. Complete evaluation methodology
+2. Final testing procedures
+3. Results analysis framework
+4. Quality assurance measures
+5. Success criteria and metrics
+
+Return as a structured final evaluation strategy."""
+
+# DCLS最终报告模板
+DCLS_FINAL_REPORT_TEMPLATE = """Generate a comprehensive DCLS (Data-Centric Learning Science) final report:
+Problem Description: {problem_description}
+Context Description: {context_description}
+Final Evaluation Strategy: {final_evaluation_strategy}
+Best Results: {best_five_result}
+
+The report should include:
+1. Executive Summary
+2. Methodology Overview
+3. Data Analysis Results
+4. Model Performance Evaluation
+5. Stability Analysis Findings
+6. Final Recommendations
+7. Implementation Guidelines
+8. Risk Assessment and Mitigation
+9. Future Research Directions
+
+Return as a comprehensive markdown report."""
+
+# 可行性建议模板
+ACTIONABLE_RECOMMENDATIONS_TEMPLATE = """Based on the comprehensive DCLS report:
+DCLS Report: {dcls_report}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate specific, actionable recommendations that include:
+1. Immediate next steps
+2. Implementation priorities
+3. Resource requirements
+4. Success metrics
+5. Timeline estimates
+6. Risk mitigation strategies
+7. Quality checkpoints
+
+Return as a structured list of actionable recommendations."""
+
+# 最终评估代码模板
+FINAL_EVALUATION_CODE_TEMPLATE = """Generate Python code for final model evaluation:
+Evaluation Strategy: {evaluation_strategy}
+Test Validation Code: {test_validation_code}
+Original CSV File Path: {csv_file_path}
+
+Problem: {problem_description}
+Context: {context_description}
+
+Generate comprehensive Python code that implements the evaluation strategy.
+
+Code Requirements:
+1. **File Path Management:**
+   - Use original CSV path: {csv_file_path}
+   - Load best models from: [csv_dir]/models/
+   - Load test datasets from: [csv_dir]/test_datasets/
+   - Save final results to: [csv_dir]/final_evaluation_results/
+
+2. **Model Loading and Evaluation:**
+   - Load the best performing models from training phase
+   - Apply models to all test dataset variations
+   - Calculate comprehensive performance metrics
+   - Compare performance across different test scenarios
+
+3. **Statistical Analysis:**
+   - Perform statistical comparisons between models
+   - Calculate confidence intervals and significance tests
+   - Analyze performance stability across test variations
+   - Generate statistical summary reports
+
+4. **Results Organization:**
+   - Save evaluation metrics to: [csv_dir]/final_evaluation_results/metrics.json
+   - Save detailed reports to: [csv_dir]/final_evaluation_results/detailed_report.csv
+   - Save visualizations to: [csv_dir]/final_evaluation_results/plots/
+   - Create comprehensive evaluation summary
+
+5. **Error Handling and Logging:**
+   - Include proper error handling for model loading and data processing
+   - Log evaluation process to: [csv_dir]/final_evaluation_results/evaluation.log
+   - Validate data integrity and model compatibility
+   - Handle missing models or test data gracefully
+
+6. **Function Structure:**
+   - Create function: def final_model_evaluation(csv_path: str) -> dict
+   - Return: {{'evaluation_results': {...}, 'model_rankings': [...], 'summary': {{...}}, 'file_paths': {{...}}}}
+
+The code should provide a comprehensive final evaluation of all models using the generated test datasets.
+Return the code wrapped in ```python``` tags."""

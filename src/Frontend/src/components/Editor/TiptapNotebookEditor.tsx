@@ -550,6 +550,22 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   /**
    * 将HTML内容转换为cells数组 - 只处理markdown内容，保持现有code cell
    */
+  // Helper function to convert HTML table to markdown
+  function convertTableToMarkdown(tableNode) {
+    const rows = [];
+    Array.from(tableNode.querySelectorAll('tr')).forEach(tr => {
+      const rowMarkdown = '| ' + Array.from(tr.querySelectorAll('td, th')).map(cell => {
+        return cell.textContent.trim();
+      }).join(' | ') + ' |';
+      rows.push(rowMarkdown);
+    });
+    if (rows.length === 0) return '';
+    const colCount = rows[0].split('|').length - 2;
+    const separator = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
+    rows.splice(1, 0, separator);
+    return rows.join('\n');
+  }
+
   function convertHtmlToCells(html) {
     if (!html || html === '<p></p>') {
       return []
@@ -617,6 +633,31 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             const latexMarkdown = displayMode ? `$$${latex}$$` : `$${latex}$`
             currentMarkdownContent.push(latexMarkdown)
           }
+        } else if (node.getAttribute('data-type') === 'markdown-image') {
+          // 处理图片节点
+          console.log('发现图片节点:', node);
+          
+          // 从data属性获取图片信息
+          const src = node.getAttribute('data-src') || ''
+          const alt = node.getAttribute('data-alt') || ''
+          const title = node.getAttribute('data-title') || ''
+          const markdown = node.getAttribute('data-markdown') || ''
+          
+          // 如果有markdown属性，直接使用；否则构造markdown格式
+          const imageMarkdown = markdown || `![${alt}](${src}${title ? ` "${title}"` : ''})`
+          
+          if (imageMarkdown.trim()) {
+            currentMarkdownContent.push(imageMarkdown)
+          }
+        } else if (node.tagName && node.tagName.toLowerCase() === 'table') {
+          // 处理表格节点
+          console.log('发现表格节点:', node);
+          
+          // 将表格转换为markdown格式
+          const tableMarkdown = convertTableToMarkdown(node)
+          if (tableMarkdown.trim()) {
+            currentMarkdownContent.push(tableMarkdown)
+          }
         } else if (isHeading(node)) {
           // 如果是标题，先清空累积的内容，然后为标题创建独立的cell
           flushMarkdownContent()
@@ -649,7 +690,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   }
 
   /**
-   * Markdown到HTML转换 - 支持格式化标记和LaTeX
+   * Markdown到HTML转换 - 支持格式化标记、LaTeX和图片
    */
   function convertMarkdownToHtml(markdown) {
     if (!markdown) return '<p></p>'
@@ -658,6 +699,19 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     let processedText = markdown
     const latexNodes = []
     let latexCounter = 0
+    
+    // 处理图片语法 - 先处理图片，避免与其他格式冲突
+    const imageNodes = []
+    let imageCounter = 0
+    
+    // 提取并替换markdown图片语法
+    processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+      const placeholder = `__IMAGE_${imageCounter}__`
+      imageNodes[imageCounter] = `<div data-type="markdown-image" data-src="${src.trim()}" data-alt="${alt.trim()}" data-title="${alt.trim()}" data-markdown="${match}"></div>`
+      console.log('提取图片:', { alt: alt.trim(), src: src.trim(), markdown: match })
+      imageCounter++
+      return placeholder
+    })
     
     // 按行处理，判断LaTeX是否独占一行
     const lines = processedText.split('\n')
@@ -733,6 +787,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     
     // 处理行内格式化
     function processInlineFormatting(text) {
+      // 如果是图片占位符，直接返回不处理
+      if (text.match(/^__IMAGE_\d+__$/)) {
+        return text
+      }
+      
       return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // 粗体
         .replace(/\*(.*?)\*/g, '<em>$1</em>')              // 斜体
@@ -757,6 +816,12 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       // 处理单行内容
       if (lines.length === 1) {
         const line = lines[0].trim()
+        
+        // 检查是否是图片占位符
+        if (line.match(/^__IMAGE_\d+__$/)) {
+          return line // 直接返回占位符，不做任何处理
+        }
+        
         if (line.startsWith('# ')) {
           return `<h1>${processInlineFormatting(line.slice(2))}</h1>`
         }
@@ -785,11 +850,23 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       }
       
       // 多行段落
-      const processedLines = lines.map(line => processInlineFormatting(line)).join('<br>')
+      const processedLines = lines.map(line => {
+        const trimmedLine = line.trim()
+        // 如果整行是图片占位符，单独处理
+        if (trimmedLine.match(/^__IMAGE_\d+__$/)) {
+          return trimmedLine
+        }
+        return processInlineFormatting(line)
+      }).join('<br>')
       return `<p>${processedLines}</p>`
     })
     
     let result = htmlParagraphs.join('')
+    
+    // 恢复图片节点占位符
+    for (let i = 0; i < imageCounter; i++) {
+      result = result.replace(`__IMAGE_${i}__`, imageNodes[i])
+    }
     
     // 恢复LaTeX节点占位符
     for (let i = 0; i < latexCounter; i++) {
@@ -797,9 +874,12 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       result = result.replace(`__LATEX_INLINE_${i}__`, latexNodes[i])
     }
     
-    console.log('转换完成，包含LaTeX节点数:', latexCounter)
+    console.log('转换完成，包含LaTeX节点数:', latexCounter, '图片节点数:', imageCounter)
     if (latexCounter > 0) {
       console.log('最终HTML包含LaTeX:', result.includes('data-type="latex-block"'))
+    }
+    if (imageCounter > 0) {
+      console.log('最终HTML包含图片:', result.includes('data-type="markdown-image"'))
     }
     
     return result

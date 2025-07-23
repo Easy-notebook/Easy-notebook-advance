@@ -77,7 +77,7 @@
     }
   },
   "emptyState": {
-    "title": "Easy-notebook-EnvInsight",
+    "title": "VDSAgents",
     "commandPlaceholder": "Type a command...",
     "questionPlaceholder": "Ask anything about data science...",
     "commandMode": "Command mode",
