@@ -13,6 +13,7 @@ import {
 import { useAIPlanningContextStore } from '../store/aiPlanningContext'
 import usePreStageStore from '../store/preStageStore';
 import { generalResponse } from '../stages/StageGeneralFunction';
+import useStore from '../../../../store/notebookStore';
 
 // TypingTitle 组件
 const TypingTitle = () => {
@@ -176,6 +177,9 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
     /* ─────────── Store Access ─────────── */
     const choiceMap = usePreStageStore(state => state.choiceMap);
     const currentFile = usePreStageStore(state => state.currentFile);
+    const problem_description = usePreStageStore(state => state.problem_description);
+    const problem_name = usePreStageStore(state => state.problem_name);
+    const target = usePreStageStore(state => state.target);
     const setSelectedProblemStore = usePreStageStore(state => state.setSelectedProblem);
     const setDatasetInfoStore = usePreStageStore(state => state.setDatasetInfo);
     const addVariable = useAIPlanningContextStore(state => state.addVariable);
@@ -206,7 +210,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         setStep('confirm');
     }, []);
     
-    const handleFinalConfirm = useCallback(() => {
+    const handleFinalConfirm = useCallback(async () => {
         const problem_description = usePreStageStore.getState().problem_description;
         const problem_name = usePreStageStore.getState().problem_name;
         
@@ -221,7 +225,8 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
             setDatasetInfoStore(datasetBackground);
         }
         
-        confirmProblem();
+        // 调用确认回调
+        await confirmProblem();
     }, [datasetBackground, confirmProblem, addVariable, currentFile, setDatasetInfoStore]);
 
     // 初始化时生成问题选择
@@ -239,11 +244,24 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         usePreStageStore.getState().updateChoiceMap(choiceMap["message"]);
     }, [i18n.language]);
 
+    // 检查是否从EmptyState跳转过来（已有问题描述），直接跳到确认步骤
     useEffect(() => {
-        if (currentFile && choiceMap.length === 0) {
+        if (problem_description && problem_name && currentFile) {
+            // 如果已经有问题描述，说明是从EmptyState跳转过来的，直接跳到确认步骤
+            setSelectedProblem({
+                problem_name,
+                problem_description,
+                target: target || 'vds'
+            });
+            setStep('confirm');
+        }
+    }, [problem_description, problem_name, target, currentFile]);
+
+    useEffect(() => {
+        if (currentFile && choiceMap.length === 0 && !problem_description) {
             setPreProblem();
         }
-    }, [currentFile, choiceMap.length, setPreProblem]);
+    }, [currentFile, choiceMap.length, problem_description, setPreProblem]);
     
     /* ─────────── Render Steps ─────────── */
     if (step === 'select') {
@@ -417,7 +435,13 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                         
                         <div className="flex gap-4 justify-center">
                             <button
-                                onClick={() => setStep('select')}
+                                onClick={() => {
+                                    // 如果是从EmptyState跳转过来的，清除问题信息并返回到select步骤
+                                    if (problem_description) {
+                                        usePreStageStore.getState().setSelectedProblem('', '', '');
+                                    }
+                                    setStep('select');
+                                }}
                                 className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-colors"
                             >
                                 {t('emptyState.goBack') || '返回'}

@@ -74,6 +74,10 @@
       "lineNumbersDesc": "在代码块中显示行号",
       "tabSize": "制表符大小",
       "tabSizeDesc": "制表符的空格数量"
+    },
+    "language": {
+      "title": "语言设置",
+      "selectLanguage": "选择界面语言"
     }
   },
   "emptyState": {

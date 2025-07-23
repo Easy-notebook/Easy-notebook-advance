@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { Play, Upload, BarChartHorizontalBig, TerminalSquare, Settings2 } from 'lucide-react';
 import ModeToggle from './ModeToggle';
 import ExportToFile from '../FunctionBar/ExportToFile';
-import LanguageSwitcher from '../../../i18n/LanguageSwitcher';
 
 const VUE_PRIMARY = '#41B883';
 const VUE_SECONDARY = '#35495E';
@@ -59,7 +58,6 @@ const Header: React.FC<HeaderProps> = ({
           </button>
         )}
         <ModeToggle viewMode={viewMode} onModeChange={onModeChange} />
-        <LanguageSwitcher />
       </div>
 
       <div className="flex items-center gap-3">

@@ -74,6 +74,10 @@
       "lineNumbersDesc": "Show line numbers in code blocks",
       "tabSize": "Tab Size",
       "tabSizeDesc": "Number of spaces for tabs"
+    },
+    "language": {
+      "title": "Language Settings",
+      "selectLanguage": "Select Interface Language"
     }
   },
   "emptyState": {

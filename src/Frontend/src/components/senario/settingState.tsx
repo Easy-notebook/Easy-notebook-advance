@@ -1,6 +1,6 @@
 // components/SettingsPage.js
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, Settings2, Key, FileText, Keyboard } from 'lucide-react';
+import { Settings, Settings2, Key, FileText, Keyboard, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import useSettingsStore, { useSettings, useSettingsOpen} from '../../store/settingsStore';
 
@@ -31,8 +31,16 @@ const Switch = ({ checked, onCheckedChange, className = '' }) => (
     </button>
 );
 
+const Select = ({ className = '', ...props }) => (
+    <select
+        className={`w-full px-4 py-3 border border-gray-300 rounded-md text-lg
+        focus:outline-none focus:ring-2 focus:ring-theme-500 bg-white ${className}`}
+        {...props}
+    />
+);
+
 const SettingsPage = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const settings = useSettings();
     const settingsOpen = useSettingsOpen();
     const store = useSettingsStore();
@@ -63,6 +71,16 @@ const SettingsPage = () => {
             store.updateShortcut(key, value);
         } catch (error) {
             console.error('Failed to update shortcut:', error);
+        }
+    };
+
+    const handleLanguageChange = (language) => {
+        try {
+            store.updateLanguage(language);
+            i18n.changeLanguage(language);
+            localStorage.setItem('language', language);
+        } catch (error) {
+            console.error('Failed to update language:', error);
         }
     };
 
@@ -201,6 +219,27 @@ const SettingsPage = () => {
                             onChange={handleApiSettingsChange}
                             placeholder={t('settings.api.placeholders.apiTimeout')}
                         />
+                    </div>
+                </div>
+
+                <div className="border-t pt-6 mt-6">
+                    <h2 className="text-xl font-bold mb-4 flex items-center space-x-2">
+                        <Globe className="w-5 h-5" />
+                        <span>{t('settings.language.title')}</span>
+                    </h2>
+                    <div className="space-y-5">
+                        <div>
+                            <label className="block text-lg font-medium text-gray-700 mb-2">
+                                {t('settings.language.selectLanguage')}
+                            </label>
+                            <Select
+                                value={settings.language || i18n.language}
+                                onChange={(e) => handleLanguageChange(e.target.value)}
+                            >
+                                <option value="zh">中文</option>
+                                <option value="en">English</option>
+                            </Select>
+                        </div>
                     </div>
                 </div>
             </div>

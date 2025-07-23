@@ -197,6 +197,12 @@ export class NotebookApiService {
     // Upload file
     static async uploadFile(notebookId: string, files: File[], uploadConfig: UploadConfig): Promise<ApiResponse> {
         try {
+            console.log('=== NotebookApiService.uploadFile ===');
+            console.log('API_BASE_URL:', API_BASE_URL);
+            console.log('notebookId:', notebookId);
+            console.log('files:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
+            console.log('uploadConfig:', uploadConfig);
+            
             const formData = new FormData();
             formData.append('notebook_id', notebookId);
             formData.append('mode', uploadConfig.mode);
@@ -204,16 +210,39 @@ export class NotebookApiService {
             formData.append('max_files', (uploadConfig.maxFiles || 10).toString());
 
             files.forEach(file => {
+                console.log('Appending file to FormData:', file.name);
                 formData.append('files', file);
             });
 
-            const response = await fetch(`${API_BASE_URL}/upload_file`, {
+            // Log FormData contents
+            console.log('FormData contents:');
+            for (let [key, value] of formData.entries()) {
+                if (value instanceof File) {
+                    console.log(`${key}: File(${value.name}, ${value.size} bytes)`);
+                } else {
+                    console.log(`${key}: ${value}`);
+                }
+            }
+
+            const url = `${API_BASE_URL}/upload_file`;
+            console.log('Making request to:', url);
+            
+            const response = await fetch(url, {
                 method: 'POST',
                 body: formData
             });
-            return await handleResponse<ApiResponse>(response);
+            
+            console.log('Response status:', response.status);
+            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+            
+            const result = await handleResponse<ApiResponse>(response);
+            console.log('Parsed response:', result);
+            return result;
         } catch (error) {
-            console.error('Failed to upload files:', error);
+            console.error('Failed to upload files - detailed error:', error);
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
             throw error;
         }
     }
@@ -448,7 +477,7 @@ export const notebookApiIntegration = {
     },
 
     // Upload files
-    uploadFiles: async (notebookId: string, files: File[], config: UploadConfig): Promise<ApiResponse> => {
+    uploadFiles: async (notebookId: string, files: File[], config: UploadConfig, signal?: AbortSignal): Promise<ApiResponse> => {
         try {
             return await NotebookApiService.uploadFile(notebookId, files, config);
         } catch (error) {

@@ -58,6 +58,7 @@ export interface Settings {
     markdownPreferences: MarkdownPreferences;
     shortcuts: Shortcuts;
     theme: ThemeType;
+    language: string;
     syncEnabled: boolean;
     lastSyncTime: string | null;
 }
@@ -143,6 +144,9 @@ export interface SettingsStoreActions {
     // Shortcuts
     updateShortcut: (key: string, value: string) => void;
 
+    // Language
+    updateLanguage: (language: string) => void;
+
     // Reset Settings
     resetSetting: (key: keyof Settings) => void;
 
@@ -209,6 +213,7 @@ const initialSettings: Settings = {
         saveFile: 'Ctrl+S',
     },
     theme: 'system',
+    language: 'zh',
     syncEnabled: false,
     lastSyncTime: null,
 };
@@ -501,6 +506,22 @@ const createSettingsStore = (set: any, get: any): SettingsStore => ({
                 }
                 return state;
             });
+        } catch (error: any) {
+            set({ error: error.message });
+            throw error;
+        }
+    },
+
+    // Language
+    updateLanguage: (language: string) => {
+        try {
+            set((state: SettingsStoreState) => ({
+                settings: {
+                    ...state.settings,
+                    language,
+                },
+                error: null,
+            }));
         } catch (error: any) {
             set({ error: error.message });
             throw error;

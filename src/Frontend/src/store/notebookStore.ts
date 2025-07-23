@@ -17,7 +17,7 @@ export type CellType = 'code' | 'markdown' | 'Hybrid' | 'image';
 /**
  * 视图模式类型
  */
-export type ViewMode = 'complete' | 'step' | 'wysiwyg';
+export type ViewMode = 'complete' | 'step' | 'wysiwyg' | 'dslc';
 
 /**
  * 上传模式类型
@@ -298,18 +298,8 @@ const useStore = create<NotebookStore>(
   subscribeWithSelector((set, get) => ({
     // ================= 原有状态(不变) =================
     notebookId: null,
-    notebookTitle: 'Untitled', // 默认标题
+    notebookTitle: '', // 默认标题
     cells: [
-      // 默认的H1标题cell，始终在第一位
-      {
-        id: 'default-title-cell',
-        type: 'markdown' as CellType,
-        content: '# Untitled',
-        outputs: [],
-        enableEdit: true,
-        phaseId: null,
-        metadata: { isDefaultTitle: true } // 标记为默认标题
-      }
     ],
     tasks: [],
     currentPhaseId: null,
