@@ -1,6 +1,6 @@
 """
-Oracle.py - 修复版本
-Fixed version with improved error handling, security, and robustness
+Oracle.py - Clean and simplified version
+Provides OpenAI API integration with proper error handling
 """
 
 import openai
@@ -18,8 +18,9 @@ class Message:
     content: str
     
     def __post_init__(self):
-        if self.role not in ['system', 'user', 'assistant']:
-            raise ValueError(f"Invalid role: {self.role}. Must be 'system', 'user', or 'assistant'")
+        valid_roles = ['system', 'user', 'assistant']
+        if self.role not in valid_roles:
+            raise ValueError(f"Invalid role: {self.role}. Must be one of {valid_roles}")
         if not self.content or not self.content.strip():
             raise ValueError("Message content cannot be empty")
 
@@ -41,10 +42,9 @@ class OracleValidationError(OracleError):
 
 class Oracle:
     """
-    Enhanced Oracle class with improved error handling and security
+    Simplified Oracle class for OpenAI API integration
     """
     
-    # Supported models with their token limits
     SUPPORTED_MODELS = {
         "gpt-4": 8192,
         "gpt-4-turbo": 128000,
@@ -54,7 +54,6 @@ class Oracle:
         "gpt-3.5-turbo-16k": 16384
     }
     
-    # Current pricing (per 1K tokens) - should be updated regularly
     MODEL_PRICING = {
         "gpt-4": {"input": 0.03, "output": 0.06},
         "gpt-4-turbo": {"input": 0.01, "output": 0.03},
@@ -75,28 +74,11 @@ class Oracle:
         retry_delay: float = 2.0,
         enable_logging: bool = True
     ):
-        # Security: Use environment variable if api_key not provided
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise OracleValidationError(
-                "API key must be provided via parameter or OPENAI_API_KEY environment variable"
-            )
+            raise OracleValidationError("API key required via parameter or OPENAI_API_KEY env var")
         
-        # Validate model
-        if model not in self.SUPPORTED_MODELS:
-            raise OracleValidationError(f"Unsupported model: {model}. Supported models: {list(self.SUPPORTED_MODELS.keys())}")
-        
-        # Validate parameters
-        if not 0 <= temperature <= 2:
-            raise OracleValidationError("Temperature must be between 0 and 2")
-        if max_tokens is not None and max_tokens <= 0:
-            raise OracleValidationError("max_tokens must be positive")
-        if timeout <= 0:
-            raise OracleValidationError("timeout must be positive")
-        if max_retries < 0:
-            raise OracleValidationError("max_retries must be non-negative")
-        if retry_delay < 0:
-            raise OracleValidationError("retry_delay must be non-negative")
+        self._validate_init_params(model, temperature, max_tokens, timeout, max_retries, retry_delay)
         
         self.base_url = base_url
         self.model = model
@@ -106,7 +88,24 @@ class Oracle:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         
-        # Initialize OpenAI client
+        self._init_client()
+        self._setup_logging(enable_logging)
+    
+    def _validate_init_params(self, model, temperature, max_tokens, timeout, max_retries, retry_delay):
+        """Validate initialization parameters"""
+        if model not in self.SUPPORTED_MODELS:
+            raise OracleValidationError(f"Unsupported model: {model}")
+        if not 0 <= temperature <= 2:
+            raise OracleValidationError("Temperature must be between 0 and 2")
+        if max_tokens is not None and max_tokens <= 0:
+            raise OracleValidationError("max_tokens must be positive")
+        if timeout <= 0:
+            raise OracleValidationError("timeout must be positive")
+        if max_retries < 0 or retry_delay < 0:
+            raise OracleValidationError("max_retries and retry_delay must be non-negative")
+    
+    def _init_client(self):
+        """Initialize OpenAI client"""
         try:
             self.client = openai.OpenAI(
                 api_key=self.api_key,
@@ -115,8 +114,9 @@ class Oracle:
             )
         except Exception as e:
             raise OracleAPIError(f"Failed to initialize OpenAI client: {e}")
-        
-        # Setup logging
+    
+    def _setup_logging(self, enable_logging):
+        """Setup logging"""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         if enable_logging and not self.logger.handlers:
             handler = logging.StreamHandler()
@@ -128,33 +128,41 @@ class Oracle:
     def _validate_messages(self, messages: Union[List[Message], List[Dict[str, str]], str]) -> List[Dict[str, str]]:
         """Validate and prepare messages for API call"""
         if isinstance(messages, str):
-            if not messages.strip():
-                raise OracleValidationError("Message content cannot be empty")
-            return [{"role": "user", "content": messages.strip()}]
-        
+            return self._validate_string_message(messages)
         elif isinstance(messages, list):
-            if not messages:
-                raise OracleValidationError("Messages list cannot be empty")
-            
-            prepared_messages = []
-            for i, msg in enumerate(messages):
-                if isinstance(msg, Message):
-                    prepared_messages.append({"role": msg.role, "content": msg.content})
-                elif isinstance(msg, dict):
-                    if "role" not in msg or "content" not in msg:
-                        raise OracleValidationError(f"Message {i} missing required fields 'role' or 'content'")
-                    if msg["role"] not in ['system', 'user', 'assistant']:
-                        raise OracleValidationError(f"Invalid role in message {i}: {msg['role']}")
-                    if not msg["content"] or not msg["content"].strip():
-                        raise OracleValidationError(f"Empty content in message {i}")
-                    prepared_messages.append({"role": msg["role"], "content": msg["content"].strip()})
-                else:
-                    raise OracleValidationError(f"Invalid message type at index {i}: {type(msg)}")
-            
-            return prepared_messages
-        
+            return self._validate_list_messages(messages)
         else:
             raise OracleValidationError(f"Invalid messages type: {type(messages)}")
+    
+    def _validate_string_message(self, message: str) -> List[Dict[str, str]]:
+        """Validate single string message"""
+        if not message.strip():
+            raise OracleValidationError("Message content cannot be empty")
+        return [{"role": "user", "content": message.strip()}]
+    
+    def _validate_list_messages(self, messages: list) -> List[Dict[str, str]]:
+        """Validate list of messages"""
+        if not messages:
+            raise OracleValidationError("Messages list cannot be empty")
+        
+        prepared_messages = []
+        valid_roles = ['system', 'user', 'assistant']
+        
+        for i, msg in enumerate(messages):
+            if isinstance(msg, Message):
+                prepared_messages.append({"role": msg.role, "content": msg.content})
+            elif isinstance(msg, dict):
+                if "role" not in msg or "content" not in msg:
+                    raise OracleValidationError(f"Message {i} missing 'role' or 'content'")
+                if msg["role"] not in valid_roles:
+                    raise OracleValidationError(f"Invalid role in message {i}: {msg['role']}")
+                if not msg["content"] or not msg["content"].strip():
+                    raise OracleValidationError(f"Empty content in message {i}")
+                prepared_messages.append({"role": msg["role"], "content": msg["content"].strip()})
+            else:
+                raise OracleValidationError(f"Invalid message type at index {i}: {type(msg)}")
+        
+        return prepared_messages
 
     def _safe_get_response_content(self, response) -> str:
         """Safely extract content from API response"""
@@ -180,12 +188,7 @@ class Oracle:
         try:
             for chunk in response:
                 try:
-                    if (hasattr(chunk, 'choices') and 
-                        chunk.choices and 
-                        len(chunk.choices) > 0 and
-                        hasattr(chunk.choices[0], 'delta') and
-                        hasattr(chunk.choices[0].delta, 'content') and
-                        chunk.choices[0].delta.content is not None):
+                    if self._is_valid_chunk(chunk):
                         yield chunk.choices[0].delta.content
                 except (IndexError, AttributeError) as e:
                     self.logger.warning(f"Skipping malformed chunk: {e}")
@@ -193,6 +196,15 @@ class Oracle:
         except Exception as e:
             self.logger.error(f"Error in stream response: {e}")
             raise OracleAPIError(f"Stream processing error: {e}")
+    
+    def _is_valid_chunk(self, chunk) -> bool:
+        """Check if chunk is valid"""
+        return (hasattr(chunk, 'choices') and 
+                chunk.choices and 
+                len(chunk.choices) > 0 and
+                hasattr(chunk.choices[0], 'delta') and
+                hasattr(chunk.choices[0].delta, 'content') and
+                chunk.choices[0].delta.content is not None)
 
     def generate(
         self,
@@ -200,33 +212,15 @@ class Oracle:
         stream: bool = False,
         **kwargs
     ) -> Union[str, Iterator[str]]:
-        """Generate response with enhanced error handling and retries"""
+        """Generate response with error handling and retries"""
         prepared_messages = self._validate_messages(messages)
-        
-        # Check token limits
-        total_tokens = sum(self.count_tokens(msg["content"]) for msg in prepared_messages)
-        model_limit = self.SUPPORTED_MODELS[self.model]
-        if total_tokens > model_limit * 0.8:  # Leave 20% buffer for response
-            self.logger.warning(f"Input tokens ({total_tokens}) approaching model limit ({model_limit})")
-        
-        last_exception = None
+        self._check_token_limits(prepared_messages)
         
         for attempt in range(self.max_retries + 1):
             try:
                 self.logger.info(f"Generating response (attempt {attempt + 1}/{self.max_retries + 1})")
                 
-                # Prepare API call parameters
-                api_params = {
-                    "model": self.model,
-                    "messages": prepared_messages,
-                    "temperature": self.temperature,
-                    "stream": stream,
-                    **kwargs
-                }
-                
-                if self.max_tokens:
-                    api_params["max_tokens"] = self.max_tokens
-                
+                api_params = self._build_api_params(prepared_messages, stream, **kwargs)
                 response = self.client.chat.completions.create(**api_params)
                 
                 if stream:
@@ -239,35 +233,46 @@ class Oracle:
             except openai.AuthenticationError as e:
                 self.logger.error(f"Authentication error: {str(e)}")
                 raise OracleAPIError(f"Authentication failed: {e}")
-                
             except openai.RateLimitError as e:
-                last_exception = e
                 if attempt < self.max_retries:
                     wait_time = self.retry_delay * (2 ** attempt)
-                    self.logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry...")
+                    self.logger.warning(f"Rate limit hit, waiting {wait_time}s")
                     time.sleep(wait_time)
                     continue
-                else:
-                    self.logger.error(f"Rate limit error after {self.max_retries + 1} attempts")
-                    raise OracleAPIError(f"Rate limit exceeded after retries: {e}")
-                    
+                raise OracleAPIError(f"Rate limit exceeded: {e}")
             except openai.APIError as e:
-                last_exception = e
                 if attempt < self.max_retries:
-                    self.logger.warning(f"API error on attempt {attempt + 1}, retrying: {str(e)}")
+                    self.logger.warning(f"API error on attempt {attempt + 1}, retrying")
                     time.sleep(self.retry_delay)
                     continue
-                else:
-                    self.logger.error(f"API error after {self.max_retries + 1} attempts")
-                    raise OracleAPIError(f"API error after retries: {e}")
-                    
+                raise OracleAPIError(f"API error: {e}")
             except Exception as e:
                 self.logger.error(f"Unexpected error: {str(e)}")
                 raise OracleError(f"Unexpected error: {e}")
         
-        # This should never be reached, but just in case
-        if last_exception:
-            raise OracleAPIError(f"Failed after all retries: {last_exception}")
+        raise OracleAPIError("Failed after all retry attempts")
+    
+    def _check_token_limits(self, messages: List[Dict[str, str]]):
+        """Check if messages approach token limits"""
+        total_tokens = sum(self.count_tokens(msg["content"]) for msg in messages)
+        model_limit = self.SUPPORTED_MODELS[self.model]
+        if total_tokens > model_limit * 0.8:
+            self.logger.warning(f"Input tokens ({total_tokens}) approaching limit ({model_limit})")
+    
+    def _build_api_params(self, messages: List[Dict[str, str]], stream: bool, **kwargs) -> dict:
+        """Build API parameters"""
+        api_params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "stream": stream,
+            **kwargs
+        }
+        
+        if self.max_tokens:
+            api_params["max_tokens"] = self.max_tokens
+        
+        return api_params
 
     def generate_with_system(
         self,
@@ -292,7 +297,7 @@ class Oracle:
         messages: Union[List[Message], List[Dict[str, str]], str],
         **kwargs
     ) -> Dict[str, Any]:
-        """Generate JSON response with enhanced validation"""
+        """Generate JSON response with validation"""
         kwargs["response_format"] = {"type": "json_object"}
         response = self.generate(messages, stream=False, **kwargs)
         
@@ -305,12 +310,12 @@ class Oracle:
                 raise ValueError("Response is not a JSON object")
             return parsed_json
         except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse JSON response: {str(e)}")
+            self.logger.error(f"Failed to parse JSON response: {e}")
             self.logger.error(f"Raw response: {response}")
-            raise OracleAPIError(f"Invalid JSON response: {str(e)}")
+            raise OracleAPIError(f"Invalid JSON response: {e}")
 
     def count_tokens(self, text: str) -> int:
-        """Count tokens with enhanced error handling"""
+        """Count tokens with fallback estimation"""
         if not text:
             return 0
         
@@ -318,16 +323,14 @@ class Oracle:
             import tiktoken
             try:
                 encoding = tiktoken.encoding_for_model(self.model)
-                return len(encoding.encode(text))
             except KeyError:
-                # Fallback to cl100k_base encoding for unknown models
                 encoding = tiktoken.get_encoding("cl100k_base")
-                return len(encoding.encode(text))
+            return len(encoding.encode(text))
         except ImportError:
-            self.logger.warning("tiktoken not available, using rough estimation")
+            self.logger.warning("tiktoken not available, using estimation")
             return len(text) // 4
         except Exception as e:
-            self.logger.warning(f"Token counting failed: {str(e)}, using rough estimation")
+            self.logger.warning(f"Token counting failed: {e}, using estimation")
             return len(text) // 4
 
     def estimate_cost(self, input_tokens: int, output_tokens: int) -> float:
@@ -371,7 +374,7 @@ class Oracle:
 
 
 class Conversation:
-    """Enhanced conversation management with better error handling"""
+    """Simplified conversation management"""
     
     def __init__(self, engine: Oracle):
         if not isinstance(engine, Oracle):
