@@ -23,6 +23,8 @@ import SettingsPage from '../senario/settingState';
 import PreviewApp from './Display/PreviewApp';
 import Header from './MainContainer/Header';
 import MainContent from './MainContainer/MainContent';
+import WorkflowControl from './MainContainer/WorkflowControl';
+import { useWorkflowControlStore } from './store/workflowControlStore';
 
 
 // Main NotebookApp component
@@ -70,6 +72,17 @@ const NotebookApp = () => {
   const { handleImport, initializeNotebook } = ImportNotebook4JsonOrJupyter();
 
   const settingstore = useSettingsStore();
+  
+  // WorkflowControl store for global state management
+  const { 
+    setContinueButtonText,
+    setIsGenerating,
+    setIsCompleted,
+    setOnTerminate,
+    setOnContinue,
+    setOnCancelCountdown,
+    reset: resetWorkflowControl
+  } = useWorkflowControlStore();
 
   // Helper function to find phase index
   const findPhaseIndex = useCallback(() => {
@@ -381,6 +394,52 @@ const NotebookApp = () => {
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [setShowCommandInput]);
 
+  // Debug isExecuting state changes
+  useEffect(() => {
+    console.log('NotebookApp: isExecuting changed to:', isExecuting);
+  }, [isExecuting]);
+
+  // WorkflowControl state management based on view mode
+  useEffect(() => {
+    console.log('NotebookApp: WorkflowControl state update', { 
+      viewMode, 
+      isExecuting, 
+      currentPhaseId 
+    });
+    
+    if (viewMode === 'dslc') {
+      // In DSLC mode, DynamicStageTemplate will manage the state
+      console.log('NotebookApp: Setting DSLC mode state - clearing handlers for DynamicStageTemplate');
+      setContinueButtonText('Continue to Next Stage');
+      // Clear handlers to let DynamicStageTemplate set them
+      setOnTerminate(null);
+      setOnContinue(null);
+      setOnCancelCountdown(null);
+    } else {
+      // In other modes, provide basic state
+      console.log('NotebookApp: Setting non-DSLC mode state');
+      setContinueButtonText('Continue Workflow');
+      // Set basic state for non-DSLC modes
+      setIsGenerating(isExecuting);
+      // In non-DSLC modes, consider it completed when not executing
+      setIsCompleted(!isExecuting);
+      
+      // Provide basic handlers for non-DSLC modes
+      setOnTerminate(() => {
+        console.log('Basic terminate handler called');
+        // Could stop any running operations here
+      });
+      
+      setOnContinue(() => {
+        console.log('Basic continue handler called');
+        // Could implement basic workflow continuation here
+        if (viewMode === 'step' && currentPhaseId) {
+          handleNextPhase();
+        }
+      });
+    }
+  }, [viewMode, isExecuting, currentPhaseId, setContinueButtonText, setIsGenerating, setIsCompleted, setOnTerminate, setOnContinue, setOnCancelCountdown, handleNextPhase]);
+
   // 键盘快捷键处理
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -504,6 +563,14 @@ const NotebookApp = () => {
           currentStepIndex={currentStepIndex}
         />
       </div>
+      
+      {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
+      <WorkflowControl 
+        fallbackIsExecuting={isExecuting}
+        fallbackViewMode={viewMode}
+        fallbackCurrentPhaseId={currentPhaseId}
+        fallbackHandleNextPhase={handleNextPhase}
+      />
     </div>
   );
 };

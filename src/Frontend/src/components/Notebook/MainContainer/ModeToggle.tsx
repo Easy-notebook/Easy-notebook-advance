@@ -20,6 +20,7 @@ const ModeToggle = memo<ModeToggleProps>(({ viewMode, onModeChange }) => {
     { id: 'complete', label: 'Create Mode', name: t('modeToggle.completeMode') },
     { id: 'step', label: 'Demo Mode', name: t('modeToggle.stepMode') },
     { id: 'wysiwyg', label: 'WYSIWYG Mode', name: t('modeToggle.wysiwygMode') },
+    { id: 'dslc', label: 'Debug Mode', name: t('modeToggle.debugMode') },
   ];
 
   const selectedMode = modes.find(mode => mode.id === viewMode);

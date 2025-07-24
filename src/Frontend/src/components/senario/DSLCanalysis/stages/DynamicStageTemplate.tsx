@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle, AlertCircle, XCircle, RefreshCw } from 'lucide-react';
 import PersistentStepContainer from '../cells/GrowingCellContainer';
-import GeneratingIndicator from '../UI/GeneratingIndicator';
 import { useScriptStore } from '../store/useScriptStore';
 import { useAIPlanningContextStore } from '../store/aiPlanningContext';
 import { usePipelineStore } from '../store/pipelineController';
+import { useWorkflowControlStore } from '../../../Notebook/store/workflowControlStore';
 import constants from './constants';
 
 // ==================== Operation Queue Class (Plan Executor) ====================
@@ -182,6 +182,19 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setChecklist,
         addVariable,
     } = useAIPlanningContextStore();
+
+    // WorkflowControl store
+    const {
+        setIsGenerating: setWorkflowGenerating,
+        setIsCompleted: setWorkflowCompleted,
+        setContinueCountdown: setWorkflowCountdown,
+        setIsReturnVisit: setWorkflowReturnVisit,
+        setContinueButtonText,
+        setOnTerminate,
+        setOnContinue,
+        setOnCancelCountdown,
+        reset: resetWorkflowControl
+    } = useWorkflowControlStore();
 
     const { clearStep, switchStep, execAction, markStepIncomplete } = useScriptStore();
 
@@ -582,9 +595,30 @@ const DynamicStageTemplate = ({ onComplete }) => {
     }, [stepsLoaded.length, currentStepIndex, loadStep, toDoList, isStageComplete, stageId]);
 
     const handleContinue = useCallback(() => {
+        console.log('handleContinue called:', { 
+            stageId, 
+            onComplete: !!onComplete,
+            hasOnComplete: typeof onComplete === 'function',
+            isStageComplete,
+            isCompleted 
+        });
+        
+        // Always mark stage as complete first
         markStageAsComplete(stageId);
-        onComplete && onComplete();
-    }, [markStageAsComplete, onComplete, stageId]);
+        
+        // If onComplete exists, call it
+        if (onComplete && typeof onComplete === 'function') {
+            console.log('Calling onComplete function...');
+            try {
+                onComplete();
+                console.log('onComplete function called successfully');
+            } catch (error) {
+                console.error('Error calling onComplete:', error);
+            }
+        } else {
+            console.log('No onComplete function provided or not in DCLS mode');
+        }
+    }, [markStageAsComplete, onComplete, stageId, isStageComplete, isCompleted]);
 
     const [continueCountdown, cancelCountdown, setContinueCountdown] = useCountdown(0, handleContinue);
 
@@ -603,11 +637,63 @@ const DynamicStageTemplate = ({ onComplete }) => {
         }, 0);
     };
 
-    const handleTerminate = () => {
+    const handleTerminate = useCallback(() => {
+        console.log('handleTerminate called');
         operationQueue.current.clear();
         setIsCompleted(true);
         setAutoAdvance(false);
-    };
+    }, []);
+
+    const handleCancelCountdown = useCallback(() => {
+        cancelCountdown();
+        setAutoAdvance(false);
+    }, [cancelCountdown]);
+
+    // Use refs to store latest function references to avoid infinite loops
+    const handleTerminateRef = useRef(handleTerminate);
+    const handleContinueRef = useRef(handleContinue);
+    const handleCancelCountdownRef = useRef(handleCancelCountdown);
+
+    // Update refs when functions change
+    useEffect(() => {
+        handleTerminateRef.current = handleTerminate;
+        handleContinueRef.current = handleContinue;
+        handleCancelCountdownRef.current = handleCancelCountdown;
+    });
+
+    // Sync state with WorkflowControl store - combined to reduce useEffect calls
+    useEffect(() => {
+        setWorkflowGenerating(isLoading && !isCompleted);
+        setWorkflowCompleted(isCompleted);
+        setWorkflowCountdown(continueCountdown);
+        setWorkflowReturnVisit(isReturnVisit);
+        setContinueButtonText(onComplete ? 'Continue to Next Stage' : `End ${config.stageTitle || 'Current Stage'}`);
+    }, [isLoading, isCompleted, continueCountdown, isReturnVisit, onComplete, config.stageTitle]);
+
+    // Set event handlers using stable wrapper functions
+    useEffect(() => {
+        console.log('DynamicStageTemplate: Setting WorkflowControl handlers', {
+            stageId,
+            hasOnComplete: !!onComplete,
+            hasHandleTerminate: !!handleTerminateRef.current,
+            hasHandleContinue: !!handleContinueRef.current,
+            hasHandleCancelCountdown: !!handleCancelCountdownRef.current
+        });
+        
+        setOnTerminate(() => handleTerminateRef.current());
+        setOnContinue(() => handleContinueRef.current());  
+        setOnCancelCountdown(() => handleCancelCountdownRef.current());
+        
+        console.log('DynamicStageTemplate: WorkflowControl handlers set successfully');
+    }, []); // Empty dependency array is safe now
+
+    // Don't reset WorkflowControl store on unmount - let NotebookApp manage it
+    // useEffect(() => {
+    //     return () => {
+    //         console.log('DynamicStageTemplate unmounting, resetting WorkflowControl store');
+    //         resetWorkflowControl();
+    //     };
+    // }, []);
 
     const EmptyState = () => <SkeletonLoader count={1} />;
 
@@ -741,39 +827,6 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                     ) : (
                                         <EmptyState />
                                     )}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex w-full">
-                            {!isCompleted && (
-                                <div className="flex items-center sticky">
-                                    <GeneratingIndicator handleTerminate={handleTerminate} />
-                                </div>
-                            )}
-                            {isCompleted && (
-                                <div className="w-full flex items-end justify-end">
-                                    {continueCountdown > 0 && !isReturnVisit && (
-                                        <button
-                                            onClick={() => {
-                                                cancelCountdown();
-                                                setAutoAdvance(false);
-                                            }}
-                                            className="mr-3 bg-white bg-opacity-20 backdrop-blur-lg rounded-full px-5 py-2.5 text-gray-700 hover:bg-white hover:bg-opacity-25 transition-all duration-300 shadow-sm text-sm font-medium focus:outline-none"
-                                        >
-                                            Cancel Auto Navigation
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={handleContinue}
-                                        className="bg-white bg-opacity-20 backdrop-blur-lg rounded-full px-5 py-2.5 shadow-lg text-gray-700 hover:text-theme-700 transition-all duration-300 flex items-center text-sm font-medium"
-                                    >
-                                        {onComplete ? 'Continue to Next Stage' : `End ${config.stageTitle || 'Current Stage'}`}
-                                        {continueCountdown > 0 && !isReturnVisit && (
-                                            <span className="ml-2 bg-theme-500 bg-opacity-80 px-2 py-0.5 rounded-full text-white text-xs">
-                                                {continueCountdown}s
-                                            </span>
-                                        )}
-                                    </button>
                                 </div>
                             )}
                         </div>
