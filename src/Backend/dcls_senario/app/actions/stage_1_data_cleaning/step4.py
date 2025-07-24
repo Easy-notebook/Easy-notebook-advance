@@ -58,10 +58,9 @@ print(data.head())
         
         data_integrity_check_code = clean_agent.generate_data_integrity_check_code_cli(csv_file_path)
         
-        step_template.add_text("## Data Integrity Checks") \
-                    .add_text("Now I'll run comprehensive integrity checks to identify any data quality issues:") \
+        step_template.add_text("Now I'll run comprehensive integrity checks to identify any data quality issues:") \
                     .add_code(data_integrity_check_code) \
-                    .exe_code_cli() \
+                    .exe_code_cli(mark_finnish="run comprehensive integrity checks") \
                     .next_thinking_event(event_tag="analyze_integrity_results",
                                         textArray=["Data Cleaning Agent is analyzing...","Analyzing data integrity check results..."])
         
@@ -73,23 +72,13 @@ print(data.head())
         integrity_problems = clean_agent.analyze_and_generate_fillna_operations_cli(data_integrity_check_result)
         
         if integrity_problems == "no problem":
-            step_template.add_text("## ✅ Data Integrity Analysis Complete") \
-                        .add_text("**Excellent!** The data integrity analysis shows no significant issues with the dataset.") \
-                        .add_text("🎯 **Data cleaning process completed successfully!**") \
-                        .add_text("") \
-                        .add_text("### 📊 **Data Cleaning Summary:**") \
-                        .add_text("- ✅ Dimension analysis completed") \
-                        .add_text("- ✅ Invalid values handled") \
-                        .add_text("- ✅ Missing values processed") \
-                        .add_text("- ✅ Data integrity verified") \
-                        .add_text("") \
-                        .add_text("🚀 **Ready to proceed to Exploratory Data Analysis!**")
+            step_template.add_text("Excellent! The data integrity analysis shows no significant issues with the dataset.") \
+                        .add_text("Data cleaning process completed successfully!") 
         else:
             markdown_str = step_template.to_tableh(integrity_problems)
             
             step_template \
                         .add_variable("data_integrity_problems", integrity_problems) \
-                        .add_text("## ⚠️ Data Integrity Issues Identified") \
                         .add_text("The integrity analysis revealed the following issues that need to be resolved:") \
                         .add_text(markdown_str) \
                         .next_thinking_event(event_tag="resolve_integrity_issues",
@@ -103,7 +92,7 @@ print(data.head())
         data_info = step_template.get_variable("data_info")
         
         if one_of_issue:
-            step_template.add_text(f"### Resolving Issue: {one_of_issue.get('problem', 'Data Integrity Issue')}") \
+            step_template.add_text(f"Resolving Issue: {one_of_issue.get('problem', 'Data Integrity Issue')}") \
                         .add_text("Generating cleaning code to resolve this specific integrity issue:") \
                         .add_code(clean_agent.generate_cleaning_code_cli(
                             csv_file_path, 
@@ -115,28 +104,23 @@ print(data.head())
                             "integrity_problem_resolved.csv"
                         )) \
                         .update_variable("csv_file_path", "integrity_problem_resolved.csv") \
-                        .exe_code_cli()                       
+                        .exe_code_cli(mark_finnish="resolved data integrity issue")                       
             
             if issue_left:
                 step_template.next_thinking_event(event_tag="resolve_integrity_issues",
                                                 textArray=["Data Cleaning Agent is working...","Processing next integrity issue..."])
             else:
                 step_template.add_text("") \
-                           .add_text("✅ **All data integrity issues have been resolved!**") \
-                           .add_text("") \
-                           .add_text("### 🎉 **Data Cleaning Process Complete!**") \
-                           .add_text("") \
-                           .add_text("### 📊 **Final Data Cleaning Summary:**") \
-                           .add_text("- ✅ Dimension analysis completed") \
-                           .add_text("- ✅ Invalid values handled") \
-                           .add_text("- ✅ Missing values processed") \
-                           .add_text("- ✅ Data integrity issues resolved") \
-                           .add_text("") \
-                           .add_text("🚀 **Ready to proceed to Exploratory Data Analysis!**")
+                           .add_text("All data integrity issues have been resolved!") \
+                           .add_text("Data Cleaning Process Complete!") \
+                           .add_text("- Dimension analysis completed") \
+                           .add_text("- Invalid values handled") \
+                           .add_text("- Missing values processed") \
+                           .add_text("- Data integrity issues resolved")
                 
         else:
-            step_template.add_text("✅ **No data integrity problems found.**") \
-                        .add_text("🎯 **Data cleaning process completed successfully!**")
+            step_template.add_text("No data integrity problems found.") \
+                        .add_text("Data cleaning process completed successfully!")
         
         return step_template.end_event()
     

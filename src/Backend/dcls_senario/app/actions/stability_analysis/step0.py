@@ -12,7 +12,7 @@ async def stability_analysis_step0(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 0: Stability Analysis Strategy") \
+        step_template.add_text("## Stability Analysis Strategy") \
                     .add_text("I will generate a comprehensive stability analysis plan to evaluate model robustness across different data preprocessing variations.") \
                     .next_thinking_event(event_tag="generate_stability_strategy",
                                         textArray=["PCS Agent is analyzing...","Generating stability analysis strategy..."])
@@ -44,7 +44,6 @@ async def stability_analysis_step0(
         
         step_template \
             .add_variable("stability_strategy", stability_strategy) \
-            .add_text("## Stability Analysis Strategy") \
             .add_text("Here is the comprehensive plan for evaluating model stability across different data preprocessing variations:") \
             .add_text(stability_strategy_table) \
             .next_thinking_event(event_tag="generate_dataset_variations",
@@ -64,7 +63,6 @@ async def stability_analysis_step0(
         
         step_template \
             .add_variable("dataset_variations", dataset_variations) \
-            .add_text("## Dataset Variations Generation") \
             .add_text("Generating multiple dataset variations for stability analysis:") \
             .add_text(variations_table) \
             .next_thinking_event(event_tag="generate_variations_code",
@@ -82,10 +80,9 @@ async def stability_analysis_step0(
         
         step_template \
             .add_variable("dataset_variations_code", variations_code) \
-            .add_text("## Generated Dataset Variations Code") \
             .add_text("The following code will create multiple dataset variations for stability testing:") \
             .add_code(variations_code) \
-            .exe_code_cli() \
+            .exe_code_cli(mark_finnish="created dataset variations") \
             .next_thinking_event(event_tag="analyze_variations_creation",
                                 textArray=["PCS Agent is analyzing...","Analyzing created dataset variations..."])
         
@@ -97,11 +94,9 @@ async def stability_analysis_step0(
         
         step_template \
             .add_variable("variations_creation_results", variations_results) \
-            .add_text("## Dataset Variations Created Successfully") \
             .add_text("Multiple dataset variations have been generated and are ready for model evaluation.") \
-            .add_text(f"**Variations Creation Results:**\n{variations_results}") \
+            .add_text(f"Variations Creation Results:\n{variations_results}") \
             .add_text("✅ Stability analysis strategy and dataset variations completed successfully.") \
-            .add_text("🎯 Ready for **Step 1: Batch Model Evaluation**")
         
         return step_template.end_event()
             

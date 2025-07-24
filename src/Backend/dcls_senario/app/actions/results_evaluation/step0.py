@@ -42,7 +42,6 @@ async def results_evaluation_step0(
         
         step_template \
             .add_variable("results_evaluation_framework", results_evaluation_framework) \
-            .add_text("## Results Evaluation Framework") \
             .add_text("Here is the comprehensive framework for final results evaluation and validation:") \
             .add_text(framework_table) \
             .next_thinking_event(event_tag="generate_test_strategy",
@@ -60,7 +59,6 @@ async def results_evaluation_step0(
         
         step_template \
             .add_variable("test_dataset_strategy", test_dataset_strategy) \
-            .add_text("## Test Dataset Generation Strategy") \
             .add_text("Here is the strategy for generating and validating test datasets:") \
             .add_text(test_strategy_table) \
             .add_text("✅ Results evaluation framework initialized successfully.") \

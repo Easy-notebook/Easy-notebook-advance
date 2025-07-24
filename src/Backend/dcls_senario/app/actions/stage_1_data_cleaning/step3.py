@@ -75,15 +75,48 @@ print(missing_data_str)
         missing_value_str = step_template.get_current_effect()
         step_template.add_variable("missing_value_str", missing_value_str)
         
-        # Generate missing value visualization code
-        missing_value_code = clean_agent.generate_missing_value_analysis_code_cli(
-            csv_file_path=csv_file_path, 
-            missing_data_str=missing_value_str
-        )
-        
+        # Create a simple, focused missing value bar chart
         step_template.add_text("## Missing Value Visualization") \
-                    .add_text("Let me create visualizations to better understand the missing value patterns:") \
-                    .add_code(missing_value_code) \
+                    .add_text("Creating a focused overview of missing value percentages:") \
+                    .add_code(f"""import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Read data and calculate missing values
+data = pd.read_csv('{csv_file_path}')
+missing_percentages = data.isna().sum() / len(data) * 100
+
+# Filter columns with missing values
+missing_cols = missing_percentages[missing_percentages > 0].sort_values(ascending=False)
+
+# Create visualization only if there are missing values
+if len(missing_cols) > 0:
+    plt.figure(figsize=(10, 6))
+    bars = plt.bar(range(len(missing_cols)), missing_cols.values, color='lightcoral', alpha=0.7)
+    
+    # Add value labels on bars
+    for i, bar in enumerate(bars):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                f'{{:.1f}}%'.format(height), ha='center', va='bottom')
+    
+    plt.title('Missing Value Percentages by Column', fontsize=14, fontweight='bold')
+    plt.xlabel('Columns', fontsize=12)
+    plt.ylabel('Missing Value Percentage (%)', fontsize=12)
+    plt.xticks(range(len(missing_cols)), missing_cols.index, rotation=45, ha='right')
+    plt.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+    
+    # Save the plot
+    plt.savefig('data_cleaning_missing_value_overview.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.close()
+    
+    print(f"Missing value analysis complete. Found {{len(missing_cols)}} columns with missing values.")
+    print("Generated missing value overview chart: data_cleaning_missing_value_overview.png")
+else:
+    print("No missing values found in the dataset.")
+""") \
                     .exe_code_cli() \
                     .next_thinking_event(event_tag="analyze_missing_value_results",
                                         textArray=["Data Cleaning Agent is analyzing...","Analyzing missing value patterns..."])

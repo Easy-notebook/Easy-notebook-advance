@@ -45,7 +45,6 @@ async def results_evaluation_step2(
         
         step_template \
             .add_variable("final_evaluation_strategy", final_evaluation_strategy) \
-            .add_text("## Final Model Evaluation Strategy") \
             .add_text("Here is the comprehensive strategy for final model evaluation across all test variations:") \
             .add_text(final_evaluation_table) \
             .next_thinking_event(event_tag="execute_final_evaluation",
@@ -64,10 +63,9 @@ async def results_evaluation_step2(
         
         step_template \
             .add_variable("final_evaluation_code", final_evaluation_code) \
-            .add_text("## Final Model Evaluation Code") \
             .add_text("The following code will execute the comprehensive final evaluation across all test scenarios:") \
             .add_code(final_evaluation_code) \
-            .exe_code_cli() \
+            .exe_code_cli(mark_finnish="executed final model evaluation") \
             .next_thinking_event(event_tag="analyze_final_results",
                                 textArray=["Results Agent is analyzing...","Analyzing final evaluation results..."])
         
@@ -79,9 +77,8 @@ async def results_evaluation_step2(
         
         step_template \
             .add_variable("final_evaluation_results", final_evaluation_results) \
-            .add_text("## Final Evaluation Results") \
             .add_text("The comprehensive final evaluation has been completed across all test scenarios.") \
-            .add_text(f"**Final Results:**\n{final_evaluation_results}") \
+            .add_text(f"Final Results:\n{final_evaluation_results}") \
             .next_thinking_event(event_tag="generate_final_report",
                                 textArray=["Results Agent is finalizing...","Generating comprehensive DCLS report..."])
         
@@ -97,8 +94,6 @@ async def results_evaluation_step2(
         
         step_template \
             .add_variable("dcls_final_report", dcls_final_report) \
-            .add_text("# 🎉 DCLS Analysis Complete - Final Report Generated") \
-            .add_text("## Comprehensive Data-Centric Learning Science Analysis Report") \
             .add_text("The complete DCLS methodology has been successfully applied. Here is the final comprehensive report:") \
             .add_code(dcls_final_report, language="markdown") \
             .next_thinking_event(event_tag="generate_recommendations",
@@ -116,32 +111,19 @@ async def results_evaluation_step2(
         
         step_template \
             .add_variable("final_recommendations", final_recommendations) \
-            .add_text("## 🎯 Actionable Recommendations") \
             .add_text("Based on the comprehensive DCLS analysis, here are the key actionable recommendations:") \
             .add_text(recommendations_table) \
-            .add_text("") \
-            .add_text("## 🏆 DCLS Analysis Pipeline Successfully Completed!") \
-            .add_text("") \
-            .add_text("### ✅ **All 6 Stages of DCLS Methodology Executed:**") \
-            .add_text("1. **Stage 1-3**: Data Loading, Cleaning, and EDA ✓") \
-            .add_text("2. **Stage 4**: Model Training and Evaluation ✓") \
-            .add_text("3. **Stage 5**: Stability Analysis ✓") \
-            .add_text("4. **Stage 6**: Results Evaluation ✓") \
-            .add_text("") \
-            .add_text("### 📊 **Key Deliverables Generated:**") \
+            .add_text("All 6 Stages of DCLS Methodology Executed:") \
+            .add_text("1. Stage 1-3: Data Loading, Cleaning, and EDA ✓") \
+            .add_text("2. Stage 4: Model Training and Evaluation ✓") \
+            .add_text("3. Stage 5: Stability Analysis ✓") \
+            .add_text("4. Stage 6: Results Evaluation ✓") \
+            .add_text("Key Deliverables Generated:") \
             .add_text("- Comprehensive data analysis and cleaning strategy") \
             .add_text("- Feature engineering and model selection recommendations") \
             .add_text("- Stability analysis across multiple data variations") \
             .add_text("- Final model evaluation and validation results") \
             .add_text("- Complete DCLS analysis report with actionable insights") \
-            .add_text("") \
-            .add_text("### 🎯 **Next Steps:**") \
-            .add_text("- Review the generated code and execute the analysis pipeline") \
-            .add_text("- Implement the recommended models and strategies") \
-            .add_text("- Use the stability insights for robust model deployment") \
-            .add_text("- Apply the DCLS methodology to new datasets") \
-            .add_text("") \
-            .add_text("**🔬 Your data science project now follows rigorous, scientific methodology! 🔬**")
         
         return step_template.end_event()
             

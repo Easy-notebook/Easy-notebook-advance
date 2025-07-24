@@ -12,6 +12,7 @@ from application.workflow.workflow_service import WorkflowService
 from presentation.api.step_template_adapter import AgentStepBuilder, create_step_template_from_agent_result
 from presentation.api.frontend_state_adapter import FrontendStateAdapter, WorkflowFrontendState
 from shared.di_container import DIContainer
+from shared.utils.context_manager import context_manager
 
 
 class WorkflowEndpoint:
@@ -121,6 +122,12 @@ class WorkflowEndpoint:
             )
             
             response = builder.build()
+            
+            # 压缩响应数据以避免传输过长内容
+            state_summary = self.frontend_state_adapter.get_state_summary(frontend_state)
+            if context_manager.should_compress(state_summary):
+                state_summary = context_manager.compress_context(state_summary)
+            
             response.update({
                 "workflow_control": {
                     "workflow_id": session_data["workflow_id"],
@@ -129,10 +136,11 @@ class WorkflowEndpoint:
                     "session_data": session_data
                 },
                 "frontend_state_management": {
-                    "state_summary": self.frontend_state_adapter.get_state_summary(frontend_state),
+                    "state_summary": state_summary,
                     "agent_thinking_preserved": True,
                     "stateless_backend": True,
-                    "state_checkpoint": self.frontend_state_adapter.create_state_checkpoint(frontend_state)
+                    "state_checkpoint": self.frontend_state_adapter.create_state_checkpoint(frontend_state),
+                    "context_compressed": context_manager.should_compress(state_summary)
                 }
             })
             
@@ -172,6 +180,12 @@ class WorkflowEndpoint:
             if not workflow_id:
                 return {"error": True, "message": "workflow_id is required"}
             
+            # 压缩传入的前端状态以避免上下文过长
+            if context_manager.should_compress(incoming_frontend_state):
+                self.logger.info(f"Compressing frontend state, original size: {context_manager.estimate_context_size(incoming_frontend_state)}")
+                incoming_frontend_state = context_manager.compress_context(incoming_frontend_state)
+                self.logger.info(f"Compressed frontend state size: {context_manager.estimate_context_size(incoming_frontend_state)}")
+            
             # 获取并更新前端状态
             frontend_state = self._frontend_states.get(workflow_id)
             if not frontend_state:
@@ -190,6 +204,19 @@ class WorkflowEndpoint:
                 step_inputs=step_inputs,
                 frontend_state=incoming_frontend_state
             )
+            
+            # 为完成的阶段创建总结
+            if execution_result.get("flow_decision") == "proceed_to_next_stage":
+                current_stage = execution_result.get("current_stage")
+                if current_stage:
+                    stage_summary = context_manager.create_stage_summary(
+                        stage_id=current_stage,
+                        step_results=execution_result.get("step_results", {}),
+                        agent_history=incoming_frontend_state.get("agent_thinking_history", [])
+                    )
+                    # 将总结添加到前端状态
+                    frontend_state.stage_summaries = getattr(frontend_state, 'stage_summaries', {})
+                    frontend_state.stage_summaries[current_stage] = stage_summary
             
             if execution_result.get("status") == "error":
                 # 记录错误到前端状态

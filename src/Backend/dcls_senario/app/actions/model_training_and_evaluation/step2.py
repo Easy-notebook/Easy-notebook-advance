@@ -45,10 +45,9 @@ async def model_training_and_evaluation_step2(
         
         step_template \
             .add_variable("modeling_methods", stage3_model_methods) \
-            .add_text("## Integration Summary") \
-            .add_text("**Feature Engineering Methods (from Step 1):**") \
+            .add_text("Feature Engineering Methods (from Step 1):") \
             .add_text(feature_engineering_table) \
-            .add_text("**Modeling Methods (from Stage 3):**") \
+            .add_text("Modeling Methods (from Stage 3):") \
             .add_text(modeling_methods_table) \
             .add_text("✅ Both feature engineering and modeling methods are now integrated and ready for comprehensive training.")
         

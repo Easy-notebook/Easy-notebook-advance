@@ -45,8 +45,7 @@ async def results_evaluation_step1(
         
         step_template \
             .add_variable("test_generation_plan", test_generation_plan) \
-            .add_text("## Test Dataset Generation Plan") \
-            .add_text("Here is the comprehensive plan for generating test dataset variations:") \
+            .add_text("The comprehensive plan for generating test dataset variations:") \
             .add_text(test_plan_table) \
             .next_thinking_event(event_tag="generate_validation_code",
                                 textArray=["Results Agent is working...","Generating validation code..."])
@@ -62,10 +61,8 @@ async def results_evaluation_step1(
         
         step_template \
             .add_variable("test_validation_code", test_validation_code) \
-            .add_text("## Test Dataset Generation and Validation Code") \
-            .add_text("The following code will generate test dataset variations and validate their quality:") \
             .add_code(test_validation_code) \
-            .exe_code_cli() \
+            .exe_code_cli(mark_finnish="validated test dataset") \
             .next_thinking_event(event_tag="analyze_test_generation",
                                 textArray=["Results Agent is analyzing...","Analyzing test dataset generation results..."])
         
@@ -77,11 +74,9 @@ async def results_evaluation_step1(
         
         step_template \
             .add_variable("test_generation_results", test_generation_results) \
-            .add_text("## Test Dataset Generation Results") \
             .add_text("Multiple test dataset variations have been successfully generated and validated.") \
-            .add_text(f"**Generation Results:**\n{test_generation_results}") \
+            .add_text(f"Generation Results:\n{test_generation_results}") \
             .add_text("✅ Test dataset generation and validation completed successfully.") \
-            .add_text("🎯 Ready for **Step 2: Final Model Evaluation**")
         
         return step_template.end_event()
             

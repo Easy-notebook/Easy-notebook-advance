@@ -44,8 +44,7 @@ async def stability_analysis_step2(
         
         step_template \
             .add_variable("stability_analysis_summary", stability_analysis_summary) \
-            .add_text("## Stability Analysis Summary") \
-            .add_text("Here is the comprehensive analysis framework for evaluating model stability:") \
+            .add_text("The comprehensive analysis framework for evaluating model stability:") \
             .add_text(stability_summary_table) \
             .next_thinking_event(event_tag="generate_evaluation_report",
                                 textArray=["Prediction Agent is working...","Generating evaluation report template..."])
@@ -60,12 +59,9 @@ async def stability_analysis_step2(
         
         step_template \
             .add_variable("evaluation_report_template", evaluation_report_template) \
-            .add_text("## Model Evaluation Report Template") \
             .add_text("The following report template will be used to document the evaluation results:") \
             .add_code(evaluation_report_template, language="markdown") \
             .add_text("✅ Stability analysis and evaluation framework completed successfully.") \
-            .add_text("📊 **Model evaluation summary report will be generated after code execution**") \
-            .add_text("🎯 Ready to proceed to **Stage 6: Results Evaluation**")
         
         return step_template.end_event()
             

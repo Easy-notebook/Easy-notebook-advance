@@ -46,19 +46,14 @@ async def generate_exploratory_data_sequence_step4(
         
         step_template \
             .add_variable("comprehensive_eda_summary", comprehensive_summary) \
-            .add_text("## 📊 Comprehensive EDA Analysis Summary") \
             .add_text("Based on all the exploratory data analysis questions and results, here is the comprehensive summary:") \
             .add_text(comprehensive_summary) \
-            .add_text("") \
-            .add_text("### ✅ EDA Stage Completed Successfully!") \
-            .add_text("") \
-            .add_text("**Key Insights Discovered:**") \
+            .add_text("✅ EDA Stage Completed Successfully!") \
+            .add_text("Key Insights Discovered:") \
             .add_text("- Data patterns and distributions have been analyzed") \
             .add_text("- Variable relationships and correlations identified") \
             .add_text("- Data quality and integrity assessed") \
             .add_text("- Statistical properties and anomalies documented") \
-            .add_text("") \
-            .add_text("🎯 **Ready to proceed to Model Proposal stage** with comprehensive data understanding!")
         
         return step_template.end_event()
     

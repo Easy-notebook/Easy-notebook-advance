@@ -41,7 +41,6 @@ async def model_training_and_evaluation_step1(
         
         step_template \
             .add_variable("feature_engineering_methods", stage3_feature_methods) \
-            .add_text("## Feature Engineering Methods from Stage 3") \
             .add_text("Using the feature engineering methods recommended in Stage 3 Method Proposal:") \
             .add_text(feature_engineering_table) \
             .add_text("✅ Ready to proceed with model training using these feature engineering approaches.")

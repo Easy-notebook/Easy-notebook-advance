@@ -45,8 +45,7 @@ async def stability_analysis_step1(
         
         step_template \
             .add_variable("batch_evaluation_strategy", batch_evaluation_strategy) \
-            .add_text("## Batch Model Evaluation Strategy") \
-            .add_text("Here is the comprehensive approach for evaluating models across all dataset variations:") \
+            .add_text("The comprehensive approach for evaluating models across all dataset variations:") \
             .add_text(batch_evaluation_table) \
             .next_thinking_event(event_tag="generate_evaluation_code",
                                 textArray=["Prediction Agent is working...","Generating batch evaluation code..."])
@@ -63,10 +62,9 @@ async def stability_analysis_step1(
         
         step_template \
             .add_variable("batch_evaluation_code", batch_evaluation_code) \
-            .add_text("## Generated Batch Evaluation Code") \
             .add_text("The following code will execute model evaluation across all dataset variations:") \
             .add_code(batch_evaluation_code) \
-            .exe_code_cli() \
+            .exe_code_cli(mark_finnish="executed batch model evaluation") \
             .next_thinking_event(event_tag="analyze_batch_results",
                                 textArray=["Prediction Agent is analyzing...","Analyzing batch evaluation results..."])
         
@@ -87,12 +85,9 @@ async def stability_analysis_step1(
         step_template \
             .add_variable("batch_evaluation_results", batch_results) \
             .add_variable("batch_results_analysis", batch_analysis) \
-            .add_text("## Batch Evaluation Results Analysis") \
-            .add_text("Here is the comprehensive analysis of model performance across all dataset variations:") \
+            .add_text("The comprehensive analysis of model performance across all dataset variations:") \
             .add_text(analysis_table) \
             .add_text("✅ Batch evaluation completed and analyzed successfully.") \
-            .add_text("📊 **Performance across variations has been evaluated**") \
-            .add_text("🎯 Ready for **Step 2: Evaluation Results Summary**")
         
         return step_template.end_event()
             

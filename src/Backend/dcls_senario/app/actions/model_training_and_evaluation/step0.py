@@ -39,10 +39,9 @@ async def model_training_and_evaluation_step0(
         
         step_template \
             .add_variable("response_variable_analysis", response_variable_analysis) \
-            .add_text("## Response Variable Identification Analysis") \
             .add_text("Based on the problem description, context, and dataset structure, here is the analysis:") \
             .add_text(response_variable_table) \
-            .add_text("✅ Response variable identification completed successfully.")
+            .add_text("Response variable identification completed successfully.")
         
         return step_template.end_event()
             

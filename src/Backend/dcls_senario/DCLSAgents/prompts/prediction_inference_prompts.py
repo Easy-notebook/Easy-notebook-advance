@@ -264,49 +264,49 @@ def evaluate_all_datasets(datasets_dir: str) -> dict:
     for csv_file in csv_files:
         csv_path = os.path.join(datasets_dir, csv_file)
         result = train_and_evaluate_models(csv_path)
-        [把result储存到result_all中]
+        [Store result in result_all]
 
     
-    [找到最好的5个组合，这5个组合的评估指标值是不同的，如果相同更换组合。并储存到result_best_5变量]
+    [Find the best 5 combinations, these 5 combinations have different evaluation metric values, replace combinations if same. Store in result_best_5 variable]
     return result_best_5
 
-[调用函数，把评估结果的字典储存到result变量,符合上述结构，具有top_5_combinations和evaluation_metric其中dataset、model、feature_count、features、metrics都是必有的字段]
+[Call function, store evaluation results dictionary in result variable, conform to above structure, with top_5_combinations and evaluation_metric where dataset, model, feature_count, features, metrics are all required fields]
 ```
 """
 
-# 添加结果总结模板
-RESULT_SUMMARY_TEMPLATE = """任务：模型评估结果总结
-任务描述：将模型评估结果按性能排序并清晰展示每个组合的详细信息。
+# Result Summary Template
+RESULT_SUMMARY_TEMPLATE = """Task: Model Evaluation Result Summary
+Task Description: Sort model evaluation results by performance and clearly display detailed information for each combination.
 
-输入数据：
-评估结果字典: {results}
+Input Data:
+Evaluation results dictionary: {results}
 
-输出格式：
+Output Format:
 ```markdown
-# 模型评估结果排名
+# Model Evaluation Result Rankings
 
 ## Top 1
-- 数据集：
-- 模型：
-- 特征数量：
-- 使用的特征：
-- 评估指标及相应得分：
+- Dataset:
+- Model:
+- Feature Count:
+- Features Used:
+- Evaluation Metrics and Corresponding Scores:
 
 ## Top 2
-[类似格式]
+[Similar format]
 
 ## Top 3
-[类似格式]
+[Similar format]
 
 ## Top 4
-[类似格式]
+[Similar format]
 
 ## Top 5
-[类似格式]
+[Similar format]
 ```
 """
 
-# 训练策略生成模板
+# Training Strategy Generation Template
 TRAINING_EVALUATION_STRATEGY_TEMPLATE = """Based on the problem description, context, and EDA summary:
 Problem: {problem_description}
 Context: {context_description}

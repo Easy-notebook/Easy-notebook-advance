@@ -63,10 +63,9 @@ async def model_training_and_evaluation_step3(
         
         step_template \
             .add_variable("model_training_code", training_code) \
-            .add_text("## Generated Model Training Code") \
             .add_text("The following code will train and evaluate multiple models using the selected strategies:") \
             .add_code(training_code) \
-            .exe_code_cli() \
+            .exe_code_cli(mark_finnish="trained and evaluated multiple models") \
             .next_thinking_event(event_tag="analyze_training_results",
                                 textArray=["Prediction Agent is working...","Analyzing model training results..."])
         
@@ -87,12 +86,9 @@ async def model_training_and_evaluation_step3(
         step_template \
             .add_variable("training_results", training_results) \
             .add_variable("training_results_analysis", results_analysis) \
-            .add_text("## Model Training Results Analysis") \
             .add_text("Here is the comprehensive analysis of the model training results:") \
             .add_text(results_table) \
             .add_text("✅ Model training and evaluation completed successfully.") \
-            .add_text("📊 **Training results have been analyzed and stored for stability analysis**") \
-            .add_text("🎯 Ready to proceed to **Stage 5: Stability Analysis**")
         
         return step_template.end_event()
             

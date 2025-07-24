@@ -47,10 +47,8 @@ async def generate_exploratory_data_sequence_step3(
         
         if eda_question:
             step_template.add_text(f"#### Solving EDA Question: {eda_question['question']}") \
-                        .add_text(f"Now,{eda_question['action']}") \
-                        .add_variable("current_eda_question", eda_question) \
                         .add_code(clean_agent.generate_eda_code_cli(csv_file_path, eda_question,data_info,data_preview)) \
-                        .exe_code_cli() \
+                        .exe_code_cli(mark_finnish=f"solved EDA Question: {eda_question['question']}") \
                         .next_thinking_event(event_tag="analyze_eda_result",
                                         textArray=["EDA Agent is thinking...","analyzing eda result..."]) 
         else:

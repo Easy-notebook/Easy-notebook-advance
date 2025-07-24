@@ -13,7 +13,7 @@ RESULTS_EVALUATION_TEMPLATE = """你是一个数据科学专家，专注于使�
       训练集和验证集是我们知道真实标签的数据,其中我们在训练集上训练,在验证集上评估模型性能
       测试集是真实数据中我们不知道真实标签的数据
 
-2. 相关技术分析说明和拘役的操作方法：
+2. Relevant Technical Analysis and Operation Methods:
     1. 使用 PCS 选择单一预测拟合
         1. 可预测性筛选:确定哪个拟合具有最佳验证集性能。
             a. 使用不同的清理和预处理判断组合创建并记录清理/预处理训练集和验证集的多个版本。设定最终清理/预处理的数据集数量为 K。  
@@ -32,19 +32,19 @@ RESULTS_EVALUATION_TEMPLATE = """你是一个数据科学专家，专注于使�
         2. 使用集成为新观测计算预测:可以基于通过可预测性筛选步骤的拟合(例如,前 10% 的拟合) 通过平均其连续预测响应或取其二元预测响应的多数票来计算集成的预测。  
         3. 测试集评估:使用测试集观测评估你的集成的预测性能,以提供其预测性能的最终独立评估。
 
-3.在预测推断探索中，我们已经完成了以下步骤：
+3. In prediction inference exploration, we have completed the following steps:
     1. 我们已经通过PCS法则创建了K 个清理/预处理的判断组合，创建了L 个不同的算法
     2. 我们已经把最开始传入的数据划分为训练集和验证集，并已经在训练集上训练、预测集上评估了K × L 个预测拟合
     3. 我们已经得到最佳的5个预测拟合在验证集上的评估结果
     4. 我们将提供清洗得到不同数据集、批训练不同数据集的相关代码
     5. 接下来，我需要您帮助我使用 PCS 选择单一预测拟合和PCS 集成，我们将提供不知道真实标签的测试集，用最佳的5个预测拟合在训练集上训练算法并在测试集上完成拟合
 
-4.注意
-  1.为了避免转义错误，定义路径的时候请使用/，比如...MyAgent/obesity_risks/1/data/test.csv
-5.相关背景
-数据科学项目描述: {problem_description}
-数据背景描述: {context_description}
-最佳的五个预测拟合：{best_five_result}
+4. Notes
+  1. To avoid escape errors, please use / when defining paths, e.g., ...MyAgent/obesity_risks/1/data/test.csv
+5. Related Background
+Data science project description: {problem_description}
+Data background description: {context_description}
+Best five predictive fits: {best_five_result}
 
 """
 

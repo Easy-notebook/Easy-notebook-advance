@@ -282,7 +282,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
     }, [execAction, addEffect]);
 
     // ---------- Stream Request Processing (current step already updated in loadStep) ----------
-    const executeStepRequest = useCallback(async (stepIndex, stepId, controller) => {
+    const executeStepRequest = useCallback(async (stepIndex, stepId, controller, retryCount = 0) => {
+        const MAX_RETRIES = 10; // 添加重试次数限制避免无限递归
+        
         setIsLoading(true);
         await new Promise(resolve => setTimeout(resolve, constants.DELAY.API_REQUEST_DELAY));
 
@@ -479,9 +481,16 @@ const DynamicStageTemplate = ({ onComplete }) => {
             console.log('feedbackResult', feedbackResult);
 
             if (!feedbackResult.targetAchieved) {
-                console.log('Target not achieved, retrying step');
-                await executeStepRequest(stepIndex, stepId, controller);
-                return;
+                if (retryCount < MAX_RETRIES) {
+                    console.log(`Target not achieved, retrying step (${retryCount + 1}/${MAX_RETRIES})`);
+                    await executeStepRequest(stepIndex, stepId, controller, retryCount + 1);
+                    return;
+                } else {
+                    console.log('Max retries reached, marking step as failed');
+                    setError(`Step failed after ${MAX_RETRIES} attempts: Target not achieved`);
+                    setIsLoading(false);
+                    return;
+                }
             }
 
             console.log('Target achieved! Proceeding to next step');
