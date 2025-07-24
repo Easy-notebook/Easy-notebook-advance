@@ -27,7 +27,7 @@ async def generate_data_cleaning_sequence_step2(
     
     # 分支1：待办事项为空
     if step_template.event("start"):
-        step_template.add_text("## Step2: Invalid Value Analysis") \
+        step_template.add_text("### Step2: Invalid Value Analysis") \
                     .add_code(
                             f"""import pandas as pd
 data = pd.read_csv('{csv_file_path}')
@@ -102,7 +102,6 @@ print(data_describe)
             
             step_template.add_text(f"Found {len(all_issues)} invalid value issues. Grouping by method type for efficient batch processing:")
             
-            current_csv_path = csv_file_path
             method_counter = 1
             final_output_filename = "invalid_value_resolved.csv"
             
@@ -111,22 +110,23 @@ print(data_describe)
                 step_template.add_text(f"#### Method Group {method_counter}: Processing {len(issues)} Issues")
                 step_template.add_text(f"**Issues:** {', '.join(issue_descriptions)}")
                 
-                # Use final filename for the last group or if only one group, temporary for intermediate steps
-                if method_counter == len(grouped_issues) or len(grouped_issues) == 1:
-                    output_filename = final_output_filename
+                # 第一个batch使用原始文件，后续batch使用之前的输出结果
+                if method_counter == 1:
+                    input_csv_path = csv_file_path
                 else:
-                    output_filename = f"temp_step2_method_{method_counter}.csv"
+                    input_csv_path = final_output_filename
+                
+                output_filename = final_output_filename
                 
                 # Pass all issues of same type at once for batch processing
                 batch_cleaning_code = clean_agent.generate_cleaning_code_cli(
-                    current_csv_path, issues, context_description, variables, 
+                    input_csv_path, issues, context_description, variables, 
                     unit_check, data_info, output_filename
                 )
                 
                 step_template.add_code(batch_cleaning_code) \
                            .exe_code_cli(mark_finnish=f"resolved {len(issues)} issues in method group {method_counter}")
                 
-                current_csv_path = output_filename
                 method_counter += 1
             
             # Update the final CSV path

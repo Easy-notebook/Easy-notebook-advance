@@ -95,7 +95,7 @@ if len(missing_cols) > 0:
     for i, bar in enumerate(bars):
         height = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                f'{{:.1f}}%'.format(height), ha='center', va='bottom')
+                f'{{height:.1f}}%', ha='center', va='bottom')
     
     plt.title('Missing Value Percentages by Column', fontsize=14, fontweight='bold')
     plt.xlabel('Columns', fontsize=12)
