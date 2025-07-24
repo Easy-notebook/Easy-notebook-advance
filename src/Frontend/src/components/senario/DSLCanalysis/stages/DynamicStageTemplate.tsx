@@ -670,22 +670,21 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setContinueButtonText(onComplete ? 'Continue to Next Stage' : `End ${config.stageTitle || 'Current Stage'}`);
     }, [isLoading, isCompleted, continueCountdown, isReturnVisit, onComplete, config.stageTitle]);
 
-    // Set event handlers using stable wrapper functions
+    // Simple approach: just store the stage info that WorkflowControl needs
     useEffect(() => {
-        console.log('DynamicStageTemplate: Setting WorkflowControl handlers', {
+        // Store basic stage info for WorkflowControl fallback to use
+        window._dslcStageInfo = {
             stageId,
             hasOnComplete: !!onComplete,
-            hasHandleTerminate: !!handleTerminateRef.current,
-            hasHandleContinue: !!handleContinueRef.current,
-            hasHandleCancelCountdown: !!handleCancelCountdownRef.current
-        });
+            isCompleted,
+            onComplete: onComplete || null
+        };
         
-        setOnTerminate(() => handleTerminateRef.current());
-        setOnContinue(() => handleContinueRef.current());  
-        setOnCancelCountdown(() => handleCancelCountdownRef.current());
-        
-        console.log('DynamicStageTemplate: WorkflowControl handlers set successfully');
-    }, []); // Empty dependency array is safe now
+        return () => {
+            // Clean up on unmount
+            delete window._dslcStageInfo;
+        };
+    }, [stageId, onComplete, isCompleted]);
 
     // Don't reset WorkflowControl store on unmount - let NotebookApp manage it
     // useEffect(() => {

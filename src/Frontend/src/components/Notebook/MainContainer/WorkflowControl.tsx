@@ -87,7 +87,20 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
         console.error('Error calling fallbackHandleNextPhase:', error);
       }
     } else if (fallbackViewMode === 'dslc') {
-      console.log('In DSLC mode but no store handler - this might be an issue');
+      console.log('DSLC mode: checking window._dslcStageInfo');
+      console.log('window._dslcStageInfo:', window._dslcStageInfo);
+      const stageInfo = window._dslcStageInfo;
+      
+      if (stageInfo?.onComplete) {
+        console.log('Found DSLC onComplete, executing...');
+        try {
+          stageInfo.onComplete();
+        } catch (error) {
+          console.error('Error calling DSLC onComplete:', error);
+        }
+      } else {
+        console.log('No DSLC onComplete found in window._dslcStageInfo');
+      }
     } else {
       console.log('No valid fallback action available');
     }
