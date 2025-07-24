@@ -45,8 +45,6 @@ async def model_training_and_evaluation_step3(
         
         step_template \
             .add_variable("training_strategy", training_strategy) \
-            .add_text("## Model Training and Evaluation Strategy") \
-            .add_text("Here is the comprehensive strategy for training and evaluating models, combining feature engineering and modeling approaches:") \
             .add_text(training_strategy_table) \
             .next_thinking_event(event_tag="generate_model_code",
                                 textArray=["Prediction Agent is working...","Generating model training code..."])

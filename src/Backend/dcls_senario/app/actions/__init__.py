@@ -122,13 +122,15 @@ async def generate_exploratory_data_sequence(step_index: int, step: Dict[str, An
 
 from app.actions.stage_3_method_proposal.step0 import generate_method_proposal_sequence_step0
 from app.actions.stage_3_method_proposal.step1 import generate_method_proposal_sequence_step1
-
-
+from app.actions.stage_3_method_proposal.step2 import generate_method_proposal_sequence_step2
+from app.actions.stage_3_method_proposal.step3 import generate_method_proposal_sequence_step3
 
 async def generate_model_proposal_sequence(step_index: int, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False) -> Dict[str, Any]:
     sequence_generators = {
         0: generate_method_proposal_sequence_step0,
         1: generate_method_proposal_sequence_step1,
+        2: generate_method_proposal_sequence_step2,
+        3: generate_method_proposal_sequence_step3,
     }
     generator = sequence_generators.get(step_index)
     

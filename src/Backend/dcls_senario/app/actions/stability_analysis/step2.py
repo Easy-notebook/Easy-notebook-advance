@@ -60,7 +60,7 @@ async def stability_analysis_step2(
         step_template \
             .add_variable("evaluation_report_template", evaluation_report_template) \
             .add_text("The following report template will be used to document the evaluation results:") \
-            .add_code(evaluation_report_template, language="markdown") \
+            .add_text(evaluation_report_template) \
             .add_text("✅ Stability analysis and evaluation framework completed successfully.") \
         
         return step_template.end_event()

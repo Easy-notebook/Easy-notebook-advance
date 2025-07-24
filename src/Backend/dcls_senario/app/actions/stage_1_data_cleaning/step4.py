@@ -34,8 +34,7 @@ async def generate_data_cleaning_sequence_step4(
                                         hyp_json=hypothesis)
     
     if step_template.think_event("check_current_data_info"):
-        step_template.add_text("## Current Data Status") \
-                    .add_text("Let me first check the current state of our dataset after previous cleaning steps:") \
+        step_template.add_text("Let me first check the current state of our dataset after previous cleaning steps:") \
                     .add_code(
                             f"""import pandas as pd
 data = pd.read_csv('{csv_file_path}')

@@ -95,7 +95,7 @@ async def results_evaluation_step2(
         step_template \
             .add_variable("dcls_final_report", dcls_final_report) \
             .add_text("The complete DCLS methodology has been successfully applied. Here is the final comprehensive report:") \
-            .add_code(dcls_final_report, language="markdown") \
+            .add_text(dcls_final_report) \
             .next_thinking_event(event_tag="generate_recommendations",
                                 textArray=["Results Agent is finalizing...","Generating actionable recommendations..."])
         

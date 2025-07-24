@@ -34,8 +34,7 @@ async def generate_data_cleaning_sequence_step3(
                                         hyp_json=hypothesis)
     
     if step_template.think_event("check_data_info"):
-        step_template.add_text("## Data Information Overview") \
-                    .add_text("First, let me check the basic information about our dataset:") \
+        step_template.add_text("First, let me check the basic information about our dataset:") \
                     .add_code(
                             f"""import pandas as pd
 data = pd.read_csv('{csv_file_path}')
@@ -52,8 +51,7 @@ print(data.info())
         dataInfo = step_template.get_current_effect()
         step_template.add_variable("data_info", dataInfo)
         
-        step_template.add_text("## Missing Value Analysis") \
-                    .add_text("Now let me check for missing values in each column:") \
+        step_template.add_text("Now let me check for missing values in each column:") \
                     .add_code(
 f"""import pandas as pd
 data = pd.read_csv("{csv_file_path}")
@@ -76,8 +74,7 @@ print(missing_data_str)
         step_template.add_variable("missing_value_str", missing_value_str)
         
         # Create a simple, focused missing value bar chart
-        step_template.add_text("## Missing Value Visualization") \
-                    .add_text("Creating a focused overview of missing value percentages:") \
+        step_template.add_text("Creating a focused overview of missing value percentages:") \
                     .add_code(f"""import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -135,15 +132,13 @@ else:
         )
         
         if missing_value_problems == "no problem":
-            step_template.add_text("## ✅ Missing Value Analysis Complete") \
-                        .add_text("**Good news!** The analysis shows no significant missing value problems in the dataset.") \
-                        .add_text("🎯 **Ready to proceed to the next step.**")
+            step_template.add_text("Good news! The analysis shows no significant missing value problems in the dataset.") \
+                        .add_text("Ready to proceed to the next step.")
         else:
             markdown_str = step_template.to_tableh(missing_value_problems)
             
             step_template \
                         .add_variable("missing_value_problems", missing_value_problems) \
-                        .add_text("## ⚠️ Missing Value Issues Identified") \
                         .add_text("The analysis revealed the following missing value problems that need to be addressed:") \
                         .add_text(markdown_str) \
                         .next_thinking_event(event_tag="generate_cleaning_operations",
@@ -157,7 +152,7 @@ else:
         data_info = step_template.get_variable("data_info")
         
         if one_of_issue:
-            step_template.add_text(f"### Resolving Issue: {one_of_issue.get('problem', 'Missing Value Issue')}") \
+            step_template.add_text(f"Resolving Issue: {one_of_issue.get('problem', 'Missing Value Issue')}") \
                         .add_text("Generating cleaning code to resolve this specific issue:") \
                         .add_code(clean_agent.generate_cleaning_code_cli(
                             csv_file_path, 
@@ -176,12 +171,12 @@ else:
                                         textArray=["Data Cleaning Agent is working...","Processing next cleaning operation..."])
             else:
                 step_template.add_text("") \
-                           .add_text("✅ **All missing value issues have been resolved!**") \
-                           .add_text("🎯 **Ready to proceed to the next data integrity check.**")
+                           .add_text("All missing value issues have been resolved!") \
+                           .add_text("Ready to proceed to the next data integrity check.")
                 
         else:
-            step_template.add_text("✅ **No missing value problems found.**") \
-                        .add_text("🎯 **Ready to proceed to the next step.**")
+            step_template.add_text("No missing value problems found.") \
+                        .add_text("Ready to proceed to the next step.")
             
         return step_template.end_event()
     

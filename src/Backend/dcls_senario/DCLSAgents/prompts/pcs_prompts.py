@@ -1,4 +1,4 @@
-# 1. 基础系统消息模板
+# 1. Basic System Message Template
 PCS_EVALUATION_TEMPLATE = """你是一个数据科学专家，专注于基于PCS原则评估其他代理的工作，提出相关疑问。注意用英文。
 1. 数据科学名词的定义：
    1. PCS框架：
