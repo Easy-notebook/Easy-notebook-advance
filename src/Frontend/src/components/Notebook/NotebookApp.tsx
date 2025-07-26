@@ -565,12 +565,12 @@ const NotebookApp = () => {
       </div>
       
       {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
-      <WorkflowControl 
+      {viewMode === 'dslc' && <WorkflowControl 
         fallbackIsExecuting={isExecuting}
         fallbackViewMode={viewMode}
         fallbackCurrentPhaseId={currentPhaseId}
         fallbackHandleNextPhase={handleNextPhase}
-      />
+      />}
     </div>
   );
 };
