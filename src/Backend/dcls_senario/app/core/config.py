@@ -166,7 +166,20 @@ STAGES = {
                 "title": "Model Proposal",
                 "description": "Propose models for data analysis",
                 "stepId": "model_proposal_step1"
-            }]
+            },
+            {
+                "id": "step2",
+                "title": "Model Proposal",
+                "description": "Propose models for data analysis",
+                "stepId": "model_proposal_step2"
+            },
+            {
+                "id": "step3",
+                "title": "Model Proposal",
+                "description": "Propose models for data analysis",
+                "stepId": "model_proposal_step3"
+            },
+            ]
     },
     "model_training_and_evaluation": {
         "id": "model_training_and_evaluation",
