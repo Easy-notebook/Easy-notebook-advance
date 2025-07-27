@@ -1,171 +1,50 @@
-import json
-import os
-import asyncio
+from typing import AsyncGenerator, Dict, Any
+
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
-from typing import AsyncGenerator
-from collections import deque
-from functools import partial
+from agents.command_agent import CommandAgent
+from .base_scenario import BaseScenarioTemplate
 
 load_dotenv()
 
+class UserCommandScenario(BaseScenarioTemplate):
+    """
+    处理用户命令的场景类
+    """
+    
+    def __init__(self, operation: Dict[str, Any]):
+        super().__init__(operation)
+        # 创建带记忆上下文的Agent操作
+        agent_operation = self._create_agent_operation(CommandAgent, agent_type="command")
+        self.agent = CommandAgent(operation=agent_operation)
+        
+    def validate_operation(self) -> bool:
+        """验证操作参数"""
+        return bool(self._get_payload_value("content") and self._get_payload_value("commandId"))
+        
+    async def process(self) -> AsyncGenerator[str, None]:
+        """处理用户命令场景"""
+        try:
+            if not self.validate_operation():
+                yield self._create_error_response(
+                    "Missing content or commandId in payload",
+                    {"commandId": self._get_payload_value("commandId")}
+                )
+                return
+                
+            async for chunk in self.agent.process():
+                yield chunk
+
+        except Exception as e:
+            print(f"Error in handle_user_command: {str(e)}")
+            yield self._create_error_response(
+                str(e),
+                {"commandId": self._get_payload_value("commandId")}
+            )
+
 async def handle_user_command(operation: dict) -> AsyncGenerator[str, None]:
-    """处理用户命令，使用OpenAI API生成代码"""
-    try:
-        # 使用异步OpenAI客户端
-        client = AsyncOpenAI(
-            api_key=os.getenv('OPENAI_API_KEY'),
-            base_url=os.getenv('BASE_URL')
-        )    
-        
-        messages = [
-            {"role": "system", "content": "You are an AI assistant that generates code based on user instructions.只输出python代码，除了代码以外的只能解释代码用用注释"},
-            {"role": "system", "content": "还有写绘图代码的时候用的字体一定是常见电脑里有的字体，不要用特殊字体"},
-            {"role": "system", "content": "你的回答是专业的，直接回答问题，不要加入其他无关的内容"},
-        ]
-
-        if content := operation.get("payload", {}).get("content"):
-            messages.append({"role": "user", "content": content})
-        
-        command_id = operation.get("payload", {}).get("commandId")
-        
-        # 初始化响应
-        yield json.dumps({
-            "type": "addCell2EndWithContent",
-            "data": {
-                "payload": {
-                    "type": "Hybrid",
-                    "content": "",
-                    "commandId": command_id,
-                    "description": f"generate by request: {content}[这个是代码的预期]\n"
-                },
-                "status": "processing"
-            }
-        }) + "\n"
-
-        # 使用带缓冲的流式处理
-        buffer = deque(maxlen=50)  # 设置合适的缓冲区大小
-        async for response in handle_openai_stream(client, messages, command_id, buffer):
-            yield response
-            
-    except Exception as e:
-        print(f"Error in handle_user_command: {str(e)}")
-        yield json.dumps({
-            "type": "error",
-            "data": {
-                "payload": {"commandId": command_id},
-                "error": str(e)
-            }
-        }) + "\n"
-
-async def handle_openai_stream(
-    client: AsyncOpenAI, 
-    messages: list, 
-    command_id: str,
-    buffer: deque
-) -> AsyncGenerator[str, None]:
-    """处理OpenAI API流式响应"""
-    try:
-        # 创建异步流
-        stream = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            stream=True,
-            timeout=30.0  # 设置超时时间
-        )
-
-        index = 0
-        generated_code = ""
-        last_flush_time = asyncio.get_event_loop().time()
-        
-        async for chunk in stream:
-            if not chunk.choices:
-                continue
-                
-            content = chunk.choices[0].delta.content
-            if not content:
-                continue
-                
-            generated_code += content
-            index += len(content)
-            
-            # 将内容添加到缓冲区
-            buffer.append(content)
-            
-            # 检查是否需要刷新缓冲区
-            current_time = asyncio.get_event_loop().time()
-            if current_time - last_flush_time >= 0.1 or len(buffer) >= 40:  # 100ms或缓冲接近满时刷新
-                combined_content = ''.join(buffer)
-                buffer.clear()
-                last_flush_time = current_time
-                
-                # 发送累积的内容
-                yield json.dumps({
-                    "type": "addNewContent2CurrentCell",
-                    "data": {
-                        "payload": {
-                            "content": combined_content,
-                            "commandId": command_id,
-                        },
-                        "status": "processing",
-                        "index": index
-                    }
-                }) + "\n"
-                
-                # 添加小延迟避免阻塞
-                await asyncio.sleep(0.01)
-        
-        # 发送剩余的缓冲区内容
-        if buffer:
-            combined_content = ''.join(buffer)
-            yield json.dumps({
-                "type": "addNewContent2CurrentCell",
-                "data": {
-                    "payload": {
-                        "content": combined_content,
-                        "commandId": command_id,
-                    },
-                    "status": "processing",
-                    "index": index
-                }
-            }) + "\n"
-        
-        # 运行代码单元格
-        yield json.dumps({
-            "type": "runCurrentCodeCell",
-            "data": {
-                "payload": {"commandId": command_id},
-                "status": "processing"
-            }
-        }) + "\n"
-        
-        # 设置为输出模式
-        yield json.dumps({
-            "type": "setCurrentCellMode_onlyOutput",
-            "data": {
-                "status": "completed",
-                "payload": {
-                    "commandId": command_id,
-                    "response": generated_code
-                }
-            }
-        }) + "\n"
-            
-    except asyncio.TimeoutError:
-        print("Stream timeout")
-        yield json.dumps({
-            "type": "error",
-            "data": {
-                "payload": {"commandId": command_id},
-                "error": "Stream timeout"
-            }
-        }) + "\n"
-    except Exception as e:
-        print(f"Error in handle_openai_stream: {str(e)}")
-        yield json.dumps({
-            "type": "error",
-            "data": {
-                "payload": {"commandId": command_id},
-                "error": str(e)
-            }
-        }) + "\n"
+    """
+    处理用户命令并生成代码
+    """
+    scenario = UserCommandScenario(operation)
+    async for response in scenario.process():
+        yield response

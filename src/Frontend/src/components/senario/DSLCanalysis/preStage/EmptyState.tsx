@@ -18,6 +18,7 @@ import { usePipelineStore, PIPELINE_STAGES } from '../store/pipelineController';
 import usePreStageStore from '../store/preStageStore';
 import { generalResponse } from '../stages/StageGeneralFunction';
 import { useAIAgentStore, EVENT_TYPES } from '../../../../store/AIAgentStore';
+import { AgentMemoryService, AgentType } from '../../../../services/agentMemoryService';
 import useStore from '../../../../store/notebookStore';
 import useOperatorStore from '../../../../store/operatorStore';
 import { createUserAskQuestionAction } from '../../../../store/actionCreators';
@@ -382,7 +383,33 @@ const AICommandInput = ({ files, setFiles }) => {
         addQA(qaData);
         const action = createUserAskQuestionAction(command, qaId, currentCellId, files);
         useAIAgentStore.getState().addAction(action);
-        sendOperation(notebookId, {
+
+        // 准备Agent记忆上下文
+        console.log('EmptyState: 准备记忆上下文', { notebookId, command });
+        const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
+          notebookId,
+          'general' as AgentType,
+          {
+            current_cell_id: currentCellId,
+            related_cells: getCurrentViewCells(),
+            related_qa_ids: qaList.map(qa => qa.id),
+            current_qa_id: qaId,
+            question_content: command
+          }
+        );
+        console.log('EmptyState: 记忆上下文准备完成', memoryContext);
+
+        // 更新用户意图
+        AgentMemoryService.updateUserIntent(
+          notebookId,
+          'general' as AgentType,
+          [command],
+          [], // TODO: 可以添加推断逻辑
+          command,
+          []
+        );
+
+        const finalPayload = {
           type: 'user_question',
           payload: {
             content: command,
@@ -393,9 +420,13 @@ const AICommandInput = ({ files, setFiles }) => {
             related_qas: qaList,
             related_actions: actions,
             related_cells: getCurrentViewCells(),
-            files: files
+            files: files,
+            // 添加记忆上下文
+            ...memoryContext
           }
-        });
+        };
+        console.log('EmptyState: 发送最终payload', finalPayload);
+        sendOperation(notebookId, finalPayload);
       }
       
       // 清空文件列表

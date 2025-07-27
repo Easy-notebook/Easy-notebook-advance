@@ -6,8 +6,9 @@ Provide richer, more readable data preview functionality
 import pandas as pd
 import numpy as np
 from typing import List
+from ..utils.display import Display
 
-class DataPreview:
+class DataPreview(Display):
     """
     VDS Tools Data Preview Toolkit - Enhanced data preview and information display
     
@@ -22,11 +23,12 @@ class DataPreview:
         Args:
             csv_file_path: Optional path to CSV file for immediate loading
         """
+        super().__init__()
         self.csv_file_path = csv_file_path
         self.data = None
         if csv_file_path:
             self._load_data()
-    
+
     def _load_data(self):
         """Load data from CSV file"""
         try:
@@ -35,38 +37,36 @@ class DataPreview:
             print(f"Error loading data: {e}")
             self.data = None
     
-    def top5line(self, csv_file_path: str = None) -> str:
+    def top5line(self, csv_file_path: str = None):
         """
         Display first 5 rows with comprehensive data information
         
         Args:
             csv_file_path: Path to CSV file (optional if set in __init__)
-            
-        Returns:
-            HTML formatted string with data preview and statistics
         """
         file_path = csv_file_path or self.csv_file_path
         if not file_path:
-            return self._create_error_report("No CSV file path provided")
-        return enhanced_data_preview(file_path, n_rows=5)
+            html_content = self._create_error_report("No CSV file path provided")
+        else:
+            html_content = enhanced_data_preview(file_path, n_rows=5)
+        self.show(html_content)
     
-    def top10line(self, csv_file_path: str = None) -> str:
+    def top10line(self, csv_file_path: str = None):
         """
         Display first 10 rows with comprehensive data information
         
         Args:
             csv_file_path: Path to CSV file (optional if set in __init__)
-            
-        Returns:
-            HTML formatted string with data preview and statistics
         """
         file_path = csv_file_path or self.csv_file_path
         if not file_path:
-            return self._create_error_report("No CSV file path provided")
-        return enhanced_data_preview(file_path, n_rows=10)
+            html_content = self._create_error_report("No CSV file path provided")
+        else:
+            html_content = enhanced_data_preview(file_path, n_rows=10)
+        self.show(html_content)
     
     def custom_preview(self, csv_file_path: str = None, n_rows: int = 5, 
-                      include_stats: bool = True) -> str:
+                      include_stats: bool = True):
         """
         Display custom number of rows with optional statistics
         
@@ -74,29 +74,27 @@ class DataPreview:
             csv_file_path: Path to CSV file (optional if set in __init__)
             n_rows: Number of rows to display
             include_stats: Whether to include statistical information
-            
-        Returns:
-            HTML formatted string with data preview
         """
         file_path = csv_file_path or self.csv_file_path
         if not file_path:
-            return self._create_error_report("No CSV file path provided")
-        return enhanced_data_preview(file_path, n_rows=n_rows)
+            html_content = self._create_error_report("No CSV file path provided")
+        else:
+            html_content = enhanced_data_preview(file_path, n_rows=n_rows)
+        self.show(html_content)
     
-    def data_info(self, csv_file_path: str = None) -> str:
+    def data_info(self, csv_file_path: str = None):
         """
         Display comprehensive dataset information
         
         Args:
             csv_file_path: Path to CSV file (optional if set in __init__)
-            
-        Returns:
-            HTML formatted string with dataset statistics
         """
         file_path = csv_file_path or self.csv_file_path
         if not file_path:
-            return self._create_error_report("No CSV file path provided")
-        return smart_data_info(file_path)
+            html_content = self._create_error_report("No CSV file path provided")
+        else:
+            html_content = smart_data_info(file_path)
+        self.show(html_content)
     
     def column_list(self, csv_file_path: str = None) -> List[str]:
         """
@@ -122,9 +120,8 @@ class DataPreview:
             </table>
         </vds-error-panel>
         """
-    
-    @staticmethod
-    def help():
+        
+    def help(self):
         """
         Display comprehensive help information for agents and users
         
@@ -255,8 +252,7 @@ class DataPreview:
         
         =============================================================================
         """
-        print(help_content)
-        return help_content
+        self.show(help_content)
 
 # Legacy function for backward compatibility
 def datapreview(csv_file_path: str) -> DataPreview:

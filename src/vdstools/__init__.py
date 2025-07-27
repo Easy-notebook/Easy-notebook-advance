@@ -103,70 +103,63 @@ __all__ = [
 
 
 # Quick access functions for common operations
-def quick_preview(csv_file_path: str, n_rows: int = 5) -> str:
+def quick_preview(csv_file_path: str, n_rows: int = 5):
     """
     Quick data preview using DataPreviewToolkit
     
     Args:
         csv_file_path: Path to CSV file
         n_rows: Number of rows to preview
-        
-    Returns:
-        HTML formatted preview
     """
     toolkit = DataPreview()
     if n_rows == 5:
-        return toolkit.top5line(csv_file_path)
+        toolkit.top5line(csv_file_path)
     elif n_rows == 10:
-        return toolkit.top10line(csv_file_path)
+        toolkit.top10line(csv_file_path)
     else:
-        return toolkit.custom_preview(csv_file_path, n_rows)
+        toolkit.custom_preview(csv_file_path, n_rows)
 
-def quick_clean(csv_file_path: str, operation: str = "missing_values") -> str:
+def quick_clean(csv_file_path: str, operation: str = "missing_values"):
     """
     Quick data cleaning using DataCleaningToolkit
     
     Args:
         csv_file_path: Path to CSV file
         operation: Type of cleaning ('missing_values', 'duplicates', 'outliers', 'invalid_values')
-        
-    Returns:
-        HTML formatted cleaning report
     """
     toolkit = DataCleaning()
     if operation == "missing_values":
-        return toolkit.fill_missing_values(csv_file_path)
+        toolkit.fill_missing_values(csv_file_path)
     elif operation == "duplicates":
-        return toolkit.remove_duplicates(csv_file_path)
+        toolkit.remove_duplicates(csv_file_path)
     elif operation == "outliers":
-        return toolkit.remove_outliers(csv_file_path)
+        toolkit.remove_outliers(csv_file_path)
     elif operation == "invalid_values":
-        return toolkit.clean_invalid_values(csv_file_path)
+        toolkit.clean_invalid_values(csv_file_path)
     else:
-        return f"<vds-error-panel>Unknown operation: {operation}</vds-error-panel>"
+        from .src.html_output import print_html
+        print_html(f"<vds-error-panel>Unknown operation: {operation}</vds-error-panel>")
 
-def quick_eda(csv_file_path: str, analysis: str = "quality") -> str:
+def quick_eda(csv_file_path: str, analysis: str = "quality"):
     """
     Quick EDA using EDAToolkit
     
     Args:
         csv_file_path: Path to CSV file
         analysis: Type of analysis ('quality', 'missing', 'stats', 'correlation')
-        
-    Returns:
-        HTML formatted analysis report
     """
     toolkit = EDAToolkit()
     if analysis == "quality":
-        return toolkit.data_quality_report(csv_file_path)
+        toolkit.data_quality_report(csv_file_path)
     elif analysis == "missing":
-        return toolkit.missing_value_analysis(csv_file_path)
+        toolkit.missing_value_analysis(csv_file_path)
     elif analysis == "stats":
-        return toolkit.statistical_summary(csv_file_path)
+        toolkit.statistical_summary(csv_file_path)
     elif analysis == "correlation":
-        return toolkit.correlation_analysis(csv_file_path)
+        toolkit.correlation_analysis(csv_file_path)
     else:
-        return f"<vds-error-panel>Unknown analysis: {analysis}</vds-error-panel>"
+        from .src.html_output import print_html
+        print_html(f"<vds-error-panel>Unknown analysis: {analysis}</vds-error-panel>")
 
 # Add quick functions to __all__
 __all__.extend(["quick_preview", "quick_clean", "quick_eda"])

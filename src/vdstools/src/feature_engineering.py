@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Optional, Union
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from ..utils.display import Display
 
 try:
     from ..core.ml_tools import (
@@ -20,7 +21,7 @@ except ImportError:
     print("Warning: ml_tools not found, using fallback implementations")
 
 
-class FeatureEngineering:
+class FeatureEngineering(Display):
     """
     VDS Tools Feature Engineering Toolkit - Advanced feature creation and transformation
     
@@ -36,11 +37,12 @@ class FeatureEngineering:
     
     def __init__(self):
         """Initialize FeatureEngineeringToolkit"""
+        super().__init__()
         pass
     
     def transform_features(self, csv_file_path: str, columns: Union[str, List[str]], 
                           method: str = 'standard', params: Optional[dict] = None,
-                          keep_original: bool = True) -> str:
+                          keep_original: bool = True):
         """
         Advanced feature transformation with multiple scaling methods
         
@@ -51,20 +53,18 @@ class FeatureEngineering:
             params: Additional parameters for transformation
             keep_original: Whether to keep original columns
             
-        Returns:
-            HTML formatted report with transformation results
-            
         Examples:
             >>> toolkit = FeatureEngineeringToolkit()
-            >>> result = toolkit.transform_features('data.csv', ['age', 'income'], 'standard')
-            >>> result = toolkit.transform_features('data.csv', 'price', 'minmax', keep_original=False)
+            >>> toolkit.transform_features('data.csv', ['age', 'income'], 'standard')
+            >>> toolkit.transform_features('data.csv', 'price', 'minmax', keep_original=False)
         """
-        return advanced_feature_transformation(csv_file_path, columns, method, params, keep_original)
+        html_content = advanced_feature_transformation(csv_file_path, columns, method, params, keep_original)
+        self.show(html_content)
     
     def reduce_dimensions(self, csv_file_path: str, method: str = 'pca', 
                          n_components: Union[int, float] = 0.95,
                          target_column: Optional[str] = None,
-                         keep_original: bool = True) -> str:
+                         keep_original: bool = True):
         """
         Advanced dimensionality reduction with PCA, LDA and other methods
         
@@ -75,18 +75,16 @@ class FeatureEngineering:
             target_column: Target column (required for LDA)
             keep_original: Whether to keep original features
             
-        Returns:
-            HTML formatted report with reduction results
-            
         Examples:
             >>> toolkit = FeatureEngineeringToolkit()
-            >>> result = toolkit.reduce_dimensions('data.csv', 'pca', 0.95)
-            >>> result = toolkit.reduce_dimensions('data.csv', 'lda', 5, 'target')
+            >>> toolkit.reduce_dimensions('data.csv', 'pca', 0.95)
+            >>> toolkit.reduce_dimensions('data.csv', 'lda', 5, 'target')
         """
-        return advanced_dimensionality_reduction(csv_file_path, method, n_components, target_column, keep_original)
+        html_content = advanced_dimensionality_reduction(csv_file_path, method, n_components, target_column, keep_original)
+        self.show(html_content)
     
     def select_features(self, csv_file_path: str, target_column: str, method: str = 'variance',
-                       n_features: Optional[int] = None, params: Optional[dict] = None) -> str:
+                       n_features: Optional[int] = None, params: Optional[dict] = None):
         """
         Advanced feature selection using multiple algorithms
         
@@ -97,19 +95,17 @@ class FeatureEngineering:
             n_features: Number of features to select
             params: Additional parameters for selection method
             
-        Returns:
-            HTML formatted report with selection results
-            
         Examples:
             >>> toolkit = FeatureEngineeringToolkit()
-            >>> result = toolkit.select_features('data.csv', 'target', 'correlation', 10)
-            >>> result = toolkit.select_features('data.csv', 'target', 'variance', params={'threshold': 0.1})
+            >>> toolkit.select_features('data.csv', 'target', 'correlation', 10)
+            >>> toolkit.select_features('data.csv', 'target', 'variance', params={'threshold': 0.1})
         """
-        return advanced_feature_selection(csv_file_path, target_column, method, n_features, params)
+        html_content = advanced_feature_selection(csv_file_path, target_column, method, n_features, params)
+        self.show(html_content)
     
     def create_polynomial_features(self, csv_file_path: str, columns: Union[str, List[str]],
                                   degree: int = 2, interaction_only: bool = False,
-                                  keep_original: bool = True) -> str:
+                                  keep_original: bool = True):
         """
         Create polynomial and interaction features from existing columns
         
@@ -120,19 +116,17 @@ class FeatureEngineering:
             interaction_only: Whether to create only interaction features
             keep_original: Whether to keep original columns
             
-        Returns:
-            HTML formatted report with polynomial feature creation results
-            
         Examples:
             >>> toolkit = FeatureEngineeringToolkit()
-            >>> result = toolkit.create_polynomial_features('data.csv', ['x1', 'x2'], degree=2)
-            >>> result = toolkit.create_polynomial_features('data.csv', 'feature', degree=3, interaction_only=True)
+            >>> toolkit.create_polynomial_features('data.csv', ['x1', 'x2'], degree=2)
+            >>> toolkit.create_polynomial_features('data.csv', 'feature', degree=3, interaction_only=True)
         """
-        return create_polynomial_features_advanced(csv_file_path, columns, degree, interaction_only, keep_original)
+        html_content = create_polynomial_features_advanced(csv_file_path, columns, degree, interaction_only, keep_original)
+        self.show(html_content)
     
     def discretize_features(self, csv_file_path: str, columns: Union[str, List[str]],
                            method: str = 'equal_width', n_bins: int = 10,
-                           labels: Optional[List[str]] = None, keep_original: bool = True) -> str:
+                           labels: Optional[List[str]] = None, keep_original: bool = True):
         """
         Convert continuous features into discrete bins
         
@@ -144,15 +138,13 @@ class FeatureEngineering:
             labels: Custom labels for bins (optional)
             keep_original: Whether to keep original columns
             
-        Returns:
-            HTML formatted report with discretization results
-            
         Examples:
             >>> toolkit = FeatureEngineeringToolkit()
-            >>> result = toolkit.discretize_features('data.csv', 'age', 'equal_width', 5)
-            >>> result = toolkit.discretize_features('data.csv', ['price', 'income'], 'equal_freq', 10)
+            >>> toolkit.discretize_features('data.csv', 'age', 'equal_width', 5)
+            >>> toolkit.discretize_features('data.csv', ['price', 'income'], 'equal_freq', 10)
         """
-        return discretize_features_advanced(csv_file_path, columns, method, n_bins, labels, keep_original)
+        html_content = discretize_features_advanced(csv_file_path, columns, method, n_bins, labels, keep_original)
+        self.show(html_content)
     
     def help(self) -> str:
         """
@@ -276,8 +268,7 @@ class FeatureEngineering:
             </vds-section>
         </vds-help-panel>
         """
-        return help_html
-
+        self.show(help_html)
 
 # Legacy function wrappers for backward compatibility
 def advanced_feature_transformation(csv_file_path: str, columns: Union[str, List[str]], 

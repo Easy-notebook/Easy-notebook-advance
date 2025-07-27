@@ -17,7 +17,7 @@ export type CellType = 'code' | 'markdown' | 'Hybrid' | 'image';
 /**
  * 视图模式类型
  */
-export type ViewMode = 'complete' | 'step' | 'wysiwyg' | 'dslc';
+export type ViewMode = 'complete' | 'step' | 'wysiwyg' | 'dslc' | 'create';
 
 /**
  * 上传模式类型
@@ -970,7 +970,14 @@ const useStore = create<NotebookStore>(
       } else {
         const phase = get().getPhaseById(state.currentPhaseId);
         if (!phase || !phase.steps.length) {
-          cells = findCellsByPhase(state.tasks, state.currentPhaseId);
+          const phaseResult = findCellsByPhase(state.tasks, state.currentPhaseId);
+          // findCellsByPhase返回PhaseResult，需要合并intro和steps中的cells
+          cells = [...phaseResult.intro];
+          phaseResult.steps.forEach(step => {
+            if (step.cells) {
+              cells.push(...step.cells);
+            }
+          });
         } else {
           const currentStep = phase.steps[state.currentStepIndex];
           if (!currentStep) return [];
@@ -981,6 +988,12 @@ const useStore = create<NotebookStore>(
             state.cells
           );
         }
+      }
+
+      // 确保cells是数组
+      if (!Array.isArray(cells)) {
+        console.error('getCurrentViewCells: cells is not an array', cells);
+        return [];
       }
 
       return cells.map((cell) => ({
@@ -1009,7 +1022,7 @@ const useStore = create<NotebookStore>(
       const state = get();
       const { cells, currentCellId } = state;
 
-      if (!currentCellId) {
+      if (!currentCellId || !Array.isArray(cells)) {
         return [];
       }
 

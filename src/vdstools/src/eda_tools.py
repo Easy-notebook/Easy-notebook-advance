@@ -7,9 +7,10 @@ import pandas as pd
 import numpy as np
 from typing import List, Optional
 from scipy import stats
+from ..utils.display import Display
 
 
-class EDAToolkit:
+class EDAToolkit(Display):
     """
     VDS Tools Exploratory Data Analysis Toolkit - Comprehensive EDA functionality
     
@@ -20,72 +21,62 @@ class EDAToolkit:
     
     def __init__(self):
         """Initialize EDAToolkit"""
-        pass
+        super().__init__()
     
-    def correlation_analysis(self, csv_file_path: str, target_column: str = None) -> str:
+    def correlation_analysis(self, csv_file_path: str, target_column: str = None):
         """
         Generate comprehensive correlation analysis with visualization insights
         
         Args:
             csv_file_path: Path to CSV file
             target_column: Target column for correlation analysis (optional)
-            
-        Returns:
-            HTML report with correlation analysis results
         """
-        return generate_correlation_analysis(csv_file_path, target_column)
+        html_content = generate_correlation_analysis(csv_file_path, target_column)
+        self.show(html_content)
     
-    def distribution_analysis(self, csv_file_path: str, column_name: str) -> str:
+    def distribution_analysis(self, csv_file_path: str, column_name: str):
         """
         Generate detailed distribution analysis for a specific column
         
         Args:
             csv_file_path: Path to CSV file
             column_name: Column to analyze
-            
-        Returns:
-            HTML report with distribution analysis
         """
-        return generate_distribution_analysis(csv_file_path, column_name)
+        html_content = generate_distribution_analysis(csv_file_path, column_name)
+        self.show(html_content)
     
-    def missing_value_analysis(self, csv_file_path: str) -> str:
+    def missing_value_analysis(self, csv_file_path: str):
         """
         Generate comprehensive missing value analysis across all columns
         
         Args:
             csv_file_path: Path to CSV file
-            
-        Returns:
-            HTML report with missing value analysis
         """
-        return generate_missing_value_analysis(csv_file_path)
+        html_content = generate_missing_value_analysis(csv_file_path)
+        self.show(html_content)
     
-    def statistical_summary(self, csv_file_path: str, columns: Optional[List[str]] = None) -> str:
+    def statistical_summary(self, csv_file_path: str, columns: Optional[List[str]] = None):
         """
         Generate comprehensive statistical summary for numeric columns
         
         Args:
             csv_file_path: Path to CSV file
             columns: Specific columns to analyze (if None, analyze all numeric columns)
-            
-        Returns:
-            HTML report with comprehensive statistics
         """
-        return generate_advanced_statistics(csv_file_path, columns)
+        html_content = generate_advanced_statistics(csv_file_path, columns)
+        self.show(html_content)
     
-    def data_quality_report(self, csv_file_path: str) -> str:
+    def data_quality_report(self, csv_file_path: str):
         """
         Generate comprehensive data quality assessment report
         
         Args:
             csv_file_path: Path to CSV file
-            
-        Returns:
-            HTML report with data quality metrics
         """
-        return generate_data_quality_report(csv_file_path)
+        html_content = generate_data_quality_report(csv_file_path)
+        self.show(html_content)
     
-    def feature_importance_analysis(self, csv_file_path: str, target_column: str, method: str = 'auto') -> str:
+    def feature_importance_analysis(self, csv_file_path: str, target_column: str, method: str = 'auto'):
         """
         Generate feature importance analysis using various methods
         
@@ -93,11 +84,9 @@ class EDAToolkit:
             csv_file_path: Path to CSV file
             target_column: Target variable column
             method: Analysis method ('auto', 'correlation', 'mutual_info', 'random_forest')
-            
-        Returns:
-            HTML report with feature importance results
         """
-        return generate_feature_importance_analysis(csv_file_path, target_column, method)
+        html_content = generate_feature_importance_analysis(csv_file_path, target_column, method)
+        self.show(html_content)
     
     def multi_column_distribution(self, csv_file_path: str, columns: List[str]) -> str:
         """
