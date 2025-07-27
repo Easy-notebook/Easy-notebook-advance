@@ -15,7 +15,6 @@ from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 
-from werkzeug.utils import secure_filename
 from apscheduler.schedulers.background import BackgroundScheduler
 import uvicorn
 from screenplay import generate_response

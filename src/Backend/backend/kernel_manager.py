@@ -157,6 +157,7 @@ class KernelExecutionManager:
         try:
             data = content['data']
             timestamp = datetime.now().isoformat()
+            print(data)
             
             if 'text/html' in data:
                 return {

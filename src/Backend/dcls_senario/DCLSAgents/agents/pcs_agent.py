@@ -175,13 +175,8 @@ class PCSAgent(BaseDSLC_Agent):
                 
                 # 添加必要的导入和路径设置
                 path_setup_code = '''import os,sys,re
-current_path = os.path.abspath(__file__)
-match = re.search(r'(.*MyAgent)', current_path)
-if not match:
-    raise FileNotFoundError("Could not find MyAgent directory")
 sys.path.append(match.group(1))
 from tools.ml_tools import *
-
 '''
                 final_code = path_setup_code + extracted_code
                 self.logger.info("Successfully generated stability analysis code")

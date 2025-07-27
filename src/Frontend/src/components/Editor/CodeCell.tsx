@@ -333,6 +333,16 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                     </div>
                 );
             }
+            if (output.type === 'html') {
+                const htmlContent = String(output.content || '');
+                return (
+                    <div
+                        key={output.key}
+                        className="output-html-container"
+                        dangerouslySetInnerHTML={{ __html: htmlContent }}
+                    />
+                );
+            }
             if (output.type === 'error' || output.type === 'text') {
                 const htmlContent = ansi_up.ansi_to_html(String(output.content || ''));
                 return (

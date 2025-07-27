@@ -219,6 +219,7 @@ export type NotebookStore = NotebookStoreState & NotebookStoreActions;
 // 序列化工具
 const serializeOutput = (output: any): any => {
   if (!output) return null;
+  console.log(output);
 
   if (Array.isArray(output)) {
     return output.map(serializeOutput);
@@ -529,7 +530,6 @@ const useStore = create<NotebookStore>(
         message: `内容已添加到单元格 ${currentCellId} 的描述`,
         type: 'success',
       });
-      // console.log(currentCell.description);
     },
 
     deleteCell: (cellId: string) =>

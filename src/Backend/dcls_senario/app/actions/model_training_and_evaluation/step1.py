@@ -19,20 +19,7 @@ async def model_training_and_evaluation_step1(
 
         return step_template.end_event()
     
-    problem_description = step_template.get_variable("problem_description")
-    context_description = step_template.get_variable("context_description")
-    eda_summary = step_template.get_variable("eda_summary")
-    csv_file_path = step_template.get_variable("csv_file_path")
-    response_variable_analysis = step_template.get_variable("response_variable_analysis")
-    # 获取Stage 3的输出 (从stage_3_method_proposal生成的特征工程方法)
     stage3_feature_methods = step_template.get_variable("feature_engineering_methods")
-    
-    prediction_agent = PredictionAndInferenceAgent(
-        problem_description=problem_description,
-        context_description=context_description,
-        eda_summary=eda_summary,
-        llm=llm
-    )
     
     if step_template.think_event("suggest_feature_engineering"):
         

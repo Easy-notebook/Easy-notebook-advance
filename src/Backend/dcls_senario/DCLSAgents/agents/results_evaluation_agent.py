@@ -171,11 +171,6 @@ class ResultsEvaluationAgent(BaseDSLC_Agent):
             if code_match:
                 extracted_code = code_match.group(1)
                 path_setup_code = '''import os,sys,re
-current_path = os.path.abspath(__file__)
-match = re.search(r'(.*MyAgent)', current_path)
-if not match:
-    raise FileNotFoundError("Could not find MyAgent directory")
-sys.path.append(match.group(1))
 from tools.ml_tools import *
 from tools.ml_tools import transform_features,reduce_dimensions,select_features,discretize_features,create_polynomial_features
 
@@ -391,6 +386,7 @@ The report should include:
 7. Implementation Guidelines
 8. Risk Assessment and Mitigation
 9. Future Research Directions
+10. should not contain header markdown more than level 4(eg. #, ##, ###)
 
 Return as a comprehensive markdown report."""
             

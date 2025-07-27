@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from typing import Dict, Any, Optional, AsyncIterable
+from typing import Dict, Any, Optional
 
 from app.utils.helpers import get_stage_or_abort, validate_step_index
 

@@ -78,6 +78,13 @@ const processOutput = (output: any): Output | null => {
             };
         }
     }
+    if (output.type==="html"){
+        return {
+            ...output,
+            content: String(output.content || ''),
+            key: output.key || `${output.type}-${Date.now()}-${Math.random()}`,
+        };
+    }
 
     if (output.type === 'text' || output.type === 'error') {
         try {
@@ -289,6 +296,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
     // 渲染输出
     const renderOutput = useCallback((output) => {
+        console.log(output,"here!!!!!!!!!!!!!!!!!!!!!!!!!");
         if (!output) return null;
         try {
             if (output.type === 'image') {
@@ -315,6 +323,29 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                     e.target.parentNode.appendChild(errorText);
                                 }}
                             />
+                        </div>
+                    </div>
+                );
+            }
+            if (output.type === 'html') {
+                console.log("HTML output detected:", output);
+                console.log("HTML content:", output.content);
+                console.log("HTML content type:", typeof output.content);
+                console.log("HTML content length:", output.content ? output.content.length : 0);
+                
+                const htmlContent = String(output.content || '');
+                console.log("Processed HTML content:", htmlContent);
+                
+                return (
+                    <div
+                        key={output.key}
+                        className="output-html-container p-4 border-2 border-blue-300 rounded bg-blue-50"
+                        style={{ minHeight: '50px', backgroundColor: '#f0f8ff' }}
+                    >
+                        <div className="text-xs text-gray-500 mb-2">HTML Output:</div>
+                        <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+                        <div className="text-xs text-gray-400 mt-2 border-t pt-2">
+                            Raw content length: {htmlContent.length}
                         </div>
                     </div>
                 );
