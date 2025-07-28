@@ -5,7 +5,6 @@ import React, {
     useState,
     useEffect,
 } from 'react';
-import { createPortal } from 'react-dom';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { dracula } from '@uiw/codemirror-theme-dracula';
@@ -461,11 +460,19 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
     // —— 展开/收缩逻辑 ——  
     const EXPAND_THRESHOLD = 200; // 阈值高度
-    const [isExpanded, setIsExpanded] = useState(isInDetachedView); // 独立窗口中默认展开
-    const [isUserToggled, setIsUserToggled] = useState(isInDetachedView); // 独立窗口中视为用户已切换
+    const [isExpanded, setIsExpanded] = useState(true); // 默认展开
+    const [isUserToggled, setIsUserToggled] = useState(false); // 用户是否手动切换过
     const [isHovering, setIsHovering] = useState(false);
     const codeBlockWrapperRef = useRef(null);
     const [contentHeight, setContentHeight] = useState(0);
+
+    // 在独立窗口中强制保持展开状态
+    useEffect(() => {
+        if (isInDetachedView) {
+            setIsExpanded(true);
+            setIsUserToggled(true);
+        }
+    }, [isInDetachedView]);
 
     // 当有新输出时，自动展开代码区域便于查看
     useEffect(() => {
@@ -639,8 +646,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         </div>
     );
 
-    // 如果处于独立窗口模式，只渲染紧凑模式
-    if (isDetached) {
+    // 如果处于独立窗口模式且不在独立窗口视图中，渲染紧凑模式
+    if (isDetached && !isInDetachedView) {
         return renderCompactMode();
     }
 
