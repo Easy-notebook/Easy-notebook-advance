@@ -1,7 +1,6 @@
 import DSLCPipeline from '../../senario/DSLCanalysis/Pipeline';
 import StepMode from '../../senario/BasicMode/StepMode';
 import CreateMode from '../../senario/BasicMode/CreateMode';
-import CompleteMode from '../../senario/BasicMode/CompleteMode';
 import DetachedCellView from './DetachedCellView';
 import { findCellsByStep } from '../../../utils/markdownParser';
 import CellDivider from './CellDivider';
@@ -106,20 +105,6 @@ const MainContent: React.FC<MainContentProps> = ({
 
     if (viewMode === 'create') {
       return <CreateMode readOnly={false} />;
-    }
-
-    // 为了向后兼容，保留 complete 模式的处理
-    if (viewMode === 'complete') {
-      const visibleCells = getCurrentViewCells();
-      return (
-        <CompleteMode
-          visibleCells={visibleCells}
-          handleAddCell={handleAddCell}
-          viewMode={viewMode}
-          renderCell={renderCell}
-          CellDivider={CellDivider}
-        />
-      );
     }
 
     // 默认情况下使用 create 模式
