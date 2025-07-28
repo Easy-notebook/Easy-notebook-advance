@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo} from 'react'
+import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo, useState} from 'react'
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -6,7 +6,8 @@ import { CodeBlockExtension } from './extensions/CodeBlockExtension'
 import SimpleTableExtension from './extensions/TableExtension'
 import ImageExtension from './extensions/ImageExtension'
 import LaTeXExtension from './extensions/LaTeXExtension'
-import useStore from '../../store/notebookStore'
+import HybridCell from './Cells/HybridCell'
+import useStore, { CellType } from '../../store/notebookStore'
 import { 
   Bold, 
   Italic, 
@@ -37,9 +38,18 @@ interface TiptapNotebookEditorProps {
 }
 
 interface TiptapNotebookEditorRef {
-  getContent: () => any;
-  setContent: (content: any) => void;
+  editor: any;
   focus: () => void;
+  getHTML: () => string;
+  setContent: (content: any) => void;
+  clearContent: () => void;
+  isEmpty: () => boolean;
+  // 混合笔记本特有的方法
+  getCells: () => any[];
+  setCells: (cells: any[]) => void;
+  addCodeCell: () => string;
+  addMarkdownCell: () => string;
+  addHybridCell: () => string;
 }
 
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(({ 
@@ -492,7 +502,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     immediatelyRender: false,
   })
 
-  // 暴露编辑器API
+  // 暴露编辑器API - 针对混合笔记本的增强API
   useImperativeHandle(ref, () => ({
     editor,
     focus: () => editor?.commands.focus(),
@@ -500,7 +510,45 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     setContent: (content) => editor?.commands.setContent(content, false),
     clearContent: () => editor?.commands.clearContent(),
     isEmpty: () => editor?.isEmpty,
-  }), [editor])
+    // 混合笔记本特有的方法
+    getCells: () => cells,
+    setCells: (newCells) => setCells(newCells),
+    addCodeCell: () => {
+      const newCell = {
+        id: generateCellId(),
+        type: 'code',
+        content: '',
+        outputs: [],
+        enableEdit: true,
+        language: 'python',
+      };
+      setCells([...cells, newCell]);
+      return newCell.id;
+    },
+    addMarkdownCell: () => {
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: '',
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+      return newCell.id;
+    },
+    addHybridCell: () => {
+      const newCell = {
+        id: generateCellId(),
+        type: 'Hybrid',
+        content: '',
+        outputs: [],
+        enableEdit: true,
+        language: 'python',
+      };
+      setCells([...cells, newCell]);
+      return newCell.id;
+    },
+  }), [editor, cells, setCells])
 
   // 插入代码块的功能
   const insertCodeBlock = useCallback(() => {
@@ -597,13 +645,16 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     console.log('输入cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
 
     const htmlParts = cells.map((cell, index) => {
-      if (cell.type === 'code') {
-        // 代码cell转换为可执行代码块，确保包含正确的ID和位置信息
-        console.log(`转换代码块 ${index}: ID=${cell.id}`);
-        return `<div data-type="executable-code-block" data-language="${cell.language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}"></div>`
+      if (cell.type === 'code' || cell.type === 'Hybrid') {
+        // code和Hybrid cell转换为可执行代码块，确保包含正确的ID和位置信息
+        console.log(`转换代码块 ${index}: ID=${cell.id}, type=${cell.type}`);
+        return `<div data-type="executable-code-block" data-language="${cell.language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}"></div>`
       } else if (cell.type === 'markdown') {
         // markdown cell转换为HTML
         return convertMarkdownToHtml(cell.content || '', cell)
+      } else if (cell.type === 'image') {
+        // image cell转换为HTML
+        return `<div class="image-cell-container"><img src="${cell.content}" alt="Cell image" class="max-w-full h-auto" /></div>`
       }
       return ''
     })
@@ -675,12 +726,13 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           const cellId = node.getAttribute('data-cell-id')
           const language = node.getAttribute('data-language') || 'python'
           const code = node.getAttribute('data-code') || ''
+          const originalType = node.getAttribute('data-original-type') || 'code'
           
-          console.log(`发现代码块: ${cellId}, 语言: ${language}`);
+          console.log(`发现代码块: ${cellId}, 语言: ${language}, 原始类型: ${originalType}`);
           
           newCells.push({
             id: cellId,
-            type: 'code',
+            type: originalType, // 直接使用保存的原始类型
             language: language,
             // 不再使用isPlaceholder标记，直接使用id匹配
           })
@@ -1130,6 +1182,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     )
   }
 
+
   return (
     <div className="tiptap-notebook-editor-container w-full h-full bg-transparent">
       {/* 浮动工具栏 - 选中文本时显示 */}
@@ -1246,11 +1299,12 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         </button>
       </BubbleMenu>
 
-      {/* 主编辑器内容 */}
+      {/* 主编辑器内容 - 恢复正常显示 */}
       <EditorContent 
         editor={editor} 
         className="w-full h-full focus-within:outline-none"
       />
+
 
       {/* 简单的占位符样式 */}
       <style>{`
@@ -1425,6 +1479,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         .latex-preview .katex .mathsf,
         .latex-preview .katex .mathtt {
           color: inherit !important;
+        }
+        
+        /* 恢复原本的可执行代码块样式 */
+        .executable-code-block-wrapper {
+          margin: 1.5em 0;
         }
       `}</style>
     </div>

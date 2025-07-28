@@ -169,10 +169,11 @@ export const CodeBlockExtension = Node.create({
   },
 })
 
-// CodeBlock视图组件 - 使用现有的CodeCell
+// CodeBlock视图组件 - 根据类型动态选择CodeCell或HybridCell
 import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react'
 import { NodeViewWrapper } from '@tiptap/react'
 import CodeCell from '../Cells/CodeCell'
+import HybridCell from '../Cells/HybridCell'
 import useStore from '../../../store/notebookStore'
 
 const CodeBlockView = ({ 
@@ -329,17 +330,23 @@ const CodeBlockView = ({
   // 这样避免了代码编辑时触发tiptap的onUpdate事件
   // CodeCell的内容变化只在store中管理，不同步回tiptap节点
 
+  // 根据cell类型决定使用哪个组件
+  const CellComponent = virtualCell.type === 'Hybrid' ? HybridCell : CodeCell;
+  
   return (
     <NodeViewWrapper 
       className="executable-code-block-wrapper my-4"
       data-cell-id={cellId}
     >
-      {/* 使用现有的CodeCell组件，传递正确的props */}
-      <CodeCell
+      {/* 根据cell类型动态选择组件 */}
+      <CellComponent
         cell={virtualCell}
         onDelete={handleDelete}
+        // CodeCell 需要的props
         isStepMode={false}
         dslcMode={false}
+        finished_thinking={false}
+        thinkingText="finished thinking"
       />
     </NodeViewWrapper>
   )

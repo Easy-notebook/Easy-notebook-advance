@@ -515,6 +515,81 @@ export class AgentMemoryService {
     this.saveToStorage();
   }
 
+  // 清理所有记忆数据
+  static clearAllMemories(): void {
+    this.memories = {};
+    try {
+      localStorage.removeItem(this.STORAGE_KEY);
+      console.log('所有agent记忆已清理');
+    } catch (error) {
+      console.error('清理记忆失败:', error);
+    }
+  }
+
+  // 获取存储使用情况
+  static getStorageUsage(): { used: number; total: number; percentage: number } {
+    try {
+      let total = 0;
+      let used = 0;
+      
+      // 估算localStorage使用量
+      for (let key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          used += localStorage[key].length + key.length;
+        }
+      }
+      
+      // 大多数浏览器localStorage限制为5-10MB
+      total = 5 * 1024 * 1024; // 5MB
+      
+      return {
+        used,
+        total,
+        percentage: Math.round((used / total) * 100)
+      };
+    } catch (error) {
+      console.error('获取存储使用情况失败:', error);
+      return { used: 0, total: 0, percentage: 0 };
+    }
+  }
+
+  // 压缩存储数据
+  static compressMemories(): void {
+    Object.keys(this.memories).forEach(agent_id => {
+      const memory = this.memories[agent_id];
+      if (memory) {
+        // 减少交互历史保留数量
+        if (memory.interactions.length > 20) {
+          memory.interactions = memory.interactions.slice(0, 20);
+        }
+        
+        // 减少成功交互记录
+        if (memory.situation_tracking.successful_interactions.length > 10) {
+          memory.situation_tracking.successful_interactions = 
+            memory.situation_tracking.successful_interactions.slice(-10);
+        }
+        
+        // 减少失败尝试记录
+        if (memory.situation_tracking.failed_attempts.length > 15) {
+          memory.situation_tracking.failed_attempts = 
+            memory.situation_tracking.failed_attempts.slice(-15);
+        }
+        
+        // 清理过长的代码版本历史
+        const codeEvolution = memory.situation_tracking.code_evolution;
+        if (codeEvolution.working_versions.length > 5) {
+          codeEvolution.working_versions = codeEvolution.working_versions.slice(-5);
+        }
+        if (codeEvolution.broken_versions.length > 5) {
+          codeEvolution.broken_versions = codeEvolution.broken_versions.slice(-5);
+        }
+      }
+    });
+    
+    this.saveToStorage();
+    console.log('记忆数据已压缩');
+  }
+
   // 获取记忆统计
   static getMemoryStats(): any {
     const stats = {
