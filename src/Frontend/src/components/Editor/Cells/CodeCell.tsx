@@ -32,9 +32,9 @@ import {
 import { AnsiUp } from 'ansi_up';
 import ReactMarkdown from 'react-markdown';
 
-import useStore from '../../store/notebookStore';
-import useCodeStore, { DISPLAY_MODES } from '../../store/codeStore';
-import { sendCurrentCellExecuteCodeError_should_debug } from '../../store/autoActions';
+import useStore from '../../../store/notebookStore';
+import useCodeStore, { DISPLAY_MODES } from '../../../store/codeStore';
+import { sendCurrentCellExecuteCodeError_should_debug } from '../../../store/autoActions';
 
 const ansi_up = new AnsiUp();
 

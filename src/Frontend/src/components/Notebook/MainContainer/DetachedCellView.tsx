@@ -1,5 +1,5 @@
 import React from 'react';
-import CodeCell from '../../Editor/CodeCell';
+import CodeCell from '../../Editor/Cells/CodeCell';
 import useStore from '../../../store/notebookStore';
 
 const DetachedCellView: React.FC = () => {

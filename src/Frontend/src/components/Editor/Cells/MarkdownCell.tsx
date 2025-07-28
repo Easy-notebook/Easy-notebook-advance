@@ -9,7 +9,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useMemo } from 'react';
 import 'katex/dist/katex.min.css';
-import useStore from '../../store/notebookStore';
+import useStore from '../../../store/notebookStore';
 import { v4 as uuidv4 } from 'uuid';
 import mermaid from 'mermaid';
 

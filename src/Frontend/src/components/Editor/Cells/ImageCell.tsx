@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2, Eye, Edit3 } from 'lucide-react';
-import useStore from '../../store/notebookStore';
+import useStore from '../../../store/notebookStore';
 
 interface Cell {
   id: string;

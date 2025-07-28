@@ -172,7 +172,7 @@ export const CodeBlockExtension = Node.create({
 // CodeBlock视图组件 - 使用现有的CodeCell
 import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react'
 import { NodeViewWrapper } from '@tiptap/react'
-import CodeCell from '../CodeCell'
+import CodeCell from '../Cells/CodeCell'
 import useStore from '../../../store/notebookStore'
 
 const CodeBlockView = ({ 

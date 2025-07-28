@@ -1,11 +1,10 @@
 import { useEffect, useCallback, memo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
-import CodeCell from '../Editor/CodeCell';
-import MarkdownCell from '../Editor/MarkdownCell';
-import HybridCell from '../Editor/HybridCell';
-import FileCell from '../Editor/FileCell';
-import ImageCell from '../Editor/ImageCell';
+import CodeCell from '../Editor/Cells/CodeCell';
+import MarkdownCell from '../Editor/Cells/MarkdownCell';
+import HybridCell from '../Editor/Cells/HybridCell';
+import ImageCell from '../Editor/Cells/ImageCell';
 import OutlineSidebar from './LeftSideBar/OutlineSidebar';
 import ErrorAlert from '../UI/ErrorAlert';
 import useStore from '../../store/notebookStore';
@@ -287,7 +286,6 @@ const NotebookApp = () => {
           const firstCellId = stepCells[0].id;
           const cellElement = document.getElementById(`cell-${firstCellId}`);
           if (cellElement) {
-            // 滚动到对应的单元格
             cellElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         }
@@ -398,8 +396,6 @@ const NotebookApp = () => {
         return <MarkdownCell key={cell.id} {...props} />;
       case 'image':
         return <ImageCell key={cell.id} {...props} />;
-      case 'file':
-        return <FileCell key={cell.id} {...props} />;
       default:
         return null;
     }

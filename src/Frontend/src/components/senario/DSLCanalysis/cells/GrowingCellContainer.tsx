@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, memo } from 'react';
 import { Loader2 } from 'lucide-react';
 import useNotebookStore from '../../../../store/notebookStore';
 
-import MarkdownCell from '../../../Editor/MarkdownCell';
-import HybridCell from '../../../Editor/HybridCell';
-import CodeCell from '../../../Editor/CodeCell';
+import MarkdownCell from '../../../Editor/Cells/MarkdownCell';
+import HybridCell from '../../../Editor/Cells/HybridCell';
+import CodeCell from '../../../Editor/Cells/CodeCell';
 import AgentThinkingIndicator from '../UI/AgentThinkingIndicator';
 
 import { SHOT_TYPES, ANIMATION } from '../store/useScriptStore';
