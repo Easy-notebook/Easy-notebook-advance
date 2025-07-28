@@ -196,34 +196,134 @@ p {
     scrollbar-color: rgba(65, 184, 131, 0.2) #F9FAFB;
 }
 
-/* 列表样式 */
+/* 列表样式增强 - 支持有序和无序列表 */
 .markdown-cell ul,
 .markdown-cell ol {
     padding-left: 1.5rem;
-    margin-bottom: 1rem;
+    margin: 1rem 0;
+    line-height: 1.6;
 }
 
+/* 无序列表样式 */
 .markdown-cell ul {
-    list-style-type: disc;
-}
-
-.markdown-cell ol {
-    list-style-type: decimal;
-    counter-reset: item;
-}
-
-.markdown-cell li {
-    margin-bottom: 0.5rem;
-    line-height: 1.5;
+    list-style: none;
     position: relative;
-    padding-left: 1.2rem;
 }
 
+.markdown-cell ul li {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+}
+
+.markdown-cell ul li::before {
+    content: "•";
+    color: #41B883;
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 1.2em;
+}
+
+/* 有序列表样式 */
+.markdown-cell ol {
+    list-style: none;
+    counter-reset: list-counter;
+}
+
+.markdown-cell ol li {
+    position: relative;
+    padding-left: 2rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+    counter-increment: list-counter;
+}
+
+.markdown-cell ol li::before {
+    content: counter(list-counter) ".";
+    color: #3490DC;
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+    top: 0;
+    min-width: 1.5rem;
+    text-align: right;
+}
+
+/* 嵌套列表样式 */
 .markdown-cell ul ul,
 .markdown-cell ul ol,
 .markdown-cell ol ul,
 .markdown-cell ol ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+/* 二级无序列表 */
+.markdown-cell ul ul li::before {
+    content: "◦";
+    color: #41B883;
+    font-size: 1.1em;
+}
+
+/* 三级无序列表 */
+.markdown-cell ul ul ul li::before {
+    content: "▪";
+    color: #41B883;
+    font-size: 1em;
+}
+
+/* 二级有序列表 */
+.markdown-cell ol ol {
+    counter-reset: sublist-counter;
+}
+
+.markdown-cell ol ol li {
+    counter-increment: sublist-counter;
+}
+
+.markdown-cell ol ol li::before {
+    content: counter(list-counter) "." counter(sublist-counter) ".";
+    color: #3490DC;
+}
+
+/* 三级有序列表 */
+.markdown-cell ol ol ol {
+    counter-reset: subsublist-counter;
+}
+
+.markdown-cell ol ol ol li {
+    counter-increment: subsublist-counter;
+}
+
+.markdown-cell ol ol ol li::before {
+    content: counter(list-counter) "." counter(sublist-counter) "." counter(subsublist-counter) ".";
+    color: #3490DC;
+    font-size: 0.9em;
+}
+
+/* 列表项内容样式 */
+.markdown-cell li p {
+    margin: 0.25rem 0;
+    display: inline;
+}
+
+.markdown-cell li p:first-child {
+    display: inline;
+}
+
+.markdown-cell li p:not(:first-child) {
+    display: block;
     margin-top: 0.5rem;
+}
+
+/* 列表悬停效果 */
+.markdown-cell li:hover {
+    background-color: rgba(65, 184, 131, 0.02);
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
 }
 
 /* 引用样式 */
@@ -434,5 +534,441 @@ p {
     * {
         scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
         scrollbar-width: thin;
+    }
+}
+
+/* ====================================================================
+   VDS Tools 相关样式
+   VDS (Visual Data Science) Tools 生成的HTML组件样式
+   用于数据预览、清理和分析结果的可视化展示
+   ==================================================================== */
+
+/* VDS 容器 - 主要包装器 */
+vds-container {
+    display: block;
+    margin: 1.5rem 0;
+    padding: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    font-size: 1rem;
+    color: #000000 !important; /* 强制黑色 */
+}
+
+/* 确保所有VDS子元素都是黑色 */
+vds-container *,
+vds-info-panel *,
+vds-section *,
+vds-title *,
+vds-table *,
+vds-thead *,
+vds-tbody *,
+vds-tr *,
+vds-td *,
+vds-code-block * {
+    color: #000000 !important; /* 强制黑色，除非特殊指定 */
+}
+
+/* VDS标题保持渐变色 */
+vds-title {
+    color: transparent !important; /* 让渐变色生效 */
+}
+
+/* VDS表格头部保持白色文字 */
+vds-th,
+vds-th * {
+    color: #ffffff !important; /* 表头保持白色 */
+}
+
+/* 特殊颜色保持原样 */
+.vds-cell.vds-numeric,
+.vds-cell.vds-numeric * {
+    color: #3490DC !important; /* 数值类型保持蓝色 */
+}
+
+.vds-null,
+.vds-null * {
+    color: #EF4444 !important; /* 空值保持红色 */
+}
+
+.vds-col-unique,
+.vds-col-unique * {
+    color: #41B883 !important; /* 唯一值统计保持绿色 */
+}
+
+.vds-col-missing,
+.vds-col-missing * {
+    color: #EF4444 !important; /* 缺失值统计保持红色 */
+}
+
+.vds-error-label,
+.vds-error-label *,
+.vds-error-value,
+.vds-error-value * {
+    color: #EF4444 !important; /* 错误信息保持红色 */
+}
+
+/* VDS 帮助面板 */
+vds-help-panel {
+    display: block;
+    background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
+    border: 1px solid rgba(65, 184, 131, 0.15);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* VDS 信息面板 - 显示基本统计信息 */
+vds-info-panel {
+    display: block;
+    background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
+    border: 1px solid rgba(65, 184, 131, 0.15);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* VDS 区域 - 内容分区，支持水平滚动 */
+vds-section {
+    display: block;
+    margin: 2rem 0;
+    padding: 0;
+    /* 为包含表格的section添加水平滚动 */
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(65, 184, 131, 0.3) transparent;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* VDS 标题 - 与markdown h3风格统一 */
+vds-title {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 600;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    margin: 1.5rem 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgba(65, 184, 131, 0.2);
+    line-height: 1.4;
+}
+
+
+/* VDS section 滚动条样式 */
+vds-section::-webkit-scrollbar {
+    height: 10px;
+}
+
+vds-section::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 5px;
+}
+
+vds-section::-webkit-scrollbar-thumb {
+    background: rgba(65, 184, 131, 0.4);
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+vds-section::-webkit-scrollbar-thumb:hover {
+    background: rgba(65, 184, 131, 0.6);
+}
+
+/* VDS 表格 - 紧凑现代化设计 */
+vds-table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
+    border: 1px solid rgba(65, 184, 131, 0.12);
+    margin: 0 0 1rem 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #202124;
+    table-layout: auto;
+}
+
+/* VDS 表格头部 */
+vds-thead {
+    display: table-header-group;
+}
+
+/* VDS 表格主体 */
+vds-tbody {
+    display: table-row-group;
+}
+
+/* VDS 表格行 */
+vds-tr {
+    display: table-row;
+    transition: background-color 0.2s ease;
+}
+
+/* VDS 表格头部单元格 - 简洁设计 */
+vds-th {
+    display: table-cell;
+    background: #41B883;
+    color: #ffffff;
+    font-weight: 500;
+    font-size: 0.875rem;
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border: none;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* VDS 表格数据单元格 */
+vds-td {
+    display: table-cell;
+    padding: 0.4rem 0.8rem;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid rgba(65, 184, 131, 0.08);
+    vertical-align: top;
+    white-space: nowrap;
+    overflow: visible;
+}
+
+/* VDS 单元格基础样式 */
+.vds-cell {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    word-wrap: break-word;
+    color: black;
+}
+
+/* 数值类型单元格 */
+.vds-cell.vds-numeric {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    text-align: right;
+    color: #3490DC;
+    font-weight: 500;
+}
+
+/* 分类/文本类型单元格 */
+.vds-cell.vds-categorical {
+    color: black;
+}
+
+/* 缺失值单元格 */
+.vds-cell.vds-missing {
+    background-color: rgba(239, 68, 68, 0.05);
+    border-left: 3px solid #EF4444;
+}
+
+/* 空值标记 */
+.vds-null {
+    color: #EF4444;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 0.75rem;
+}
+
+/* 行索引单元格 */
+.vds-row-index {
+    background-color: rgba(65, 184, 131, 0.05);
+    font-weight: 500;
+    color: #41B883;
+    text-align: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 列名样式 */
+.vds-col-name {
+    font-weight: 500;
+    color: black;
+}
+
+/* 数据类型显示 */
+.vds-col-type {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    color: #6574CD;
+    background-color: rgba(101, 116, 205, 0.1);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+}
+
+/* 缺失值统计 */
+.vds-col-missing {
+    color: #EF4444;
+    font-weight: 500;
+}
+
+/* 唯一值统计 */
+.vds-col-unique {
+    color: #41B883;
+    font-weight: 500;
+}
+
+/* 表格行悬停效果 */
+vds-tr:hover {
+    background-color: rgba(65, 184, 131, 0.03);
+}
+
+/* 表格体内行的交替背景 */
+vds-tbody vds-tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.01);
+}
+
+/* 信息表格样式 */
+.vds-info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.vds-info-table td {
+    padding: 0.5rem 0;
+    border: none;
+    border-bottom: 1px solid rgba(65, 184, 131, 0.05);
+}
+
+.vds-info-table td:last-child {
+    border-bottom: none;
+}
+
+/* 标签-值样式 */
+.vds-label {
+    font-weight: 500;
+    color: #35495E;
+    width: 40%;
+}
+
+.vds-value {
+    color: #41B883;
+    font-weight: 600;
+}
+
+/* 代码块样式 */
+vds-code-block {
+    display: block;
+    background-color: rgba(65, 184, 131, 0.05);
+    border: 1px solid rgba(65, 184, 131, 0.1);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+}
+
+vds-code-block code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: #35495E;
+    line-height: 1.4;
+}
+
+/* 错误面板 */
+vds-error-panel {
+    display: block;
+    background-color: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.vds-error-table {
+    width: 100%;
+}
+
+.vds-error-label {
+    font-weight: 600;
+    color: #DC2626;
+}
+
+.vds-error-value {
+    color: #EF4444;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+}
+
+/* 清理报告样式 */
+vds-cleaning-report {
+    display: block;
+    background: linear-gradient(135deg, rgba(65, 184, 131, 0.03), rgba(52, 144, 220, 0.03));
+    border: 1px solid rgba(65, 184, 131, 0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.vds-report-table {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.vds-report-header {
+    background: linear-gradient(135deg, #41B883, #3490DC);
+    color: #fff;
+    padding: 0.75rem;
+    font-weight: 500;
+    border-radius: 4px 4px 0 0;
+}
+
+.vds-issue-item {
+    padding: 0.5rem;
+    color: #35495E;
+    border-bottom: 1px solid rgba(65, 184, 131, 0.05);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    vds-table {
+        font-size: 11px;
+    }
+    
+    vds-th, vds-td {
+        padding: 0.4rem 0.3rem;
+    }
+    
+    .vds-cell {
+        font-size: 11px;
+    }
+}
+
+/* 暗色模式支持 */
+@media (prefers-color-scheme: dark) {
+    vds-info-panel {
+        background: linear-gradient(135deg, rgba(65, 184, 131, 0.08), rgba(52, 144, 220, 0.08));
+        border-color: rgba(65, 184, 131, 0.2);
+    }
+    
+    vds-title {
+        color: #D1D5DB;
+        border-bottom-color: rgba(65, 184, 131, 0.2);
+    }
+    
+    vds-table {
+        border-color: rgba(65, 184, 131, 0.15);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    
+    vds-td {
+        border-bottom-color: rgba(65, 184, 131, 0.1);
+    }
+    
+    .vds-cell.vds-categorical {
+        color: #D1D5DB;
+    }
+    
+    .vds-row-index {
+        background-color: rgba(65, 184, 131, 0.1);
+    }
+    
+    vds-tbody vds-tr:nth-child(even) {
+        background-color: rgba(65, 184, 131, 0.02);
+    }
+    
+    vds-tr:hover {
+        background-color: rgba(65, 184, 131, 0.06);
     }
 }

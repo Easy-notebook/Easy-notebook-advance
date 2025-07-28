@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from typing import Dict, Any, Optional, AsyncIterable
+from typing import Dict, Any, Optional
 
 from app.utils.helpers import get_stage_or_abort, validate_step_index
 
@@ -30,6 +30,15 @@ async def get_sequence_generator(stage_id: str, step_index: int, state: Optional
     
     if stage_id == "model_proposal":
         return await generate_model_proposal_sequence(step_index, step, state, stream)
+    
+    if stage_id == "model_training_and_evaluation":
+        return await generate_model_training_and_evaluation_sequence(step_index, step, state, stream)
+    
+    if stage_id == "stability_analysis":
+        return await generate_stability_analysis_sequence(step_index, step, state, stream)
+    
+    if stage_id == "results_evaluation":
+        return await generate_results_evaluation_sequence(step_index, step, state, stream)
     
     raise HTTPException(status_code=404, detail=f"No sequence generator implemented for stage {stage_id}")
 
@@ -92,6 +101,7 @@ from app.actions.stage_2_exploratory_data_analysis.step0 import generate_explora
 from app.actions.stage_2_exploratory_data_analysis.step1 import generate_exploratory_data_sequence_step1
 from app.actions.stage_2_exploratory_data_analysis.step2 import generate_exploratory_data_sequence_step2
 from app.actions.stage_2_exploratory_data_analysis.step3 import generate_exploratory_data_sequence_step3
+from app.actions.stage_2_exploratory_data_analysis.step4 import generate_exploratory_data_sequence_step4
 
 
 async def generate_exploratory_data_sequence(step_index: int, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False) -> Dict[str, Any]:
@@ -100,6 +110,7 @@ async def generate_exploratory_data_sequence(step_index: int, step: Dict[str, An
         1: generate_exploratory_data_sequence_step1,
         2: generate_exploratory_data_sequence_step2,
         3: generate_exploratory_data_sequence_step3,
+        4: generate_exploratory_data_sequence_step4,
     }
     generator = sequence_generators.get(step_index) 
     
@@ -111,13 +122,71 @@ async def generate_exploratory_data_sequence(step_index: int, step: Dict[str, An
 
 from app.actions.stage_3_method_proposal.step0 import generate_method_proposal_sequence_step0
 from app.actions.stage_3_method_proposal.step1 import generate_method_proposal_sequence_step1
-
-
+from app.actions.stage_3_method_proposal.step2 import generate_method_proposal_sequence_step2
+from app.actions.stage_3_method_proposal.step3 import generate_method_proposal_sequence_step3
 
 async def generate_model_proposal_sequence(step_index: int, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False) -> Dict[str, Any]:
     sequence_generators = {
         0: generate_method_proposal_sequence_step0,
         1: generate_method_proposal_sequence_step1,
+        2: generate_method_proposal_sequence_step2,
+        3: generate_method_proposal_sequence_step3,
+    }
+    generator = sequence_generators.get(step_index)
+    
+    if generator:
+        return await generator(step, state, stream)
+    
+    raise HTTPException(status_code=404, detail=f"No sequence defined for step index {step_index}")
+
+
+from app.actions.model_training_and_evaluation.step0 import model_training_and_evaluation_step0
+from app.actions.model_training_and_evaluation.step1 import model_training_and_evaluation_step1
+from app.actions.model_training_and_evaluation.step2 import model_training_and_evaluation_step2
+from app.actions.model_training_and_evaluation.step3 import model_training_and_evaluation_step3
+
+async def generate_model_training_and_evaluation_sequence(step_index: int, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False) -> Dict[str, Any]:
+    sequence_generators = {
+        0: model_training_and_evaluation_step0,
+        1: model_training_and_evaluation_step1,
+        2: model_training_and_evaluation_step2,
+        3: model_training_and_evaluation_step3,
+    }
+    generator = sequence_generators.get(step_index)
+    
+    if generator:
+        return await generator(step, state, stream)
+    
+    raise HTTPException(status_code=404, detail=f"No sequence defined for step index {step_index}")
+
+
+from app.actions.stability_analysis.step0 import stability_analysis_step0
+from app.actions.stability_analysis.step1 import stability_analysis_step1
+from app.actions.stability_analysis.step2 import stability_analysis_step2
+
+async def generate_stability_analysis_sequence(step_index: int, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False) -> Dict[str, Any]:
+    sequence_generators = {
+        0: stability_analysis_step0,
+        1: stability_analysis_step1,
+        2: stability_analysis_step2,
+    }
+    generator = sequence_generators.get(step_index)
+    
+    if generator:
+        return await generator(step, state, stream)
+    
+    raise HTTPException(status_code=404, detail=f"No sequence defined for step index {step_index}")
+
+
+from app.actions.results_evaluation.step0 import results_evaluation_step0
+from app.actions.results_evaluation.step1 import results_evaluation_step1
+from app.actions.results_evaluation.step2 import results_evaluation_step2
+
+async def generate_results_evaluation_sequence(step_index: int, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False) -> Dict[str, Any]:
+    sequence_generators = {
+        0: results_evaluation_step0,
+        1: results_evaluation_step1,
+        2: results_evaluation_step2,
     }
     generator = sequence_generators.get(step_index)
     

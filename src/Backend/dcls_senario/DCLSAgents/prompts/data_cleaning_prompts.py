@@ -55,53 +55,53 @@ the information we know:
 #    设计的hypothesis: {hyp_json}
 # """
 
-# 1. 数据加载与验证
-DATA_LOADING_TEMPLATE = """任务：数据加载与验证
-任务描述：检查数据是否正确加载，比较前10行与随机10行，确认数据一致性。
+# 1. Data Loading and Validation
+DATA_LOADING_TEMPLATE = """Task: Data Loading and Validation
+Task Description: Check if data is correctly loaded by comparing the first 10 rows with random 10 rows to confirm data consistency.
 
-输入数据：
-1. 数据的前十行内容: {first_10_rows}
-2. 数据的随机十行内容: {random_10_rows}
+Input Data:
+1. First ten rows of data: {first_10_rows}
+2. Random ten rows of data: {random_10_rows}
 
-输出数据：
-确认数据是否正确加载，以文本格式提供。
+Output Data:
+Confirm whether data is correctly loaded, provided in text format.
 """
 
-# 2. 数据维度检查代码生成
-DIMENSION_CHECK_TEMPLATE = """任务：数据维度检查代码生成
-任务描述：生成用于检查数据维度的Python代码，根据已有的科学项目描述、数据背景描述、观测单位、数据变量描述检查数据维度是否符合预期，以及是否有违背数据背景的逻辑问题，数据的真实年份数量是否超出数据背景描述的范围。请把所有分析结果存在变量 result 中，result变量中最好包含数据的分析信息而不是只有文字结论。
+# 2. Data Dimension Check Code Generation
+DIMENSION_CHECK_TEMPLATE = """Task: Data Dimension Check Code Generation
+Task Description: Generate Python code to check data dimensions. Based on existing scientific project description, data background description, observation units, and data variable descriptions, check if data dimensions meet expectations, identify any logical issues that contradict the data background, and verify if the actual number of years in the data exceeds the range described in the data background. Store all analysis results in the result variable, which should include data analysis information rather than just text conclusions.
 
-输入数据：
-1. CSV文件路径: {csv_path}
-2. 数据背景信息: {context_description}
+Input Data:
+1. CSV file path: {csv_path}
+2. Data background information: {context_description}
 
-输出数据：
-Python代码，格式如下：
+Output Data:
+Python code in the following format:
 ```python
 import pandas as pd
-data = pd.read_csv('路径')
+data = pd.read_csv('path')
 result = ""
-# 检查维度的代码
+# Code to check dimensions
 print(result)
 ```
 """
 
-DIMENSION_ANALYSIS_TEMPLATE_2 = """you should do the dimension analysis based on the result and the background knowledge.
+DIMENSION_ANALYSIS_TEMPLATE_2 = """You should conduct dimension analysis based on the result and background knowledge.
 
-input data:
-1. result: {result}
-2. background knowledge: {context_description}
+Input Data:
+1. Result: {result}
+2. Background knowledge: {context_description}
 
-your output should be:
-if there are problems with the data dimension, return the JSON format of the problem, if there is no problem, do not return JSON.
-each problem should include the problem description and the method that can be used to handle the problem. to keep the data integrity.
-the JSON format should be:
+Your Output Should Be:
+If there are problems with the data dimension, return the JSON format of the problem. If there is no problem, do not return JSON.
+Each problem should include the problem description and the method that can be used to handle the problem to keep data integrity.
+The JSON format should be:
 ```json
 [
-  {{"problem": "describe the problem", "method": "method that can be used to handle the problem. to keep the data integrity"}}
+  {{"problem": "describe the problem", "method": "method that can be used to handle the problem to keep data integrity"}}
 ]
 ```
-if there is no problem, just output "no problem" only, without json.
+If there is no problem, just output "no problem" only, without JSON.
 
 """
 
@@ -136,19 +136,19 @@ JSON STRUCTURE:
 ```
 """
 
-CLEANING_OPERATIONS_TEMPLATE_2 = """you are a data cleaning expert, you need to generate the cleaning operations for the data.
+CLEANING_OPERATIONS_TEMPLATE_2 = """You are a data cleaning expert. You need to generate cleaning operations for the data.
 
-input data:
-1. problem list: {problem_list}
+Input Data:
+1. Problem list: {problem_list}
 
-your output should be:
-the JSON format of the cleaning operations,if there is no problem, do not return JSON.
+Your Output Should Be:
+The JSON format of the cleaning operations. If there is no problem, do not return JSON.
 ```json
 [
-  {{"problem": "describe the problem", "method": "method that can be used to handle the problem. methods based on the background knowledge."}}
+  {{"problem": "describe the problem", "method": "method that can be used to handle the problem. Methods based on background knowledge."}}
 ]
 
-if there is no problem, just output "no problem" only, without json.
+If there is no problem, just output "no problem" only, without JSON.
 """
 
 MISSING_VALUE_CODE_TEMPLATE_2 = """Please generate Python code for an in-depth exploratory analysis of missing values based on the provided missing value proportion data. Images will be saved directly in the current directory with filenames beginning with "data_cleaning_missing_value_". Please think through and complete the task step by step.
@@ -228,6 +228,8 @@ INSTRUCTIONS:
   * Domain-specific patterns: Custom logic based on context
 - do not talk about any no operation needed variable.
 - you should group the variables with the same operation method.
+- Keep responses concise and focused
+- If using headings, use maximum level 4 headings (####) only when necessary
 
 OUTPUT FORMAT:
 JSON array of cleaning operations:
@@ -242,118 +244,126 @@ JSON array of cleaning operations:
 ```
 """
 
-DATA_INTEGRITY_CHECK_TEMPLATE_2 = """you are a data cleaning expert, you need to generate the data integrity check code for the data.
+DATA_INTEGRITY_CHECK_TEMPLATE_2 = """You are a data cleaning expert. You need to generate data integrity check code for the data.
 
-input data:
-1. csv file path: {csv_path}
+Input Data:
+1. CSV file path: {csv_path}
 
-your output should be:
-Python code for data integrity check,format as follows:
+INSTRUCTIONS:
+- Keep responses concise and focused
+- If using headings, use maximum level 4 headings (####) only when necessary
+
+Your Output Should Be:
+Python code for data integrity check, format as follows:
 ```python
 import pandas as pd
 data = pd.read_csv('{csv_path}')
 result = ''
-# check the data integrity
-result += 'analysis result:...'
+# Check the data integrity
+result += 'Analysis result:...'
 print(result)
 ```
 """
 
-DATA_INTEGRITY_CLEANING_TEMPLATE_2 = """you are a data cleaning expert, you need to generate the data integrity cleaning operations for the data.
+DATA_INTEGRITY_CLEANING_TEMPLATE_2 = """You are a data cleaning expert. You need to generate data integrity cleaning operations for the data.
 
-input data:
-1. data integrity check result: {integrity_result}
+Input Data:
+1. Data integrity check result: {integrity_result}
 
-your output should be:
-the JSON format of the data integrity cleaning operations,if there is no problem, do not return JSON.
+INSTRUCTIONS:
+- Keep responses concise and focused
+- If using headings, use maximum level 4 headings (####) only when necessary
+
+Your Output Should Be:
+The JSON format of data integrity cleaning operations. If there is no problem, do not return JSON.
 ```json
 [
-  {{"problem": "describe the problem", "method": "method that can be used to handle the problem. methods based on the background knowledge."}}
+  {{"problem": "describe the problem", "method": "method that can be used to handle the problem. Methods based on background knowledge."}}
 ]
 ```
 
-if there is no problem, just output "no problem" only, without json.
+If there is no problem, just output "no problem" only, without JSON.
 """
 
-# 10. hypothesis验证代码生成
-HYPOTHESIS_VALIDATION_CODE_TEMPLATE = """任务：hypothesis验证代码生成
-任务描述：根据提供的hypothesis和verification method，生成用于验证hypothesis的 Python 代码。代码需要将分析结果存储在 result 变量中。
+# 10. Hypothesis Validation Code Generation
+HYPOTHESIS_VALIDATION_CODE_TEMPLATE = """Task: Hypothesis Validation Code Generation
+Task Description: Based on the provided hypothesis and verification method, generate Python code to validate the hypothesis. The code needs to store analysis results in the result variable.
 
-输入数据：
-1. hypothesis内容: {hypothesis}
-2. verification_method: {validation_method}
-3. CSV文件路径: {csv_path}
+Input Data:
+1. Hypothesis content: {hypothesis}
+2. Verification method: {validation_method}
+3. CSV file path: {csv_path}
 
-输出数据：
-用于验证hypothesis的 Python 代码，格式如下：
+Output Data:
+Python code for hypothesis validation, format as follows:
 ```python
 import pandas as pd
-data = pd.read_csv('csv路径')
+data = pd.read_csv('csv_path')
 result = ''
-# 验证逻辑
-result += '验证结果：...'
+# Validation logic
+result += 'Validation result:...'
 print(result)
 ```
 """
 
-# 11. hypothesis验证结果分析
-HYPOTHESIS_VALIDATION_ANALYSIS_TEMPLATE = """任务：hypothesis验证结果分析
-任务描述：根据本地运行Python代码的结果，判断hypothesis是否成立,并生成新的hypothesis结论。
+# 11. Hypothesis Validation Result Analysis
+HYPOTHESIS_VALIDATION_ANALYSIS_TEMPLATE = """Task: Hypothesis Validation Result Analysis
+Task Description: Based on the results of locally running Python code, determine whether the hypothesis holds and generate new hypothesis conclusions.
 
-输入数据：
-1. 验证结果: {validation_result}
+Input Data:
+1. Validation result: {validation_result}
 
-输出数据：
-JSON格式的分析结果：
+Output Data:
+JSON format analysis result:
 ```json
 [
   {{
-    "hypothesis": "hypothesis的内容",
-    "verification_method": "hypothesis的verification method",
-    "结论": "该hypothesis成立或不成立"
+    "hypothesis": "content of the hypothesis",
+    "verification_method": "verification method of the hypothesis",
+    "conclusion": "the hypothesis is valid or invalid"
   }}
 ]
 ```
 """
 
-# 12. 数据清理函数生成
-DATA_CLEANING_FUNCTION_TEMPLATE = """任务：数据清理函数生成
-任务描述：根据提供的清理操作项列表，生成一个数据清理 Python 函数。对于插补数据，请注意插补的逻辑。比如对于 国家-年的数据应该按照国家对每个变量进行插补。函数应该允许对每个操作项的工具函数参数进行自定义设置。
+# 12. Data Cleaning Function Generation
+DATA_CLEANING_FUNCTION_TEMPLATE = """Task: Data Cleaning Function Generation
+Task Description: Generate a data cleaning Python function based on the provided list of cleaning operations. For data imputation, pay attention to the imputation logic. For example, for country-year data, imputation should be performed by country for each variable. The function should allow custom settings for tool function parameters of each operation item.
 
-输入数据：
-1. CSV文件路径: {csv_path}
-2. 数据背景描述: {context_description}
-3. 变量描述: {var_descriptions}
-4. 数据单位: {check_unit}
-5. 数据信息: {data_info}
-6. 清理操作项列表: {cleaning_operations}
+Input Data:
+1. CSV file path: {csv_path}
+2. Data background description: {context_description}
+3. Variable descriptions: {var_descriptions}
+4. Data unit: {check_unit}
+5. Data information: {data_info}
+6. Cleaning operations list: {cleaning_operations}
 
-可用的工具函数：
+Available Tool Functions:
 {tools}
 
-工具函数描述：
+Tool Function Descriptions:
 {tool_descriptions}
 
-输出要求：
-实现一个具有多个可选参数的数据处理函数，需满足以下功能要求：
-- 工具函数已经默认导入，你给出的代码不需要重新import。
-- 函数应能调用预定义的工具函数进行数据处理，必要时可扩展实现其他处理函数。每次调用工具函数后需要使用变量接收返回的数据框，以保证数据处理的连续性。
-- 函数需区分必要的数据清理步骤和可选的数据预处理步骤。数据完整性处理优先执行，随后执行数据清理，最后执行数据预处理
-- 通过布尔类型参数控制各项处理操作的执行
-- 对于函数fill_missing和handle_outliers的调用，应该允许通过参数字典自定义其参数设置
-- 处理后的数据文件存储路径规则：
-  - 位置：原始文件目录下的 'clean_dataset' 子目录（不存在则创建）
-  - 示例：原始文件 '/path/data.csv' -> 处理后文件 '/path/clean_dataset/cleaned_data.csv'
-  - 注意：数据集的保存操作应在函数调用后进行，而不是在函数内部实现
-- 必须包含可选参数 `remove_with_missing`：控制是否在所有数据清理操作完成后，按照数据结构移除数据集中仍然包含缺失值的行。此参数默认为 True，设置为 True 时将生成一个完全没有缺失值的数据集。
-- 必须包含可选参数 `convert_categorical`：控制是否将分类变量转换为数值编码，编码方式最好使用类别编码，不保存原始列，不需要对需要预测的变量进行转换。
-- 函数参数命名需避免与工具函数参数重名，以防止参数冲突
-- 在代码的最后直接调用该函数，不要使用if __name__ == "__main__"，在调用部分储存数据集，并将数据集地址储存在result变量中
-- 函数应返回处理后的DataFrame
-- 根据操作项，如果对某几个变量有相同方法的fill_missing或者handle_outliers操作，则把这几个变量合并成变量组。
-- fill_missing和handle_outliers的布尔值参数控制是否进行填充和异常值处理，fill_missing_params和outlier_params是字典参数，在调用部分根据操作项的建议方法进行填充方法和阈值。
-- handle_outliers的strategy参数默认是clip
-- 如果数据集中存在ID type的变量，请不要删除
+Output Requirements:
+Implement a data processing function with multiple optional parameters that meets the following functional requirements:
+- Tool functions are already imported by default, your code does not need to re-import.
+- The function should be able to call predefined tool functions for data processing and can extend to implement other processing functions when necessary. After each tool function call, use a variable to receive the returned dataframe to ensure data processing continuity.
+- The function needs to distinguish between necessary data cleaning steps and optional data preprocessing steps. Data integrity processing has priority, followed by data cleaning, and finally data preprocessing.
+- Control the execution of various processing operations through boolean parameters
+- For calls to functions fill_missing and handle_outliers, allow custom parameter settings through parameter dictionaries
+- Processed data file storage path rules:
+  - Location: 'clean_dataset' subdirectory under the original file directory (create if it doesn't exist)
+  - Example: Original file '/path/data.csv' -> Processed file '/path/clean_dataset/cleaned_data.csv'
+  - Note: Dataset saving operation should be performed after function call, not implemented inside the function
+- Must include optional parameter `remove_with_missing`: Controls whether to remove rows that still contain missing values from the dataset after all data cleaning operations are completed according to data structure. This parameter defaults to True, and when set to True will generate a dataset completely without missing values.
+- Must include optional parameter `convert_categorical`: Controls whether to convert categorical variables to numerical encoding. Preferably use categorical encoding, do not save original columns, and do not need to transform variables that need to be predicted.
+- Function parameter naming should avoid conflicts with tool function parameters to prevent parameter conflicts
+- Directly call the function at the end of the code, do not use if __name__ == "__main__", store the dataset in the calling part and store the dataset address in the result variable
+- The function should return the processed DataFrame
+- According to operation items, if several variables have the same method for fill_missing or handle_outliers operations, merge these variables into variable groups.
+- The boolean parameters of fill_missing and handle_outliers control whether to perform filling and outlier handling, fill_missing_params and outlier_params are dictionary parameters, in the calling part fill methods and thresholds according to suggested methods of operation items.
+- The strategy parameter of handle_outliers defaults to clip
+- If there are ID type variables in the dataset, please do not delete them
 
 格式示例：
 ```python
@@ -431,43 +441,58 @@ result = output_path
 ```
 """
 
-DATA_CLEANING_FUNCTION_TEMPLATE_2 = """you are a data cleaning expert, you need to generate the data cleaning python script for the data.
+DATA_CLEANING_FUNCTION_TEMPLATE_2 = """You are a data cleaning expert. You need to generate a data cleaning Python script for the data.
 
-input data:
-1. csv file path: {csv_path}
-2. context description: {context_description}
-3. var_descriptions: {var_descriptions} # 变量描述，例如列名、预期类型、含义、取值范围等
-4. check_unit: {check_unit} # 是否需要检查和统一单位 (例如 True/False 或具体要求)
-5. data_info: {data_info} # 数据的基本信息，例如 df.info() 和 df.describe() 的输出
-6. cleaning_operations: {cleaning_operations} # 需要执行的具体清洗操作列表或描述
-7. save_path: {save_path} # 清洗后数据的保存路径
+Input Data:
+1. CSV file path: {csv_path}
+2. Context description: {context_description}
+3. Variable descriptions: {var_descriptions} # Variable descriptions, e.g., column names, expected types, meanings, value ranges, etc.
+4. Check unit: {check_unit} # Whether unit checking and unification is needed (e.g., True/False or specific requirements)
+5. Data info: {data_info} # Basic information about the data, e.g., output from df.info() and df.describe()
+6. Cleaning operations: {cleaning_operations} # List or description of specific cleaning operations to execute
+7. Save path: {save_path} # Save path for cleaned data, must save at this path
 
-your output should be:
-a python script that can be run directly, and the cleaned data will be saved to the save_path.
+IMPORTANT REQUIREMENTS:
+- DO NOT use any try-except blocks in the generated code
+- DO NOT include any error handling with try-catch statements
+- The code should be direct and straightforward without exception handling
+- If operations might fail, use simple conditional checks instead of try-except
+- When processing multiple cleaning operations, optimize for efficiency by:
+  * Loading the data only once at the beginning
+  * Applying all cleaning operations in logical sequence
+  * Grouping related operations on same columns together
+  * Saving the data only once at the end
+- Generate clean, readable code with clear comments for each operation
+- Ensure operations are applied in the correct order to avoid conflicts
+
+Your Output Should Be:
+A Python script that can be run directly, and the cleaned data will be saved to the save_path.
+The script must not contain any try-except statements.
+For multiple operations, generate an optimized single script rather than separate code blocks.
 """
 
 
-# 13. EDA问题生成
-EDA_QUESTIONS_TEMPLATE = """任务：数据探索性分析（EDA）问题生成
-任务描述：根据清理后的数据和数据科学项目描述，生成具体的探索性数据分析问题。
+# 13. EDA Question Generation
+EDA_QUESTIONS_TEMPLATE = """Task: Exploratory Data Analysis (EDA) Question Generation
+Task Description: Generate specific exploratory data analysis questions based on cleaned data and data science project descriptions.
 
-注意：
-1. 不要提出超过三个问题。
-2. 对于预测问题，问题可以涉及数据的特征提取，比如分析所有相关变量与响应变量的相关关系。
-3.由于提供的数据集是清理后的数据集，eda问题中的列名可能存在一定的变化，请注意使用正确的列名。
+Notes:
+1. Do not propose more than three questions.
+2. For prediction problems, questions can involve data feature extraction, such as analyzing correlations between all relevant variables and response variables.
+3. Since the provided dataset is a cleaned dataset, column names in EDA questions may have changed. Please pay attention to using correct column names.
 
-输入数据：
-1. 数据科学项目描述: {problem_description}
-2. 清理后的数据结构信息: {data_structure}
-3. 清理后的数据变量预览: {data_preview}
+Input Data:
+1. Data science project description: {problem_description}
+2. Cleaned data structure information: {data_structure}
+3. Cleaned data variable preview: {data_preview}
 
-输出数据：
-JSON格式的EDA问题列表（JSON 格式，包含问题及其简要描述）：
+Output Data:
+JSON format EDA question list (JSON format, including questions and brief descriptions):
 ```json
 [
   {{
-    "问题1": "问题1描述",
-    "结论": "等待后续解决"
+    "Question 1": "Question 1 description",
+    "Conclusion": "Awaiting further resolution"
   }}
 ]
 ```
@@ -567,6 +592,7 @@ INPUTS:
 
 OUTPUT REQUIREMENTS:
 - Write in clear, technical English
+- Keep responses concise and focused
 - Focus ONLY on statistically significant findings
 - Prioritize insights directly applicable to feature engineering
 - Identify specific variable relationships, patterns, or anomalies
@@ -574,103 +600,104 @@ OUTPUT REQUIREMENTS:
 - Suggest concrete next steps for model development
 - Maximum 3-5 concise bullet points
 - No explanations, background, or methodological discussion
+- If using headings, use maximum level 4 headings (####) only when necessary
 """
 
-# 16. PCS评估代码生成
-PCS_EVALUATION_TEMPLATE = """任务：PCS评估代码生成
-任务描述：根据提供的结论，生成用于评估预测性、可计算性和稳定性的 Python 代码。代码可以包括分析、绘图等操作。代码应将分析结果和生成的图片路径列表存储在 result 变量中，并将图片保存在与 CSV 文件相同的目录下。保存图片时请使用 os.path.join 函数动态生成路径，避免直接硬编码路径。
-请确保代码生成的图片不超过3张，图例标题都使用中文；
-generated_plots 列表中只包含图片的完整路径字符串，不要包含其他信息。
+# 16. PCS Evaluation Code Generation
+PCS_EVALUATION_TEMPLATE = """Task: PCS Evaluation Code Generation
+Task Description: Generate Python code to evaluate predictability, computability, and stability based on provided conclusions. The code can include analysis, plotting, and other operations. The code should store analysis results and generated image path lists in the result variable, and save images in the same directory as the CSV file. When saving images, use the os.path.join function to dynamically generate paths and avoid direct hardcoded paths.
+Ensure that the code generates no more than 3 images, with all legend titles in English.
+The generated_plots list should only contain complete image path strings, no other information.
 
-输入数据：
-1. 清理后的数据路径: {csv_path}
-2. 待评估的结论: {conclusions}
-3. 数据结构信息: {data_structure}
-4. 数据变量预览: {data_preview}
+Input Data:
+1. Cleaned data path: {csv_path}
+2. Conclusions to be evaluated: {conclusions}
+3. Data structure information: {data_structure}
+4. Data variable preview: {data_preview}
 
-输出数据：
-Python代码，评估内容包括：
-- 对结论的可预测性评估。可预测性指这些数据驱动的结果在某些新情境中重新出现
-- 数据扰动后结论的稳定性
-- 可视化生成的主观判断稳定性
+Output Data:
+Python code, evaluation content includes:
+- Predictability assessment of conclusions. Predictability refers to these data-driven results reappearing in some new contexts
+- Stability of conclusions after data perturbation
+- Stability of subjective judgments generated by visualization
 
-格式如下：
+Format as follows:
 ```python
 import pandas as pd
 result = ''
 ...
-# 评估代码
+# Evaluation code
 result = {{
-    'text_result': '',  # 文本分析结果，包含数据的具体描述
-    'generated_plots': []  # 图片路径列表，例如: ['path/to/plot1.png', 'path/to/plot2.png']
+    'text_result': '',  # Text analysis results, including specific descriptions of data
+    'generated_plots': []  # Image path list, e.g.: ['path/to/plot1.png', 'path/to/plot2.png']
 }}
 print(result)
 ```
 """
 
-# 17. 离散变量数值化需求判断
-DISCRETE_VAR_CHECK_TEMPLATE = """任务：离散变量数值化需求判断
-任务描述：根据提供的数据路径和问题描述，判断是否需要将数据中的离散变量数值化。
+# 17. Discrete Variable Numeralization Need Assessment
+DISCRETE_VAR_CHECK_TEMPLATE = """Task: Discrete Variable Numeralization Need Assessment
+Task Description: Based on the provided data path and problem description, determine whether discrete variables in the data need to be numeralized.
 
-输入数据：
-1. 清理后的数据路径: {csv_path}
-2. 问题描述: {problem_description}
+Input Data:
+1. Cleaned data path: {csv_path}
+2. Problem description: {problem_description}
 
-输出数据：
-JSON格式的判断结果：
+Output Data:
+JSON format judgment result:
 ```json
 [
   {{
-    "需要数值化": true
+    "needs_numeralization": true
   }}
 ]
 ```
 """
 
-# 18. 离散变量数值化代码生成
-DISCRETE_VAR_CODE_TEMPLATE = """任务：离散变量数值化代码生成
-任务描述：根据提供的数据路径和离散变量列表，生成数值化的 Python 代码。
+# 18. Discrete Variable Numeralization Code Generation
+DISCRETE_VAR_CODE_TEMPLATE = """Task: Discrete Variable Numeralization Code Generation
+Task Description: Generate numeralization Python code based on provided data path and discrete variable list.
 
-输入数据：
-1. CSV路径: {csv_path}
-2. 离散变量及其唯一值: {discrete_vars}
+Input Data:
+1. CSV path: {csv_path}
+2. Discrete variables and their unique values: {discrete_vars}
 
-输出数据：
-Python代码，用于数值化处理：
-- 代码需将数据中的所有离散变量转换为数值变量
-- 清理后的数据需保存为新的 CSV 文件，路径基于原始数据路径生成
+Output Data:
+Python code for numeralization processing:
+- Code needs to convert all discrete variables in the data to numerical variables
+- Cleaned data needs to be saved as a new CSV file, with path generated based on original data path
 ```python
 import pandas as pd
-data = pd.read_csv('路径')
-# 数值化代码逻辑
+data = pd.read_csv('path')
+# Numeralization code logic
 data.to_csv('new_file.csv', index=False)
 ```
 """
 
-# 数据清理任务列表生成
-TASK_LIST_TEMPLATE = """任务：数据清理任务列表生成
-任务描述：在正式执行数据清理任务之前，你需要首先根据提供的数据科学项目描述、数据背景描述、观测单位、数据变量描述和设计的hypothesis，生成一个与数据清理相关的任务顺序列表。
+# Data Cleaning Task List Generation
+TASK_LIST_TEMPLATE = """Task: Data Cleaning Task List Generation
+Task Description: Before formally executing data cleaning tasks, you need to first generate a task sequence list related to data cleaning based on the provided data science project description, data background description, observation units, data variable descriptions, and designed hypothesis.
 
-可选的任务类型（仅从以下选项中选择）：
+Optional Task Types (select only from the following options):
 - Dimension Analysis
 - Invalid Value Analysis
 - Missing Value Analysis
 - Data Integrity Analysis
 
-注意：
-- 只需列出task_name，无需添加额外描述
-- 严格按照上述任务类型的文字描述选择
-- 每个任务只需包含"task_name"字段
-- 按照执行顺序排列任务，生成的任务列表将用于指导后续数据清理操作
+Notes:
+- Only list task_name, no need to add additional descriptions
+- Strictly select according to the above task type text descriptions
+- Each task only needs to include the "task_name" field
+- Arrange tasks in execution order, the generated task list will be used to guide subsequent data cleaning operations
 
-输入数据：
-1. 数据科学项目描述: {problem_description}
-2. 数据背景描述: {context_description}
-3. 观测单位: {check_unit}
-4. 数据变量描述: {var_json}
+Input Data:
+1. Data science project description: {problem_description}
+2. Data background description: {context_description}
+3. Observation unit: {check_unit}
+4. Data variable description: {var_json}
 
-输出数据：
-请严格按照以下JSON格式输出任务列表：
+Output Data:
+Please strictly output the task list in the following JSON format:
 ```json
 [
   {{"task_name": "Dimension Analysis"}},
@@ -681,24 +708,25 @@ TASK_LIST_TEMPLATE = """任务：数据清理任务列表生成
 ```
 """
 
-# 19. EDA总结生成
-EDA_SUMMARY_TEMPLATE = """任务：生成EDA分析总结
-任务描述：根据已完成的EDA问题及其结论，生成一个全面的探索性数据分析总结报告。
+# 19. EDA Summary Generation
+EDA_SUMMARY_TEMPLATE = """Task: Generate EDA Analysis Summary
+Task Description: Generate a comprehensive exploratory data analysis summary report based on completed EDA questions and their conclusions.
 
-输入数据：
-1. EDA问题及结论列表: {eda_results}
-2. 数据科学项目描述: {problem_description}
+Input Data:
+1. EDA questions and conclusions list: {eda_results}
+2. Data science project description: {problem_description}
 
-输出要求：
-1. 总结需要包含以下内容：
-   - 数据探索的主要发现
-   - 各个变量之间的关键关系
-   - 对后续建模的启示
-2. 使用专业但易懂的语言
-3. 确保总结与项目目标相关
-5. 采用连贯的段落形式，而不是列表或JSON格式
-6. 总结应该是一段完整的叙述性文本
+Output Requirements:
+1. The summary needs to include the following content:
+   - Main findings from data exploration
+   - Key relationships between variables
+   - Insights for subsequent modeling
+2. Use professional but understandable language
+3. Ensure the summary is relevant to project objectives
+4. Use concise content with maximum heading level 4 (####) when necessary
+5. Adopt coherent paragraph format rather than list or JSON format
+6. The summary should be a complete narrative text
 
-输出格式示例：
-通过对数据的探索性分析，我们发现了以下关键insights：[主要发现]。在变量关系方面，[描述重要的变量关系]。这些发现对后续建模有重要启示，[建模相关建议]。
+Output Format Example:
+Through exploratory data analysis, we discovered the following key insights: [main findings]. Regarding variable relationships, [describe important variable relationships]. These findings provide important insights for subsequent modeling, [modeling-related recommendations].
 """ 

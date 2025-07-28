@@ -1,6 +1,7 @@
 # agents/results_evaluation_agent.py
 from .base_agent import BaseDSLC_Agent
 from DCLSAgents.prompts.results_evaluation_prompts import *
+import json
 import re
 import os
 
@@ -170,11 +171,6 @@ class ResultsEvaluationAgent(BaseDSLC_Agent):
             if code_match:
                 extracted_code = code_match.group(1)
                 path_setup_code = '''import os,sys,re
-current_path = os.path.abspath(__file__)
-match = re.search(r'(.*MyAgent)', current_path)
-if not match:
-    raise FileNotFoundError("Could not find MyAgent directory")
-sys.path.append(match.group(1))
 from tools.ml_tools import *
 from tools.ml_tools import transform_features,reduce_dimensions,select_features,discretize_features,create_polynomial_features
 
@@ -241,3 +237,216 @@ from tools.ml_tools import transform_features,reduce_dimensions,select_features,
                 continue  # 尝试下一次
 
         return {"结果": f"在{max_attempts}次尝试后未能成功生成和执行代码。"}
+    
+    def generate_results_evaluation_framework_cli(self, stability_summary, report_template):
+        """CLI method for generating results evaluation framework"""
+        try:
+            input_data = RESULTS_EVALUATION_FRAMEWORK_TEMPLATE.format(
+                stability_summary=stability_summary,
+                report_template=report_template,
+                problem_description=self.problem_description,
+                context_description=self.context_description,
+                best_five_result=self.best_five_result
+            )
+            
+            response = self.execute(input_data)
+            framework = self.parse_llm_json(response)
+            
+            if framework:
+                return framework
+            else:
+                return [{"error": "Could not generate evaluation framework"}]
+        except Exception as e:
+            return [{"error": f"Error generating evaluation framework: {str(e)}"}]
+    
+    def generate_test_dataset_strategy_cli(self, evaluation_framework):
+        """CLI method for generating test dataset strategy"""
+        try:
+            input_data = f"""Based on the evaluation framework:
+Evaluation Framework: {evaluation_framework}
+
+Problem: {self.problem_description}
+Context: {self.context_description}
+
+Generate a comprehensive test dataset strategy that includes:
+1. Test data generation approaches
+2. Dataset validation criteria
+3. Quality control measures
+4. Coverage requirements
+5. Sampling strategies
+
+Return as a structured test dataset strategy."""
+            
+            response = self.execute(input_data)
+            strategy = self.parse_llm_json(response)
+            
+            if strategy:
+                return strategy
+            else:
+                return [{"error": "Could not generate test dataset strategy"}]
+        except Exception as e:
+            return [{"error": f"Error generating test dataset strategy: {str(e)}"}]
+    
+    def generate_test_datasets_plan_cli(self, csv_file_path, test_strategy, evaluation_framework):
+        """CLI method for generating test datasets plan"""
+        try:
+            input_data = f"""Based on the test strategy and evaluation framework:
+CSV File Path: {csv_file_path}
+Test Strategy: {test_strategy}
+Evaluation Framework: {evaluation_framework}
+
+Problem: {self.problem_description}
+Context: {self.context_description}
+
+Generate a detailed plan for creating test datasets that includes:
+1. Specific dataset variations to create
+2. Generation parameters and settings
+3. Validation procedures for each dataset
+4. Expected outcomes and quality metrics
+5. Implementation timeline
+
+Return as a structured test datasets generation plan."""
+            
+            response = self.execute(input_data)
+            plan = self.parse_llm_json(response)
+            
+            if plan:
+                return plan
+            else:
+                return [{"error": "Could not generate test datasets plan"}]
+        except Exception as e:
+            return [{"error": f"Error generating test datasets plan: {str(e)}"}]
+    
+    def generate_test_validation_code_cli(self, test_generation_plan, csv_file_path):
+        """CLI method for generating test validation code"""
+        try:
+            input_data = TEST_VALIDATION_CODE_TEMPLATE.format(
+                test_generation_plan=json.dumps(test_generation_plan, ensure_ascii=False),
+                csv_file_path=csv_file_path,
+                problem_description=self.problem_description,
+                context_description=self.context_description
+            )
+            
+            response = self.execute(input_data)
+            # Extract code from markdown if present
+            code_match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
+            if code_match:
+                return code_match.group(1).strip()
+            else:
+                return response
+        except Exception as e:
+            return f"# Error generating test validation code: {str(e)}"
+    
+    def generate_final_evaluation_strategy_cli(self, evaluation_framework, test_plan, validation_code):
+        """CLI method for generating final evaluation strategy"""
+        try:
+            input_data = f"""Based on evaluation components:
+Evaluation Framework: {evaluation_framework}
+Test Plan: {test_plan}
+Validation Code: {validation_code}
+
+Problem: {self.problem_description}
+Context: {self.context_description}
+
+Generate a comprehensive final evaluation strategy that includes:
+1. Complete evaluation methodology
+2. Final testing procedures
+3. Results analysis framework
+4. Quality assurance measures
+5. Success criteria and metrics
+
+Return as a structured final evaluation strategy."""
+            
+            response = self.execute(input_data)
+            strategy = self.parse_llm_json(response)
+            
+            if strategy:
+                return strategy
+            else:
+                return [{"error": "Could not generate final evaluation strategy"}]
+        except Exception as e:
+            return [{"error": f"Error generating final evaluation strategy: {str(e)}"}]
+    
+    def generate_dcls_final_report_cli(self, problem_description, context_description, final_evaluation_strategy):
+        """CLI method for generating DCLS final report"""
+        try:
+            input_data = f"""Generate a comprehensive DCLS (Data-Centric Learning Science) final report:
+Problem Description: {problem_description}
+Context Description: {context_description}
+Final Evaluation Strategy: {final_evaluation_strategy}
+Best Results: {self.best_five_result}
+
+The report should include:
+1. Executive Summary
+2. Methodology Overview
+3. Data Analysis Results
+4. Model Performance Evaluation
+5. Stability Analysis Findings
+6. Final Recommendations
+7. Implementation Guidelines
+8. Risk Assessment and Mitigation
+9. Future Research Directions
+10. should not contain header markdown more than level 4(eg. #, ##, ###)
+
+Return as a comprehensive markdown report."""
+            
+            response = self.execute(input_data)
+            # Extract markdown report if wrapped
+            markdown_match = re.search(r"```markdown\n(.*?)\n```", response, re.DOTALL)
+            if markdown_match:
+                return markdown_match.group(1).strip()
+            else:
+                return response
+        except Exception as e:
+            return f"# Error generating DCLS final report: {str(e)}"
+    
+    def generate_actionable_recommendations_cli(self, dcls_report):
+        """CLI method for generating actionable recommendations"""
+        try:
+            input_data = f"""Based on the comprehensive DCLS report:
+DCLS Report: {dcls_report}
+
+Problem: {self.problem_description}
+Context: {self.context_description}
+
+Generate specific, actionable recommendations that include:
+1. Immediate next steps
+2. Implementation priorities
+3. Resource requirements
+4. Success metrics
+5. Timeline estimates
+6. Risk mitigation strategies
+7. Quality checkpoints
+
+Return as a structured list of actionable recommendations."""
+            
+            response = self.execute(input_data)
+            recommendations = self.parse_llm_json(response)
+            
+            if recommendations:
+                return recommendations
+            else:
+                return [{"error": "Could not generate actionable recommendations"}]
+        except Exception as e:
+            return [{"error": f"Error generating actionable recommendations: {str(e)}"}]
+    
+    def generate_final_evaluation_code_cli(self, evaluation_strategy, test_validation_code, csv_file_path):
+        """CLI method for generating final evaluation code"""
+        try:
+            input_data = FINAL_EVALUATION_CODE_TEMPLATE.format(
+                evaluation_strategy=json.dumps(evaluation_strategy, ensure_ascii=False),
+                test_validation_code=test_validation_code,
+                csv_file_path=csv_file_path,
+                problem_description=self.problem_description,
+                context_description=self.context_description
+            )
+            
+            response = self.execute(input_data)
+            # Extract code from markdown if present
+            code_match = re.search(r"```python\n(.*?)\n```", response, re.DOTALL)
+            if code_match:
+                return code_match.group(1).strip()
+            else:
+                return response
+        except Exception as e:
+            return f"# Error generating final evaluation code: {str(e)}"

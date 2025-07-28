@@ -1,0 +1,66 @@
+Metadata-Version: 2.4
+Name: vdstools
+Version: 1.1.1
+Summary: Simple data science toolkit for DCLS workflow
+Author: VDS Team
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=1.3.0
+Requires-Dist: numpy>=1.21.0
+Requires-Dist: matplotlib>=3.5.0
+Requires-Dist: seaborn>=0.11.0
+Requires-Dist: scipy>=1.7.0
+Requires-Dist: scikit-learn>=1.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=6.0; extra == "dev"
+Requires-Dist: pytest-cov>=2.0; extra == "dev"
+Requires-Dist: black>=21.0; extra == "dev"
+Requires-Dist: flake8>=3.9; extra == "dev"
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# VDS Tools
+
+Simple data science toolkit for DCLS workflow.
+
+Replaces hardcoded data operations with better visual output for Jupyter notebooks.
+
+## Features
+
+- Enhanced data preview with HTML output
+- Data cleaning tools using ml_tools integration
+- EDA analysis tools with structured reports
+- Custom vds-prefixed HTML tags for frontend styling
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+## Usage
+
+```python
+from vdstools import enhanced_data_preview, apply_cleaning_method
+
+# Enhanced data preview
+result = enhanced_data_preview("data.csv", n_rows=5)
+
+# Data cleaning
+result = apply_cleaning_method("data.csv", "fill_missing_values")
+```

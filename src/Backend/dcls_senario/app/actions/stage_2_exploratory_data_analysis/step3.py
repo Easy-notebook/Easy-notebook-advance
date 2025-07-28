@@ -47,9 +47,8 @@ async def generate_exploratory_data_sequence_step3(
         
         if eda_question:
             step_template.add_text(f"#### Solving EDA Question: {eda_question['question']}") \
-                        .add_text(f"Now,{eda_question['action']}") \
-                        .add_variable("current_eda_question", eda_question) \
                         .add_code(clean_agent.generate_eda_code_cli(csv_file_path, eda_question,data_info,data_preview)) \
+                        .add_variable("current_eda_question", eda_question) \
                         .exe_code_cli() \
                         .next_thinking_event(event_tag="analyze_eda_result",
                                         textArray=["EDA Agent is thinking...","analyzing eda result..."]) 
@@ -62,6 +61,19 @@ async def generate_exploratory_data_sequence_step3(
         
         eda_result = step_template.get_current_effect()
         current_eda_question = step_template.get_variable("current_eda_question")
+        
+        # Debug: Check the type and content of current_eda_question
+        if isinstance(current_eda_question, str):
+            # If it's a string, it might be JSON that needs parsing or it's been set incorrectly
+            import json
+            try:
+                current_eda_question = json.loads(current_eda_question)
+            except (json.JSONDecodeError, TypeError):
+                # If parsing fails, we need to handle this case
+                print(f"[ERROR] current_eda_question is a string: {current_eda_question}")
+                # We can't proceed without proper question structure
+                step_template.add_text("Error: Invalid EDA question format. Please check the data structure.")
+                return step_template.end_event()
         
         analysis_result = clean_agent.analyze_eda_result_cli(current_eda_question["question"],current_eda_question["action"],eda_result)
         eda_QA = [{"question":current_eda_question["question"],"action":current_eda_question["action"],"conclusion":analysis_result}]

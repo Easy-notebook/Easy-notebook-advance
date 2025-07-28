@@ -1,6 +1,7 @@
 // pipelineController.js
 import { create } from 'zustand';
 import workflowAPIClient from '../services/WorkflowAPIClient';
+import { contextSummarizer } from '../utils/contextSummarizer';
 
 // Define initial pipeline stages (will be updated dynamically from backend)
 const INITIAL_PIPELINE_STAGES = {
@@ -187,32 +188,61 @@ const usePipelineStore = create((set, get) => ({
 
     // Mark stage as completed (frontend state)
     markStageCompleted: (stageId) => {
-        set(state => ({
-            completedStages: state.completedStages.includes(stageId) 
-                ? state.completedStages 
-                : [...state.completedStages, stageId],
-            stageResults: {
-                ...state.stageResults,
-                [stageId]: {
-                    completedAt: new Date().toISOString(),
-                    steps: state.completedSteps
+        set(state => {
+            // 创建阶段总结
+            const stageSummary = contextSummarizer.createStageSummary(
+                stageId,
+                state.stepResults,
+                state.agentThinkingHistory
+            );
+            
+            return {
+                completedStages: state.completedStages.includes(stageId) 
+                    ? state.completedStages 
+                    : [...state.completedStages, stageId],
+                stageResults: {
+                    ...state.stageResults,
+                    [stageId]: {
+                        completedAt: new Date().toISOString(),
+                        steps: state.completedSteps,
+                        summary: stageSummary
+                    }
                 }
-            }
-        }));
+            };
+        });
     },
 
     // Add agent thinking record (frontend state)
     addAgentThinking: (agentName, thinkingData) => {
-        set(state => ({
-            agentThinkingHistory: [
-                ...state.agentThinkingHistory,
-                {
-                    agent_name: agentName,
-                    timestamp: new Date().toISOString(),
-                    ...thinkingData
-                }
-            ].slice(-100) // Keep last 100 records
-        }));
+        set(state => {
+            const newThinking = {
+                agent_name: agentName,
+                timestamp: new Date().toISOString(),
+                ...thinkingData
+            };
+            
+            // 智能历史管理 - 保留关键里程碑和最近记录
+            const updatedHistory = [...state.agentThinkingHistory, newThinking];
+            
+            if (updatedHistory.length > 100) {
+                // 保留里程碑和高置信度记录
+                const milestones = updatedHistory.filter(item => 
+                    item.is_milestone || item.confidence_level > 0.8
+                );
+                // 保留最近的记录
+                const recent = updatedHistory.slice(-50);
+                
+                // 合并并去重
+                const combined = [...milestones, ...recent];
+                const unique = combined.filter((item, index, arr) => 
+                    arr.findIndex(t => t.timestamp === item.timestamp) === index
+                );
+                
+                return { agentThinkingHistory: unique.slice(-80) };
+            }
+            
+            return { agentThinkingHistory: updatedHistory };
+        });
     },
 
     // Set current agent activity (frontend state)
@@ -225,20 +255,23 @@ const usePipelineStore = create((set, get) => ({
         try {
             const state = get();
             
+            // 优化前端状态以减少传输大小
+            const optimizedFrontendState = contextSummarizer.optimizeContextForTransmission({
+                completed_steps: state.completedSteps,
+                completed_stages: state.completedStages,
+                step_results: state.stepResults,
+                stage_results: state.stageResults,
+                agent_thinking_history: state.agentThinkingHistory,
+                current_stage_id: state.currentStageId,
+                current_step_id: state.currentStepId
+            });
+            
             // Prepare full context for stateless backend
             const fullStepRequest = {
                 ...stepRequest,
                 context: stepRequest.context,
                 variables: stepRequest.variables,
-                frontend_state: {
-                    completed_steps: state.completedSteps,
-                    completed_stages: state.completedStages,
-                    step_results: state.stepResults,
-                    stage_results: state.stageResults,
-                    agent_thinking_history: state.agentThinkingHistory,
-                    current_stage_id: state.currentStageId,
-                    current_step_id: state.currentStepId
-                }
+                frontend_state: optimizedFrontendState
             };
 
             // Execute step via stateless backend

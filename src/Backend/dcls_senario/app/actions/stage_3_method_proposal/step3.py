@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from app.core.config import llm, DataCleaningAndEDA_Agent
 from app.models.StepTemplate import StepTemplate
 
-async def generate_exploratory_data_sequence_step3(
+async def generate_method_proposal_sequence_step3(
     step: Dict[str, Any], 
     state: Optional[Dict[str, Any]] = None,
     stream: bool = False

@@ -95,11 +95,7 @@ print(data.info())
             if issue_left:
                 step_template.next_thinking_event(event_tag="generate_cleaning_operations",
                                         textArray=["Data Cleaning and EDA Agent is thinking...","generating cleaning operations..."])
-            # else:
-            #     step_template.add_text("I have generated the cleaning operations for all the dimension problems, final check the data.") \
-            #                 .next_thinking_event(event_tag="generate_dimension_check_code",
-            #                             textArray=["Data Cleaning and EDA Agent is thinking...","final check the data..."])
-        
+
         else:
             step_template.add_text("Maybe there is no problem with the data dimension, let's proceed to the next step.")
             

@@ -1,56 +1,109 @@
-import os
 import json
 import asyncio
 from collections import deque
-from typing import AsyncGenerator, Dict, List, Any
+from typing import AsyncGenerator, List, Dict, Any
+from .base_agent import BaseAgentTemplate
 
-from dotenv import load_dotenv
-from openai import AsyncOpenAI
-
-load_dotenv()
-
-class GeneralAgent:
+class GeneralAgent(BaseAgentTemplate):
     """
-    一个简单的 ChatGPT 代理类，用于演示如何从原有代码中
-    提取并封装核心的 AI Agent 功能。
+    通用Agent类，继承自BaseAgentTemplate
     """
 
     def __init__(self, 
+                operation: Dict[str, Any] = None,
                 api_key: str = None, 
                 base_url: str = None, 
                 engine: str = "o4-mini", 
                 role: str = "You are AI Agent behind easyremote notebook.") -> None:
         """
-        初始化代理，创建 AsyncOpenAI 客户端
+        初始化通用代理
         """
-        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-        self.base_url = base_url or os.getenv('OPENAI_API_BASE')
-        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-        self.engine = engine
-        self.role = role
+        super().__init__(operation, api_key, base_url, engine, role)
+        
+    def validate_operation(self) -> bool:
+        """验证操作参数"""
+        return bool(self.operation)
 
+    async def process(self) -> AsyncGenerator[str, None]:
+        """处理通用Agent逻辑"""
+        if not self.validate_operation():
+            yield self._create_response_json("error", {
+                "error": "Invalid operation parameters"
+            })
+            return
+            
+        async for response in self.handle_user_questions():
+            yield response
+    
     async def handle_user_questions(
         self, 
-        content: str, 
-        q_id: str, 
+        content: str = None, 
+        q_id: str = None, 
         related_qa_ids: List[str] = None,
         related_cells = None
     ) -> AsyncGenerator[str, None]:
         """
-        对用户问题进行流式回答的生成器函数。
-        
-        参数：
-            content: 当前用户提问的内容
-            q_id: 问题 ID，用于在返回数据中跟踪该问题
-            related_qa_ids: 关联历史 QA 的 ID 列表（可选）
-        
-        返回：
-            一个异步生成器，依次返回每段回答内容的 JSON 字符串。
+        对用户问题进行流式回答的生成器函数，使用记忆系统
         """
-        # 构造初始消息
-        messages = [
-            {"role": "system", "content": self.role}
-        ]
+        # 使用传入参数或从operation中获取
+        content = content or self._get_payload_value("content", "")
+        q_id = q_id or self._get_payload_value("QId")
+        related_qa_ids = related_qa_ids or self._get_payload_value("relatedQAIds", [])
+        related_cells = related_cells or self._get_payload_value("related_cells", [])
+        
+        if not q_id:
+            yield self._create_response_json("error", {
+                "payload": {"QId": q_id},
+                "error": "Missing QId in payload"
+            })
+            return
+        
+        # 检查终止条件
+        should_terminate, terminate_reason = self._should_terminate()
+        if should_terminate:
+            yield self._create_response_json("initStreamingAnswer", {
+                "payload": {"QId": q_id},
+                "status": "processing"
+            })
+            yield self._create_response_json("addContentToAnswer", {
+                "payload": {
+                    "QId": q_id,
+                    "content": f"🛑 问答终止: {terminate_reason}\n\n建议总结当前进展，整理思路后再继续。"
+                },
+                "status": "completed"
+            })
+            yield self._create_response_json("finishStreamingAnswer", {
+                "payload": {"QId": q_id},
+                "status": "completed"
+            })
+            return
+        
+        # 构造记忆感知的消息
+        messages = self._build_system_messages()
+
+        # 检查QA特定的记忆信息
+        qa_context = self._extract_qa_context()
+        current_qa_id = qa_context.get("current_qa_id")
+        question_content = qa_context.get("question_content", content)
+        
+        # 检查是否有相关的成功解决方案
+        working_solutions = self._get_working_solutions()
+        solution_context = ""
+        for problem_type, solution in list(working_solutions.items())[:2]:  # 最多显示2个
+            if any(keyword in question_content.lower() for keyword in problem_type.lower().split()):
+                solution_context += f"参考历史解决方案 - {problem_type}: {solution}\n"
+                
+        # 添加QA特定的上下文提示
+        if current_qa_id and self.agent_memory:
+            situation = self.agent_memory.get("situation_tracking", {})
+            successful_qa = [
+                interaction for interaction in situation.get("successful_interactions", [])
+                if interaction.get("operation_type") == "qa_completed"
+            ]
+            if successful_qa:
+                recent_successful_pattern = successful_qa[-1].get("operation_data", {})
+                if recent_successful_pattern.get("response_length", 0) > 200:
+                    solution_context += f"💡 根据历史记录，用户更偏好详细的回答\n"
 
         # 如果有相关历史，可以在这里拼接
         if related_qa_ids:
@@ -65,17 +118,21 @@ class GeneralAgent:
                 "content": f"related notebook cells: {str(related_cells)}"
             })
 
+        # 添加解决方案上下文
+        if solution_context:
+            messages.append({
+                "role": "user", 
+                "content": f"历史相关解决方案:\n{solution_context}"
+            })
+
         # 添加用户的问题
         messages.append({"role": "user", "content": content})
 
         # 发送初始流式回答通知
-        yield json.dumps({
-            "type": "initStreamingAnswer",
-            "data": {
-                "payload": {"QId": q_id},
-                "status": "processing"
-            }
-        }) + "\n"
+        yield self._create_response_json("initStreamingAnswer", {
+            "payload": {"QId": q_id},
+            "status": "processing"
+        })
 
         # 使用 deque 作为缓存，边生成边输出
         buffer = deque(maxlen=50)
@@ -176,3 +233,11 @@ class GeneralAgent:
                     "error": error_msg
                 }
             }) + "\n"
+
+    def _extract_qa_context(self) -> Dict[str, Any]:
+        """提取QA特定的上下文信息"""
+        qa_context = {}
+        if self.current_context:
+            qa_context["current_qa_id"] = self.current_context.get("current_qa_id")
+            qa_context["question_content"] = self.current_context.get("question_content")
+        return qa_context

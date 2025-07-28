@@ -93,16 +93,7 @@ const usePreStageStore = create(
     }))
 );
 
-// 添加Debug订阅器，帮助开发时追踪状态变化
 if (import.meta.env.MODE === 'development') {
-    // usePreStageStore.subscribe(
-    //     state => state.choiceMap,
-    //     (currentChoiceMap, previousChoiceMap) => {
-    //         // console.log('choiceMap changed:');
-    //         // console.log('Previous:', previousChoiceMap);
-    //         // console.log('Current:', currentChoiceMap);
-    //     }
-    // );
 }
 
 export default usePreStageStore;

@@ -157,8 +157,15 @@ class KernelExecutionManager:
         try:
             data = content['data']
             timestamp = datetime.now().isoformat()
+            print(data)
             
-            if 'image/png' in data:
+            if 'text/html' in data:
+                return {
+                    'type': 'html',
+                    'content': data['text/html'],
+                    'timestamp': timestamp
+                }
+            elif 'image/png' in data:
                 return {
                     'type': 'image',
                     'content': f"data:image/png;base64,{data['image/png']}",
@@ -184,7 +191,13 @@ class KernelExecutionManager:
             data = content['data']
             timestamp = datetime.now().isoformat()
             
-            if 'text/plain' in data:
+            if 'text/html' in data:
+                return {
+                    'type': 'html',
+                    'content': data['text/html'],
+                    'timestamp': timestamp
+                }
+            elif 'text/plain' in data:
                 return {
                     'type': 'text',
                     'content': data['text/plain'],

@@ -1,7 +1,9 @@
 {
   "modeToggle": {
     "completeMode": "创作模式",
-    "stepMode": "演示模式"
+    "stepMode": "演示模式",
+    "wysiwygMode": "所见即所得模式",
+    "debugMode": "调试模式"
   },
   "cell": {
     "addCodeCell": "添加代码单元格",
@@ -73,10 +75,14 @@
       "lineNumbersDesc": "在代码块中显示行号",
       "tabSize": "制表符大小",
       "tabSizeDesc": "制表符的空格数量"
+    },
+    "language": {
+      "title": "语言设置",
+      "selectLanguage": "选择界面语言"
     }
   },
   "emptyState": {
-    "title": "环境规制问题分析平台",
+    "title": "VDS智能体",
     "commandPlaceholder": "输入命令...",
     "questionPlaceholder": "询问有关数据科学的任何问题...",
     "commandMode": "命令模式",
@@ -92,7 +98,25 @@
     "uploadCSV": "上传CSV文件开始",
     "analysisDisplay": "每个分析步骤将实时显示，带有完全可编辑的代码和可视化",
     "pressShiftEnter": "按Shift + Enter换行",
-    "uploadFiles": "上传文件"
+    "uploadFiles": "上传文件",
+    "backToMain": "返回主界面",
+    "chooseAnalysisType": "选择分析类型",
+    "fileUploaded": "文件已上传：",
+    "customProblem": "自定义问题",
+    "customProblemPlaceholder": "描述你的自定义分析问题...",
+    "confirm": "确认",
+    "addDatasetBackground": "添加数据集背景信息",
+    "backgroundOptional": "这是可选的，但有助于提高分析质量。",
+    "backgroundPlaceholder": "描述你的数据集背景、数据来源、收集方法等...",
+    "skip": "跳过",
+    "continue": "继续",
+    "confirmProblem": "确认问题设置",
+    "reviewSettings": "请在开始分析前检查你的设置。",
+    "analysisType": "分析类型",
+    "dataFile": "数据文件",
+    "datasetBackground": "数据集背景",
+    "goBack": "返回",
+    "startAnalysis": "开始分析"
   },
   "problemDefine": {
     "selectAnalysis": "请选择您要执行的分析类型，或描述您要解决的问题：",
@@ -119,6 +143,43 @@
     "problemInput": "描述您的问题或需求...",
     "followUpQuestion": "询问有关结果的后续问题...",
     "processing": "处理中...",
-    "selectOptions": "请从上面的选项中选择"
+    "selectOptions": "请从上面的选项中选择",
+    "selectionError": "抱歉，您的选择出现问题。请重试或描述您的问题。",
+    "youHaveSelected": "您已选择 {problemName}",
+    "youSelectedAnalysis": "您已选择您的分析",
+    "defaultAnalysisName": "分析",
+    "noOptionsAvailable": "抱歉，没有可用的分析选项。让我们重新开始工作流程。",
+    "selectionIssue": "抱歉，您的选择出现问题。请重试。",
+    "youSelected": "您选择了 {problemName}",
+    "youSelectedDefault": "您选择了您的分析"
+  },
+  "rightSideBar": {
+    "history": "历史记录",
+    "chat": "聊天",
+    "noContent": "暂无内容",
+    "collapseDetails": "收起详情",
+    "viewDetails": "查看详情",
+    "noChatMessages": "暂无聊天消息",
+    "startConversation": "开始对话后将在此显示消息",
+    "you": "你",
+    "ai": "AI",
+    "linkedToQA": "关联问答",
+    "processing": "正在处理您的请求...",
+    "eventTypes": {
+      "question": "问题",
+      "instruction": "指令",
+      "upload": "上传",
+      "understanding": "理解",
+      "explaining": "解释",
+      "coding": "编码",
+      "running": "运行",
+      "analysis": "分析",
+      "debug": "调试",
+      "thinking": "思考",
+      "reply": "回复",
+      "system": "系统",
+      "editing": "编辑",
+      "event": "事件"
+    }
   }
 } 

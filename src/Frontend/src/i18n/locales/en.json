@@ -1,7 +1,9 @@
 {
   "modeToggle": {
     "completeMode": "Create Mode",
-    "stepMode": "Demo Mode"
+    "stepMode": "Demo Mode",
+    "wysiwygMode": "WYSIWYG Mode",
+    "debugMode": "Debug Mode"
   },
   "cell": {
     "addCodeCell": "Add Code Cell",
@@ -73,10 +75,14 @@
       "lineNumbersDesc": "Show line numbers in code blocks",
       "tabSize": "Tab Size",
       "tabSizeDesc": "Number of spaces for tabs"
+    },
+    "language": {
+      "title": "Language Settings",
+      "selectLanguage": "Select Interface Language"
     }
   },
   "emptyState": {
-    "title": "Easy-notebook-EnvInsight",
+    "title": "VDSAgents",
     "commandPlaceholder": "Type a command...",
     "questionPlaceholder": "Ask anything about data science...",
     "commandMode": "Command mode",
@@ -92,7 +98,25 @@
     "uploadCSV": "Upload CSV File to Begin",
     "analysisDisplay": "Each analysis step will be displayed in real-time, with fully editable code and visualizations",
     "pressShiftEnter": "Press Shift + Enter for new line",
-    "uploadFiles": "Upload Files"
+    "uploadFiles": "Upload Files",
+    "backToMain": "Back to Main",
+    "chooseAnalysisType": "Choose Analysis Type",
+    "fileUploaded": "File uploaded:",
+    "customProblem": "Custom Problem",
+    "customProblemPlaceholder": "Describe your custom analysis problem...",
+    "confirm": "Confirm",
+    "addDatasetBackground": "Add Dataset Background",
+    "backgroundOptional": "This is optional but helps improve analysis quality.",
+    "backgroundPlaceholder": "Describe your dataset background, data source, collection method, etc...",
+    "skip": "Skip",
+    "continue": "Continue",
+    "confirmProblem": "Confirm Problem Setup",
+    "reviewSettings": "Please review your settings before starting analysis.",
+    "analysisType": "Analysis Type",
+    "dataFile": "Data File",
+    "datasetBackground": "Dataset Background",
+    "goBack": "Go Back",
+    "startAnalysis": "Start Analysis"
   },
   "problemDefine": {
     "selectAnalysis": "Please select the type of analysis you want to perform, or describe the problem you want to solve:",
@@ -119,6 +143,43 @@
     "problemInput": "Describe your problem or requirements...",
     "followUpQuestion": "Ask follow-up questions about the results...",
     "processing": "Processing...",
-    "selectOptions": "Please select from the options above"
+    "selectOptions": "Please select from the options above",
+    "selectionError": "Sorry, there was an issue with your selection. Please try again or describe your problem.",
+    "youHaveSelected": "You have selected {problemName}",
+    "youSelectedAnalysis": "You have selected your analysis",
+    "defaultAnalysisName": "Analysis",
+    "noOptionsAvailable": "Sorry, no analysis options are available. Let's restart the workflow.",
+    "selectionIssue": "Sorry, there was an issue with your selection. Please try again.",
+    "youSelected": "You selected {problemName}",
+    "youSelectedDefault": "You selected your analysis"
+  },
+  "rightSideBar": {
+    "history": "History",
+    "chat": "Chat",
+    "noContent": "No content available",
+    "collapseDetails": "Collapse Details",
+    "viewDetails": "View Details",
+    "noChatMessages": "No chat messages yet",
+    "startConversation": "Start a conversation to see messages here",
+    "you": "You",
+    "ai": "AI",
+    "linkedToQA": "Linked to Q&A",
+    "processing": "Processing your request...",
+    "eventTypes": {
+      "question": "Question",
+      "instruction": "Instruction",
+      "upload": "Upload",
+      "understanding": "Understanding",
+      "explaining": "Explaining",
+      "coding": "Coding",
+      "running": "Running",
+      "analysis": "Analysis",
+      "debug": "Debug",
+      "thinking": "Thinking",
+      "reply": "Reply",
+      "system": "System",
+      "editing": "Editing",
+      "event": "Event"
+    }
   }
 } 

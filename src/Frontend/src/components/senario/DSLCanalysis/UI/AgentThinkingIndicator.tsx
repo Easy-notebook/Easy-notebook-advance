@@ -1,0 +1,188 @@
+import { useState, useEffect, useRef } from 'react';
+import { usePipelineStore } from '../store/pipelineController';
+
+const AgentThinkingIndicator = ({
+    agentName = "AI",
+    customText = null,
+    textArray = [],
+    useWorkflowThinking = false
+}) => {
+    const [seconds, setSeconds] = useState(0);
+    const [rotation, setRotation] = useState(0);
+    const [opacity, setOpacity] = useState(1);
+    const [textIndex, setTextIndex] = useState(0);
+    const [workflowThinkingTexts, setWorkflowThinkingTexts] = useState([]);
+    const animationRef = useRef(null);
+
+    // 处理时间计数
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setSeconds(prev => prev + 1);
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
+
+    // 使用requestAnimationFrame处理旋转动画，实现更平滑的顺时针旋转
+    useEffect(() => {
+        const animate = () => {
+            setRotation(prev => (prev + 1) % 360);
+            animationRef.current = requestAnimationFrame(animate);
+        };
+
+        animationRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+            }
+        };
+    }, []);
+
+    // 处理脉动效果
+    useEffect(() => {
+        const pulseTimer = setInterval(() => {
+            setOpacity(prev => prev === 1 ? 0.8 : 1);
+        }, 800);
+
+        return () => clearInterval(pulseTimer);
+    }, []);
+
+    // 处理文本切换
+    useEffect(() => {
+        if (textArray && textArray.length > 1) {
+            const textSwitchTimer = setInterval(() => {
+                setTextIndex(prev => (prev + 1) % textArray.length);
+            }, 3000); // 每3秒切换一次文本
+
+            return () => clearInterval(textSwitchTimer);
+        }
+    }, [textArray]);
+
+    // Get agent thinking from frontend store
+    const agentThinkingHistory = usePipelineStore(state => state.agentThinkingHistory);
+    
+    // Update workflow thinking texts
+    useEffect(() => {
+        if (useWorkflowThinking && agentThinkingHistory) {
+            const agentThinking = agentThinkingHistory
+                .filter(thinking => thinking.agent_name === agentName)
+                .slice(-5) // Get last 5 thinking records
+                .map(thinking => thinking.current_step || thinking.description || `${agentName} is thinking...`);
+            
+            setWorkflowThinkingTexts(agentThinking);
+        }
+    }, [useWorkflowThinking, agentName, agentThinkingHistory]);
+
+    // 确定显示的文本
+    const displayText = () => {
+        if (customText) {
+            return customText;
+        } else if (useWorkflowThinking && workflowThinkingTexts.length > 0) {
+            return workflowThinkingTexts[textIndex % workflowThinkingTexts.length];
+        } else if (textArray && textArray.length > 0) {
+            return textArray[textIndex];
+        } else {
+            return `${agentName} agent is thinking`;
+        }
+    };
+
+    // 控制背景流动效果
+    const [gradientPosition, setGradientPosition] = useState(0);
+    const animationFrameRef = useRef(null);
+    const lastTimeRef = useRef(0);
+    const speedRef = useRef(0.05); // 每毫秒移动的像素
+
+    // 使用requestAnimationFrame实现更平滑的背景流动效果
+    useEffect(() => {
+        const animate = (timestamp) => {
+            if (!lastTimeRef.current) lastTimeRef.current = timestamp;
+            const deltaTime = timestamp - lastTimeRef.current;
+            lastTimeRef.current = timestamp;
+
+            // 更平滑地更新位置
+            setGradientPosition(prev => {
+                const newPosition = prev - speedRef.current * deltaTime;
+                // 确保值在0-200之间循环
+                return ((newPosition % 200) + 200) % 200;
+            });
+
+            animationFrameRef.current = requestAnimationFrame(animate);
+        };
+
+        animationFrameRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, []);
+
+    return (
+        <div className="w-full relative overflow-hidden rounded-full">
+            {/* 流动渐变效果的整行背景 - 从右向左流动，无过渡以避免卡顿 */}
+            <div
+                className="absolute inset-0 w-full h-full"
+                style={{
+                    background: `linear-gradient(90deg, 
+                    rgba(255,255,255,0) 0%, 
+                    rgba(65,184,131,0.08) 20%, 
+                    rgba(52,144,220,0.12) 50%, 
+                    rgba(101,116,205,0.08) 80%, 
+                    rgba(255,255,255,0) 100%)`,
+                    backgroundSize: '200% 100%',
+                    backgroundPosition: `${gradientPosition}% 0%`
+                }}
+            />
+
+            {/* 指示器容器 */}
+            <div className="w-full flex items-center justify-start py-1 relative z-10">
+                <div className="inline-flex items-center px-3 py-1 rounded-full"
+                    style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.6)',
+                        border: '1px solid #41B883',
+                        opacity: opacity,
+                        transition: 'opacity 0.3s ease'
+                    }}>
+                    {/* 旋转的加载指示器 */}
+                    <div className="mr-2 flex-shrink-0">
+                        <div className="w-4 h-4 relative">
+                            <div
+                                className="absolute inset-0 border-2 rounded-full border-transparent"
+                                style={{
+                                    borderLeftColor: '#41B883',
+                                    borderTopColor: '#3490DC',
+                                    transform: `rotate(${rotation}deg)`
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* 文本部分 */}
+                    <div className="flex items-center">
+                        <span
+                            className="text-xs font-medium"
+                            style={{ color: '#41B883' }}
+                        >
+                            {displayText()}
+                            <span className="inline-block ml-1">
+                                {'.'.repeat(1 + (seconds % 3))}
+                            </span>
+                        </span>
+
+                        {/* 显示思考时间 */}
+                        <span
+                            className="text-xs ml-2 font-medium"
+                            style={{ color: '#3490DC' }}
+                        >
+                            {seconds}s
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default AgentThinkingIndicator;

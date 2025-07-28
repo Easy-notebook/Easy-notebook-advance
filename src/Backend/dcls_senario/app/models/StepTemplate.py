@@ -258,25 +258,6 @@ class StepTemplate:
             return False
     
     def error_invalid_event(self):
-        
-        # print(f"[DEBUG] Error: {error_message}")
-        
-        # action = {
-        #     "action": "error",
-        #     "error_message": error_message,
-        #     "state": self._get_context()
-        # }
-        # self.actions.append(action)
-        # self.step = step
-        # self.state = state.copy()  # 复制上下文，避免直接修改传入的对象
-        # self.actions: List[Dict[str, Any]] = []
-        # self.todo_list: List[str] = list(self.state.get("toDoList", []))
-        
-        print("[DEBUG] todo_list:",self.todo_list)
-        # print("[DEBUG] state:",self.state)
-        # print("[DEBUG] actions:",self.actions)
-        # print("[DEBUG] step:",self.step)
-        
         error_message = f"invalid event: {self.todo_list}"
         
         action = {

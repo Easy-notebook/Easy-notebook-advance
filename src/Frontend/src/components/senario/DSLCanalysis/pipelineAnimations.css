@@ -88,7 +88,7 @@
 /* Progress bar animations */
 .progress-bar {
     height: 4px;
-    background: linear-gradient(to right, #be123c, #f43f5e);
+    background: linear-gradient(to right, #41B883, #3490DC);
     transition: width 0.5s ease-in-out;
 }
 
@@ -147,6 +147,47 @@
     animation-delay: 700ms;
 }
 
+/* Additional smooth transitions */
+.theme-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Bounce animation for small elements */
+@keyframes bounceSmall {
+    0%, 20%, 53%, 80%, 100% {
+        transform: translate3d(0, 0, 0);
+    }
+    40%, 43% {
+        transform: translate3d(0, -4px, 0);
+    }
+    70% {
+        transform: translate3d(0, -2px, 0);
+    }
+    90% {
+        transform: translate3d(0, -1px, 0);
+    }
+}
+
+.animate-bounce-small {
+    animation: bounceSmall 1s ease-in-out;
+}
+
+/* Fade in animation */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 10px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeInUp 0.4s ease-out;
+}
+
 /* Pulsing animation for active elements */
 @keyframes pulse {
 
@@ -168,10 +209,10 @@
 
 /* Glowing effect for important elements */
 .glow {
-    box-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
+    box-shadow: 0 0 10px rgba(65, 184, 131, 0.5);
     transition: box-shadow 0.3s ease-in-out;
 }
 
 .glow:hover {
-    box-shadow: 0 0 20px rgba(244, 63, 94, 0.8);
+    box-shadow: 0 0 20px rgba(65, 184, 131, 0.8);
 }

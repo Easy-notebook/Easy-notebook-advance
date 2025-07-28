@@ -1,0 +1,679 @@
+import { useEffect, useCallback, memo, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { useTranslation } from 'react-i18next';
+import CodeCell from '../Editor/Cells/CodeCell';
+import MarkdownCell from '../Editor/Cells/MarkdownCell';
+import HybridCell from '../Editor/Cells/HybridCell';
+import ImageCell from '../Editor/Cells/ImageCell';
+import AIThinkingCell from '../Editor/Cells/AIThinkingCell';
+import OutlineSidebar from './LeftSideBar/OutlineSidebar';
+import ErrorAlert from '../UI/ErrorAlert';
+import useStore from '../../store/notebookStore';
+import { findCellsByStep } from '../../utils/markdownParser';
+import { createExportHandlers } from '../../utils/exportToFile/exportUtils';
+import { useToast } from '../UI/Toast';
+import AIAgentSidebar from './RightSideBar/AIAgentSidebar';
+import useOperatorStore from '../../store/operatorStore';
+import CommandInput from './FunctionBar/AITerminal';
+import { useAIAgentStore } from '../../store/AIAgentStore';
+import usePreviewStore from '../../store/previewStore';
+import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
+import useSettingsStore from '../../store/settingsStore';
+import SettingsPage from '../senario/settingState';
+import PreviewApp from './Display/PreviewApp';
+import Header from './MainContainer/Header';
+import MainContent from './MainContainer/MainContent';
+import WorkflowControl from './MainContainer/WorkflowControl';
+import { useWorkflowControlStore } from './store/workflowControlStore';
+
+
+
+// Main NotebookApp component
+const NotebookApp = () => {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  
+  // Panel width states
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('leftSidebarWidth');
+    return saved ? parseInt(saved) : 384; // w-96 = 384px
+  });
+  
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('rightSidebarWidth');
+    return saved ? parseInt(saved) : 384; // w-96 = 384px
+  });
+  
+  const {
+    notebookId,
+    cells,
+    tasks,
+    viewMode,
+    currentPhaseId,
+    currentStepIndex,
+    getCurrentViewCells,
+    getTotalSteps,
+    runAllCells,
+    isExecuting,
+    currentRunningPhaseId,
+    allowPagination,
+    error,
+    isCollapsed,
+    lastAddedCellId,
+    uploadMode,
+    allowedTypes,
+    maxFiles,
+    isRightSidebarCollapsed,
+    setError,
+    setLastAddedCellId,
+    setIsRightSidebarCollapsed,
+    setEditingCellId,
+    setCurrentPhase,
+    setCurrentStepIndex,
+    setCurrentCell,
+    addCell,
+    deleteCell,
+    updateCell,
+    setViewMode,
+  } = useStore();
+
+  const { setShowCommandInput } = useAIAgentStore();
+
+  const fileInputRef = useRef(null);
+  
+  // Optimized resize handlers
+  const handleLeftResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftSidebarWidth;
+    let animationId;
+    
+    const handleMouseMove = (e) => {
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = requestAnimationFrame(() => {
+        const newWidth = Math.max(200, Math.min(800, startWidth + e.clientX - startX));
+        setLeftSidebarWidth(newWidth);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      if (animationId) cancelAnimationFrame(animationId);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      // Save the current width state
+      requestAnimationFrame(() => {
+        localStorage.setItem('leftSidebarWidth', leftSidebarWidth.toString());
+      });
+    };
+    
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [leftSidebarWidth]);
+  
+  const handleRightResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightSidebarWidth;
+    let animationId;
+    
+    const handleMouseMove = (e) => {
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = requestAnimationFrame(() => {
+        const newWidth = Math.max(200, Math.min(800, startWidth + startX - e.clientX));
+        setRightSidebarWidth(newWidth);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      if (animationId) cancelAnimationFrame(animationId);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      // Save the current width state
+      requestAnimationFrame(() => {
+        localStorage.setItem('rightSidebarWidth', rightSidebarWidth.toString());
+      });
+    };
+    
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [rightSidebarWidth]);
+
+
+  // 使用自定义 Hook 获取 handleImport 和 initializeNotebook
+  const { handleImport, initializeNotebook } = ImportNotebook4JsonOrJupyter();
+
+  const settingstore = useSettingsStore();
+  
+  // WorkflowControl store for global state management
+  const { 
+    setContinueButtonText,
+    setIsGenerating,
+    setIsCompleted,
+    setOnTerminate,
+    setOnContinue,
+    setOnCancelCountdown,
+    reset: resetWorkflowControl
+  } = useWorkflowControlStore();
+
+  // Helper function to find phase index
+  const findPhaseIndex = useCallback(() => {
+    for (const task of tasks) {
+      const phaseIndex = task.phases.findIndex(p => p.id === currentPhaseId);
+      if (phaseIndex !== -1) {
+        return { task, phaseIndex };
+      }
+    }
+    return null;
+  }, [tasks, currentPhaseId]);
+
+  // 修改后的 handleAddCell 函数，使用 hook 的 initializeNotebook
+  const handleAddCell = useCallback(async (type, index = null) => {
+    try {
+      if (!notebookId) {
+        await initializeNotebook();
+      }
+
+      const newCell = {
+        id: uuidv4(),
+        type: type,
+        content: '',
+        outputs: [], // 使用 'outputs' 而不是 'output'
+        enableEdit: true,
+        phaseId: currentRunningPhaseId || null // 分配到当前运行的阶段
+      };
+
+      addCell(newCell, index); // 直接调用 store 的 addCell 动作
+      setLastAddedCellId(newCell.id);
+
+      toast({
+        title: t('toast.success'),
+        description: t('toast.cellAdded', { type: t(`cellTypes.${type}`) }),
+        variant: "success",
+      });
+    } catch (err) {
+      console.error('Error adding cell:', err);
+      setError('Failed to add cell. Please try again.');
+      toast({
+        title: t('toast.error'),
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  }, [initializeNotebook, notebookId, currentRunningPhaseId, addCell, setLastAddedCellId, setError, toast, t]);
+
+  // Run all cells
+  const handleRunAll = useCallback(async () => {
+    try {
+      await runAllCells();
+      toast({
+        title: t('toast.success'),
+        description: t('toast.allCellsExecuted'),
+        variant: "success",
+      });
+    } catch (err) {
+      console.error('Error running all cells:', err);
+      setError('Failed to run all cells. Please try again.');
+      toast({
+        title: t('toast.error'),
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  }, [runAllCells, setError, toast, t]);
+
+  // Navigation handlers
+  const handlePreviousStep = useCallback(() => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(currentStepIndex - 1); // 直接调用 store 的 setCurrentStepIndex 动作
+    }
+  }, [currentStepIndex, setCurrentStepIndex]);
+
+  const handleNextStep = useCallback(() => {
+    const totalSteps = getTotalSteps();
+    if (currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex(currentStepIndex + 1); // 直接调用 store 的 setCurrentStepIndex 动作
+    }
+  }, [currentStepIndex, getTotalSteps, setCurrentStepIndex]);
+
+  const handlePreviousPhase = useCallback(() => {
+    const result = findPhaseIndex();
+    if (result) {
+      const { task, phaseIndex } = result;
+      if (phaseIndex > 0) {
+        const previousPhase = task.phases[phaseIndex - 1];
+        setCurrentPhase(previousPhase.id);
+        setCurrentStepIndex(0);
+      }
+    }
+  }, [findPhaseIndex, setCurrentPhase, setCurrentStepIndex]);
+
+  const handleNextPhase = useCallback(() => {
+    const result = findPhaseIndex();
+    if (result) {
+      const { task, phaseIndex } = result;
+      if (phaseIndex < task.phases.length - 1) {
+        const nextPhase = task.phases[phaseIndex + 1];
+        setCurrentPhase(nextPhase.id); // 直接调用 store 的 setCurrentPhase 动作
+        setCurrentStepIndex(0); // 直接调用 store 的 setCurrentStepIndex 动作
+      }
+    }
+  }, [findPhaseIndex, setCurrentPhase, setCurrentStepIndex]);
+
+  /**
+   * 处理阶段选择事件。
+   * @param {string} phaseId 阶段 ID。
+   * @param {string} stepId 步骤 ID。
+   */
+  const handlePhaseSelect = useCallback((phaseId, stepId) => {
+    // 设置当前阶段和步骤
+    setCurrentPhase(phaseId); // 直接调用 store 的 setCurrentPhase 动作
+
+    // 查找对应的阶段
+    const phase = tasks.flatMap(task => task.phases).find(p => p.id === phaseId);
+    if (phase) {
+      // 查找步骤的索引
+      const stepIndex = phase.steps.findIndex(s => s.id === stepId);
+      if (stepIndex !== -1) {
+        // 设置当前步骤索引
+        setCurrentStepIndex(stepIndex); // 直接调用 store 的 setCurrentStepIndex 动作
+
+        // 查找对应步骤的单元格
+        const stepCells = findCellsByStep(tasks, phaseId, stepId, cells);
+        if (stepCells.length > 0) {
+          const firstCellId = stepCells[0].id;
+          const cellElement = document.getElementById(`cell-${firstCellId}`);
+          if (cellElement) {
+            cellElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
+    }
+  }, [tasks, cells, setCurrentPhase, setCurrentStepIndex]);
+
+  /**
+   * 处理视图模式切换。
+   * @param {string} mode 新的视图模式。
+   */
+  const handleModeChange = useCallback((mode) => {
+    if (mode === 'step' && !currentPhaseId && tasks.length > 0) {
+      const firstTask = tasks[0];
+      if (firstTask.phases.length > 0) {
+        setCurrentPhase(firstTask.phases[0].id);
+      }
+    }
+    setViewMode(mode);
+    // 记录并发送操作到后端
+    const operation = {
+      type: 'update_view_mode',
+      payload: { change_to: mode, current_phase_id: currentPhaseId, current_step_index: currentStepIndex }
+    };
+    useOperatorStore.getState().sendOperation(notebookId, operation);
+
+    setCurrentCell(null);
+    setEditingCellId(null);
+  }, [
+    currentPhaseId,
+    tasks,
+    setCurrentPhase,
+    setViewMode,
+    notebookId,
+    setCurrentCell,
+    setEditingCellId,
+    currentStepIndex
+  ]);
+
+  // Export handlers
+  const handleExportJson = useCallback(async () => {
+    try {
+      const exportData = {
+        notebook_id: notebookId, // 使用 'notebook_id'
+        cells,
+        tasks
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: 'application/json'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `notebook-${notebookId}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: t('toast.success'),
+        description: t('toast.exportSuccess'),
+        variant: "success",
+      });
+    } catch (err) {
+      console.error('Error exporting notebook:', err);
+      toast({
+        title: t('toast.error'),
+        description: t('toast.exportFailed'),
+        variant: "destructive",
+      });
+    }
+  }, [notebookId, cells, tasks, toast, t]);
+
+  const { exportDocx, exportPdf, exportMarkdown } = createExportHandlers(cells, tasks);
+
+  // 触发文件输入
+  const triggerFileInput = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  /**
+   * 渲染单元格。
+   * @param {Object} cell 单元格数据。
+   */
+  const renderCell = useCallback((cell) => {
+    if (!cell) return null;
+
+    const props = {
+      cell,
+      onDelete: viewMode === 'complete' ? () => deleteCell(cell.id) : null, // 直接调用 store 的 deleteCell 动作
+      onUpdate: (newContent) => updateCell(cell.id, newContent), // 直接调用 store 的 updateCell 动作
+      className: "w-full",
+      viewMode,
+      enableEdit: cell.enableEdit,
+      uploadMode,
+      allowedTypes,
+      maxFiles
+    };
+
+    switch (cell.type) {
+      case 'Hybrid':
+        return <HybridCell key={cell.id} {...props} />;
+      case 'code':
+        return <CodeCell key={cell.id} {...props} />;
+      case 'markdown':
+        return <MarkdownCell key={cell.id} {...props} />;
+      case 'image':
+        return <ImageCell key={cell.id} {...props} />;
+      case 'thinking':
+        return <AIThinkingCell key={cell.id} {...props} />;
+      default:
+        return null;
+    }
+  }, [viewMode, uploadMode, allowedTypes, maxFiles, deleteCell, updateCell]);
+
+  /**
+   * 渲染步骤导航。
+   */
+  const renderStepNavigation = useCallback(() => {
+    const result = findPhaseIndex();
+    if (!result) return null;
+
+    const { task, phaseIndex } = result;
+    const currentPhase = task.phases[phaseIndex];
+    const isFirstPhase = phaseIndex === 0;
+    const isLastPhase = phaseIndex === task.phases.length - 1;
+
+    return (
+      <StepNavigation
+        currentPhase={currentPhase}
+        currentStepIndex={currentStepIndex}
+        totalSteps={getTotalSteps()}
+        onPrevious={handlePreviousStep}
+        onNext={handleNextStep}
+        onPreviousPhase={handlePreviousPhase}
+        onNextPhase={handleNextPhase}
+        isFirstPhase={isFirstPhase}
+        isLastPhase={isLastPhase}
+      />
+    );
+  }, [
+    findPhaseIndex,
+    currentStepIndex,
+    getTotalSteps,
+    handlePreviousStep,
+    handleNextStep,
+    handlePreviousPhase,
+    handleNextPhase
+  ]);
+
+  const isShowingFileExplorer = usePreviewStore((state) => state.previewMode === 'file');
+
+  /**
+   * 渲染内容区域。
+   */
+
+  // 滚动到最后添加的单元格
+  useEffect(() => {
+    if (lastAddedCellId) {
+      const cellElement = document.getElementById(`cell-${lastAddedCellId}`);
+      cellElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setLastAddedCellId(null);
+    }
+  }, [lastAddedCellId, setLastAddedCellId]);
+
+  // 处理快捷键 (Alt/Ctrl + /)
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      const tag = e.target.tagName.toLowerCase();
+      if ((e.altKey || e.metaKey) && e.key === '/' && tag !== 'input' && tag !== 'textarea') {
+        e.preventDefault();
+        setShowCommandInput(true);
+        console.log("show command input");
+      }
+    };
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [setShowCommandInput]);
+
+  // Debug isExecuting state changes
+  useEffect(() => {
+    console.log('NotebookApp: isExecuting changed to:', isExecuting);
+  }, [isExecuting]);
+
+  // WorkflowControl state management based on view mode
+  useEffect(() => {
+    console.log('NotebookApp: WorkflowControl state update', { 
+      viewMode, 
+      isExecuting, 
+      currentPhaseId 
+    });
+    
+    if (viewMode === 'dslc') {
+      // In DSLC mode, DynamicStageTemplate will manage the state
+      console.log('NotebookApp: Setting DSLC mode state - clearing handlers for DynamicStageTemplate');
+      setContinueButtonText('Continue to Next Stage');
+      // Clear handlers to let DynamicStageTemplate set them
+      setOnTerminate(null);
+      setOnContinue(null);
+      setOnCancelCountdown(null);
+    } else {
+      // In other modes, provide basic state
+      console.log('NotebookApp: Setting non-DSLC mode state');
+      setContinueButtonText('Continue Workflow');
+      // Set basic state for non-DSLC modes
+      setIsGenerating(isExecuting);
+      // In non-DSLC modes, consider it completed when not executing
+      setIsCompleted(!isExecuting);
+      
+      // Provide basic handlers for non-DSLC modes
+      setOnTerminate(() => {
+        console.log('Basic terminate handler called');
+        // Could stop any running operations here
+      });
+      
+      setOnContinue(() => {
+        console.log('Basic continue handler called');
+        // Could implement basic workflow continuation here
+        if (viewMode === 'step' && currentPhaseId) {
+          handleNextPhase();
+        }
+      });
+    }
+  }, [viewMode, isExecuting, currentPhaseId, setContinueButtonText, setIsGenerating, setIsCompleted, setOnTerminate, setOnContinue, setOnCancelCountdown, handleNextPhase]);
+
+  // 键盘快捷键处理
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Alt + Left/Right Arrow for navigation
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (viewMode === 'step') {
+          if (currentStepIndex > 0) {
+            handlePreviousStep();
+          } else {
+            handlePreviousPhase();
+          }
+        }
+      }
+
+      if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (viewMode === 'step') {
+          const totalSteps = getTotalSteps();
+          if (currentStepIndex < totalSteps - 1) {
+            handleNextStep();
+          } else {
+            handleNextPhase();
+          }
+        }
+      }
+
+      // Alt + Ctrl to toggle view mode
+      if (e.altKey && e.ctrlKey) {
+        e.preventDefault();
+        handleModeChange(viewMode === 'complete' ? 'step' : 'complete'); // 切换模式
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    viewMode,
+    currentStepIndex,
+    handlePreviousStep,
+    handleNextStep,
+    handlePreviousPhase,
+    handleNextPhase,
+    getTotalSteps,
+    handleModeChange,
+    currentPhaseId,
+    notebookId
+  ]);
+
+  return (
+    <div className="h-screen flex">
+      <SettingsPage />
+      {/* 左侧边栏 */}
+      {!(cells.length === 0) && (
+        <div className="flex">
+          <div 
+            className="transition-all duration-500 ease-in-out relative"
+            style={{ width: isCollapsed ? '48px' : `${leftSidebarWidth}px` }}
+          >
+        <OutlineSidebar
+          tasks={tasks}
+          currentPhaseId={currentPhaseId}
+          currentStepId={currentStepIndex !== null ? tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.steps[currentStepIndex]?.id : null}
+          isCollapsed={isCollapsed}
+          onPhaseSelect={handlePhaseSelect}
+          viewMode={viewMode}
+          currentRunningPhaseId={currentRunningPhaseId}
+          allowPagination={allowPagination} // 传递翻页权限设置
+        />
+          </div>
+          {!isCollapsed && (
+            <div 
+              className="w-px bg-gray-300 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 relative group"
+              onMouseDown={handleLeftResize}
+            >
+              <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-blue-100/50" />
+            </div>
+          )}
+        </div>
+      )}
+      {/* 主内容区 */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        <CommandInput
+          onClick={() => setShowCommandInput(true)}
+        />
+        <Header
+          viewMode={viewMode}
+          isCollapsed={isCollapsed}
+          cells={cells}
+          isExecuting={isExecuting}
+          isRightSidebarCollapsed={isRightSidebarCollapsed}
+          onModeChange={handleModeChange}
+          onRunAll={handleRunAll}
+          onExportJson={handleExportJson}
+          onExportDocx={exportDocx}
+          onExportPdf={exportPdf}
+          onExportMarkdown={exportMarkdown}
+          onTriggerFileInput={triggerFileInput}
+          onHandleImport={handleImport}
+          onShowCommandInput={() => setShowCommandInput(true)}
+          onToggleRightSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+          onOpenSettings={settingstore.openSettings}
+          fileInputRef={fileInputRef}
+        />
+        <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-blue-200 bg-white w-full h-full">
+          {isShowingFileExplorer && <PreviewApp />}
+          <div className={`${isShowingFileExplorer ? 'hidden' : 'block'} w-full h-full `}>
+            <MainContent
+              cells={cells}
+              viewMode={viewMode}
+              tasks={tasks}
+              currentPhaseId={currentPhaseId}
+              currentStepIndex={currentStepIndex}
+              getCurrentViewCells={getCurrentViewCells}
+              handleAddCell={handleAddCell}
+              renderCell={renderCell}
+              renderStepNavigation={renderStepNavigation}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <ErrorAlert
+            message={error}
+            onClose={() => setError(null)}
+          />
+        )}
+      </div>
+
+      {/* 右侧边栏 */}
+      {isRightSidebarCollapsed && (
+        <div className="flex">
+          <div 
+            className="w-px bg-gray-300 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 relative group"
+            onMouseDown={handleRightResize}
+          >
+            <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-blue-100/50" />
+          </div>
+          <div 
+            className="transition-all duration-500 ease-in-out opacity-100 overflow-hidden flex-shrink-0"
+            style={{ width: `${rightSidebarWidth}px` }}
+          >
+            <AIAgentSidebar
+              viewMode={viewMode}
+              currentPhaseId={currentPhaseId}
+              currentStepIndex={currentStepIndex}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
+      {viewMode === 'dslc' && <WorkflowControl 
+        fallbackIsExecuting={isExecuting}
+        fallbackViewMode={viewMode}
+        fallbackCurrentPhaseId={currentPhaseId}
+        fallbackHandleNextPhase={handleNextPhase}
+      />}
+    </div>
+  );
+};
+
+export default memo(NotebookApp);

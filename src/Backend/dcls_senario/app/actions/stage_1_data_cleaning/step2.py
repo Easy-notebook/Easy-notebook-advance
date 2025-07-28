@@ -27,8 +27,6 @@ async def generate_data_cleaning_sequence_step2(
     
     # 分支1：待办事项为空
     if step_template.event("start"):
-        csv_file_path = step_template.get_variable("csv_file_path")
-
         step_template.add_text("### Step2: Invalid Value Analysis") \
                     .add_code(
                             f"""import pandas as pd
@@ -90,34 +88,55 @@ print(data_describe)
         return step_template.end_event()
     
     if step_template.think_event("generate_cleaning_operations"):
-        one_of_issue, issue_left = step_template.pop_last_sub_variable("invalid_value_problems")
+        all_issues = step_template.get_variable("invalid_value_problems")
         data_info = step_template.get_variable("data_info")
         
-        if one_of_issue:
-            step_template.add_code(clean_agent.generate_cleaning_code_cli(csv_file_path, one_of_issue, context_description, variables, unit_check, data_info,"invalid_data_problem_resolved.csv")) \
-                        .update_variable("csv_file_path","invalid_data_problem_resolved.csv") \
-                        .exe_code_cli(mark_finnish=f"resolved {one_of_issue['problem']}")                       
-            if issue_left:
-                step_template.next_thinking_event(event_tag="generate_cleaning_operations",
-                                        textArray=["Data Cleaning and EDA Agent is thinking...","generating cleaning operations..."])
-            else:
-                step_template.add_text("I have generated the cleaning operations for all the dimension problems.") \
-                # step_template.add_text("I have generated the cleaning operations for all the dimen, final check the data.") \
-#                             .add_code(
-# f"""
-# data = pd.read_csv("{csv_file_path}")
-# data_describe = data.select_dtypes('number').describe()
-# data_describe = data_describe.to_string()
-# print(data_describe)
-# """
-#                 ) \
-#                 .exe_code_cli( 
-#                     # event_tag="finished_code_execution",
-#                     mark_finnish="finished check the processed data"
-#                 )
+        if all_issues:
+            # Group issues by cleaning method type for batch processing
+            grouped_issues = {}
+            for issue in all_issues:
+                method_type = issue.get('method', 'general')
+                if method_type not in grouped_issues:
+                    grouped_issues[method_type] = []
+                grouped_issues[method_type].append(issue)
+            
+            step_template.add_text(f"Found {len(all_issues)} invalid value issues. Grouping by method type for efficient batch processing:")
+            
+            method_counter = 1
+            final_output_filename = "invalid_value_resolved.csv"
+            
+            for method_type, issues in grouped_issues.items():
+                issue_descriptions = [issue.get('problem', 'Invalid value issue') for issue in issues]
+                step_template.add_text(f"#### Method Group {method_counter}: Processing {len(issues)} Issues")
+                step_template.add_text(f"**Issues:** {', '.join(issue_descriptions)}")
+                
+                # 第一个batch使用原始文件，后续batch使用之前的输出结果
+                if method_counter == 1:
+                    input_csv_path = csv_file_path
+                else:
+                    input_csv_path = final_output_filename
+                
+                output_filename = final_output_filename
+                
+                # Pass all issues of same type at once for batch processing
+                batch_cleaning_code = clean_agent.generate_cleaning_code_cli(
+                    input_csv_path, issues, context_description, variables, 
+                    unit_check, data_info, output_filename
+                )
+                
+                step_template.add_code(batch_cleaning_code) \
+                           .exe_code_cli(mark_finnish=f"resolved {len(issues)} issues in method group {method_counter}")
+                
+                method_counter += 1
+            
+            # Update the final CSV path
+            step_template.update_variable("csv_file_path", final_output_filename)
+            step_template.add_text("✅ **All invalid value issues have been resolved using batch processing!**") \
+                       .add_text("🎯 **Ready to proceed to the next step.**")
         
         else:
-            step_template.add_text("Maybe there is no problem with invalid data, let's proceed to the next step.")
+            step_template.add_text("✅ **No invalid value problems found.**") \
+                       .add_text("🎯 **Ready to proceed to the next step.**")
             
         return step_template.end_event()
     
