@@ -1,6 +1,7 @@
 {
   "modeToggle": {
     "completeMode": "创作模式",
+    "createMode": "创建模式",
     "stepMode": "演示模式",
     "wysiwygMode": "所见即所得模式",
     "debugMode": "调试模式"
@@ -47,6 +48,7 @@
     "title": "设置",
     "tabs": {
       "general": "通用",
+      "editor": "编辑器",
       "shortcuts": "快捷键",
       "markdown": "Markdown"
     },
@@ -79,6 +81,25 @@
     "language": {
       "title": "语言设置",
       "selectLanguage": "选择界面语言"
+    },
+    "editor": {
+      "title": "编辑器设置",
+      "editorType": "编辑器类型",
+      "editorTypeDesc": "选择您偏好的编辑器风格。Tiptap适合流畅写作，Jupyter适合结构化编程。",
+      "tiptapEditor": "Tiptap 编辑器 (富文本模式)",
+      "jupyterEditor": "Jupyter 编辑器 (单元格模式)",
+      "defaultLanguage": "默认编程语言",
+      "defaultLanguageDesc": "新建代码单元格时使用的默认编程语言。",
+      "kernel": "代码执行内核",
+      "kernelDesc": "选择代码执行的运行环境。本地内核使用本机环境，远程内核连接到服务器。",
+      "autoSave": "自动保存",
+      "autoSaveDesc": "编辑时自动保存文档内容",
+      "autoComplete": "代码自动完成",
+      "autoCompleteDesc": "启用智能代码提示和自动完成功能",
+      "autoFormat": "自动格式化代码",
+      "autoFormatDesc": "保存时自动格式化代码，保持代码风格一致",
+      "showLineNumbers": "显示行号",
+      "showLineNumbersDesc": "在代码编辑器中显示行号"
     }
   },
   "emptyState": {

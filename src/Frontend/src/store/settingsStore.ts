@@ -38,6 +38,19 @@ export interface MarkdownPreferences {
 }
 
 /**
+ * 编辑器设置接口
+ */
+export interface EditorSettings {
+    editorType: 'tiptap' | 'jupyter';
+    defaultLanguage: string;
+    kernel: 'local' | 'remote' | 'docker' | 'cloud';
+    autoSave: boolean;
+    autoComplete: boolean;
+    autoFormat: boolean;
+    showLineNumbers: boolean;
+}
+
+/**
  * 快捷键设置接口
  */
 export interface Shortcuts {
@@ -56,6 +69,7 @@ export interface Settings {
     baseUrl: string;
     apiTimeout: number;
     markdownPreferences: MarkdownPreferences;
+    editorSettings: EditorSettings;
     shortcuts: Shortcuts;
     theme: ThemeType;
     language: string;
@@ -141,6 +155,9 @@ export interface SettingsStoreActions {
     // Markdown Preferences
     updateMarkdownPreferences: (preferences: Partial<MarkdownPreferences>) => void;
 
+    // Editor Settings
+    updateEditorSettings: (settings: Partial<EditorSettings>) => void;
+
     // Shortcuts
     updateShortcut: (key: string, value: string) => void;
 
@@ -204,6 +221,15 @@ const initialSettings: Settings = {
         autoFormat: true,
         syntaxHighlighting: true,
         lineNumbers: false,
+    },
+    editorSettings: {
+        editorType: 'tiptap',
+        defaultLanguage: 'python',
+        kernel: 'local',
+        autoSave: true,
+        autoComplete: true,
+        autoFormat: true,
+        showLineNumbers: true,
     },
     shortcuts: {
         newCell: 'Ctrl+Enter',
@@ -485,6 +511,25 @@ const createSettingsStore = (set: any, get: any): SettingsStore => ({
         }
     },
 
+    // Editor Settings
+    updateEditorSettings: (editorSettings: Partial<EditorSettings>) => {
+        try {
+            set((state: SettingsStoreState) => ({
+                settings: {
+                    ...state.settings,
+                    editorSettings: {
+                        ...state.settings.editorSettings,
+                        ...editorSettings,
+                    }
+                },
+                error: null,
+            }));
+        } catch (error: any) {
+            set({ error: error.message });
+            throw error;
+        }
+    },
+
     // Shortcuts
     updateShortcut: (key: string, value: string) => {
         try {
@@ -666,6 +711,10 @@ const storageConfig = {
                             markdownPreferences: {
                                 ...initialSettings.markdownPreferences,
                                 ...migratedState.settings.markdownPreferences,
+                            },
+                            editorSettings: {
+                                ...initialSettings.editorSettings,
+                                ...migratedState.settings.editorSettings,
                             }
                         };
                     }

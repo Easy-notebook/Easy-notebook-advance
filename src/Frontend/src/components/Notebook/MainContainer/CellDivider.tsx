@@ -20,7 +20,7 @@ const CellDivider = memo<CellDividerProps>(({ index, onAddCell, viewMode }) => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {isHovered && viewMode === 'complete' && (
+      {isHovered && (viewMode === 'complete' || viewMode === 'create') && (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 backdrop-blur-md shadow-lg rounded-2xl p-2 z-10">
           <button
             onClick={() => onAddCell('code', index)}

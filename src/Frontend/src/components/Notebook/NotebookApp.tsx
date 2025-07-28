@@ -378,7 +378,7 @@ const NotebookApp = () => {
 
     const props = {
       cell,
-      onDelete: viewMode === 'complete' ? () => deleteCell(cell.id) : null, // 直接调用 store 的 deleteCell 动作
+      onDelete: (viewMode === 'complete' || viewMode === 'create') ? () => deleteCell(cell.id) : null, // 直接调用 store 的 deleteCell 动作
       onUpdate: (newContent) => updateCell(cell.id, newContent), // 直接调用 store 的 updateCell 动作
       className: "w-full",
       viewMode,
@@ -544,7 +544,7 @@ const NotebookApp = () => {
       // Alt + Ctrl to toggle view mode
       if (e.altKey && e.ctrlKey) {
         e.preventDefault();
-        handleModeChange(viewMode === 'complete' ? 'step' : 'complete'); // 切换模式
+        handleModeChange(viewMode === 'create' ? 'step' : 'create'); // 切换模式
       }
     };
 

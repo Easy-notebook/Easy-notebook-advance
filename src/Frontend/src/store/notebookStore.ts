@@ -17,7 +17,7 @@ export type CellType = 'code' | 'markdown' | 'Hybrid' | 'image' | 'thinking';
 /**
  * 视图模式类型
  */
-export type ViewMode = 'complete' | 'step' | 'wysiwyg' | 'dslc' | 'create';
+export type ViewMode = 'complete' | 'step' | 'dslc' | 'create';
 
 /**
  * 上传模式类型
@@ -314,7 +314,7 @@ const useStore = create<NotebookStore>(
     tasks: [],
     currentPhaseId: null,
     currentStepIndex: 0,
-    viewMode: 'complete',
+    viewMode: 'create',
     currentCellId: null,
     isExecuting: false,
     currentRunningPhaseId: null,
@@ -634,7 +634,7 @@ const useStore = create<NotebookStore>(
     toggleViewMode: () =>
       set(
         produce((state: NotebookStoreState) => {
-          state.viewMode = state.viewMode === 'complete' ? 'step' : 'complete';
+          state.viewMode = state.viewMode === 'create' ? 'step' : 'create';
           if (state.viewMode === 'step' && !state.currentPhaseId && state.tasks.length > 0) {
             const firstTask = state.tasks[0];
             if (firstTask.phases.length > 0) {
@@ -978,7 +978,7 @@ const useStore = create<NotebookStore>(
       const state = get();
       let cells: Cell[];
 
-      if (state.viewMode === 'complete' || !state.currentPhaseId) {
+      if (state.viewMode === 'complete' || state.viewMode === 'create' || !state.currentPhaseId) {
         cells = state.cells;
       } else {
         const phase = get().getPhaseById(state.currentPhaseId);

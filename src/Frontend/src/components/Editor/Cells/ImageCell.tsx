@@ -242,7 +242,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell }) => {
             </div>
 
             {/* 工具栏 */}
-            {viewMode === "complete" && (
+            {(viewMode === "complete" || viewMode === "create") && (
               <div
                 className={`absolute -right-14 top-1 flex items-center transition-opacity duration-200 ${
                   cellShowButtons || isEditing ? 'opacity-100' : 'opacity-0'

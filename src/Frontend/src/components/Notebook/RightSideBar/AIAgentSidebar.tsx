@@ -316,7 +316,7 @@ const AIAgentSidebar = () => {
     return actions.filter(action =>
       ((viewMode && action.viewMode === viewMode && viewMode === 'step') &&
         (getCurrentStepCellsIDs().includes(action.cellId))) ||
-      (viewMode && action.viewMode === viewMode && viewMode === 'complete') ||
+      (viewMode && action.viewMode === viewMode && (viewMode === 'complete' || viewMode === 'create')) ||
       (viewMode && action.viewMode === viewMode && viewMode === 'dslc')
     );
   }, [actions, viewMode, getCurrentStepCellsIDs]);

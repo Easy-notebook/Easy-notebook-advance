@@ -60,8 +60,8 @@ const CommandInput: React.FC = () => {
 
         return actions.filter(action => {
             const isStepMode = viewMode === 'step';
-            const isCompleteMode = viewMode === 'complete';
-            const isOtherMode = !isStepMode && !isCompleteMode; // wysiwyg, dslc, etc.
+            const isCompleteMode = viewMode === 'complete' || viewMode === 'create';
+            const isOtherMode = !isStepMode && !isCompleteMode; // dslc, etc.
 
             // Step mode: only show actions for current step
             if (isStepMode && action.viewMode === viewMode &&
@@ -75,7 +75,7 @@ const CommandInput: React.FC = () => {
             }
             
             // Other modes: show all actions for that mode or general actions
-            if (isOtherMode && (action.viewMode === viewMode || action.viewMode === 'complete')) {
+            if (isOtherMode && (action.viewMode === viewMode || action.viewMode === 'complete' || action.viewMode === 'create')) {
                 return true;
             }
             
@@ -89,8 +89,8 @@ const CommandInput: React.FC = () => {
 
         return qaList.filter(qa => {
             const isStepMode = viewMode === 'step';
-            const isCompleteMode = viewMode === 'complete';
-            const isOtherMode = !isStepMode && !isCompleteMode; // wysiwyg, dslc, etc.
+            const isCompleteMode = viewMode === 'complete' || viewMode === 'create';
+            const isOtherMode = !isStepMode && !isCompleteMode; // dslc, etc.
 
             // Step mode: only show QAs for current step
             if (isStepMode && qa.viewMode === viewMode &&

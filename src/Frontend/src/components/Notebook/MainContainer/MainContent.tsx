@@ -1,6 +1,6 @@
 import DSLCPipeline from '../../senario/DSLCanalysis/Pipeline';
 import StepMode from '../../senario/BasicMode/StepMode';
-import TiptapNotebookEditor from '../../Editor/TiptapNotebookEditor';
+import CreateMode from '../../senario/BasicMode/CreateMode';
 import CompleteMode from '../../senario/BasicMode/CompleteMode';
 import DetachedCellView from './DetachedCellView';
 import { findCellsByStep } from '../../../utils/markdownParser';
@@ -104,32 +104,26 @@ const MainContent: React.FC<MainContentProps> = ({
       );
     }
 
-    if (viewMode === 'wysiwyg') {
+    if (viewMode === 'create') {
+      return <CreateMode readOnly={false} />;
+    }
+
+    // 为了向后兼容，保留 complete 模式的处理
+    if (viewMode === 'complete') {
+      const visibleCells = getCurrentViewCells();
       return (
-        <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 my-auto">
-          <div className="h-10 w-full"></div>
-          <div className="relative">
-            <TiptapNotebookEditor
-              className="w-full"
-              placeholder="Start writing your notebook... Type ```python to create a code block"
-              readOnly={false}
-            />
-          </div>
-          <div className="h-20 w-full"></div>
-        </div>
+        <CompleteMode
+          visibleCells={visibleCells}
+          handleAddCell={handleAddCell}
+          viewMode={viewMode}
+          renderCell={renderCell}
+          CellDivider={CellDivider}
+        />
       );
     }
 
-    const visibleCells = getCurrentViewCells();
-    return (
-      <CompleteMode
-        visibleCells={visibleCells}
-        handleAddCell={handleAddCell}
-        viewMode={viewMode}
-        renderCell={renderCell}
-        CellDivider={CellDivider}
-      />
-    );
+    // 默认情况下使用 create 模式
+    return <CreateMode readOnly={false} />;
   }
 };
 

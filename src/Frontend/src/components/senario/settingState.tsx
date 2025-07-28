@@ -1,6 +1,6 @@
 // components/SettingsPage.js
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, Settings2, Key, FileText, Keyboard, Globe } from 'lucide-react';
+import { Settings, Settings2, Key, FileText, Keyboard, Globe, Monitor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import useSettingsStore, { useSettings, useSettingsOpen} from '../../store/settingsStore';
 
@@ -81,6 +81,16 @@ const SettingsPage = () => {
             localStorage.setItem('language', language);
         } catch (error) {
             console.error('Failed to update language:', error);
+        }
+    };
+
+    const handleEditorSettingsChange = (key, value) => {
+        try {
+            store.updateEditorSettings({
+                [key]: value
+            });
+        } catch (error) {
+            console.error('Failed to update editor settings:', error);
         }
     };
 
@@ -300,6 +310,80 @@ const SettingsPage = () => {
                 </div>
             </div>
         ),
+        editor: (
+            <div className="p-2">
+                <h2 className="text-xl font-bold mb-4 flex items-center space-x-2">
+                    <Monitor className="w-5 h-5" />
+                    <span>{t('settings.editor.title', '编辑器设置')}</span>
+                </h2>
+                <div className="space-y-6">
+                    {/* 编辑器类型选择 */}
+                    <div>
+                        <label className="block text-lg font-medium text-gray-700 mb-2">
+                            {t('settings.editor.editorType', '编辑器类型')}
+                        </label>
+                        <Select
+                            value={settings.editorSettings?.editorType || 'tiptap'}
+                            onChange={(e) => handleEditorSettingsChange('editorType', e.target.value)}
+                        >
+                            <option value="tiptap">{t('settings.editor.tiptapEditor', 'Tiptap 编辑器 (富文本模式)')}</option>
+                            <option value="jupyter">{t('settings.editor.jupyterEditor', 'Jupyter 编辑器 (单元格模式)')}</option>
+                        </Select>
+                        <p className="text-sm text-gray-500 mt-1">
+                            {t('settings.editor.editorTypeDesc', '选择您偏好的编辑器风格。Tiptap适合流畅写作，Jupyter适合结构化编程。')}
+                        </p>
+                    </div>
+
+                    {/* 自动保存 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-700">
+                                {t('settings.editor.autoSave', '自动保存')}
+                            </h3>
+                            <p className="text-base text-gray-500">
+                                {t('settings.editor.autoSaveDesc', '编辑时自动保存文档内容')}
+                            </p>
+                        </div>
+                        <Switch
+                            checked={settings.editorSettings?.autoSave !== false}
+                            onCheckedChange={(checked) => handleEditorSettingsChange('autoSave', checked)}
+                        />
+                    </div>
+
+                    {/* 代码自动完成 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-700">
+                                {t('settings.editor.autoComplete', '代码自动完成')}
+                            </h3>
+                            <p className="text-base text-gray-500">
+                                {t('settings.editor.autoCompleteDesc', '启用智能代码提示和自动完成功能')}
+                            </p>
+                        </div>
+                        <Switch
+                            checked={settings.editorSettings?.autoComplete !== false}
+                            onCheckedChange={(checked) => handleEditorSettingsChange('autoComplete', checked)}
+                        />
+                    </div>
+
+                    {/* 代码格式化 */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-700">
+                                {t('settings.editor.autoFormat', '自动格式化代码')}
+                            </h3>
+                            <p className="text-base text-gray-500">
+                                {t('settings.editor.autoFormatDesc', '保存时自动格式化代码，保持代码风格一致')}
+                            </p>
+                        </div>
+                        <Switch
+                            checked={settings.editorSettings?.autoFormat !== false}
+                            onCheckedChange={(checked) => handleEditorSettingsChange('autoFormat', checked)}
+                        />
+                    </div>
+                </div>
+            </div>
+        ),
     };
 
     return (
@@ -338,6 +422,7 @@ const SettingsPage = () => {
 
                             <div className="px-6 py-2 flex space-x-2">
                                 <TabButton id="general" label={t('settings.tabs.general')} icon={Settings} />
+                                <TabButton id="editor" label={t('settings.tabs.editor', '编辑器')} icon={Monitor} />
                                 <TabButton id="shortcuts" label={t('settings.tabs.shortcuts')} icon={Keyboard} />
                                 <TabButton id="markdown" label={t('settings.tabs.markdown')} icon={FileText} />
                             </div>
