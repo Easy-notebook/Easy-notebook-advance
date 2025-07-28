@@ -9,12 +9,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="vdstools",
-    version="1.1.0",
+    version="1.1.1",
     author="VDS Team", 
     description="Simple data science toolkit for DCLS workflow",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=["vdstools", "vdstools.src", "vdstools.core"],
+    packages=["vdstools", "vdstools.src", "vdstools.core", "vdstools.utils"],
     package_dir={"vdstools": "."},
     classifiers=[
         "Development Status :: 4 - Beta",

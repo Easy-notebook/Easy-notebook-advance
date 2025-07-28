@@ -122,6 +122,10 @@ export interface NotebookStoreState {
 
     // 新增 showButtons 状态
     showButtons: Record<string, boolean>;
+    
+    // 独立窗口状态
+    detachedCellId: string | null;
+    isDetachedCellFullscreen: boolean;
 }
 
 /**
@@ -209,6 +213,11 @@ export interface NotebookStoreActions {
     getCurrentStepCellsIDs: () => string[];
     getAllCellsBeforeCurrent: () => Cell[];
     getTotalSteps: () => number;
+
+    // 独立窗口管理
+    setDetachedCellId: (cellId: string | null) => void;
+    getDetachedCell: () => Cell | null;
+    toggleDetachedCellFullscreen: () => void;
 }
 
 /**
@@ -326,6 +335,10 @@ const useStore = create<NotebookStore>(
 
     // 新增 showButtons 状态
     showButtons: {},
+    
+    // 独立窗口状态
+    detachedCellId: null,
+    isDetachedCellFullscreen: false,
 
     getCurrentCellId: () => get().currentCellId,
     getCurrentCell: () => {
@@ -1044,6 +1057,20 @@ const useStore = create<NotebookStore>(
       const phase = get().getPhaseById(state.currentPhaseId!);
       return phase ? phase.steps.length : 0;
     },
+
+    // 独立窗口管理
+    setDetachedCellId: (cellId: string | null) => set({ 
+      detachedCellId: cellId,
+      isDetachedCellFullscreen: false // 重置为分屏模式
+    }),
+    getDetachedCell: (): Cell | null => {
+      const state = get();
+      if (!state.detachedCellId) return null;
+      return state.cells.find(cell => cell.id === state.detachedCellId) || null;
+    },
+    toggleDetachedCellFullscreen: () => set((state) => ({ 
+      isDetachedCellFullscreen: !state.isDetachedCellFullscreen 
+    })),
   }))
 );
 

@@ -5,6 +5,7 @@ import React, {
     useState,
     useEffect,
 } from 'react';
+import { createPortal } from 'react-dom';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { dracula } from '@uiw/codemirror-theme-dracula';
@@ -23,6 +24,8 @@ import {
     InfoIcon,
     ChevronDown,
     ChevronUp,
+    ExternalLink,
+    Minimize2,
 } from 'lucide-react';
 
 import { AnsiUp } from 'ansi_up';
@@ -54,6 +57,7 @@ interface CodeCellProps {
   dslcMode?: boolean;
   finished_thinking?: boolean;
   thinkingText?: string;
+  isInDetachedView?: boolean; // 新增：是否在独立窗口中
 }
 
 const processOutput = (output: any): Output | null => {
@@ -99,7 +103,7 @@ const processOutput = (output: any): Output | null => {
     return output;
 };
 
-const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false, dslcMode = false, finished_thinking = false, thinkingText = "finished thinking" }) => {
+const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false, dslcMode = false, finished_thinking = false, thinkingText = "finished thinking", isInDetachedView = false }) => {
     // 合并 useStore 的调用
     const {
         currentCellId,
@@ -108,7 +112,12 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         updateCell,
         clearCellOutputs,
         setEditingCellId,
+        detachedCellId,
+        setDetachedCellId,
     } = useStore();
+
+    // 独立窗口状态
+    const isDetached = detachedCellId === cell.id;
 
     const getCellExecState = useCodeStore((state) => state.getCellExecState);
     const executeCell = useCodeStore((state) => state.executeCell);
@@ -452,8 +461,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
     // —— 展开/收缩逻辑 ——  
     const EXPAND_THRESHOLD = 200; // 阈值高度
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [isUserToggled, setIsUserToggled] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(isInDetachedView); // 独立窗口中默认展开
+    const [isUserToggled, setIsUserToggled] = useState(isInDetachedView); // 独立窗口中视为用户已切换
     const [isHovering, setIsHovering] = useState(false);
     const codeBlockWrapperRef = useRef(null);
     const [contentHeight, setContentHeight] = useState(0);
@@ -585,6 +594,56 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     // 添加一个新的状态来控制工具栏的显示
     const [showToolbar, setShowToolbar] = useState(false);
 
+
+    // 紧凑模式渲染
+    const renderCompactMode = () => (
+        <div
+            data-cell-id={cell.id}
+            className="code-cell-container bg-white/90 shadow-sm rounded-lg backdrop-blur-sm border-2 border-blue-300"
+            ref={codeContainerRef}
+            onMouseEnter={() => setShowToolbar(true)}
+            onMouseLeave={() => setShowToolbar(false)}
+        >
+            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/50">
+                <div className="flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4 text-blue-500" />
+                    <span className="text-sm font-medium text-blue-700">Cell opened in split view</span>
+                    {cell.description && (
+                        <div className="flex items-center gap-1">
+                            <InfoIcon className="w-3 h-3 text-blue-500" />
+                            <span className="text-xs text-blue-600 truncate max-w-[200px]">
+                                {cell.description.slice(0, 50)}...
+                            </span>
+                        </div>
+                    )}
+                </div>
+                <div className={`flex items-center gap-2 transition-opacity duration-200 ${showToolbar ? 'opacity-100' : 'opacity-60'}`}>
+                    <button
+                        onClick={() => setDetachedCellId(null)}
+                        className="p-1.5 hover:bg-blue-200 rounded text-blue-700"
+                        title="Return to normal view"
+                    >
+                        <Minimize2 className="w-4 h-4" />
+                    </button>
+                    {onDelete && (
+                        <button
+                            onClick={() => onDelete(cell.id)}
+                            className="p-1.5 hover:bg-red-200 rounded text-red-600"
+                            title="Delete cell"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+    // 如果处于独立窗口模式，只渲染紧凑模式
+    if (isDetached) {
+        return renderCompactMode();
+    }
+
     return (
         <div
             data-cell-id={cell.id}
@@ -610,36 +669,57 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
             >
                 {/* 顶部工具栏 - DSLC 模式下隐藏 */}
                 {!shouldHideToolbar && (
-                    <div className={`flex items-center justify-between p-2 rounded-t-lg border-none transition-opacity duration-200 ${showToolbar ? 'opacity-100' : 'opacity-0'}`}>
+                    <div className={`flex items-center justify-between p-2 rounded-t-lg border-none transition-opacity duration-200 ${isInDetachedView ? 'opacity-100' : (showToolbar ? 'opacity-100' : 'opacity-0')}`}>
                         <div className="flex items-center gap-2">
                             {renderExecuteButton()}
-                            <button
-                                onClick={() => {
-                                    console.log(`Initializing kernel for cell ${cell.id}`);
-                                    useStore.getState().clearAllOutputs();
-                                    useCodeStore.getState().restartKernel();
-                                }}
-                                className="p-2 hover:bg-theme-600 rounded"
-                                title="Restart kernel"
-                            >
-                                <RefreshCw className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={handleClearOutput}
-                                className="p-2 hover:bg-yellow-600 rounded"
-                                disabled={!processedOutputs.length}
-                                title="Clear outputs"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                            {renderDisplayModeButton()}
-                            {onDelete && (
+                            {!isInDetachedView && (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            console.log(`Initializing kernel for cell ${cell.id}`);
+                                            useStore.getState().clearAllOutputs();
+                                            useCodeStore.getState().restartKernel();
+                                        }}
+                                        className="p-2 hover:bg-theme-600 rounded"
+                                        title="Restart kernel"
+                                    >
+                                        <RefreshCw className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={handleClearOutput}
+                                        className="p-2 hover:bg-yellow-600 rounded"
+                                        disabled={!processedOutputs.length}
+                                        title="Clear outputs"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                    {renderDisplayModeButton()}
+                                    <button
+                                        onClick={() => setDetachedCellId(isDetached ? null : cell.id)}
+                                        className={`p-2 hover:bg-blue-600 rounded ${isDetached ? 'bg-blue-500 text-white' : ''}`}
+                                        title={isDetached ? "Dock to main view" : "Open in detached window"}
+                                    >
+                                        {isDetached ? <Minimize2 className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}
+                                    </button>
+                                    {onDelete && (
+                                        <button
+                                            onClick={() => onDelete(cell.id)}
+                                            className="p-2 hover:bg-gray-600 rounded text-red-500"
+                                            title="Delete cell"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                            {isInDetachedView && (
                                 <button
-                                    onClick={() => onDelete(cell.id)}
-                                    className="p-2 hover:bg-gray-600 rounded text-red-500"
-                                    title="Delete cell"
+                                    onClick={handleClearOutput}
+                                    className="p-2 hover:bg-yellow-600 rounded"
+                                    disabled={!processedOutputs.length}
+                                    title="Clear outputs"
                                 >
-                                    <Trash2 className="w-4 h-4" />
+                                    <X className="w-4 h-4" />
                                 </button>
                             )}
                         </div>
@@ -689,13 +769,15 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                             <div
                                 className="relative overflow-hidden rounded-lg"
                                 style={{
-                                    maxHeight: contentHeight > EXPAND_THRESHOLD
-                                        ? isExpanded
-                                            ? `${contentHeight}px`
-                                            : `${EXPAND_THRESHOLD}px`
-                                        : 'none',
-                                    transition: 'max-height 300ms ease-in-out',
-                                    willChange: 'max-height',
+                                    maxHeight: isInDetachedView ? 'none' : (
+                                        contentHeight > EXPAND_THRESHOLD
+                                            ? isExpanded
+                                                ? `${contentHeight}px`
+                                                : `${EXPAND_THRESHOLD}px`
+                                            : 'none'
+                                    ),
+                                    transition: isInDetachedView ? 'none' : 'max-height 300ms ease-in-out',
+                                    willChange: isInDetachedView ? 'auto' : 'max-height',
                                 }}
                             >
                                 {/* Copy button - fixed position, show on hover */}
@@ -748,8 +830,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                     )}
                                 </div>
 
-                                {/* Expand/Collapse button */}
-                                {contentHeight > EXPAND_THRESHOLD && (
+                                {/* Expand/Collapse button - 独立窗口中隐藏 */}
+                                {!isInDetachedView && contentHeight > EXPAND_THRESHOLD && (
                                     <div
                                         className={`absolute bottom-0 left-0 right-0 flex justify-center items-center z-30 transition-opacity duration-200 ${isHovering ? 'opacity-100' : 'opacity-0'}`}
                                     >
@@ -782,8 +864,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                     </div>
                                 )}
 
-                                {/* Gradient overlay for collapsed state */}
-                                {!isExpanded && contentHeight > EXPAND_THRESHOLD && (
+                                {/* Gradient overlay for collapsed state - 独立窗口中隐藏 */}
+                                {!isInDetachedView && !isExpanded && contentHeight > EXPAND_THRESHOLD && (
                                     <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-gray-800 to-transparent pointer-events-none"></div>
                                 )}
                             </div>

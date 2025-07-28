@@ -20,13 +20,6 @@ interface Stats {
   [key: string]: any;
 }
 
-// Usage example:
-// <ResponsiveCSVViewer 
-//   initialData={yourDataArray} 
-//   className="h-screen"
-//   style={{height: '100vh'}} 
-// />
-
 const CSVPreviewApp: React.FC<CSVPreviewAppProps> = ({
     initialData = null,
     className = "",

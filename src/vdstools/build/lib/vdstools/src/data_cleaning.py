@@ -6,6 +6,7 @@ Provide stable data processing methods for common data issues
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, List, Optional, Union
+from ..utils.display import Display
 
 from ..core.ml_tools import (
     fill_missing_values_tools,
@@ -14,9 +15,7 @@ from ..core.ml_tools import (
     encode_categorical_tools
 )
 
-
-
-class DataCleaning:
+class DataCleaning(Display):
     """
     VDS Tools Data Cleaning Toolkit - Comprehensive data cleaning and preprocessing
     
@@ -27,48 +26,42 @@ class DataCleaning:
     
     def __init__(self):
         """Initialize DataCleaningToolkit"""
-        pass
+        super().__init__()
     
-    def clean_invalid_values(self, csv_file_path: str, **kwargs) -> str:
+    def clean_invalid_values(self, csv_file_path: str, **kwargs):
         """
         Clean invalid values in dataset (negative values, extreme outliers)
         
         Args:
             csv_file_path: Path to CSV file
             **kwargs: Additional parameters for customization
-            
-        Returns:
-            HTML formatted cleaning report
         """
-        return apply_cleaning_method(csv_file_path, "remove_invalid_values", **kwargs)
+        html_content = apply_cleaning_method(csv_file_path, "remove_invalid_values", **kwargs)
+        self.show(html_content)
     
-    def fill_missing_values(self, csv_file_path: str, **kwargs) -> str:
+    def fill_missing_values(self, csv_file_path: str, **kwargs):
         """
         Fill missing values using appropriate strategies
         
         Args:
             csv_file_path: Path to CSV file
             **kwargs: Additional parameters (method, columns, etc.)
-            
-        Returns:
-            HTML formatted cleaning report
         """
-        return apply_cleaning_method(csv_file_path, "fill_missing_values", **kwargs)
+        html_content = apply_cleaning_method(csv_file_path, "fill_missing_values", **kwargs)
+        self.show(html_content)
     
-    def remove_outliers(self, csv_file_path: str, **kwargs) -> str:
+    def remove_outliers(self, csv_file_path: str, **kwargs):
         """
         Remove or clip outliers using statistical methods
         
         Args:
             csv_file_path: Path to CSV file
             **kwargs: Additional parameters (method, sensitivity, etc.)
-            
-        Returns:
-            HTML formatted cleaning report
         """
-        return apply_cleaning_method(csv_file_path, "remove_outliers", **kwargs)
+        html_content = apply_cleaning_method(csv_file_path, "remove_outliers", **kwargs)
+        self.show(html_content)
     
-    def remove_duplicates(self, csv_file_path: str, **kwargs) -> str:
+    def remove_duplicates(self, csv_file_path: str, **kwargs):
         """
         Remove duplicate rows from dataset
         
@@ -81,7 +74,7 @@ class DataCleaning:
         """
         return apply_cleaning_method(csv_file_path, "remove_duplicates", **kwargs)
     
-    def optimize_data_types(self, csv_file_path: str, **kwargs) -> str:
+    def optimize_data_types(self, csv_file_path: str, **kwargs):
         """
         Optimize data types for better memory usage
         
@@ -97,7 +90,7 @@ class DataCleaning:
     def advanced_missing_fill(self, csv_file_path: str, target_columns: Union[str, List[str]], 
                              method: str = 'auto', group_columns: Optional[Union[str, List[str]]] = None,
                              time_column: Optional[str] = None, fill_value: Optional[Any] = None,
-                             max_group_null_ratio: float = 0.8) -> str:
+                             max_group_null_ratio: float = 0.8):
         """
         Advanced missing values filling with grouping and time-series support
         
@@ -121,7 +114,7 @@ class DataCleaning:
     def advanced_column_removal(self, csv_file_path: str, strategy: Union[str, List[str], None] = None,
                                columns: Optional[List[str]] = None, threshold: Union[float, Dict[str, float]] = 0.5,
                                exclude_columns: Optional[List[str]] = None, min_unique_ratio: float = 0.01,
-                               correlation_threshold: float = 0.95) -> str:
+                               correlation_threshold: float = 0.95):
         """
         Advanced column removal with multiple strategies
         
@@ -144,7 +137,7 @@ class DataCleaning:
     
     def advanced_outlier_handling(self, csv_file_path: str, target_columns: Union[str, List[str]],
                                  method: str = 'iqr', strategy: str = 'clip', sensitivity: str = 'medium',
-                                 group_columns: Optional[Union[str, List[str]]] = None) -> str:
+                                 group_columns: Optional[Union[str, List[str]]] = None):
         """
         Advanced outlier detection and handling
         
@@ -165,7 +158,7 @@ class DataCleaning:
     
     def encode_categorical_data(self, csv_file_path: str, target_columns: Union[str, List[str]],
                                method: str = 'auto', group_columns: Optional[Union[str, List[str]]] = None,
-                               handle_unknown: str = 'ignore', keep_original: bool = True) -> str:
+                               handle_unknown: str = 'ignore', keep_original: bool = True):
         """
         Advanced categorical encoding
         
@@ -184,8 +177,7 @@ class DataCleaning:
             csv_file_path, target_columns, method, group_columns, handle_unknown, keep_original
         )
     
-    @staticmethod
-    def help():
+    def help(self):
         """
         Display comprehensive help information for agents and users
         
@@ -405,8 +397,7 @@ class DataCleaning:
         
         =============================================================================
         """
-        print(help_content)
-        return help_content
+        self.show(help_content)
 
 
 def apply_cleaning_method(csv_file_path: str, method: str, **kwargs) -> str:

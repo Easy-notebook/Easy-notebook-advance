@@ -2,8 +2,10 @@ import DSLCPipeline from '../../senario/DSLCanalysis/Pipeline';
 import StepMode from '../../senario/BasicMode/StepMode';
 import TiptapNotebookEditor from '../../Editor/TiptapNotebookEditor';
 import CompleteMode from '../../senario/BasicMode/CompleteMode';
+import DetachedCellView from './DetachedCellView';
 import { findCellsByStep } from '../../../utils/markdownParser';
 import CellDivider from './CellDivider';
+import useStore from '../../../store/notebookStore';
 
 interface MainContentProps {
   cells: any[];
@@ -28,8 +30,45 @@ const MainContent: React.FC<MainContentProps> = ({
   renderCell,
   renderStepNavigation
 }) => {
+  const { detachedCellId, isDetachedCellFullscreen } = useStore();
+  
   // Always render DSLCPipeline to keep DynamicStageTemplate alive for WorkflowControl
   const shouldShowDSLCUI = cells.length === 0 || viewMode === 'dslc';
+
+  // 如果有独立窗口模式的 cell 且是全屏模式，优先显示独立视图
+  if (detachedCellId && isDetachedCellFullscreen) {
+    return <DetachedCellView />;
+  }
+
+  // 如果有独立窗口且是分屏模式，渲染分屏布局
+  if (detachedCellId && !isDetachedCellFullscreen) {
+    return (
+      <div className="w-full h-full flex">
+        {/* 左侧：原始内容 */}
+        <div className="w-1/2 h-full border-r border-gray-200 overflow-hidden">
+          <div className="w-full h-full overflow-auto">
+            {shouldShowDSLCUI ? (
+              <div className="w-full h-full" style={{ zIndex: viewMode === 'dslc' ? 100 : 1 }}>
+                <DSLCPipeline 
+                  onAddCell={handleAddCell}
+                  className="w-full h-full"
+                />
+              </div>
+            ) : (
+              <div style={{ zIndex: 10 }}>
+                {renderOtherModes()}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* 右侧：独立窗口 */}
+        <div className="w-1/2 h-full overflow-hidden">
+          <DetachedCellView />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
