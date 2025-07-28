@@ -1,6 +1,6 @@
 import React from 'react';
 import TiptapNotebookEditor from '../../Editor/TiptapNotebookEditor';
-import JupyterNotebookEditor from '../../Editor/JupyerNotebookEditor';
+import JupyterNotebookEditor from '../../Editor/JupyterNotebookEditor';
 import { useSettings } from '../../../store/settingsStore';
 
 interface CreateModeProps {
