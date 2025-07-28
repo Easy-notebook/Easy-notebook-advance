@@ -156,7 +156,6 @@ const NotebookApp = () => {
     setOnTerminate,
     setOnContinue,
     setOnCancelCountdown,
-    reset: resetWorkflowControl
   } = useWorkflowControlStore();
 
   // Helper function to find phase index

@@ -313,7 +313,7 @@ const globalUpdateInterface: GlobalUpdateInterface = {
      * @param {string[]} relatedQAIds - 相关的 QA IDs
      * @param {string|null} cellId - 相关的 Cell ID
      */
-    createSystemEvent: (content: string, result: string = '', relatedQAIds: string[] = [], cellId: string | null = useStore.getState().getCurrentCellId(), viewMode: ViewMode = 'complete') => {
+    createSystemEvent: (content: string, result: string = '', relatedQAIds: string[] = [], cellId: string | null = useStore.getState().getCurrentCellId(), viewMode: ViewMode = 'create') => {
         const action = createSystemEventAction(content, result, relatedQAIds, cellId, viewMode);
         useAIAgentStore.getState().addAction(action);
     },

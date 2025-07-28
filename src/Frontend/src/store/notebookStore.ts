@@ -17,7 +17,7 @@ export type CellType = 'code' | 'markdown' | 'Hybrid' | 'image' | 'thinking';
 /**
  * 视图模式类型
  */
-export type ViewMode = 'complete' | 'step' | 'dslc' | 'create';
+export type ViewMode = 'step' | 'dslc' | 'create';
 
 /**
  * 上传模式类型
@@ -978,7 +978,7 @@ const useStore = create<NotebookStore>(
       const state = get();
       let cells: Cell[];
 
-      if (state.viewMode === 'complete' || state.viewMode === 'create' || !state.currentPhaseId) {
+      if (state.viewMode === 'create' || !state.currentPhaseId) {
         cells = state.cells;
       } else {
         const phase = get().getPhaseById(state.currentPhaseId);

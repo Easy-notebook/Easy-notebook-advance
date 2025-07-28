@@ -153,7 +153,7 @@ const ImportNotebook4JsonOrJupyter = () => {
         // 重置视图状态
         setCurrentPhase(null);
         setCurrentStepIndex(0);
-        setViewMode('complete');
+        setViewMode('create');
         setCurrentRunningPhaseId(null);
     }, [
         clearCells,
@@ -231,7 +231,7 @@ const ImportNotebook4JsonOrJupyter = () => {
         // 重置视图状态
         setCurrentPhase(null);
         setCurrentStepIndex(0);
-        setViewMode('complete');
+        setViewMode('create');
         setCurrentRunningPhaseId(null);
     }, [
         clearCells,

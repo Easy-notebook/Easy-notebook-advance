@@ -9,7 +9,7 @@ export interface ToastMessage {
 }
 
 export interface StreamPayload {
-    mode?: 'complete' | 'step';
+    mode?: 'create' | 'step';
     phaseId?: string;
     index?: number;
     allow?: boolean;
