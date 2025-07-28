@@ -54,14 +54,14 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
         className={`
           text-sm text-gray-700 leading-relaxed tracking-wide
           transition-all duration-200 ease-in-out
-          prose prose-sm max-w-none 
+          prose prose-sm max-w-none break-words overflow-wrap-anywhere
           prose-headings:font-medium prose-headings:my-1 prose-headings:text-gray-800
-          prose-p:my-0.5 prose-p:leading-6 prose-p:text-gray-700
-          prose-pre:bg-gray-100 prose-pre:rounded-md prose-pre:p-2 prose-pre:my-1 prose-pre:border
-          prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1 prose-code:rounded prose-code:text-xs
-          prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0.5 prose-li:text-gray-700
+          prose-p:my-0.5 prose-p:leading-6 prose-p:text-gray-700 prose-p:break-words
+          prose-pre:bg-gray-100 prose-pre:rounded-md prose-pre:p-2 prose-pre:my-1 prose-pre:border prose-pre:overflow-x-auto prose-pre:text-xs
+          prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:break-all
+          prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0.5 prose-li:text-gray-700 prose-li:break-words
           prose-strong:text-gray-800 prose-em:text-gray-600
-          prose-blockquote:border-l-gray-300 prose-blockquote:text-gray-600
+          prose-blockquote:border-l-gray-300 prose-blockquote:text-gray-600 prose-blockquote:break-words
           ${!isExpanded && exceedsMaxLines ? 'overflow-hidden' : ''}
         `}
         style={{
@@ -263,27 +263,33 @@ const ViewSwitcher = () => {
   const { t } = useTranslation();
 
   return (
-    <div className="flex gap-3 text-lg items-center w-full justify-between">
-      <div className="flex gap-3">
+    <div className="flex gap-2 text-lg items-center w-full justify-between">
+      <div className="flex gap-1 flex-1 min-w-0">
         {['script', 'qa'].map((view) => (
           <button
             key={view}
             onClick={() => setActiveView(view)}
             className={`
-              px-5 py-2 rounded-md transition-all duration-300 flex items-center gap-2
+              px-2 py-2 rounded-md transition-all duration-300 flex items-center gap-1.5
+              flex-shrink-0 min-w-0
               ${activeView === view
                 ? 'bg-white text-theme-800 font-semibold'
                 : 'text-gray-600 hover:bg-white/10'
               }
             `}
           >
-            {view === 'script' ? <Clock className="w-5 h-5" /> : <LucideMessageCircle className="w-5 h-5" />}
-            {view === 'script' ? t('rightSideBar.history') : t('rightSideBar.chat')}
+            {view === 'script' ? 
+              <Clock className="w-5 h-5 flex-shrink-0" /> : 
+              <LucideMessageCircle className="w-5 h-5 flex-shrink-0" />
+            }
+            <span className="hidden sm:inline whitespace-nowrap overflow-hidden text-ellipsis">
+              {view === 'script' ? t('rightSideBar.history') : t('rightSideBar.chat')}
+            </span>
           </button>
         ))}
       </div>
       <button
-        className="p-2 hover:bg-white/10 rounded-lg"
+        className="p-2 hover:bg-white/10 rounded-lg flex-shrink-0"
         onClick={() => setIsRightSidebarCollapsed(false)}
       >
         <CircleX className="w-5 h-5 text-gray-700" />
@@ -416,14 +422,14 @@ const AIAgentSidebar = () => {
       <div
         key={isOriginal ? `original-${action.id}-${index}` : action.id}
         className={`
-          p-4 relative transition-all duration-300
+          p-3 relative transition-all duration-300 min-w-0 break-words overflow-wrap-anywhere
           ${index === 0 && !isOriginal
             ? 'bg-white/10 rounded-lg ring-1 ring-theme-200'
             : 'hover:bg-white/10 hover:rounded-lg hover:shadow-sm'
           }
         `}
       >
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap min-w-0">
           {!isOriginal && (
             <span className="text-xs font-semibold text-gray-700">
               [{totalCount - index}]
@@ -460,7 +466,7 @@ const AIAgentSidebar = () => {
         <ExpandableText text={action.content} maxLines={3} />
 
         {action.result && (
-          <div className="mt-3 p-3 bg-white/10 rounded-lg text-sm text-gray-600">
+          <div className="mt-3 p-3 bg-white/10 rounded-lg text-sm text-gray-600 min-w-0 break-words overflow-wrap-anywhere">
             <ExpandableText text={action.result} maxLines={3} />
           </div>
         )}
@@ -480,12 +486,12 @@ const AIAgentSidebar = () => {
 
   return (
     <>
-      <div className="h-full flex flex-col bg-gray-50">
-        <div className="h-16 w-full flex items-center justify-between px-5 border-b border-white/10 bg-white/5 backdrop-blur-sm relative">
+      <div className="h-full flex flex-col bg-gray-50 min-w-0 overflow-hidden">
+        <div className="h-16 w-full flex items-center justify-between px-3 sm:px-5 border-b border-white/10 bg-white/5 backdrop-blur-sm relative">
           <ViewSwitcher />
         </div>
 
-        <div className="flex-1 px-4 pb-5 overflow-y-auto scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50">
+        <div className="flex-1 px-2 sm:px-4 pb-5 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50 min-w-0">
           <style>{`
             .scrollbar-thin::-webkit-scrollbar {
               width: 4px;
@@ -540,11 +546,11 @@ const AIAgentSidebar = () => {
                   <div
                     key={qa.id}
                     id={qa.id}
-                    className={`flex ${qa.type === 'user' ? 'justify-start' : 'justify-end'}`}
+                    className="w-full mb-3"
                   >
                     <div
                       className={`
-                        relative p-4 rounded-lg shadow-sm max-w-sm transition-all duration-300
+                        relative p-4 rounded-lg shadow-sm w-full transition-all duration-300 min-w-0
                         ${index === 0
                           ? 'bg-white/20 ring-1 ring-theme-200'
                           : qa.type === 'user'
@@ -577,7 +583,7 @@ const AIAgentSidebar = () => {
                         <span className="text-xs text-gray-500">{qa.timestamp}</span>
                       </div>
 
-                      <div className="text-left">
+                      <div className="text-left break-words overflow-wrap-anywhere min-w-0">
                         <ExpandableText text={qa.content} maxLines={5} />
                       </div>
                     </div>

@@ -140,8 +140,8 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
                 tasks.push(currentTask);
                 
                 // Create project intro phase
-                const introPhase: Phase = createPhase('Project Intro & Input', cell.id, Book);
-                const introStep: Step = createStep('Project Intro & Input', 0, introPhase.id);
+                const introPhase: Phase = createPhase(taskTitle, cell.id, Book);
+                const introStep: Step = createStep(taskTitle, 0, introPhase.id);
                 introStep.startIndex = index;
                 introPhase.steps.push(introStep);
                 introPhase.currentIntroStep = introStep;

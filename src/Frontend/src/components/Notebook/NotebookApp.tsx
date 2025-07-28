@@ -1,4 +1,4 @@
-import { useEffect, useCallback, memo, useRef } from 'react';
+import { useEffect, useCallback, memo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import CodeCell from '../Editor/CodeCell';
@@ -27,10 +27,23 @@ import WorkflowControl from './MainContainer/WorkflowControl';
 import { useWorkflowControlStore } from './store/workflowControlStore';
 
 
+
 // Main NotebookApp component
 const NotebookApp = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
+  
+  // Panel width states
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('leftSidebarWidth');
+    return saved ? parseInt(saved) : 384; // w-96 = 384px
+  });
+  
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('rightSidebarWidth');
+    return saved ? parseInt(saved) : 384; // w-96 = 384px
+  });
+  
   const {
     notebookId,
     cells,
@@ -67,6 +80,68 @@ const NotebookApp = () => {
   const { setShowCommandInput } = useAIAgentStore();
 
   const fileInputRef = useRef(null);
+  
+  // Optimized resize handlers
+  const handleLeftResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftSidebarWidth;
+    let animationId;
+    
+    const handleMouseMove = (e) => {
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = requestAnimationFrame(() => {
+        const newWidth = Math.max(200, Math.min(800, startWidth + e.clientX - startX));
+        setLeftSidebarWidth(newWidth);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      if (animationId) cancelAnimationFrame(animationId);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      // Save the current width state
+      requestAnimationFrame(() => {
+        localStorage.setItem('leftSidebarWidth', leftSidebarWidth.toString());
+      });
+    };
+    
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [leftSidebarWidth]);
+  
+  const handleRightResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightSidebarWidth;
+    let animationId;
+    
+    const handleMouseMove = (e) => {
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = requestAnimationFrame(() => {
+        const newWidth = Math.max(200, Math.min(800, startWidth + startX - e.clientX));
+        setRightSidebarWidth(newWidth);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      if (animationId) cancelAnimationFrame(animationId);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      // Save the current width state
+      requestAnimationFrame(() => {
+        localStorage.setItem('rightSidebarWidth', rightSidebarWidth.toString());
+      });
+    };
+    
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [rightSidebarWidth]);
+
 
   // 使用自定义 Hook 获取 handleImport 和 initializeNotebook
   const { handleImport, initializeNotebook } = ImportNotebook4JsonOrJupyter();
@@ -493,7 +568,12 @@ const NotebookApp = () => {
     <div className="h-screen flex">
       <SettingsPage />
       {/* 左侧边栏 */}
-      {!(cells.length === 0) && <div className={`${isCollapsed ? 'w-14' : 'w-96'} transition-all duration-500 ease-in-out relative`}>
+      {!(cells.length === 0) && (
+        <div className="flex">
+          <div 
+            className="transition-all duration-500 ease-in-out relative"
+            style={{ width: isCollapsed ? '48px' : `${leftSidebarWidth}px` }}
+          >
         <OutlineSidebar
           tasks={tasks}
           currentPhaseId={currentPhaseId}
@@ -504,8 +584,17 @@ const NotebookApp = () => {
           currentRunningPhaseId={currentRunningPhaseId}
           allowPagination={allowPagination} // 传递翻页权限设置
         />
-      </div>
-      }
+          </div>
+          {!isCollapsed && (
+            <div 
+              className="w-px bg-gray-300 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 relative group"
+              onMouseDown={handleLeftResize}
+            >
+              <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-blue-100/50" />
+            </div>
+          )}
+        </div>
+      )}
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <CommandInput
@@ -556,13 +645,26 @@ const NotebookApp = () => {
       </div>
 
       {/* 右侧边栏 */}
-      <div className={`transition-all duration-500 ease-in-out ${!isRightSidebarCollapsed ? 'w-0 opacity-0' : 'w-96 opacity-100'} overflow-hidden flex-shrink-0`}>
-        <AIAgentSidebar
-          viewMode={viewMode}
-          currentPhaseId={currentPhaseId}
-          currentStepIndex={currentStepIndex}
-        />
-      </div>
+      {isRightSidebarCollapsed && (
+        <div className="flex">
+          <div 
+            className="w-px bg-gray-300 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 relative group"
+            onMouseDown={handleRightResize}
+          >
+            <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-blue-100/50" />
+          </div>
+          <div 
+            className="transition-all duration-500 ease-in-out opacity-100 overflow-hidden flex-shrink-0"
+            style={{ width: `${rightSidebarWidth}px` }}
+          >
+            <AIAgentSidebar
+              viewMode={viewMode}
+              currentPhaseId={currentPhaseId}
+              currentStepIndex={currentStepIndex}
+            />
+          </div>
+        </div>
+      )}
       
       {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
       {viewMode === 'dslc' && <WorkflowControl 

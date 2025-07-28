@@ -296,7 +296,6 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
     // 渲染输出
     const renderOutput = useCallback((output) => {
-        console.log(output,"here!!!!!!!!!!!!!!!!!!!!!!!!!");
         if (!output) return null;
         try {
             if (output.type === 'image') {
@@ -339,8 +338,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                 return (
                     <div
                         key={output.key}
-                        className="output-html-container p-4 border-2 border-blue-300 rounded bg-blue-50"
-                        style={{ minHeight: '50px', backgroundColor: '#f0f8ff' }}
+                        className="output-html-container border-2 border-blue-300"
                     >
                         <div className="text-xs text-gray-500 mb-2">HTML Output:</div>
                         <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
