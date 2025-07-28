@@ -5,7 +5,7 @@ import useNotebookStore from '../../../../store/notebookStore';
 import MarkdownCell from '../../../Editor/Cells/MarkdownCell';
 import HybridCell from '../../../Editor/Cells/HybridCell';
 import CodeCell from '../../../Editor/Cells/CodeCell';
-import AgentThinkingIndicator from '../UI/AgentThinkingIndicator';
+import AIThinkingCell from '../../../Editor/Cells/AIThinkingCell';
 
 import { SHOT_TYPES, ANIMATION } from '../store/useScriptStore';
 import useScriptStore from '../store/useScriptStore';
@@ -228,7 +228,7 @@ const AnimatedStepContainer = ({
             case SHOT_TYPES.DIALOGUE:
                 return <MarkdownCell key={cell.id} {...shotProps} />;
             case SHOT_TYPES.THINKING:
-                return <AgentThinkingIndicator key={cell.id} {...shotProps} />;
+                return <AIThinkingCell key={cell.id} {...shotProps} />;
             default:
                 return <Shot key={cell.id} cell={cell} onRemove={onRemoveHandler} />;
         }

@@ -3,10 +3,12 @@ import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { CodeBlockExtension } from './extensions/CodeBlockExtension'
+import { ThinkingCellExtension } from './extensions/ThinkingCellExtension'
 import SimpleTableExtension from './extensions/TableExtension'
 import ImageExtension from './extensions/ImageExtension'
 import LaTeXExtension from './extensions/LaTeXExtension'
 import HybridCell from './Cells/HybridCell'
+import AIThinkingCell from './Cells/AIThinkingCell'
 import useStore, { CellType } from '../../store/notebookStore'
 import { 
   Bold, 
@@ -50,6 +52,7 @@ interface TiptapNotebookEditorRef {
   addCodeCell: () => string;
   addMarkdownCell: () => string;
   addHybridCell: () => string;
+  addAIThinkingCell: (props?: any) => string;
 }
 
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(({ 
@@ -228,6 +231,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       
       // 可执行代码块扩展
       CodeBlockExtension,
+      
+      // AI思考单元格扩展
+      ThinkingCellExtension,
       
       // 自定义Heading扩展，保留ID属性
       Heading.configure({
@@ -548,6 +554,21 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       setCells([...cells, newCell]);
       return newCell.id;
     },
+    addAIThinkingCell: (props = {}) => {
+      const newCell = {
+        id: generateCellId(),
+        type: 'thinking',
+        content: '',
+        outputs: [],
+        enableEdit: false,
+        agentName: props.agentName || 'AI',
+        customText: props.customText || null,
+        textArray: props.textArray || [],
+        useWorkflowThinking: props.useWorkflowThinking || false,
+      };
+      setCells([...cells, newCell]);
+      return newCell.id;
+    },
   }), [editor, cells, setCells])
 
   // 插入代码块的功能
@@ -559,6 +580,19 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         cellId: `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         outputs: [],
         enableEdit: true,
+      }).run()
+    }
+  }, [editor])
+
+  // 插入AI思考单元格的功能
+  const insertThinkingCell = useCallback((props = {}) => {
+    if (editor) {
+      editor.chain().focus().insertThinkingCell({
+        cellId: `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        agentName: props.agentName || 'AI',
+        customText: props.customText || null,
+        textArray: props.textArray || [],
+        useWorkflowThinking: props.useWorkflowThinking || false,
       }).run()
     }
   }, [editor])
@@ -655,6 +689,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       } else if (cell.type === 'image') {
         // image cell转换为HTML
         return `<div class="image-cell-container"><img src="${cell.content}" alt="Cell image" class="max-w-full h-auto" /></div>`
+      } else if (cell.type === 'thinking') {
+        // thinking cell转换为HTML
+        console.log(`转换AI思考单元格 ${index}: ID=${cell.id}`);
+        return `<div data-type="thinking-cell" data-cell-id="${cell.id}" data-agent-name="${cell.agentName || 'AI'}" data-custom-text="${encodeURIComponent(cell.customText || '')}" data-text-array="${encodeURIComponent(JSON.stringify(cell.textArray || []))}" data-use-workflow-thinking="${cell.useWorkflowThinking || false}"></div>`
       }
       return ''
     })
@@ -750,6 +788,29 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             const latexMarkdown = displayMode ? `$$${latex}$$` : `$${latex}$`
             currentMarkdownContent.push(latexMarkdown)
           }
+        } else if (node.getAttribute('data-type') === 'thinking-cell') {
+          // 处理AI思考单元格
+          flushMarkdownContent()
+          
+          const cellId = node.getAttribute('data-cell-id')
+          const agentName = node.getAttribute('data-agent-name') || 'AI'
+          const customText = node.getAttribute('data-custom-text') || ''
+          const textArray = node.getAttribute('data-text-array') || '[]'
+          const useWorkflowThinking = node.getAttribute('data-use-workflow-thinking') === 'true'
+          
+          console.log(`发现AI思考单元格: ${cellId}, 代理: ${agentName}`);
+          
+          newCells.push({
+            id: cellId,
+            type: 'thinking',
+            content: '',
+            outputs: [],
+            enableEdit: false,
+            agentName: agentName,
+            customText: customText ? decodeURIComponent(customText) : null,
+            textArray: JSON.parse(decodeURIComponent(textArray)),
+            useWorkflowThinking: useWorkflowThinking,
+          })
         } else if (node.getAttribute('data-type') === 'markdown-image') {
           // 处理图片节点
           console.log('发现图片节点:', node);
@@ -1320,6 +1381,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         .executable-code-block-wrapper {
           margin: 1.5em 0;
         }
+        
+        /* AI思考单元格样式 */
+        .thinking-cell-wrapper {
+          margin: 1.5em 0;
+        }
        
         /* 表格样式 */
         .tiptap-notebook-editor table {
@@ -1484,6 +1550,26 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         /* 恢复原本的可执行代码块样式 */
         .executable-code-block-wrapper {
           margin: 1.5em 0;
+        }
+        
+        /* 移除CodeCell输出中的边框样式 */
+        .executable-code-block-wrapper pre {
+          border: none !important;
+          border-left: none !important;
+          border-right: none !important;
+          border-top: none !important;
+          border-bottom: none !important;
+          background: transparent !important;
+          padding-left: 0 !important;
+          margin: 0 !important;
+        }
+        
+        /* 移除prose样式对CodeCell输出的影响 */
+        .executable-code-block-wrapper .output-container pre {
+          border: none !important;
+          background: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
         }
       `}</style>
     </div>

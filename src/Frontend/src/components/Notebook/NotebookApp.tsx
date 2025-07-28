@@ -5,6 +5,7 @@ import CodeCell from '../Editor/Cells/CodeCell';
 import MarkdownCell from '../Editor/Cells/MarkdownCell';
 import HybridCell from '../Editor/Cells/HybridCell';
 import ImageCell from '../Editor/Cells/ImageCell';
+import AIThinkingCell from '../Editor/Cells/AIThinkingCell';
 import OutlineSidebar from './LeftSideBar/OutlineSidebar';
 import ErrorAlert from '../UI/ErrorAlert';
 import useStore from '../../store/notebookStore';
@@ -396,6 +397,8 @@ const NotebookApp = () => {
         return <MarkdownCell key={cell.id} {...props} />;
       case 'image':
         return <ImageCell key={cell.id} {...props} />;
+      case 'thinking':
+        return <AIThinkingCell key={cell.id} {...props} />;
       default:
         return null;
     }

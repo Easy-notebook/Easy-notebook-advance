@@ -455,17 +455,27 @@ export const useScriptStore = create((set, get) => ({
         };
 
         // add corresponding cell in notebookStore
-        useNotebookStore.getState().addCell({
+        const cellData = {
             id: actionId,
             type: cellType,
             content: content,
             outputs: [],
-            enableEdit: true,
+            enableEdit: cellType === 'thinking' ? false : true,
             couldVisibleInWritingMode: couldVisibleInWritingMode,
             phaseId: currentStep,
             description: shot.description || '',
             metadata: shot.metadata || {}
-        });
+        };
+
+        // Add special properties for thinking cells
+        if (cellType === 'thinking') {
+            cellData.agentName = shot.agentName || 'AI';
+            cellData.customText = shot.customText || null;
+            cellData.textArray = shot.textArray || [];
+            cellData.useWorkflowThinking = shot.useWorkflowThinking || false;
+        }
+
+        useNotebookStore.getState().addCell(cellData);
 
         // update step's actionIds and actions status
         set(state => {
@@ -809,9 +819,10 @@ export const useScriptStore = create((set, get) => ({
                 get().addShot({
                     id: actionId,
                     type: 'thinking',
-                    textArray: step.textArray || [],
+                    textArray: step.textArray || [`${step.agentName || 'AI'} is thinking...`],
                     agentName: step.agentName || 'AI',
-                    customText: step.customText || null
+                    customText: step.customText || null,
+                    useWorkflowThinking: false // We'll handle thinking texts via textArray instead
                 });
                 globalUpdateInterface.createAICriticalThinking(`${step.agentName || 'AI'} is thinking...`, step.customText || '', [], actionId, true);
                 break;
