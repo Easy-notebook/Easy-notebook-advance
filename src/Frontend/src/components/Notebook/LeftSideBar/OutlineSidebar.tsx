@@ -73,13 +73,38 @@ const PhaseSection = memo(({
   const regularSteps = phase.steps.slice(1);
 
   const handleTitleClick = useCallback(() => {
+    console.log('=== 大纲跳转调试 ===');
+    console.log('点击的Phase ID:', phase.id);
+    console.log('查找元素ID:', phase.id);
+    
     onStepSelect(phase.id, introStep.id);
     if (regularSteps.length > 0) {
       onToggle();
     }
-    const targetElement = document.getElementById(`phase-${phase.id}`);
+    
+    // 检查TiptapNotebookEditor中是否有对应的标题元素
+    const targetElement = document.getElementById(phase.id);
+    console.log('找到的目标元素:', targetElement);
+    
     if (targetElement) {
+      console.log('元素标签名:', targetElement.tagName);
+      console.log('元素文本内容:', targetElement.textContent);
+      console.log('元素所在容器:', targetElement.closest('.tiptap-notebook-editor'));
       targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      console.log('已执行滚动');
+    } else {
+      console.log('未找到目标元素，检查所有标题:');
+      // 特别检查TiptapNotebookEditor容器内的标题
+      const tiptapContainer = document.querySelector('.tiptap-notebook-editor');
+      if (tiptapContainer) {
+        const headings = tiptapContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        console.log('TiptapEditor中的标题元素:');
+        headings.forEach(h => {
+          console.log(`- ${h.tagName}: id="${h.id}", text="${h.textContent?.substring(0, 50)}"`);
+        });
+      } else {
+        console.log('未找到TiptapNotebookEditor容器');
+      }
     }
   }, [phase.id, introStep.id, onStepSelect, onToggle, regularSteps.length]);
 
@@ -199,6 +224,7 @@ const OutlineSidebar = ({
   onPhaseSelect,
   viewMode,
 }) => {
+  
   const isCollapsed = useStore((state) => state.isCollapsed);
   const setIsCollapsed = useStore((state) => state.setIsCollapsed);
   const settingstore = useSettingsStore();

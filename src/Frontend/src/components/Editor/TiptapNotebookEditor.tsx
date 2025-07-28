@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo} from 'react'
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -28,6 +28,7 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import { Extension } from '@tiptap/react'
 import { Plugin, PluginKey } from 'prosemirror-state'
+import Heading from '@tiptap/extension-heading'
 
 interface TiptapNotebookEditorProps {
   className?: string;
@@ -128,16 +129,16 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     lastCellsRef.current = cells
   }, [])
   
-  // 初始内容 - 只在首次渲染时计算，后续更新通过useEffect处理
+  // 初始内容 - 只在组件首次挂载时计算一次，避免与useEffect重复设置
   const initialContent = useMemo(() => {
-    console.log('=== 计算initialContent ===');
+    console.log('=== 计算initialContent（仅首次） ===');
     console.log('初始cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
     
     const content = convertCellsToHtml(cells)
     
     console.log('初始HTML长度:', content.length);
     return content
-  }, [cells.length]) // 只在cells数量变化时重新计算，避免内容变化导致重新初始化
+  }, []) // 空依赖数组，只在组件挂载时计算一次
 
   // 简化表格检测
   function isMarkdownTable(text) {
@@ -203,9 +204,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       StarterKit.configure({
         // 禁用默认的代码块，使用我们的可执行代码块
         codeBlock: false,
-        heading: {
-          levels: [1, 2, 3, 4, 5, 6],
-        },
+        // 禁用默认的heading，我们将使用自定义的heading扩展
+        heading: false,
         bulletList: {
           keepMarks: true,
           keepAttributes: false,
@@ -218,6 +218,54 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       
       // 可执行代码块扩展
       CodeBlockExtension,
+      
+      // 自定义Heading扩展，保留ID属性
+      Heading.configure({
+        levels: [1, 2, 3, 4, 5, 6],
+        HTMLAttributes: {},
+      }).extend({
+        parseHTML() {
+          return [
+            { tag: 'h1', getAttrs: (node) => ({ level: 1, id: node.getAttribute('id') }) },
+            { tag: 'h2', getAttrs: (node) => ({ level: 2, id: node.getAttribute('id') }) },
+            { tag: 'h3', getAttrs: (node) => ({ level: 3, id: node.getAttribute('id') }) },
+            { tag: 'h4', getAttrs: (node) => ({ level: 4, id: node.getAttribute('id') }) },
+            { tag: 'h5', getAttrs: (node) => ({ level: 5, id: node.getAttribute('id') }) },
+            { tag: 'h6', getAttrs: (node) => ({ level: 6, id: node.getAttribute('id') }) },
+          ]
+        },
+        renderHTML({ node, HTMLAttributes }) {
+          const hasLevel = this.options.levels.includes(node.attrs.level)
+          const level = hasLevel ? node.attrs.level : this.options.levels[0]
+          
+          // 确保ID属性正确传递
+          const attrs = { ...HTMLAttributes }
+          if (node.attrs.id) {
+            attrs.id = node.attrs.id
+            console.log('=== Tiptap Heading renderHTML ===');
+            console.log('Level:', level);
+            console.log('Node attrs:', node.attrs);
+            console.log('Final attrs:', attrs);
+          }
+          
+          return [`h${level}`, attrs, 0]
+        },
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            id: {
+              default: null,
+              parseHTML: element => element.getAttribute('id'),
+              renderHTML: attributes => {
+                if (!attributes.id) {
+                  return {}
+                }
+                return { id: attributes.id }
+              },
+            },
+          }
+        },
+      }),
       
       // 动态游标样式扩展
       CursorStyleExtension,
@@ -270,33 +318,28 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             language: language,
           };
           
-          // 找到当前光标位置，确定插入位置
+          // 计算插入位置：通过transaction位置推算，避免HTML解析循环
           const { selection } = transaction;
           const currentPos = selection.from;
           
-          // 计算在cells数组中的插入位置
-          let insertIndex = 0;
-          const html = editor.getHTML();
-          const tempCells = convertHtmlToCells(html);
+          // 根据光标位置推算插入位置，避免依赖HTML解析
+          let insertIndex = cells.length; // 默认添加到末尾
           
-          // 通过分析HTML找到新代码块的位置
-          const codeBlockIndex = tempCells.findIndex(cell => 
-            cell.type === 'code' && cell.id === newCodeCellId
-          );
-          
-          if (codeBlockIndex >= 0) {
-            insertIndex = codeBlockIndex;
-          } else {
-            insertIndex = cells.length; // 默认添加到末尾
+          // 通过文档位置大致估算插入位置
+          if (currentPos > 0 && cells.length > 0) {
+            // 简单估算：根据位置比例确定插入位置
+            const docSize = editor.state.doc.content.size;
+            const positionRatio = currentPos / docSize;
+            insertIndex = Math.min(Math.floor(positionRatio * cells.length), cells.length);
           }
           
-          console.log('插入位置:', insertIndex, '当前cells数量:', cells.length);
+          console.log('推算插入位置:', insertIndex, '当前cells数量:', cells.length);
           
           // 创建新的cells数组
           const newCells = [...cells];
           newCells.splice(insertIndex, 0, newCell);
           
-          // 立即更新store
+          // 使用统一的内部更新标记和时序
           isInternalUpdate.current = true;
           setCells(newCells);
           
@@ -307,15 +350,17 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             setEditingCellId(newCodeCellId);
           }
           
-          // 延迟聚焦到新代码块
+          // 统一的延迟时间和重置逻辑
           setTimeout(() => {
+            isInternalUpdate.current = false;
+            
+            // 在重置标记后再进行聚焦，避免触发不必要的更新
             const codeElement = document.querySelector(`[data-cell-id="${newCodeCellId}"] .cm-editor .cm-content`);
             if (codeElement) {
               codeElement.focus();
               console.log('已聚焦到新代码块编辑器');
             }
-            isInternalUpdate.current = false;
-          }, 100);
+          }, 50); // 统一使用50ms延迟
         }
         return
       }
@@ -366,10 +411,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         step.jsonID === 'setNodeMarkup'
       )
       
-      // 格式化操作使用较短的防抖时间，文本输入使用较长的防抖时间
-      const debounceTime = isFormattingOperation ? 100 : 300
+      // 根据操作类型调整防抖时间，减少不必要的同步
+      const debounceTime = isFormattingOperation ? 150 : 400
       
-      // 使用防抖延迟同步
+      // 使用防抖延迟同步，避免频繁更新
       clearTimeout(window.tiptapSyncTimeout)
       window.tiptapSyncTimeout = setTimeout(() => {
         const html = editor.getHTML()
@@ -487,15 +532,12 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     }
   }, [editor])
 
-  // 同步外部cells变化到编辑器 - 只处理需要同步到tiptap的变化
+  // 同步外部cells变化到编辑器 - 只处理必须同步到tiptap的变化
   useEffect(() => {
     if (editor && cells && !isInternalUpdate.current) {
       const lastCells = lastCellsRef.current
       
-      // 只检查影响tiptap显示的变化：
-      // 1. markdown cell的内容变化
-      // 2. 新增/删除 cell（结构变化）
-      // 3. cell类型变化
+      // 更严格的检查：只在真正需要时才更新tiptap内容
       const needsTiptapUpdate = cells.length !== lastCells.length ||
         cells.some((cell, index) => {
           const lastCell = lastCells[index]
@@ -507,9 +549,20 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           // 只有markdown cell的内容变化才需要更新tiptap
           if (cell.type === 'markdown' && cell.content !== lastCell.content) return true
           
-          // code cell的内容变化不需要更新tiptap
+          // code cell的内容、输出变化都不需要更新tiptap
           return false
         })
+      
+      // 额外检查：如果是由InputRule触发的cells变化，跳过tiptap更新
+      const hasNewCodeBlock = cells.some(cell => 
+        cell.type === 'code' && !lastCells.find(lastCell => lastCell.id === cell.id)
+      )
+      
+      if (hasNewCodeBlock) {
+        console.log('检测到新代码块，跳过tiptap更新以避免冲突');
+        lastCellsRef.current = cells; // 仍然更新缓存
+        return;
+      }
       
       if (needsTiptapUpdate) {
         console.log('=== 外部cells变化，需要更新tiptap ===');
@@ -522,7 +575,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         
         setTimeout(() => {
           isInternalUpdate.current = false
-        }, 10)
+        }, 50) // 统一使用50ms延迟
         
         // 更新缓存
         lastCellsRef.current = cells
@@ -550,8 +603,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         return `<div data-type="executable-code-block" data-language="${cell.language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}"></div>`
       } else if (cell.type === 'markdown') {
         // markdown cell转换为HTML
-        console.log(`转换markdown ${index}: 内容长度=${(cell.content || '').length}`);
-        return convertMarkdownToHtml(cell.content || '')
+        return convertMarkdownToHtml(cell.content || '', cell)
       }
       return ''
     })
@@ -705,7 +757,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   /**
    * Markdown到HTML转换 - 支持格式化标记、LaTeX和图片
    */
-  function convertMarkdownToHtml(markdown) {
+  function convertMarkdownToHtml(markdown, cell = null) {
     if (!markdown) return '<p></p>'
     
     // 处理LaTeX语法 - 分步骤处理避免嵌套问题
@@ -789,9 +841,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           const afterTable = tableLines.slice(tableHtml.endIndex + 1).join('\n')
           
           let result = ''
-          if (beforeTable) result += convertMarkdownToHtml(beforeTable)
+          if (beforeTable) result += convertMarkdownToHtml(beforeTable, cell)
           result += tableHtml.html
-          if (afterTable) result += convertMarkdownToHtml(afterTable)
+          if (afterTable) result += convertMarkdownToHtml(afterTable, cell)
           
           return result
         }
@@ -835,23 +887,49 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           return line // 直接返回占位符，不做任何处理
         }
         
+        // 生成标题ID用于大纲跳转 - H1和H2使用 phaseId（若存在），否则回退到 cell.id
+        const generateHeadingId = () => {
+          if (cell) {
+            // 优先使用 phaseId（与 OutlineSidebar 的 phase.id 对应），否则回退到 cell.id
+            if ((cell as any).phaseId) {
+              return (cell as any).phaseId;
+            }
+            if ((cell as any).id) {
+              return (cell as any).id;
+            }
+          }
+          return null;
+        };
+        
         if (line.startsWith('# ')) {
-          return `<h1>${processInlineFormatting(line.slice(2))}</h1>`
+          const text = processInlineFormatting(line.slice(2));
+          const id = generateHeadingId();
+          return id ? `<h1 id="${id}">${text}</h1>` : `<h1>${text}</h1>`;
         }
         if (line.startsWith('## ')) {
-          return `<h2>${processInlineFormatting(line.slice(3))}</h2>`
+          const text = processInlineFormatting(line.slice(3));
+          const id = generateHeadingId();
+          return id ? `<h2 id="${id}">${text}</h2>` : `<h2>${text}</h2>`;
         }
         if (line.startsWith('### ')) {
-          return `<h3>${processInlineFormatting(line.slice(4))}</h3>`
+          const text = processInlineFormatting(line.slice(4));
+          const id = generateHeadingId();
+          return id ? `<h3 id="${id}">${text}</h3>` : `<h3>${text}</h3>`;
         }
         if (line.startsWith('#### ')) {
-          return `<h4>${processInlineFormatting(line.slice(5))}</h4>`
+          const text = processInlineFormatting(line.slice(5));
+          const id = generateHeadingId();
+          return id ? `<h4 id="${id}">${text}</h4>` : `<h4>${text}</h4>`;
         }
         if (line.startsWith('##### ')) {
-          return `<h5>${processInlineFormatting(line.slice(6))}</h5>`
+          const text = processInlineFormatting(line.slice(6));
+          const id = generateHeadingId();
+          return id ? `<h5 id="${id}">${text}</h5>` : `<h5>${text}</h5>`;
         }
         if (line.startsWith('###### ')) {
-          return `<h6>${processInlineFormatting(line.slice(7))}</h6>`
+          const text = processInlineFormatting(line.slice(7));
+          const id = generateHeadingId();
+          return id ? `<h6 id="${id}">${text}</h6>` : `<h6>${text}</h6>`;
         }
         if (line.startsWith('> ')) {
           return `<blockquote>${processInlineFormatting(line.slice(2))}</blockquote>`
@@ -1041,10 +1119,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
    */
   function generateCellId() {
     return `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-  }
-
-  function stripZWS(str) {
-    return str.replace(/[\u200B-\u200D\uFEFF]/g, '');
   }
 
 

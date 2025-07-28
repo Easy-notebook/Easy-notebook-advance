@@ -67,9 +67,9 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
         phases: []
     });
 
-    // Helper to create new phase
+    // Helper to create new phase - 现在直接使用cellId作为phase.id
     const createPhase = (title: string, cellId: string, icon: IconType | null = null): Phase => ({
-        id: `phase-${title}-${cellId}`,
+        id: cellId,  // 直接使用cellId，与标题cell的id一致
         title,
         icon: icon || DEFAULT_ICONS[0],
         status: 'pending',
