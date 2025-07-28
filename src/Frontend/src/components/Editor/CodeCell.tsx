@@ -25,6 +25,8 @@ import {
     ChevronUp,
     ExternalLink,
     Minimize2,
+    Maximize2,
+    Split,
 } from 'lucide-react';
 
 import { AnsiUp } from 'ansi_up';
@@ -113,6 +115,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         setEditingCellId,
         detachedCellId,
         setDetachedCellId,
+        isDetachedCellFullscreen,
+        toggleDetachedCellFullscreen,
     } = useStore();
 
     // 独立窗口状态
@@ -654,19 +658,24 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     return (
         <div
             data-cell-id={cell.id}
-            className={`code-cell-container codeCell bg-white/90 shadow-sm rounded-lg backdrop-blur-sm`}
+            className={`code-cell-container codeCell ${
+                isInDetachedView 
+                    ? 'bg-white h-full' 
+                    : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm'
+            }`}
             ref={codeContainerRef}
             style={{
                 width: finished_thinking && dslcMode && showThinking ? 'fit-content' : '',
+                height: isInDetachedView ? '100%' : 'auto',
             }}
             onMouseEnter={() => setShowToolbar(true)}
             onMouseLeave={() => setShowToolbar(false)}
         >
             <div
-                className={`mb-4 rounded-xl border backdrop-blur-md transition-all duration-500 ease-out 
+                className={`${isInDetachedView ? 'h-full flex flex-col' : 'mb-4 rounded-xl border hover:shadow-md'} backdrop-blur-md transition-all duration-500 ease-out 
                     ${isExecuting ? 'border-yellow-400/50 shadow-lg bg-white/95' : 'bg-white/90 text-black'}
                     ${isTransitioningToOutput ? 'transform scale-y-95 opacity-90' : ''}
-                    hover:shadow-md
+                    ${isInDetachedView ? '' : 'hover:shadow-md'}
                 `}
                 onTransitionEnd={() => {
                     if (isTransitioningToOutput) {
@@ -676,7 +685,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
             >
                 {/* 顶部工具栏 - DSLC 模式下隐藏 */}
                 {!shouldHideToolbar && (
-                    <div className={`flex items-center justify-between p-2 rounded-t-lg border-none transition-opacity duration-200 ${isInDetachedView ? 'opacity-100' : (showToolbar ? 'opacity-100' : 'opacity-0')}`}>
+                    <div className={`${isInDetachedView ? 'flex-shrink-0' : ''} flex items-center justify-between p-2 ${isInDetachedView ? 'border-b border-gray-200' : 'rounded-t-lg border-none'} transition-opacity duration-200 ${isInDetachedView ? 'opacity-100' : (showToolbar ? 'opacity-100' : 'opacity-0')}`}>
                         <div className="flex items-center gap-2">
                             {renderExecuteButton()}
                             {!isInDetachedView && (
@@ -720,14 +729,68 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                 </>
                             )}
                             {isInDetachedView && (
-                                <button
-                                    onClick={handleClearOutput}
-                                    className="p-2 hover:bg-yellow-600 rounded"
-                                    disabled={!processedOutputs.length}
-                                    title="Clear outputs"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
+                                <>
+                                    <button
+                                        onClick={handleClearOutput}
+                                        className="p-2 hover:bg-yellow-600 rounded"
+                                        disabled={!processedOutputs.length}
+                                        title="Clear outputs"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                    {/* 在独立窗口中添加切换开关 */}
+                                    <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                                        <button
+                                            onClick={() => setCellMode(cell.id, DISPLAY_MODES.CODE_ONLY)}
+                                            className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                                                cellMode === DISPLAY_MODES.CODE_ONLY 
+                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                            title="Show code only"
+                                        >
+                                            <Code className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => setCellMode(cell.id, DISPLAY_MODES.OUTPUT_ONLY)}
+                                            className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                                                cellMode === DISPLAY_MODES.OUTPUT_ONLY 
+                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                            title="Show output only"
+                                        >
+                                            <Monitor className="w-4 h-4" />
+                                        </button>
+                                        {/* <button
+                                            onClick={() => setCellMode(cell.id, DISPLAY_MODES.COMPLETE)}
+                                            className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                                                cellMode === DISPLAY_MODES.COMPLETE 
+                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                            title="Show both code and output"
+                                        >
+                                            <Layout className="w-4 h-4" />
+                                        </button> */}
+                                    </div>
+                                    {/* 全屏切换按钮 */}
+                                    <button
+                                        onClick={toggleDetachedCellFullscreen}
+                                        className="p-2 hover:bg-gray-200 rounded"
+                                        title={isDetachedCellFullscreen ? "Switch to split view" : "Switch to fullscreen"}
+                                    >
+                                        {isDetachedCellFullscreen ? <Split className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                    </button>
+                                    {/* 关闭独立窗口按钮 */}
+                                    <button
+                                        onClick={() => setDetachedCellId(null)}
+                                        className="p-2 hover:bg-red-200 rounded text-red-600"
+                                        title="Close detached view"
+                                    >
+                                        <Minimize2 className="w-4 h-4" />
+                                    </button>
+                                </>
                             )}
                         </div>
                         {/* 右侧：AI Debug / Tooltip */}
@@ -769,7 +832,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                     (cellMode === DISPLAY_MODES.COMPLETE ||
                         cellMode === DISPLAY_MODES.CODE_ONLY) && (
                         <div
-                            className="relative"
+                            className={`relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
                             onMouseEnter={() => setIsHovering(true)}
                             onMouseLeave={() => setIsHovering(false)}
                         >
@@ -812,12 +875,12 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                 </div>
 
                                 <div
-                                    className="h-full overflow-auto"
+                                    className={`${isInDetachedView ? 'h-full' : 'h-full'} overflow-auto`}
                                     ref={codeBlockWrapperRef}
                                 >
                                     <CodeMirror
                                         value={typeof cell.content === 'string' ? cell.content : String(cell.content || '')}
-                                        height="auto"
+                                        height={isInDetachedView ? "100%" : "auto"}
                                         extensions={[python()]}
                                         onChange={handleChange}
                                         onKeyDown={handleKeyDown}
@@ -825,6 +888,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                         style={{
                                             fontSize: '16px',
                                             lineHeight: '1.5',
+                                            height: isInDetachedView ? '100%' : 'auto',
                                         }}
                                         readOnly={isExecuting || dslcMode}
                                         autoFocus={isCurrentCell && !dslcMode}
@@ -881,12 +945,15 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
                 {/* 输出区域 - 添加执行状态标签和动画 */}
                 {(cellMode === DISPLAY_MODES.COMPLETE || cellMode === DISPLAY_MODES.OUTPUT_ONLY || shouldHideCode) && (
-                    <>
+                    <div className={`${isInDetachedView ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
                         {/* 执行中占位符 */}
                         {renderExecutingPlaceholder()}
 
                         {/* 实际输出内容 */}
-                        <div onClick={() => setShowThinking(!showThinking)}>
+                        <div 
+                            onClick={() => setShowThinking(!showThinking)}
+                            className={`${isInDetachedView ? 'flex-1 min-h-0 overflow-auto' : ''}`}
+                        >
                             {finished_thinking && dslcMode && showThinking ? (
                                 <div className="flex flex-col justify-center px-2"
                                 >
@@ -930,7 +997,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                     </div>
                                 ))}
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         </div >
