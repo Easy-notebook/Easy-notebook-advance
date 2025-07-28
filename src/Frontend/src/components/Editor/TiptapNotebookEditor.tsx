@@ -250,38 +250,72 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       // 防止循环更新
       if (isInternalUpdate.current) return
       
-      // 如果是InputRule创建的代码块，跳过处理避免冲突，但处理聚焦
+      // 如果是InputRule创建的代码块，立即同步到store但跳过HTML解析
       if (transaction.getMeta('codeBlockInputRule')) {
-        console.log('跳过InputRule创建的代码块变化');
+        console.log('处理InputRule创建的代码块变化');
         
-        // 获取新创建的代码块ID并聚焦
         const newCodeCellId = transaction.getMeta('newCodeCellId');
+        const language = transaction.getMeta('codeBlockLanguage') || 'python';
+        
         if (newCodeCellId) {
-          console.log('准备聚焦到新代码块:', newCodeCellId);
+          console.log('立即创建新代码块:', newCodeCellId, language);
           
-          // 立即将新代码块设置为当前活跃cell（如果store可用）
-          const { setCurrentCell } = useStore.getState();
-          if (setCurrentCell) {
-            setCurrentCell(newCodeCellId);
-            console.log('已设置新代码块为当前活跃cell');
+          // 立即创建新的代码块cell并添加到store
+          const newCell = {
+            id: newCodeCellId,
+            type: 'code',
+            content: '',
+            outputs: [],
+            enableEdit: true,
+            language: language,
+          };
+          
+          // 找到当前光标位置，确定插入位置
+          const { selection } = transaction;
+          const currentPos = selection.from;
+          
+          // 计算在cells数组中的插入位置
+          let insertIndex = 0;
+          const html = editor.getHTML();
+          const tempCells = convertHtmlToCells(html);
+          
+          // 通过分析HTML找到新代码块的位置
+          const codeBlockIndex = tempCells.findIndex(cell => 
+            cell.type === 'code' && cell.id === newCodeCellId
+          );
+          
+          if (codeBlockIndex >= 0) {
+            insertIndex = codeBlockIndex;
+          } else {
+            insertIndex = cells.length; // 默认添加到末尾
           }
           
-          // 延迟聚焦，等待组件渲染完成
+          console.log('插入位置:', insertIndex, '当前cells数量:', cells.length);
+          
+          // 创建新的cells数组
+          const newCells = [...cells];
+          newCells.splice(insertIndex, 0, newCell);
+          
+          // 立即更新store
+          isInternalUpdate.current = true;
+          setCells(newCells);
+          
+          // 设置为当前活跃cell
+          const { setCurrentCell, setEditingCellId } = useStore.getState();
+          if (setCurrentCell) {
+            setCurrentCell(newCodeCellId);
+            setEditingCellId(newCodeCellId);
+          }
+          
+          // 延迟聚焦到新代码块
           setTimeout(() => {
             const codeElement = document.querySelector(`[data-cell-id="${newCodeCellId}"] .cm-editor .cm-content`);
             if (codeElement) {
               codeElement.focus();
               console.log('已聚焦到新代码块编辑器');
-            } else {
-              console.warn('未找到代码块编辑器元素');
-              // 如果找不到编辑器，尝试找到容器并触发焦点
-              const containerElement = document.querySelector(`[data-cell-id="${newCodeCellId}"]`);
-              if (containerElement) {
-                containerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                console.log('滚动到新代码块位置');
-              }
             }
-          }, 200); // 增加延迟时间，确保组件完全渲染
+            isInternalUpdate.current = false;
+          }, 100);
         }
         return
       }
@@ -366,41 +400,21 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           console.log('原有cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
           console.log('新解析cells:', newCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
           
-          // 智能合并：用占位符替换为现有代码块，只更新markdown
+          // 智能合并：保持现有代码块完整性，只更新markdown内容
           const mergedCells = newCells.map((newCell, index) => {
-            if (newCell.type === 'code' && newCell.isPlaceholder) {
-              // 查找现有的代码块
+            if (newCell.type === 'code') {
+              // 对于代码块，总是优先使用store中的现有数据
               const existingCodeCell = cells.find(cell => 
                 cell.type === 'code' && cell.id === newCell.id
               )
               if (existingCodeCell) {
                 console.log(`代码块位置 ${index}: 保持现有代码块 ${existingCodeCell.id}`);
-                return existingCodeCell // 完全保持现有代码块
+                return existingCodeCell // 完全保持现有代码块，包括content和outputs
               } else {
-                console.log(`代码块位置 ${index}: 创建新的代码块 ${newCell.id}`);
-                // 这是一个新创建的代码块，使用解析出的数据
-                let language = newCell.language || 'python'
-                let initialCode = newCell.code || ''
-                
-                // 尝试解码code内容
-                try {
-                  if (initialCode) {
-                    initialCode = decodeURIComponent(initialCode)
-                  }
-                } catch (e) {
-                  console.warn('Failed to decode initial code:', e)
-                }
-                
-                console.log(`新代码块语言: ${language}, 初始代码: "${initialCode}"`);
-                
-                return {
-                  id: newCell.id,
-                  type: 'code',
-                  content: initialCode,
-                  outputs: [],
-                  enableEdit: true,
-                  language: language,
-                }
+                console.log(`代码块位置 ${index}: 发现未知代码块 ${newCell.id}，跳过创建`);
+                // 如果是HTML解析发现的新代码块，但不在store中，可能是异常情况
+                // 不应该通过HTML解析创建新代码块，应该通过InputRule或其他明确的用户操作
+                return null; // 标记为无效，稍后过滤掉
               }
             } else if (newCell.type === 'markdown') {
               // Markdown cell 使用新解析的内容
@@ -409,7 +423,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
               // 其他情况保持原样
               return newCell
             }
-          })
+          }).filter(cell => cell !== null) // 过滤掉无效的代码块
           
           console.log('合并后cells:', mergedCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
           console.log('===============================================');
@@ -615,9 +629,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           newCells.push({
             id: cellId,
             type: 'code',
-            isPlaceholder: true, // 标记为占位符
             language: language,
-            code: code
+            // 不再使用isPlaceholder标记，直接使用id匹配
           })
         } else if (node.getAttribute('data-type') === 'latex-block') {
           // 处理LaTeX节点

@@ -155,10 +155,11 @@ export const CodeBlockExtension = Node.create({
             tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newPos)))
           }
           
-          // 添加标记，告诉onUpdate这是InputRule创建的变化，应该跳过处理
+          // 添加标记，告诉onUpdate这是InputRule创建的变化
           tr.setMeta('codeBlockInputRule', true);
-          // 添加cellId到meta，用于后续聚焦
+          // 添加cellId和语言到meta，用于后续处理
           tr.setMeta('newCodeCellId', cellId);
+          tr.setMeta('codeBlockLanguage', language);
           
           console.log('=== InputRule 处理完成，cellId:', cellId, '===');
           return tr
