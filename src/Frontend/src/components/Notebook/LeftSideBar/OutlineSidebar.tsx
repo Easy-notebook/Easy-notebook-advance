@@ -11,6 +11,8 @@ import useStore from '../../../store/notebookStore';
 import iconMapping from '../../../utils/iconMapping';
 import useSettingsStore from '../../../store/settingsStore';
 import FileTree from './FileExplorer';
+import AgentList from '../../Agents/AgentList';
+import { AgentType } from '../../../services/agentMemoryService';
 
 const StatusStyles = {
   colors: {
@@ -223,6 +225,7 @@ const OutlineSidebar = ({
   currentStepId,
   onPhaseSelect,
   viewMode,
+  onAgentSelect,
 }) => {
   
   const isCollapsed = useStore((state) => state.isCollapsed);
@@ -231,6 +234,7 @@ const OutlineSidebar = ({
   const notebookId = useStore((state) => state.notebookId);
   const [activeTab, setActiveTab] = useState('outline');
   const [isHovered, setIsHovered] = useState(false);
+  const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
 
   const [expandedSections, setExpandedSections] = useState(() => {
     const initialState = {};
@@ -249,7 +253,7 @@ const OutlineSidebar = ({
     );
   }, [tasks, currentPhaseId]);
 
-  const projectName = currentTask?.title || '';
+  const projectName = currentTask?.title || (tasks && tasks.length > 0 ? tasks[0].title : '');
 
   const toggleCollapse = useCallback(() => {
     setIsCollapsed(!isCollapsed);
@@ -276,6 +280,11 @@ const OutlineSidebar = ({
       }));
     }
   }, [toggleCollapse, onPhaseSelect, tasks]);
+
+  const handleAgentSelect = useCallback((agentType: AgentType) => {
+    setSelectedAgentType(agentType);
+    onAgentSelect?.(agentType);
+  }, [onAgentSelect]);
 
   const allPhases = useMemo(() => tasks.flatMap(task => task.phases), [tasks]);
 
@@ -321,12 +330,12 @@ const OutlineSidebar = ({
             <MenuIcon size={16} className="text-gray-700" />
           </button>
 
-          {/* 文件/大纲 Tab 切换 */}
-          <div className="ml-4 flex space-x-2">
+          {/* 大纲/文件/Agent Tab 切换 */}
+          <div className="ml-4 flex space-x-1">
             <button
               onClick={() => setActiveTab('outline')}
               className={`
-                px-3 py-1 rounded
+                px-2 py-1 rounded text-xs
                 ${activeTab === 'outline' ? 'bg-white text-theme-800 font-semibold'
                   : 'text-gray-600 hover:bg-white/10'}
               `}
@@ -336,12 +345,22 @@ const OutlineSidebar = ({
             <button
               onClick={() => setActiveTab('file')}
               className={`
-                px-3 py-1 rounded
+                px-2 py-1 rounded text-xs
                 ${activeTab === 'file' ? 'bg-white text-theme-800 font-semibold'
                   : 'text-gray-600 hover:bg-white/10'}
               `}
             >
               Files
+            </button>
+            <button
+              onClick={() => setActiveTab('agents')}
+              className={`
+                px-2 py-1 rounded text-xs
+                ${activeTab === 'agents' ? 'bg-white text-theme-800 font-semibold'
+                  : 'text-gray-600 hover:bg-white/10'}
+              `}
+            >
+              Agents
             </button>
           </div>
         </div>
@@ -378,7 +397,17 @@ const OutlineSidebar = ({
           <div className="flex-1 h-full w-full relative">
             <FileTree notebookId={notebookId} projectName={projectName} />
           </div>
+        ) : activeTab === 'agents' ? (
+          // Agent视图：显示AI代理列表
+          <div className="flex-1 h-full w-full relative">
+            <AgentList 
+              isCollapsed={false}
+              onAgentSelect={handleAgentSelect}
+              selectedAgentType={selectedAgentType}
+            />
+          </div>
         ) : (
+          // 大纲视图：显示任务和阶段
           <div className="py-0.5">
             {tasks.map((task) => (
               <div key={task.id} className="mb-5">

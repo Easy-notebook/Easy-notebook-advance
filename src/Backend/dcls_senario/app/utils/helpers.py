@@ -7,13 +7,7 @@ from fastapi.responses import StreamingResponse
 from typing import AsyncIterable, Dict, Any, List
 
 from app.core.config import STAGES
-from app.utils.logger import (
-    log_stream_start, 
-    log_header_sent, 
-    log_action_generated,
-    log_action_sent,
-    log_stream_complete
-)
+
 
 logger = logging.getLogger("app")
 
@@ -36,9 +30,7 @@ def validate_step_index(stage: dict, step_index: int) -> dict:
     return stage["steps"][step_index]
 
 async def generate_streaming_response(sequence: dict):
-    """生成流式响应"""
-    log_stream_start(sequence.get("stage_id"), sequence.get("step"), True)
-    
+    """生成流式响应"""    
     header = {"header": {
         "stage_id": sequence.get("stage_id"), 
         "step": sequence.get("step"),
@@ -46,7 +38,6 @@ async def generate_streaming_response(sequence: dict):
     }}
     
     header_json = json.dumps(header)
-    log_header_sent(header_json)
     yield header_json + "\n"
     
     # 处理步骤列表或异步迭代器
@@ -57,7 +48,6 @@ async def generate_streaming_response(sequence: dict):
         async for action in steps:
             count += 1
             action_json = json.dumps({"action": action})
-            log_action_sent(action_json)
             yield action_json + "\n"
             # 确保每个操作都被立即刷新到客户端
             await asyncio.sleep(0.01)  # 微小延迟确保数据被发送
@@ -70,12 +60,10 @@ async def generate_streaming_response(sequence: dict):
                 logger.info(f"调试模式: 延迟 {delay} 秒后发送操作")
             await asyncio.sleep(delay)  # 使用异步睡眠替代阻塞式睡眠
             action_json = json.dumps({"action": action})
-            log_action_sent(action_json)
             yield action_json + "\n"
             # 确保每个操作都被立即刷新到客户端
             await asyncio.sleep(0.01)  # 微小延迟确保数据被发送
     
-    log_stream_complete()
 
 def create_streaming_response(sequence: dict):
     """创建流式响应对象"""
@@ -109,9 +97,6 @@ async def generate_step_actions(actions: List[Dict[str, Any]], debug_mode: bool 
             if i == 0:
                 delay += 1.0
             logger.info(f"调试模式: 操作 {i+1}/{len(actions)} 延迟 {delay} 秒")
-        
-        # 记录正在生成的操作
-        log_action_generated(i, len(actions), action_type, delay)
         
         await asyncio.sleep(delay)
         yield action 

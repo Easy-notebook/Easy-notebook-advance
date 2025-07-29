@@ -159,27 +159,27 @@ STAGES = {
                 "id": "step0",
                 "title": "Stage Introduction",
                 "description": "Understand the goal and steps of method proposal",
-                "stepId": "model_proposal_step0"
+                "stepId": "stage_3_method_proposal_step0"
             },
             {
                 "id": "step1",
-                "title": "Model Proposal",
-                "description": "Propose models for data analysis",
-                "stepId": "model_proposal_step1"
+                "title": "Feature Engineering and Model Methods",
+                "description": "Generate feature engineering methods and model selection methods",
+                "stepId": "stage_3_method_proposal_step1"
             },
             {
                 "id": "step2",
-                "title": "Model Proposal",
-                "description": "Propose models for data analysis",
-                "stepId": "model_proposal_step2"
+                "title": "Training and Evaluation Strategy",
+                "description": "Generate comprehensive training and evaluation strategy",
+                "stepId": "stage_3_method_proposal_step2"
             },
             {
                 "id": "step3",
-                "title": "Model Proposal",
-                "description": "Propose models for data analysis",
-                "stepId": "model_proposal_step3"
-            },
-            ]
+                "title": "Method Proposal Summary",
+                "description": "Provide comprehensive summary of proposed methods and strategy",
+                "stepId": "stage_3_method_proposal_step3"
+            }
+        ]
     },
     "model_training_and_evaluation": {
         "id": "model_training_and_evaluation",
@@ -266,12 +266,6 @@ STAGES = {
 
 from DCLSAgents.agents import (ProblemDefinitionAndDataCollectionAgent, DataCleaningAndEDA_Agent, 
                     PCSAgent, PredictionAndInferenceAgent, 
-                    ResultsEvaluationAgent, ResultsCommunicationAgent)
+                    ResultsEvaluationAgent)
 
-#gpt
-from ..utils import Oracle
-llm = Oracle(
-    api_key="sk-iLOmdIAzvILZxzlY94AdC46e7bE145089aD6Fe7bAc3e7489",
-    base_url="https://openkey.cloud/v1",
-    model="gpt-4o"
-)
+llm = "gpt-4o-mini"

@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from app.core.config import llm, DataCleaningAndEDA_Agent
+from app.core.config import llm, PredictionAndInferenceAgent
 from app.models.StepTemplate import StepTemplate
 
 async def generate_method_proposal_sequence_step2(
@@ -10,43 +10,43 @@ async def generate_method_proposal_sequence_step2(
     state = state or {}
     
     step_template = StepTemplate(step, state)
-    problem_description = step_template.get_variable("problem_description")
-    context_description = step_template.get_variable("context_description")
-    unit_check = step_template.get_variable("unit_check")
-    variables = step_template.get_variable("variables")
-    hypothesis = step_template.get_variable("pcs_hypothesis")
-    
     
     if step_template.event("start"):
         
-        step_template.add_text("### Step 1: Generate EDA questions") \
-                    .add_text("ok we know the data structure, let's generate the EDA questions") \
-                    .next_thinking_event(event_tag="generate_eda_questions",
-                                        textArray=["Data Cleaning and EDA Agent is thinking...","generating EDA questions..."])
+        step_template.add_text("### Step 2: Training and Evaluation Strategy") \
+                    .add_text("Based on the proposed feature engineering methods and models, I will generate a comprehensive training and evaluation strategy.") \
+                    .next_thinking_event(event_tag="generate_strategy",
+                                        textArray=["Strategy Generation Agent is thinking...","generating training strategy..."])
         
         return step_template.end_event()
     
+    problem_description = step_template.get_variable("problem_description")
+    context_description = step_template.get_variable("context_description")
+    eda_summary = step_template.get_variable("eda_summary")
+    feature_engineering_methods = step_template.get_variable("feature_engineering_methods")
+    model_methods = step_template.get_variable("model_methods")
     
-    eda_agent = DataCleaningAndEDA_Agent(llm=llm,
-                                        problem_description=problem_description,
-                                        context_description=context_description,
-                                        check_unit=unit_check,
-                                        var_json=variables,
-                                        hyp_json=hypothesis)
+    prediction_agent = PredictionAndInferenceAgent(
+        problem_description=problem_description,
+        context_description=context_description,
+        eda_summary=eda_summary,
+        llm=llm
+    )
     
-    data_info = step_template.get_variable("data_info") 
-    data_preview = step_template.get_variable("data_preview")
-    
-    if step_template.think_event("generate_eda_questions"):
-        eda_questions = eda_agent.generate_eda_questions_cli(problem_description, data_info, data_preview)
+    if step_template.think_event("generate_strategy"):
         
-        markdown_str = step_template.to_tableh(eda_questions)
+        # Generate training and evaluation strategy using existing method
+        training_strategy = prediction_agent.generate_training_evaluation_strategy_cli(
+            feature_engineering_methods, model_methods
+        )
         
-        step_template.add_variable("eda_questions", eda_questions) \
-                    .add_text("I have generated the EDA questions, let's see:") \
-                    .add_text(markdown_str) \
-                    .add_text("ok we know the EDA questions, let's solve them one by one") \
-                    .add_text("I will solve the EDA questions one by one, and you can see the result in the following steps.") \
+        strategy_table = step_template.to_tableh(training_strategy)
+        
+        step_template \
+            .add_variable("training_strategy", training_strategy) \
+            .add_text("Here is the comprehensive training and evaluation strategy:") \
+            .add_text(strategy_table) \
+            .add_text("This strategy will guide us through the model training and evaluation phase.")
         
         return step_template.end_event()
             

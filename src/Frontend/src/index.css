@@ -199,9 +199,9 @@ p {
 /* 列表样式增强 - 支持有序和无序列表 */
 .markdown-cell ul,
 .markdown-cell ol {
-    padding-left: 1.5rem;
-    margin: 1rem 0;
+    padding-left: 0.5rem;
     line-height: 1.6;
+    color: black;
 }
 
 /* 无序列表样式 */
@@ -212,8 +212,8 @@ p {
 
 .markdown-cell ul li {
     position: relative;
-    padding-left: 1.5rem;
-    margin-bottom: 0.5rem;
+    padding-left: 1rem;
+    margin-bottom: 0.2rem;
     line-height: 1.6;
 }
 

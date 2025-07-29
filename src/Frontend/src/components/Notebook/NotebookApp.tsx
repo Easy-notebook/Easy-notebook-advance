@@ -25,6 +25,8 @@ import Header from './MainContainer/Header';
 import MainContent from './MainContainer/MainContent';
 import WorkflowControl from './MainContainer/WorkflowControl';
 import { useWorkflowControlStore } from './store/workflowControlStore';
+import AgentDetail from '../Agents/AgentDetail';
+import { AgentType } from '../../services/agentMemoryService';
 
 
 
@@ -43,6 +45,9 @@ const NotebookApp = () => {
     const saved = localStorage.getItem('rightSidebarWidth');
     return saved ? parseInt(saved) : 384; // w-96 = 384px
   });
+
+  const [currentView, setCurrentView] = useState<'notebook' | 'agent'>('notebook');
+  const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
   
   const {
     notebookId,
@@ -325,6 +330,18 @@ const NotebookApp = () => {
     currentStepIndex
   ]);
 
+  // Handle agent selection
+  const handleAgentSelect = useCallback((agentType: AgentType) => {
+    setSelectedAgentType(agentType);
+    setCurrentView('agent');
+  }, []);
+
+  // Handle back to notebook
+  const handleBackToNotebook = useCallback(() => {
+    setCurrentView('notebook');
+    setSelectedAgentType(null);
+  }, []);
+
   // Export handlers
   const handleExportJson = useCallback(async () => {
     try {
@@ -584,6 +601,7 @@ const NotebookApp = () => {
           currentStepId={currentStepIndex !== null ? tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.steps[currentStepIndex]?.id : null}
           isCollapsed={isCollapsed}
           onPhaseSelect={handlePhaseSelect}
+          onAgentSelect={handleAgentSelect}
           viewMode={viewMode}
           currentRunningPhaseId={currentRunningPhaseId}
           allowPagination={allowPagination} // 传递翻页权限设置
@@ -624,8 +642,18 @@ const NotebookApp = () => {
           fileInputRef={fileInputRef}
         />
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-blue-200 bg-white w-full h-full">
-          {isShowingFileExplorer && <PreviewApp />}
-          <div className={`${isShowingFileExplorer ? 'hidden' : 'block'} w-full h-full `}>
+          {/* PreviewApp - 文件预览 */}
+          <div className={`${isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
+            <PreviewApp />
+          </div>
+          
+          {/* AgentDetail - Agent详情视图 */}
+          <div className={`${currentView === 'agent' && selectedAgentType && !isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
+            {selectedAgentType && <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} />}
+          </div>
+          
+          {/* MainContent - 主笔记本内容 */}
+          <div className={`${!isShowingFileExplorer && currentView === 'notebook' ? 'block' : 'hidden'} w-full h-full`}>
             <MainContent
               cells={cells}
               viewMode={viewMode}

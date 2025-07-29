@@ -1,27 +1,17 @@
-from .base_agent import BaseDSLC_Agent
+from .base_agent import BaseAgent
 from DCLSAgents.prompts.general_prompts import *
 
-class GeneralAgent(BaseDSLC_Agent):
-    def __init__(self, memory=None, llm=None):        
+class GeneralAgent(BaseAgent):
+    def __init__(self, llm=None):        
         super().__init__(
             name="General Agent",
-            system_message="you are a general agent of dcls, you can provide general response to the user's question",
-            memory=memory,
-            llm=llm
+            model=llm if llm else "gpt-4o-mini",
+            system_prompt="you are a general agent of dcls, you can provide general response to the user's question"
         )
     
     def generate_question_choice_map_cli(self, context):
         input_data = QUESTION_CHOICE_MAP_TEMPLATE.format(
             context=context
         )
-        response = self.chat_without_memory(input_data)
-        parsed_question_choice_map = self.parse_llm_json(response)
-        
-        if parsed_question_choice_map:
-            self.logger.info("Successfully generated question choice map")
-            return parsed_question_choice_map
-        else:
-            self.logger.warning("Failed to parse question choice map")
-            return {"error_message": "failed to parse question choice map"}
-        
-        
+        parsed_question_choice_map = self.analyzing(input_data)
+        return parsed_question_choice_map

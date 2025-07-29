@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from app.core.config import llm, DataCleaningAndEDA_Agent
+from app.core.config import llm, PredictionAndInferenceAgent
 from app.models.StepTemplate import StepTemplate
 
 async def generate_method_proposal_sequence_step3(
@@ -12,63 +12,55 @@ async def generate_method_proposal_sequence_step3(
     step_template = StepTemplate(step, state)
         
     if step_template.event("start"):
-        step_template.add_text("### EDA Questions Solving") \
-                    .add_text("I will solve the EDA questions one by one, and you can see the result in the following steps.") \
-                    .next_thinking_event(event_tag="solve_eda_questions",
-                                        textArray=["Data Cleaning and EDA Agent is thinking...","solving EDA questions..."])
-    
-    
-    problem_description = step_template.get_variable("problem_description")
-    context_description = step_template.get_variable("context_description")
-    unit_check = step_template.get_variable("unit_check")
-    variables = step_template.get_variable("variables")
-    hypothesis = step_template.get_variable("pcs_hypothesis")
-    csv_file_path = step_template.get_variable("csv_file_path")
-
-    
-    clean_agent = DataCleaningAndEDA_Agent(llm=llm,
-                                        problem_description=problem_description,
-                                        context_description=context_description,
-                                        check_unit=unit_check,
-                                        var_json=variables,
-                                        hyp_json=hypothesis)
-    
-    if step_template.think_event("solve_eda_questions"):
-        eda_question_is_working = step_template.get_variable("eda_question_is_working")
-        if eda_question_is_working:
-            step_template.add_text("")
-            return step_template.end_event()
-        
-        eda_question, eda_questions_left = step_template.pop_last_sub_variable("eda_questions")
-        
-        data_info = step_template.get_variable("data_info")
-        data_preview = step_template.get_variable("data_preview")
-        
-        if eda_question:
-            step_template.add_text(f"#### Solving EDA Question: {eda_question['question']}") \
-                        .add_text(f"Now,{eda_question['action']}") \
-                        .add_variable("current_eda_question", eda_question) \
-                        .add_code(clean_agent.generate_eda_code_cli(csv_file_path, eda_question,data_info,data_preview)) \
-                        .exe_code_cli() \
-                        .next_thinking_event(event_tag="analyze_eda_result",
-                                        textArray=["EDA Agent is thinking...","analyzing eda result..."]) 
-        else:
-            step_template.add_text("Ok, I have solved all the EDA questions, let's proceed to the next step.")
+        step_template.add_text("### Step 3: Method Proposal Summary") \
+                    .add_text("I will now provide a comprehensive summary of the proposed methods and training strategy for this data science project.") \
+                    .next_thinking_event(event_tag="generate_summary",
+                                        textArray=["Summary Generation Agent is thinking...","generating method summary..."])
         
         return step_template.end_event()
     
-    if step_template.think_event("analyze_eda_result"):
+    problem_description = step_template.get_variable("problem_description")
+    context_description = step_template.get_variable("context_description")
+    eda_summary = step_template.get_variable("eda_summary")
+    feature_engineering_methods = step_template.get_variable("feature_engineering_methods")
+    model_methods = step_template.get_variable("model_methods")
+    training_strategy = step_template.get_variable("training_strategy")
+
+    if step_template.think_event("generate_summary"):
         
-        eda_result = step_template.get_current_effect()
-        current_eda_question = step_template.get_variable("current_eda_question")
-        # step_template.push_variable("eda_result",eda_result)
+        # Generate a comprehensive summary
+        step_template.add_text("**Method Proposal Summary**：") \
+                    .add_text("📊 **Problem Context**：") \
+                    .add_text(f"**Problem**: {problem_description}") \
+                    .add_text(f"**Context**: {context_description}") \
+                    .add_text("🔧 **Proposed Feature Engineering Methods**：")
         
-        analysis_result = clean_agent.analyze_eda_result_cli(current_eda_question["question"],current_eda_question["action"],eda_result)
-        step_template.push_variable("analysis_result",analysis_result)
+        # Display feature engineering methods
+        if feature_engineering_methods:
+            fe_table = step_template.to_tableh(feature_engineering_methods)
+            step_template.add_text(fe_table)
         
-        step_template.add_text(f"Ok, my analysis is {analysis_result}") \
-                    .next_thinking_event(event_tag="solve_eda_questions",
-                                        textArray=["EDA Agent is thinking...","analyzing eda result..."])
+        step_template.add_text("🤖 **Proposed Modeling Methods**：")
+        
+        # Display modeling methods
+        if model_methods:
+            model_table = step_template.to_tableh(model_methods)
+            step_template.add_text(model_table)
+        
+        step_template.add_text("📋 **Training and Evaluation Strategy**：")
+        
+        # Display training strategy
+        if training_strategy:
+            strategy_table = step_template.to_tableh(training_strategy)
+            step_template.add_text(strategy_table)
+        
+        step_template.add_text("✅ **Next Steps**：") \
+                    .add_text("1. **Model Training**: Implement the proposed feature engineering methods") \
+                    .add_text("2. **Model Evaluation**: Train and evaluate the suggested models") \
+                    .add_text("3. **Performance Analysis**: Compare model performance using the defined strategy") \
+                    .add_text("4. **Result Interpretation**: Analyze and interpret the results") \
+                    .add_text("") \
+                    .add_text("The method proposal stage is now complete. We are ready to proceed to the model training and evaluation phase.")
         
         return step_template.end_event()
     

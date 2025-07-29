@@ -246,6 +246,8 @@ const FileTreeItem = memo(({
 
 // Main FileTree Component
 const FileTree = memo(({ notebookId, projectName }) => {
+    // Get tasks from store to determine if outline can be parsed
+    const tasks = useStore((state) => state.tasks);
     const [files, setFiles] = useState(null);
     const [fileTree, setFileTree] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -696,7 +698,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 </div>
             )}
 
-            {projectName && (<div
+            {(projectName || (tasks && tasks.length > 0)) && (<div
                 className="
                 flex items-center py-2 cursor-pointer
                 text-gray-700 hover:bg-theme-50 transition-colors duration-200
@@ -715,7 +717,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 <span
                     className="truncate text-sm font-bold text-theme-800"
                 >
-                    {projectName + ".easynb"}
+                    {(projectName || (tasks && tasks.length > 0 ? tasks[0].title : '')) + ".easynb"}
                 </span>
 
             </div>)}

@@ -205,6 +205,17 @@ export class AgentMemoryService {
     };
     
     this.saveToStorage();
+    
+    // 触发具体agent更新事件
+    const event = new CustomEvent('agentMemoryUpdated', {
+      detail: { 
+        notebookId, 
+        agentType, 
+        timestamp: Date.now(),
+        updateType: 'memory_update'
+      }
+    });
+    window.dispatchEvent(event);
   }
 
   // 记录操作型交互（用于streamHandler）
@@ -259,6 +270,17 @@ export class AgentMemoryService {
     }
 
     this.saveToStorage();
+    
+    // 触发交互记录事件
+    const event = new CustomEvent('agentMemoryUpdated', {
+      detail: { 
+        notebookId, 
+        agentType, 
+        timestamp: Date.now(),
+        updateType: 'operation_interaction'
+      }
+    });
+    window.dispatchEvent(event);
   }
 
   // 记录交互
@@ -307,6 +329,17 @@ export class AgentMemoryService {
     }
 
     this.updateAgentMemory(notebookId, agentType, memory);
+    
+    // 触发交互记录事件
+    const event = new CustomEvent('agentMemoryUpdated', {
+      detail: { 
+        notebookId, 
+        agentType, 
+        timestamp: Date.now(),
+        updateType: 'interaction_record'
+      }
+    });
+    window.dispatchEvent(event);
   }
 
   // 记录debug尝试
@@ -484,6 +517,11 @@ export class AgentMemoryService {
   private static saveToStorage(): void {
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.memories));
+      // 触发自定义事件通知组件更新
+      const event = new CustomEvent('agentMemoryUpdated', {
+        detail: { timestamp: Date.now() }
+      });
+      window.dispatchEvent(event);
     } catch (error) {
       console.error('Failed to save agent memories:', error);
     }
