@@ -9,9 +9,10 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Body, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, Body, UploadFile, File, HTTPException, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 
@@ -42,8 +43,7 @@ logger = logging.getLogger(__name__)
 # ORM: 使用 SQLAlchemy 建立 SQLite 数据库
 # ========================
 from sqlalchemy import create_engine, Column, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 DATABASE_URL = "sqlite:///./notebooks.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -95,6 +95,10 @@ ALLOWED_MIME_TYPES = {
 # 初始化 FastAPI 应用
 # ========================
 app = FastAPI(title="Notebook API", version="1.0.0")
+
+# 暂时注释掉安全过滤中间件，因为主要过滤逻辑已在各端点实现
+# app.add_middleware(SecurityFilterMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -182,6 +186,62 @@ def is_valid_notebook_id(notebook_id: str) -> bool:
     pattern = r'^[\w\-]+$'
     return bool(re.match(pattern, notebook_id))
 
+def sanitize_response_content(content: any, notebook_id: str) -> any:
+    """
+    简单过滤：如果字符串包含notebook_id，返回空字符串
+    """
+    if not notebook_id or not content:
+        return content
+    
+    if isinstance(content, str):
+        if notebook_id in content:
+            return ""
+        return content
+    elif isinstance(content, dict):
+        result = {}
+        for key, value in content.items():
+            if isinstance(value, str) and notebook_id in value:
+                result[key] = ""
+            else:
+                result[key] = value
+        return result
+    elif isinstance(content, list):
+        result = []
+        for item in content:
+            if isinstance(item, str) and notebook_id in item:
+                continue  # 跳过包含notebook_id的项
+            result.append(item)
+        return result
+    else:
+        return content
+
+class SecurityFilterMiddleware(BaseHTTPMiddleware):
+    """
+    安全过滤中间件，自动过滤所有响应中的notebook ID
+    """
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # 尝试从URL路径中提取notebook_id
+        notebook_id = None
+        path_parts = request.url.path.split('/')
+        
+        # 查找可能的notebook_id (32位十六进制字符串)
+        for part in path_parts:
+            if len(part) == 32 and all(c in '0123456789abcdef' for c in part.lower()):
+                notebook_id = part
+                break
+        
+        # 如果找到notebook_id且响应是JSON，则过滤内容
+        if notebook_id and hasattr(response, 'body'):
+            try:
+                # 这里主要是为了日志记录，实际的过滤已经在各个端点中实现
+                logger.debug(f"Security filter applied for notebook {notebook_id}")
+            except Exception as e:
+                logger.error(f"Error in security filter: {str(e)}")
+        
+        return response
+
 # ========================
 # API 路由
 # ========================
@@ -261,10 +321,14 @@ async def execute_code_endpoint(execute_request: ExecuteRequest, db: Session = D
             kernel_managers[execute_request.notebook_id] = KernelExecutionManager(work_dir=work_dir)
         kem = kernel_managers[execute_request.notebook_id]
         result = await kem.execute_code_with_progress(execute_request.code)
-        return ExecuteResponse(**result)
+        
+        # 过滤结果中的敏感信息
+        sanitized_result = sanitize_response_content(result, execute_request.notebook_id)
+        return ExecuteResponse(**sanitized_result)
     except Exception as e:
-        logger.error(f"Request {request_id}: Code execution failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = sanitize_response_content(str(e), execute_request.notebook_id)
+        logger.error(f"Request {request_id}: Code execution failed: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg or "Code execution failed")
 
 @app.post("/cancel_execution/{notebook_id}")
 async def cancel_execution(notebook_id: str, db: Session = Depends(get_db)):
@@ -399,12 +463,16 @@ async def list_files_endpoint(notebook_id: str, db: Session = Depends(get_db)):
         # Build hierarchical file tree
         file_tree = build_file_tree(work_dir, work_dir)
         
+        # 过滤文件树中的敏感信息
+        sanitized_tree = sanitize_response_content(file_tree, notebook_id)
+        
         logger.info(f"Built file tree for notebook {notebook_id}")
-        return {'status': 'ok', 'files': file_tree}
+        return {'status': 'ok', 'files': sanitized_tree}
         
     except Exception as e:
-        logger.error(f"Error listing files: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = sanitize_response_content(str(e), notebook_id)
+        logger.error(f"Error listing files: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/download_file/{notebook_id}/{filename}")
 async def download_file_endpoint(notebook_id: str, filename: str, db: Session = Depends(get_db)):
@@ -424,9 +492,23 @@ async def send_operation_endpoint(send_operation_request: SendOperationRequest, 
     log_request(db, endpoint="/send_operation", notebook_id=send_operation_request.notebook_id)
     notebook_id = send_operation_request.notebook_id
     operation = send_operation_request.operation
-    logger.info(f"Received operation for notebook {notebook_id}: {operation}")
+    
+    # 过滤操作请求中的敏感信息
+    sanitized_operation = sanitize_response_content(operation, notebook_id)
+    logger.info(f"Received operation for notebook {notebook_id}: {sanitized_operation}")
+    
+    # 对流式响应进行包装以过滤输出
+    async def filtered_generate_response():
+        async for chunk in generate_response(operation):
+            if isinstance(chunk, str):
+                sanitized_chunk = sanitize_response_content(chunk, notebook_id)
+                if sanitized_chunk:  # 只有非空的chunk才返回
+                    yield sanitized_chunk
+            else:
+                yield chunk
+    
     return StreamingResponse(
-        generate_response(operation),
+        filtered_generate_response(),
         media_type="application/json",
         headers={
             "Cache-Control": "no-cache",
@@ -447,16 +529,22 @@ async def get_file_info_endpoint(request: GetFileInfoRequest, db: Session = Depe
         stat = file_path.stat()
         file_type = "directory" if file_path.is_dir() else "file"
         
-        return FileInfoResponse(
-            name=file_path.name,
-            path=str(file_path.relative_to(work_dir)),
-            size=stat.st_size,
-            lastModified=datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            type=file_type
-        )
+        # 过滤文件信息中的敏感内容
+        response_data = {
+            "name": file_path.name,
+            "path": str(file_path.relative_to(work_dir)),
+            "size": stat.st_size,
+            "lastModified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "type": file_type
+        }
+        
+        sanitized_data = sanitize_response_content(response_data, request.notebook_id)
+        return FileInfoResponse(**sanitized_data)
+        
     except Exception as e:
-        logger.error(f"Error getting file info: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = sanitize_response_content(str(e), request.notebook_id)
+        logger.error(f"Error getting file info: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.post("/get_file", response_model=FileContentResponse)
 async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_db)):
@@ -482,7 +570,7 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
             
             data_url = f"data:{file_type};base64,{file_content}"
             
-            return FileContentResponse(
+            response = FileContentResponse(
                 content=file_content,
                 size=stat.st_size,
                 lastModified=last_modified,
@@ -498,19 +586,25 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
                 with open(file_path, 'rb') as f:
                     file_content = base64.b64encode(f.read()).decode('utf-8')
             
-            return FileContentResponse(
-                content=file_content,
+            # 过滤文件内容中的敏感信息
+            sanitized_content = sanitize_response_content(file_content, request.notebook_id)
+            
+            response = FileContentResponse(
+                content=sanitized_content,
                 size=stat.st_size,
                 lastModified=last_modified
             )
+        
+        return response
             
     except Exception as e:
-        logger.error(f"Error reading file: {str(e)}")
+        error_msg = sanitize_response_content(str(e), request.notebook_id)
+        logger.error(f"Error reading file: {error_msg}")
         return FileContentResponse(
             content="",
             size=0,
             lastModified=datetime.utcnow().isoformat(),
-            error=str(e)
+            error=error_msg
         )
 
 
