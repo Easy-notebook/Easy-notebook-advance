@@ -8,12 +8,24 @@ interface WorkflowControlState {
   isReturnVisit: boolean;
   continueButtonText: string;
   
+  // Dynamic Workflow State
+  dynamicWorkflow: any | null;
+  workflowAnalysis: any | null;
+  selectedChapters: string[];
+  currentChapterActions: any | null;
+  
   // Actions
   setIsGenerating: (isGenerating: boolean) => void;
   setIsCompleted: (isCompleted: boolean) => void;
   setContinueCountdown: (countdown: number) => void;
   setIsReturnVisit: (isReturnVisit: boolean) => void;
   setContinueButtonText: (text: string) => void;
+  
+  // Dynamic Workflow Actions
+  setDynamicWorkflow: (workflow: any) => void;
+  setWorkflowAnalysis: (analysis: any) => void;  
+  setSelectedChapters: (chapters: string[]) => void;
+  setCurrentChapterActions: (actions: any) => void;
   
   // Event handlers
   onTerminate: (() => void) | null;
@@ -35,6 +47,13 @@ const initialState = {
   continueCountdown: 0,
   isReturnVisit: false,
   continueButtonText: 'Continue to Next Stage',
+  
+  // Dynamic Workflow Initial State
+  dynamicWorkflow: null,
+  workflowAnalysis: null,
+  selectedChapters: [],
+  currentChapterActions: null,
+  
   onTerminate: null,
   onContinue: null,
   onCancelCountdown: null,
@@ -71,6 +90,36 @@ export const useWorkflowControlStore = create<WorkflowControlState>((set) => ({
   setContinueButtonText: (continueButtonText) => set((state) => {
     if (state.continueButtonText !== continueButtonText) {
       return { continueButtonText };
+    }
+    return state;
+  }),
+  
+  // Dynamic Workflow setters
+  setDynamicWorkflow: (dynamicWorkflow) => set((state) => {
+    if (state.dynamicWorkflow !== dynamicWorkflow) {
+      console.log('setDynamicWorkflow called:', dynamicWorkflow);
+      return { dynamicWorkflow };
+    }
+    return state;
+  }),
+  setWorkflowAnalysis: (workflowAnalysis) => set((state) => {
+    if (state.workflowAnalysis !== workflowAnalysis) {
+      console.log('setWorkflowAnalysis called:', workflowAnalysis);
+      return { workflowAnalysis };
+    }
+    return state;
+  }),
+  setSelectedChapters: (selectedChapters) => set((state) => {
+    if (JSON.stringify(state.selectedChapters) !== JSON.stringify(selectedChapters)) {
+      console.log('setSelectedChapters called:', selectedChapters);
+      return { selectedChapters };
+    }
+    return state;
+  }),
+  setCurrentChapterActions: (currentChapterActions) => set((state) => {
+    if (state.currentChapterActions !== currentChapterActions) {
+      console.log('setCurrentChapterActions called:', currentChapterActions);
+      return { currentChapterActions };
     }
     return state;
   }),

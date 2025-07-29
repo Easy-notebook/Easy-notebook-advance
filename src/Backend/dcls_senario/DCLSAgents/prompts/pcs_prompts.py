@@ -79,7 +79,124 @@ EDA_PCS_EVALUATION_TEMPLATE = """任务：Eda 结论的PCS 评估结果分析
 ```
 """
 
-# 4. 数据清理稳定性分析代码生成
+# 4. 基于存在性第一性原理的阶段依赖分析模板
+WORKFLOW_GENERATION_TEMPLATE = """
+You are **PCS-Agent**, a reasoning assistant based on the *Existential First Principles* framework.
+
+Your core method: **Reason backwards from the final goal**, identifying the necessary existence states and their upstream dependencies.
+
+The project operates in five progressive stages, each with specific deliverables:
+
+* {Data Existence Establishment} – Establishes variable definitions, observation units, relevance analysis, and forms the PCS hypothesis.
+* {Data Integrity Assurance} – Ensures the dataset is clean, complete, and structurally valid.
+* {Data Insight Acquisition} – Extracts exploratory data analysis (EDA) summaries and builds structured data understanding.
+* {Methodology Strategy Formulation} – Designs feature engineering, modeling methods, and training strategies aligned with the goal.
+* {Model Implementation Execution} – Executes model training and generates intermediate results for evaluation.
+* {Stability Validation} – Validates the robustness and generalizability of the model under varied conditions.
+* {Results Evaluation Confirmation} – Confirms effectiveness through a final DCLS report and provides actionable recommendations.
+
+---
+
+### Task:
+
+Given the user’s goal and background, analyze the *precise* needs using existential dependency chains.
+
+**User Goal**: {user\_goal}
+**Project Description**: {problem\_description}
+**Data Context**: {context\_description}
+
+---
+
+### Analysis Steps:
+
+1. What **exact outcome** does the user want to achieve?
+2. What **existence state(s)** must be true to reach this goal?
+3. What **prior states** are required to enable each of these?
+4. Which of the five project stages are **strictly necessary**? Which can be **skipped or minimized**?
+
+---
+
+### Important:
+
+Only reason based on the user’s specific goal. Do *not* generalize to typical workflows.
+
+---
+
+### Output Format:
+
+```json
+{
+  "target_analysis": "Clear interpretation of the user's specific goal and desired outcome.",
+  "existence_chain": [
+    {
+      "state": "The final required state",
+      "depends_on": "The prerequisite state(s) needed to reach it",
+      "provided_by": "The stage that delivers the prerequisite state"
+    }
+  ],
+  "stage_dependencies": {
+    "Problem Definition": {
+      "provides": ["States this stage delivers"],
+      "depends_on": ["States it depends on, if any"],
+      "necessity": "Is this stage required? Why or why not?"
+    }
+    // ...repeat for other stages
+  },
+  "minimal_workflow": ["List of stages that must be executed in order"],
+  "promise": "Based on the goal of {user_goal}, I will need to..., which corresponds to executing the ... stage to obtain..., then..., and finally I will deliver..."
+}
+```
+"""
+
+# 5. Stage Action Selection Template (User Goal Driven)
+STAGE_ACTION_SELECTION_TEMPLATE = """You are PCS-Agent. Select necessary actions for this stage based strictly on the user's specific goal.
+
+**Core Principle**: The user's final goal determines everything. Only select actions that directly serve the user's goal, skip unnecessary steps.
+
+User's Specific Goal:
+{user_goal}
+
+Current Stage Information:
+**Stage**: {stage_name}
+**Stage Purpose**: {stage_goal}
+
+Available Actions:
+{available_actions}
+
+Current State:
+{current_data_state}
+
+Analysis Process:
+1. What does the user's goal actually require?
+2. What existence states must this stage produce to achieve the user's goal?
+3. Which actions directly contribute to these existence states?
+4. Which actions are unnecessary for the user's goal?
+
+Output Format:
+```json
+{{
+  "goal_relevance_analysis": "How this stage relates to the user's goal",
+  "essential_for_user_goal": ["Existence states that must be created for the user's goal"],
+  "selected_actions": [
+    {{
+      "action_id": "section_2_data_structure_discovery",
+      "contribution_to_goal": "How this action directly serves the user's goal",
+      "necessity": "essential/helpful/optional",
+      "provides_for_goal": "What this provides for the user's goal"
+    }}
+  ],
+  "execution_order": ["Execution order based on user goal priority"],
+  "skip_actions": [
+    {{
+      "action_id": "section_4_observation_unit_identification", 
+      "skip_reason": "Why this action is not important for the user's goal"
+    }}
+  ],
+  "stage_execution_plan": "In this stage I will perform [specific operations] as [foundation for what] to achieve [which part of user's goal]"
+}}
+```"""
+
+# 6. 数据清理稳定性分析代码生成
 DATA_CLEANING_STABILITY_TEMPLATE = """任务：数据清理稳定性分析代码生成
 任务描述：基于传入的数据清理函数代码，生成用于评估数据清理和预处理判断稳定性的代码。通过调整清理函数的参数和工具函数的参数，生成多个清理版本的数据集。
 

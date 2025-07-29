@@ -28,6 +28,19 @@ class PCSAgent(BaseAgent):
         self.context_description = context_description
         self.problem_description = problem_description
         self.info("PCS Evaluation Agent initialized")
+    
+    def generate_workflow_cli(self, user_goal:str, problem_description:str, context_description:str):
+        """CLI method for generating workflow"""
+        input_data = WORKFLOW_GENERATION_TEMPLATE.format(
+            user_goal=user_goal,
+            problem_description=problem_description,
+            context_description=context_description
+        )
+        response = self.analyzing(input_data)
+        if response:
+            return response
+        else:
+            return [{"error": "Could not generate workflow"}]
 
     def evaluate_problem_definition_cli(self, problem_description:str, context_description:str, var_json:str, unit_check:str, relevant_variables_analysis:str):
         """
@@ -142,3 +155,51 @@ Return the code wrapped in ```python``` tags."""
         
         response = self.coding(input_data)
         return response
+
+    def select_stage_actions_cli(self, stage_name: str, stage_goal: str, required_states: list, 
+                                available_actions: list, current_data_state: str, user_goal: str):
+        """
+        为特定阶段选择必要的actions
+        
+        参数：
+        - stage_name: 阶段名称
+        - stage_goal: 阶段目标
+        - required_states: 需要产生的存在状态
+        - available_actions: 可用的actions列表
+        - current_data_state: 当前数据状态
+        - user_goal: 用户目标
+        
+        返回值：
+        - 选择的actions配置JSON
+        """
+        self.info(f"Selecting actions for stage: {stage_name}")
+        
+        # 格式化available_actions为字符串
+        actions_str = "\n".join([f"- {action}" for action in available_actions])
+        
+        input_data = STAGE_ACTION_SELECTION_TEMPLATE.format(
+            stage_name=stage_name,
+            stage_goal=stage_goal,
+            required_states=", ".join(required_states),
+            available_actions=actions_str,
+            current_data_state=current_data_state,
+            user_goal=user_goal
+        )
+        
+        response = self.analyzing(input_data)
+        
+        if response:
+            self.info(f"Successfully selected actions for stage: {stage_name}")
+            return response
+        else:
+            self.warning(f"Failed to select actions for stage: {stage_name}")
+            return {
+                "error": f"Could not select actions for stage: {stage_name}",
+                "fallback": {
+                    "stage_analysis": f"Default execution for {stage_name}",
+                    "required_existence_states": required_states,
+                    "selected_actions": [{"action_id": action, "necessity": "必需", "reason": "Default selection", "provides": "Basic functionality"} for action in available_actions[:3]],
+                    "execution_order": available_actions[:3],
+                    "skip_actions": []
+                }
+            }

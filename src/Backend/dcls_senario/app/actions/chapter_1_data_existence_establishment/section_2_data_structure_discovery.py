@@ -1,7 +1,4 @@
 from typing import Dict, Any, Optional
-from app.core.config import llm, ProblemDefinitionAndDataCollectionAgent
-
-# 假设StepTemplate在对应的模块中已定义并导入
 from app.models.StepTemplate import StepTemplate
 
 async def generate_data_loading_and_hypothesis_proposal_step_1(
