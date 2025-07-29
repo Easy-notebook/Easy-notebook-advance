@@ -822,7 +822,7 @@ export const useScriptStore = create((set, get) => ({
                 const chapterContent = `## Stage ${newChapterNumber}: ${step.content}`;
                 get().addShot({
                     id: actionId,
-                    type: 'text',
+                    type: step.shotType || 'text',
                     content: chapterContent,
                     metadata: {
                         ...step.metadata,
@@ -844,7 +844,7 @@ export const useScriptStore = create((set, get) => ({
                 const sectionContent = `### Step ${newSectionNumber}: ${step.content}`;
                 get().addShot({
                     id: actionId,
-                    type: 'text',
+                    type: step.shotType || 'text',
                     content: sectionContent,
                     metadata: {
                         ...step.metadata,
