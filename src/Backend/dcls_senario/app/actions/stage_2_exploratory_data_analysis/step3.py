@@ -12,7 +12,7 @@ async def generate_exploratory_data_sequence_step3(
     step_template = StepTemplate(step, state)
         
     if step_template.event("start"):
-        step_template.add_text("### Step 3: EDA Questions Solving") \
+        step_template.new_section("EDA Questions Solving") \
                     .add_text("I will solve the EDA questions one by one, and you can see the result in the following steps.") \
                     .next_thinking_event(event_tag="solve_eda_questions",
                                         textArray=["Data Cleaning and EDA Agent is thinking...","solving EDA questions..."])

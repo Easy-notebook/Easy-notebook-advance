@@ -12,7 +12,7 @@ async def results_evaluation_step1(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 1: Test Dataset Generation and Validation") \
+        step_template.new_section("Test Dataset Generation and Validation") \
                     .add_text("I will generate comprehensive test dataset variations and establish validation procedures for robust final evaluation.") \
                     .next_thinking_event(event_tag="generate_test_datasets",
                                         textArray=["Results Agent is analyzing...","Generating test dataset variations..."])

@@ -12,7 +12,7 @@ async def model_training_and_evaluation_step0(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 0: Response Variable Identification") \
+        step_template.new_chapter("Model Training and Evaluation") \
                     .add_text("I will analyze the dataset structure and problem context to identify the target variable for prediction.") \
                     .next_thinking_event(event_tag="identify_response_variable",
                                         textArray=["Prediction Agent is analyzing...","Identifying response variable..."])

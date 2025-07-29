@@ -12,7 +12,7 @@ async def model_training_and_evaluation_step2(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 2: Modeling Methods Integration") \
+        step_template.new_section("Modeling Methods Integration") \
                     .add_text("Building on the feature engineering methods from Step 1, I will integrate the modeling methods from Stage 3 to prepare for comprehensive model training.") \
                     .next_thinking_event(event_tag="suggest_modeling_methods",
                                         textArray=["Prediction Agent is analyzing...","Suggesting modeling methods..."])

@@ -12,7 +12,7 @@ async def results_evaluation_step2(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 2: Final Model Evaluation and DCLS Analysis Report") \
+        step_template.new_section("Final Model Evaluation and DCLS Analysis Report") \
                     .add_text("I will conduct the final comprehensive evaluation and generate the complete DCLS analysis report with actionable insights and recommendations.") \
                     .next_thinking_event(event_tag="conduct_final_evaluation",
                                         textArray=["Results Agent is analyzing...","Conducting final model evaluation..."])

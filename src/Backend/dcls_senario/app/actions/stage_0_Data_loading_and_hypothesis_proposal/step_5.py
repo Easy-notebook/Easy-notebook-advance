@@ -19,7 +19,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_5(
     # 分支1：待办事项为空
     if step_template.event("start"):
         
-        step_template.add_text("### Step 4: Hypothesis Propose") \
+        step_template.new_section("Hypothesis Propose") \
                     .add_text("I need to propose a pcs hypothesis") \
                     .next_thinking_event(event_tag="pcs_hypothesis_thinking",
                                     textArray=["Problem Definition Agent is thinking...","proposing a pcs hypothesis..."], 

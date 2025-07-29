@@ -139,6 +139,10 @@ export const useScriptStore = create((set, get) => ({
     activeSequence: null,      // Holds the configuration for an active automated script sequence (e.g., for step-by-step execution).
     sequenceIndex: 0,          // Current step index within an active automated sequence.
 
+    // Chapter and section counters
+    chapterCounter: 0,         // Counter for chapters (stages)
+    sectionCounter: 0,         // Counter for sections (steps)
+
     // stage-related state:
     // Defines all stages in the script. stages offer an alternative way to organize and sequence actions.
     // Each stage (e.g., stages['stageId']) contains:
@@ -805,6 +809,50 @@ export const useScriptStore = create((set, get) => ({
                 } else {
                     globalUpdateInterface.createAIGeneratingText("",  '', [], actionId);
                 }
+                break;
+            }
+            case 'new_chapter': {
+                const actionId = step.storeId || uuidv4();
+                // 增加章节计数器，重置节计数器
+                const { chapterCounter } = get();
+                const newChapterNumber = chapterCounter + 1;
+                set({ chapterCounter: newChapterNumber, sectionCounter: 0 });
+                
+                // 生成章节标题格式：## Stage [章节号]: [内容]
+                const chapterContent = `## Stage ${newChapterNumber}: ${step.content}`;
+                get().addShot({
+                    id: actionId,
+                    type: 'text',
+                    content: chapterContent,
+                    metadata: {
+                        ...step.metadata,
+                        isChapter: true,
+                        chapterId: actionId,
+                        chapterNumber: newChapterNumber
+                    },
+                });
+                break;
+            }
+            case 'new_section': {
+                const actionId = step.storeId || uuidv4();
+                // 增加节计数器
+                const { sectionCounter } = get();
+                const newSectionNumber = sectionCounter + 1;
+                set({ sectionCounter: newSectionNumber });
+                
+                // 生成节标题格式：### Step [节号]: [内容]  
+                const sectionContent = `### Step ${newSectionNumber}: ${step.content}`;
+                get().addShot({
+                    id: actionId,
+                    type: 'text',
+                    content: sectionContent,
+                    metadata: {
+                        ...step.metadata,
+                        isSection: true,
+                        sectionId: actionId,
+                        sectionNumber: newSectionNumber
+                    },
+                });
                 break;
             }
             case 'next_event': {

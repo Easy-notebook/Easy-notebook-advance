@@ -13,7 +13,7 @@ async def generate_data_cleaning_sequence_step0(
     
     if step_template.event("start"):
         
-        step_template.add_text("## Stage 2: Data Cleaning") \
+        step_template.new_chapter("Data Cleaning") \
                     .add_text("In this stage, we will do `Dimension Analysis`, `Invalid Value Analysis`, `Missing Value Analysis`, `Data Integrity Analysis`") \
         
         return step_template.end_event()

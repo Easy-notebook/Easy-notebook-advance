@@ -12,7 +12,7 @@ async def results_evaluation_step0(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 0: Results Evaluation Framework Initialization") \
+        step_template.new_chapter("Results Evaluation") \
                     .add_text("I will establish a comprehensive framework for final results evaluation, incorporating insights from all previous stages.") \
                     .next_thinking_event(event_tag="initialize_results_framework",
                                         textArray=["Results Evaluation Agent is analyzing...","Initializing evaluation framework..."])

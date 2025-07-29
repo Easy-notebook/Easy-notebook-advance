@@ -27,7 +27,7 @@ async def generate_data_cleaning_sequence_step2(
     
     # 分支1：待办事项为空
     if step_template.event("start"):
-        step_template.add_text("### Step2: Invalid Value Analysis") \
+        step_template.new_section("Invalid Value Analysis") \
                     .add_code(
                             f"""import pandas as pd
 data = pd.read_csv('{csv_file_path}')

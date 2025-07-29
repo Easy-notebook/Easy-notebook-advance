@@ -12,7 +12,7 @@ async def generate_data_cleaning_sequence_step4(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 4: Data Integrity Analysis") \
+        step_template.new_section("Data Integrity Analysis") \
                     .add_text("I will perform comprehensive data integrity checks to identify potential data quality issues.") \
                     .next_thinking_event(event_tag="check_current_data_info",
                                         textArray=["Data Cleaning Agent is working...","Checking current data information..."])

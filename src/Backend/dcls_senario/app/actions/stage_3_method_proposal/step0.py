@@ -12,7 +12,7 @@ async def generate_method_proposal_sequence_step0(
     
     if step_template.event("start"):
         
-        step_template.add_text("## Stage 4: Method and Model Proposal") \
+        step_template.new_chapter("Method and Model Proposal") \
                     .add_text("This stage is to propose various feature engineering methods and models selections.") \
                     .add_text("We will propose 3 feature engineering methods and 3 models, and then select the best one based on the EDA results.")
                     

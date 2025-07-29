@@ -12,7 +12,7 @@ async def generate_data_cleaning_sequence_step3(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 3: Missing Value Analysis") \
+        step_template.new_section("Missing Value Analysis") \
                     .add_text("I will analyze missing values in the dataset to identify data quality issues.") \
                     .next_thinking_event(event_tag="check_data_info",
                                         textArray=["Data Cleaning Agent is working...","Checking data information..."])

@@ -18,7 +18,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_3(
     # 分支1：待办事项为空
     if step_template.event("start"):
         
-        step_template.add_text("### Step 2: Analysis of the observation unit") \
+        step_template.new_section("Analysis of the observation unit") \
                     .add_text("I need to analyze the data variables") \
                     .next_thinking_event(event_tag="unit_check_thinking",
                                     textArray=["Problem Definition Agent is thinking...","analyzing the data variables..."], 

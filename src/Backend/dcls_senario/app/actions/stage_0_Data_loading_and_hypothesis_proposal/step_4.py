@@ -15,7 +15,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_4(
     
     
     if step_template.event("start"):
-        step_template.add_text("### Step 3: Variable Relevance Analysis") \
+        step_template.new_section("Variable Relevance Analysis") \
                     .add_text("I need to analyze the data variables") \
                     .next_thinking_event(event_tag="relative_analysis_thinking",
                                     textArray=["Problem Definition Agent is thinking...","analyzing the data variables..."], 

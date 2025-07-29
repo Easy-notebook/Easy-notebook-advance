@@ -19,7 +19,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_2(
     if step_template.event("start"):
         
         step_template \
-            .add_text("### Step 1: Variable Describe") \
+            .new_section("Variable Describe") \
             .add_text("I need to analyze the data variables") \
             .next_thinking_event(event_tag="thinking_1",
                             textArray=["Problem Definition Agent is thinking...","analyzing the data variables..."], 

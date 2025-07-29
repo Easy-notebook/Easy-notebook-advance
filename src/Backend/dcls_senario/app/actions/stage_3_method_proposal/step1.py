@@ -12,7 +12,7 @@ async def generate_method_proposal_sequence_step1(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 0: Generate Feature Engineering Methods") \
+        step_template.new_section("Generate Feature Engineering Methods") \
                     .add_text("I will generate 3 feature engineering methods based on the EDA results.") \
                     .next_thinking_event(event_tag="generate_feature_engineering_methods",
                                         textArray=["Feature Engineering Agent is thinking...","generating feature engineering methods..."])

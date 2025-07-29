@@ -12,7 +12,7 @@ async def stability_analysis_step1(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 1: Batch Model Evaluation Strategy") \
+        step_template.new_section("Batch Model Evaluation Strategy") \
                     .add_text("I will design a comprehensive batch evaluation approach to assess model performance across all dataset variations.") \
                     .next_thinking_event(event_tag="generate_batch_evaluation",
                                         textArray=["Prediction Agent is analyzing...","Generating batch evaluation strategy..."])

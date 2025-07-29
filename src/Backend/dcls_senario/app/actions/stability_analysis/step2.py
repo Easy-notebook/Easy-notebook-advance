@@ -12,7 +12,7 @@ async def stability_analysis_step2(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 2: Evaluation Results Summary and Analysis") \
+        step_template.new_section("Evaluation Results Summary and Analysis") \
                     .add_text("I will analyze and summarize the batch evaluation results to provide insights on model stability and performance across different data variations.") \
                     .next_thinking_event(event_tag="analyze_stability_results",
                                         textArray=["Prediction Agent is analyzing...","Summarizing evaluation results..."])

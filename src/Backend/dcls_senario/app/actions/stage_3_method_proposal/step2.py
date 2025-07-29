@@ -13,7 +13,7 @@ async def generate_method_proposal_sequence_step2(
     
     if step_template.event("start"):
         
-        step_template.add_text("### Step 2: Training and Evaluation Strategy") \
+        step_template.new_section("Training and Evaluation Strategy") \
                     .add_text("Based on the proposed feature engineering methods and models, I will generate a comprehensive training and evaluation strategy.") \
                     .next_thinking_event(event_tag="generate_strategy",
                                         textArray=["Strategy Generation Agent is thinking...","generating training strategy..."])

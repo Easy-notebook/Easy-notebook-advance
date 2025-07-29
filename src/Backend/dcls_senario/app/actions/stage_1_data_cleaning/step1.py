@@ -25,7 +25,7 @@ async def generate_data_cleaning_sequence_step1(
                                         hyp_json=hypothesis)
     
     if step_template.event("start"):
-        step_template.add_text("### Step1: Dimension Analysis") \
+        step_template.new_section("Dimension Analysis") \
                     .add_code(
                             f"""import pandas as pd
 data = pd.read_csv('{csv_file_path}')

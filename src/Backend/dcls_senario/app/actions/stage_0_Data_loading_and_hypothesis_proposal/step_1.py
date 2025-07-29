@@ -16,7 +16,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_1(
     
     # 分支1：待办事项为空
     if step_template.event("start"):
-        step_template.add_text("### Step 0: Data preview") \
+        step_template.new_section("Data preview") \
                      .add_text("read the first 5 rows of the CSV file and extract the variable names and data preview") \
                      .add_code(
                          f'''import pandas as pd

@@ -12,7 +12,7 @@ async def model_training_and_evaluation_step3(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("### Step 3: Model Training and Evaluation Strategy") \
+        step_template.new_section("Model Training and Evaluation Strategy") \
                     .add_text("I will develop a comprehensive model training and evaluation strategy, combining the suggested feature engineering methods with the recommended models.") \
                     .next_thinking_event(event_tag="generate_training_strategy",
                                         textArray=["Prediction Agent is analyzing...","Generating model training strategy..."])

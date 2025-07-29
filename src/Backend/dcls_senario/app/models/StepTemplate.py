@@ -25,6 +25,30 @@ class StepTemplate:
         self.actions.append(action)
         return self
     
+    def new_chapter(self, content: str, delay: Optional[int] = None):
+        action = {
+            "action": "new_chapter",
+            "shotType": SHOT_TYPES.DIALOGUE,
+            "content": content,
+            "state": self._get_context()
+        }
+        if delay is not None:
+            action["delay"] = delay
+        self.actions.append(action)
+        return self
+    
+    def new_section(self, content: str, delay: Optional[int] = None):
+        action = {
+            "action": "new_section",
+            "shotType": SHOT_TYPES.DIALOGUE,
+            "content": content,
+            "state": self._get_context()
+        }
+        if delay is not None:
+            action["delay"] = delay
+        self.actions.append(action)
+        return self
+    
     def event(self, event_name: str="start"):
         if event_name == "start":
             return not self.todo_list

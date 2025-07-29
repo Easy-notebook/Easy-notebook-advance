@@ -12,7 +12,7 @@ async def stability_analysis_step0(
     step_template = StepTemplate(step, state)
     
     if step_template.event("start"):
-        step_template.add_text("## Stability Analysis Strategy") \
+        step_template.new_chapter("Stability Analysis Strategy") \
                     .add_text("I will generate a comprehensive stability analysis plan to evaluate model robustness across different data preprocessing variations.") \
                     .next_thinking_event(event_tag="generate_stability_strategy",
                                         textArray=["PCS Agent is analyzing...","Generating stability analysis strategy..."])

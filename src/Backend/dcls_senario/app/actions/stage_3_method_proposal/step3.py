@@ -12,7 +12,7 @@ async def generate_method_proposal_sequence_step3(
     step_template = StepTemplate(step, state)
         
     if step_template.event("start"):
-        step_template.add_text("### Step 3: Method Proposal Summary") \
+        step_template.new_section("Method Proposal Summary") \
                     .add_text("I will now provide a comprehensive summary of the proposed methods and training strategy for this data science project.") \
                     .next_thinking_event(event_tag="generate_summary",
                                         textArray=["Summary Generation Agent is thinking...","generating method summary..."])
