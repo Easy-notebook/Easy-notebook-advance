@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
 import { v4 as uuidv4 } from 'uuid'
+import { TextSelection } from 'prosemirror-state'
 
 // CodeBlock节点定义
 export const CodeBlockExtension = Node.create({
@@ -105,6 +106,46 @@ export const CodeBlockExtension = Node.create({
     }
   },
 
+  addKeyboardShortcuts() {
+    return {
+      // 防止在代码块边缘使用 Backspace 删除整个代码块
+      'Backspace': ({ editor }) => {
+        const { state, view } = editor
+        const { selection } = state
+        const { $from } = selection
+        
+        // 检查是否在代码块中
+        for (let depth = $from.depth; depth >= 0; depth--) {
+          const node = $from.node(depth)
+          if (node.type.name === this.name) {
+            // 如果在代码块中且光标在开始位置，不要删除整个代码块
+            // 让 CodeMirror 处理删除逻辑
+            return true // 阻止默认删除行为
+          }
+        }
+        return false // 允许默认删除行为
+      },
+      
+      // 防止在代码块边缘使用 Delete 删除整个代码块
+      'Delete': ({ editor }) => {
+        const { state, view } = editor
+        const { selection } = state
+        const { $from } = selection
+        
+        // 检查是否在代码块中
+        for (let depth = $from.depth; depth >= 0; depth--) {
+          const node = $from.node(depth)
+          if (node.type.name === this.name) {
+            // 如果在代码块中且光标在结束位置，不要删除整个代码块
+            // 让 CodeMirror 处理删除逻辑
+            return true // 阻止默认删除行为
+          }
+        }
+        return false // 允许默认删除行为
+      },
+    }
+  },
+
   // 自动转换普通代码块为可执行代码块
   addInputRules() {
     return [
@@ -152,7 +193,7 @@ export const CodeBlockExtension = Node.create({
           // 将光标移动到代码块后面（这样代码块组件可以接管焦点）
           const newPos = start + codeBlockNode.nodeSize
           if (newPos <= tr.doc.content.size) {
-            tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newPos)))
+            tr.setSelection(TextSelection.near(tr.doc.resolve(newPos)))
           }
           
           // 添加标记，告诉onUpdate这是InputRule创建的变化
@@ -210,10 +251,21 @@ const CodeBlockView = ({
     }
   }, [cellId, cells]) // 只依赖cellId和cells，不依赖node attributes
 
+  // 添加删除保护状态
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // 处理删除
   const handleDelete = useCallback(() => {
+    // 防止双重删除
+    if (isDeleting) {
+      console.log('删除已在进行中，跳过重复删除');
+      return;
+    }
+    
     console.log('=== 删除代码块开始 ===');
     console.log('删除的代码块ID:', cellId);
+    
+    setIsDeleting(true);
     
     if (editor && getPos) {
       const pos = getPos();
@@ -225,87 +277,61 @@ const CodeBlockView = ({
       
       console.log('代码块位置:', nodeStart, '-', nodeEnd);
       
-      // 在删除之前，先找到上一个元素的位置
-      let targetPos = nodeStart;
-      let foundPreviousElement = false;
-      
-      // 尝试找到前一个可编辑的位置
-      if (nodeStart > 0) {
-        try {
-          // 逐步向前查找，找到合适的位置
-          for (let pos = nodeStart - 1; pos >= 0; pos--) {
-            const $pos = editor.state.doc.resolve(pos);
-            
-            // 如果找到了段落，移动到段落末尾
-            if ($pos.parent.type.name === 'paragraph') {
-              targetPos = $pos.end($pos.depth);
-              foundPreviousElement = true;
-              console.log('找到前一个段落，位置:', targetPos);
-              break;
-            }
-            
-            // 如果找到了其他块级元素，也可以作为目标
-            if ($pos.parent.isBlock && $pos.parent.type.name !== 'doc') {
-              targetPos = $pos.end($pos.depth);
-              foundPreviousElement = true;
-              console.log('找到前一个块级元素:', $pos.parent.type.name, '位置:', targetPos);
-              break;
-            }
-          }
-        } catch (e) {
-          console.warn('查找前一个元素失败:', e);
-        }
-      }
-      
-      // 删除代码块
-      tr.delete(nodeStart, nodeEnd);
-      
-      // 调整删除后的位置
-      if (foundPreviousElement) {
-        // 确保位置在有效范围内
-        targetPos = Math.min(targetPos, tr.doc.content.size);
-      } else {
-        // 如果没找到前一个元素，设置到删除位置
-        targetPos = Math.min(nodeStart, tr.doc.content.size);
-      }
-      
-      // 确保位置不为负数
-      if (targetPos < 0) {
-        targetPos = 0;
-      }
+      // 使用 markdown 占位符取代代码块，防止光标跳到文档开头
+      const placeholder = '```python\n';
+      const textNode = editor.state.schema.text(placeholder);
+      tr.replaceWith(nodeStart, nodeEnd, textNode);
+
+      // 将光标定位到占位符末尾
+      let targetPos = nodeStart + placeholder.length;
       
       console.log('删除后文档大小:', tr.doc.content.size, '目标位置:', targetPos);
       
-      // 设置光标位置
-      if (targetPos <= tr.doc.content.size) {
+      // 设置光标位置 - 使用更安全的方式
+      if (targetPos >= 0 && targetPos <= tr.doc.content.size) {
         try {
-          const $finalPos = tr.doc.resolve(targetPos);
-          const selection = editor.state.selection.constructor.near($finalPos, -1);
+          const $pos = tr.doc.resolve(targetPos);
+          // 使用更简单的选择策略
+          const selection = TextSelection.near($pos);
           tr.setSelection(selection);
-          
           console.log('最终光标位置:', targetPos);
         } catch (e) {
-          console.warn('设置光标位置失败:', e);
-          // 备用方案：设置到安全位置
-          try {
-            const safePos = Math.min(Math.max(0, targetPos), tr.doc.content.size);
-            const $safePos = tr.doc.resolve(safePos);
-            tr.setSelection(editor.state.selection.constructor.near($safePos));
-          } catch (e2) {
-            console.error('备用光标位置设置也失败:', e2);
-          }
+          console.warn('设置光标位置失败，使用默认位置:', e);
+          // 如果定位失败，让编辑器自动处理
         }
       }
       
       // 应用事务
       editor.view.dispatch(tr);
+
+      // 事务完成后，确保焦点和光标仍在占位符处
+      setTimeout(() => {
+        const { state: newState, view: newView } = editor;
+        const safePos = Math.min(targetPos, newState.doc.content.size);
+        try {
+          const $pos = newState.doc.resolve(safePos);
+          const sel = TextSelection.near($pos);
+          newView.dispatch(newState.tr.setSelection(sel).scrollIntoView());
+          newView.focus();
+        } catch (err) {
+          console.warn('Post-delete focus reset failed', err);
+        }
+      }, 20);
       
       console.log('=== 删除代码块完成 ===');
+      
+      // 延迟重置删除标志，防止快速连续删除
+      setTimeout(() => {
+        setIsDeleting(false);
+      }, 200);
     } else {
       // 备用方案
       deleteNode();
+      setTimeout(() => {
+        setIsDeleting(false);
+      }, 200);
     }
-  }, [deleteNode, editor, getPos, cellId, node])
+  }, [deleteNode, editor, getPos, cellId, node, isDeleting])
 
   // 防止重复插入的引用
   const hasTriedToAdd = useRef(false)

@@ -117,40 +117,6 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
     );
 };
 
-// Preview Modal Component
-// const PreviewModal = ({ isOpen, onClose, file, content, type }) => {
-//     if (!isOpen) return null;
-
-//     return (
-//         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-//             <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
-//                 <div className="border-b p-4 flex justify-between items-center">
-//                     <h3 className="font-semibold text-lg">{file}</h3>
-//                     <button
-//                         onClick={onClose}
-//                         className="p-1 rounded hover:bg-gray-200"
-//                     >
-//                         <X size={20} />
-//                     </button>
-//                 </div>
-//                 <div className="p-4 overflow-auto flex-grow">
-//                     {type === 'image' ? (
-//                         <img
-//                             src={content}
-//                             alt={file}
-//                             className="max-w-full max-h-[70vh] mx-auto ml-3 mr-2"
-//                         />
-//                     ) : (
-//                         <pre className="whitespace-pre-wrap text-sm bg-gray-100 p-4 rounded overflow-x-auto">
-//                             {content}
-//                         </pre>
-//                     )}
-//                 </div>
-//             </div>
-//         </div>
-//     );
-// };
-
 // FileTreeItem Component
 const FileTreeItem = memo(({
     item,
@@ -659,13 +625,13 @@ const FileTree = memo(({ notebookId, projectName }) => {
             />
 
             {/* Drag & drop instruction overlay - appears when dragging over */}
-            {(draggedOver || uploadState.uploading) ? null : (
+            {/* {(draggedOver || uploadState.uploading) ? null : (
                 <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity duration-300 bg-theme-50 border border-dashed border-theme-300 rounded-lg">
                     <div className="text-center">
                         <p className="text-theme-600 text-sm font-medium">Drag and drop files here to upload</p>
                     </div>
                 </div>
-            )}
+            )} */}
 
             {/* Upload status overlay */}
             {uploadState.uploading && (
@@ -714,11 +680,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
             )}
 
             {/* File tree content */}
-            {fileTree.length === 0 ? (
-                <div className="flex justify-center items-center h-full w-full">
-                    <p className="text-theme-600 text-sm font-medium">Drag and drop files here to upload.</p>
-                </div>
-            ) : (
+            {fileTree.length >0 && (
                 <div>
                     {fileTree.map((item, index) => (
                         <FileTreeItem
