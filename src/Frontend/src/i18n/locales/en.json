@@ -2,7 +2,7 @@
   "modeToggle": {
     "completeMode": "Create Mode",
     "createMode": "Create Mode",
-    "stepMode": "Demo Mode",
+    "demoMode": "Demo Mode",
     "wysiwygMode": "WYSIWYG Mode",
     "debugMode": "Debug Mode"
   },

@@ -2,7 +2,7 @@
   "modeToggle": {
     "completeMode": "创作模式",
     "createMode": "创建模式",
-    "stepMode": "演示模式",
+    "demoMode": "演示模式",
     "wysiwygMode": "所见即所得模式",
     "debugMode": "调试模式"
   },
