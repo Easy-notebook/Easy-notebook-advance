@@ -379,6 +379,7 @@ export class NotebookApiService {
             throw error;
         }
     }
+
 }
 
 // Notebook Store Integration
@@ -515,6 +516,7 @@ export const notebookApiIntegration = {
             throw error;
         }
     },
+
 
     // Download file
     downloadFile: async (notebookId: string, filename: string): Promise<Blob> => {

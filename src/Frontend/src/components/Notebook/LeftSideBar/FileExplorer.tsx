@@ -177,10 +177,10 @@ const FileTreeItem = memo(({
         }
     }, [item, toggleExpand, onFileSelect]);
 
-    // const handleContextMenu = useCallback((e) => {
-    //     e.preventDefault();
-    //     onContextMenu(e, item);
-    // }, [item, onContextMenu]);
+    const handleContextMenu = useCallback((e) => {
+        e.preventDefault();
+        onContextMenu(e, item);
+    }, [item, onContextMenu]);
 
     const handleDragOver = useCallback((e) => {
         if (item.type === 'directory') {
@@ -211,7 +211,7 @@ const FileTreeItem = memo(({
                 "
                 style={{ paddingLeft }}
                 onClick={handleClick}
-                // onContextMenu={handleContextMenu}
+                onContextMenu={handleContextMenu}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 draggable={item.type === 'file'}
@@ -316,12 +316,14 @@ const FileTree = memo(({ notebookId, projectName }) => {
         if (!notebookId) return;
         setIsLoading(true);
         try {
+            // Fetch notebook files
             await fetchFileList({
                 notebookId,
                 notebookApiIntegration,
                 setFileList: setFiles,
                 toast
             });
+            
         } catch (err) {
             console.error('Error fetching files:', err);
             setFiles([]);
@@ -336,81 +338,93 @@ const FileTree = memo(({ notebookId, projectName }) => {
     }, [fetchFileListWrapper]);
 
 
-    // Build file tree
-    useEffect(() => {
+    // Process file tree from backend - backend now returns hierarchical structure
+    const processFileTree = useMemo(() => {
         if (!files || files.length === 0) {
-            return;
+            return [];
         }
 
-        const tree = [];
-        const directories = {};
+        try {
+            // If files is already a hierarchical structure (array of objects with children)
+            if (Array.isArray(files) && files.length > 0 && typeof files[0] === 'object' && files[0].type) {
+                return files; // Backend already provided the tree structure
+            }
 
-        // Build directory nodes
-        files.forEach(filePath => {
-            const parts = filePath.split('/');
-            let currentPath = '';
-            let currentTree = tree;
+            // Fallback: if still receiving flat file paths, build tree manually
+            const tree = [];
+            const directories = {};
 
-            for (let i = 0; i < parts.length - 1; i++) {
-                const part = parts[i];
-                currentPath = currentPath ? `${currentPath}/${part}` : part;
-                if (!directories[currentPath]) {
-                    const newDir = {
-                        name: part,
-                        type: 'directory',
-                        path: currentPath,
-                        children: []
+            files.forEach(filePath => {
+                const pathStr = typeof filePath === 'string' ? filePath : filePath.path || filePath.name;
+                if (!pathStr) return;
+                
+                const parts = pathStr.split('/');
+                let currentPath = '';
+                let currentTree = tree;
+
+                // Build directory structure
+                for (let i = 0; i < parts.length - 1; i++) {
+                    const part = parts[i];
+                    if (!part) continue;
+                    
+                    currentPath = currentPath ? `${currentPath}/${part}` : part;
+                    if (!directories[currentPath]) {
+                        const newDir = {
+                            name: part,
+                            type: 'directory',
+                            path: currentPath,
+                            children: []
+                        };
+                        directories[currentPath] = newDir;
+                        currentTree.push(newDir);
+                    }
+                    currentTree = directories[currentPath].children;
+                }
+
+                // Add file
+                const fileName = parts[parts.length - 1];
+                if (fileName) {
+                    const fileObj = {
+                        name: fileName,
+                        type: 'file',
+                        path: pathStr,
+                        size: typeof filePath === 'object' ? filePath.size : undefined,
+                        lastModified: typeof filePath === 'object' ? filePath.lastModified : undefined
                     };
-                    directories[currentPath] = newDir;
-                    currentTree.push(newDir);
-                }
-                currentTree = directories[currentPath].children;
-            }
-        });
 
-        // Add files to appropriate directories
-        files.forEach(filePath => {
-            const parts = filePath.split('/');
-            const fileName = parts.pop();
-            const parentPath = parts.join('/');
-
-            const fileObj = {
-                name: fileName,
-                type: 'file',
-                path: filePath
-            };
-
-            if (parentPath === '') {
-                tree.push(fileObj);
-            } else if (directories[parentPath]) {
-                directories[parentPath].children.push(fileObj);
-            }
-        });
-
-        // Sort: directories first, then files
-        const sortEntries = (entries) => {
-            entries.sort((a, b) => {
-                if (a.type !== b.type) {
-                    return a.type === 'directory' ? -1 : 1;
-                }
-                return a.name.localeCompare(b.name);
-            });
-            entries.forEach(entry => {
-                if (entry.type === 'directory') {
-                    sortEntries(entry.children);
+                    if (parts.length === 1) {
+                        tree.push(fileObj);
+                    } else {
+                        const parentPath = parts.slice(0, -1).join('/');
+                        if (directories[parentPath]) {
+                            directories[parentPath].children.push(fileObj);
+                        }
+                    }
                 }
             });
-        };
-        sortEntries(tree);
 
-        setFileTree(tree);
-    }, [files, projectName]);
+            return tree;
+        } catch (error) {
+            console.error('Error processing file tree:', error);
+            return [];
+        }
+    }, [files]);
+
+    // Update file tree when processFileTree changes
+    useEffect(() => {
+        setFileTree(processFileTree);
+    }, [processFileTree]);
 
     // Handle preview using the preview store
     const handlePreviewFile = useCallback(async (file) => {
         try {
             if (!file) {
                 console.error('Error previewing file: file is null');
+                toast({
+                    title: "Error",
+                    description: "No file selected for preview",
+                    variant: "destructive",
+                });
                 return;
             }
 
@@ -421,8 +435,13 @@ const FileTree = memo(({ notebookId, projectName }) => {
             });
         } catch (err) {
             console.error('Error previewing file:', err);
+            toast({
+                title: "Preview Error",
+                description: `Failed to preview ${file?.name || 'file'}: ${err.message}`,
+                variant: "destructive",
+            });
         }
-    },[]);
+    },[toast]);
 
     // Handle file selection using the preview store
     const handleFileSelect = useCallback(async (file) => {
@@ -483,6 +502,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
             });
         }
     }, [notebookId, fetchFileListWrapper, toast]);
+
 
     // Handle drag over
     const handleDragOver = useCallback((e, item) => {

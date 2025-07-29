@@ -154,6 +154,7 @@ class GetFileInfoRequest(BaseModel):
     notebook_id: str
     filename: str
 
+
 class FileInfoResponse(BaseModel):
     name: str
     path: str
@@ -340,6 +341,53 @@ async def upload_file_endpoint(
         logger.error(f"Request {request_id}: Upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def build_file_tree(directory: Path, base_dir: Path) -> List[Dict]:
+    """Build a hierarchical file tree structure"""
+    tree = []
+    
+    # Get all items in the directory
+    items = []
+    try:
+        for item in directory.iterdir():
+            # Skip hidden files and directories
+            if item.name.startswith('.'):
+                continue
+            items.append(item)
+    except PermissionError:
+        return tree
+    
+    # Sort items: directories first, then files
+    items.sort(key=lambda x: (x.is_file(), x.name.lower()))
+    
+    for item in items:
+        # Calculate relative path from the base directory (notebook folder)
+        relative_path = str(item.relative_to(base_dir))
+        
+        if item.is_dir():
+            # Recursively build subtree for directories
+            subtree = build_file_tree(item, base_dir)
+            stat = item.stat()
+            tree.append({
+                'name': item.name,
+                'type': 'directory',
+                'path': relative_path,
+                'children': subtree,
+                'size': 0,
+                'lastModified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+            })
+        elif item.is_file():
+            # Add file info
+            stat = item.stat()
+            tree.append({
+                'name': item.name,
+                'type': 'file',
+                'path': relative_path,
+                'size': stat.st_size,
+                'lastModified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+            })
+    
+    return tree
+
 @app.get("/list_files/{notebook_id}")
 async def list_files_endpoint(notebook_id: str, db: Session = Depends(get_db)):
     log_request(db, endpoint="/list_files", notebook_id=notebook_id)
@@ -347,8 +395,13 @@ async def list_files_endpoint(notebook_id: str, db: Session = Depends(get_db)):
         work_dir = Path(f"./notebooks/{notebook_id}")
         if not work_dir.exists():
             return {'status': 'error', 'message': 'Notebook directory not found'}
-        files = [f.name for f in work_dir.iterdir() if f.is_file()]
-        return {'status': 'ok', 'files': files}
+        
+        # Build hierarchical file tree
+        file_tree = build_file_tree(work_dir, work_dir)
+        
+        logger.info(f"Built file tree for notebook {notebook_id}")
+        return {'status': 'ok', 'files': file_tree}
+        
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -459,6 +512,7 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
             lastModified=datetime.utcnow().isoformat(),
             error=str(e)
         )
+
 
 # ========================
 # 应用启动与关闭事件
