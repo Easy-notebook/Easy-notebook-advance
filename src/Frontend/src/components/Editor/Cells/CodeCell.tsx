@@ -59,6 +59,7 @@ interface CodeCellProps {
   finished_thinking?: boolean;
   thinkingText?: string;
   isInDetachedView?: boolean; // 新增：是否在独立窗口中
+  isDemoMode?: boolean; // 新增：是否在演示模式中
 }
 
 const processOutput = (output: any): Output | null => {
@@ -104,7 +105,7 @@ const processOutput = (output: any): Output | null => {
     return output;
 };
 
-const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false, dslcMode = false, finished_thinking = false, thinkingText = "finished thinking", isInDetachedView = false }) => {
+const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false, dslcMode = false, finished_thinking = false, thinkingText = "finished thinking", isInDetachedView = false, isDemoMode = false }) => {
     // 合并 useStore 的调用
     const {
         currentCellId,
@@ -133,12 +134,20 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     const isCancelling = cellExec.isCancelling;
     const elapsedTime = cellExec.elapsedTime || 0;
 
-    // 当前 cell 的显示模式
+    // 当前 cell 的显示模式 - 演示模式下默认只显示输出
+    const defaultMode = isDemoMode ? DISPLAY_MODES.OUTPUT_ONLY : DISPLAY_MODES.COMPLETE;
     const cellMode =
-        useCodeStore((state) => state.cellModes[cell.id]) || DISPLAY_MODES.COMPLETE;
+        useCodeStore((state) => state.cellModes[cell.id]) || defaultMode;
 
     // 添加一个状态来控制是否显示thinking状态
     const [showThinking, setShowThinking] = useState(true);
+
+    // 演示模式下初始化显示模式为OUTPUT_ONLY
+    useEffect(() => {
+        if (isDemoMode && !useCodeStore.getState().cellModes[cell.id]) {
+            setCellMode(cell.id, DISPLAY_MODES.OUTPUT_ONLY);
+        }
+    }, [isDemoMode, cell.id, setCellMode]);
 
     // 检查是否为 DSLC JSON 指令
     const isDslcCommand = useMemo(() => {
@@ -417,8 +426,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
             <button
                 onClick={toggleCellMode}
                 className="p-2 hover:bg-gray-200 rounded"
-                disabled={isStepMode && processedOutputs.length > 0}
-                title={title}
+                disabled={(isStepMode && processedOutputs.length > 0) || isDemoMode}
+                title={isDemoMode ? 'Mode switching disabled in demo mode' : title}
             >
                 {icon}
             </button>

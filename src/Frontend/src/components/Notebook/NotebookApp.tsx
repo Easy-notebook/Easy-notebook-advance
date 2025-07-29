@@ -387,11 +387,17 @@ const NotebookApp = () => {
       maxFiles
     };
 
+    // 为代码单元格添加演示模式标识
+    const codeProps = {
+      ...props,
+      isDemoMode: viewMode === 'demo' // 演示模式标识
+    };
+
     switch (cell.type) {
       case 'Hybrid':
         return <HybridCell key={cell.id} {...props} />;
       case 'code':
-        return <CodeCell key={cell.id} {...props} />;
+        return <CodeCell key={cell.id} {...codeProps} />;
       case 'markdown':
         return <MarkdownCell key={cell.id} {...props} />;
       case 'image':
@@ -630,6 +636,18 @@ const NotebookApp = () => {
               handleAddCell={handleAddCell}
               renderCell={renderCell}
               renderStepNavigation={renderStepNavigation}
+              handlePreviousStep={handlePreviousStep}
+              handleNextStep={handleNextStep}
+              handlePreviousPhase={handlePreviousPhase}
+              handleNextPhase={handleNextPhase}
+              isFirstPhase={(() => {
+                const result = findPhaseIndex();
+                return result ? result.phaseIndex === 0 : false;
+              })()}
+              isLastPhase={(() => {
+                const result = findPhaseIndex();
+                return result ? result.phaseIndex === result.task.phases.length - 1 : false;
+              })()}
             />
           </div>
         </div>

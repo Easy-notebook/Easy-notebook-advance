@@ -18,7 +18,7 @@ const ModeToggle = memo<ModeToggleProps>(({ viewMode, onModeChange }) => {
 
   const modes = [
     { id: 'create', label: 'Create Mode', name: t('modeToggle.createMode', '创建模式') },
-    // { id: 'step', label: 'Demo Mode', name: t('modeToggle.stepMode') },
+    { id: 'demo', label: 'Demo Mode', name: t('modeToggle.demoMode', '演示模式') },
     { id: 'dslc', label: 'Debug Mode', name: t('modeToggle.debugMode') },
   ];
 

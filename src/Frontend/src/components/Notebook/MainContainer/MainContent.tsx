@@ -1,9 +1,8 @@
 import DSLCPipeline from '../../senario/DSLCanalysis/Pipeline';
-import StepMode from '../../senario/BasicMode/StepMode';
 import CreateMode from '../../senario/BasicMode/CreateMode';
+import DemoMode from '../../senario/BasicMode/DemoMode';
 import DetachedCellView from './DetachedCellView';
 import { findCellsByStep } from '../../../utils/markdownParser';
-import CellDivider from './CellDivider';
 import useStore from '../../../store/notebookStore';
 
 interface MainContentProps {
@@ -16,6 +15,13 @@ interface MainContentProps {
   handleAddCell: (type: string, index?: number) => void;
   renderCell: (cell: any) => JSX.Element | null;
   renderStepNavigation: () => JSX.Element | null;
+  // Navigation handlers for DemoMode
+  handlePreviousStep?: () => void;
+  handleNextStep?: () => void;
+  handlePreviousPhase?: () => void;
+  handleNextPhase?: () => void;
+  isFirstPhase?: boolean;
+  isLastPhase?: boolean;
 }
 
 const MainContent: React.FC<MainContentProps> = ({
@@ -27,7 +33,13 @@ const MainContent: React.FC<MainContentProps> = ({
   getCurrentViewCells,
   handleAddCell,
   renderCell,
-  renderStepNavigation
+  renderStepNavigation,
+  handlePreviousStep,
+  handleNextStep,
+  handlePreviousPhase,
+  handleNextPhase,
+  isFirstPhase,
+  isLastPhase
 }) => {
   const { detachedCellId, isDetachedCellFullscreen } = useStore();
   
@@ -89,16 +101,22 @@ const MainContent: React.FC<MainContentProps> = ({
   );
 
   function renderOtherModes() {
-    if (viewMode === 'step') {
+    if (viewMode === 'demo') {
       return (
-        <StepMode
+        <DemoMode
           tasks={tasks}
           currentPhaseId={currentPhaseId}
           currentStepIndex={currentStepIndex}
           cells={cells}
           findCellsByStep={findCellsByStep}
           renderCell={renderCell}
-          renderStepNavigation={renderStepNavigation}
+          readOnly={false}
+          onPrevious={handlePreviousStep}
+          onNext={handleNextStep}
+          onPreviousPhase={handlePreviousPhase}
+          onNextPhase={handleNextPhase}
+          isFirstPhase={isFirstPhase}
+          isLastPhase={isLastPhase}
         />
       );
     }
