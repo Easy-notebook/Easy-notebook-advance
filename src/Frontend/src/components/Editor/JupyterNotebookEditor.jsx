@@ -72,7 +72,6 @@ const JupyterNotebookEditor = forwardRef(({
   const renderCell = (cell) => {
     const cellIndex = cells.findIndex(c => c.id === cell.id);
     const cellProps = {
-      key: cell.id,
       cell,
       readOnly,
       onDelete: () => handleDeleteCell(cell.id),
@@ -85,18 +84,18 @@ const JupyterNotebookEditor = forwardRef(({
 
     switch (cell.type) {
       case 'code':
-        return <CodeCell {...cellProps} />;
+        return <CodeCell key={cell.id} {...cellProps} />;
       case 'Hybrid':
-        return <HybridCell {...cellProps} />;
+        return <HybridCell key={cell.id} {...cellProps} />;
       case 'markdown':
-        return <MarkdownCell {...cellProps} />;
+        return <MarkdownCell key={cell.id} {...cellProps} />;
       case 'image':
-        return <ImageCell {...cellProps} />;
+        return <ImageCell key={cell.id} {...cellProps} />;
       case 'thinking':
-        return <AIThinkingCell {...cellProps} />;
+        return <AIThinkingCell key={cell.id} {...cellProps} />;
       default:
         return (
-          <div className="p-4 border border-red-200 rounded-lg bg-red-50">
+          <div key={cell.id} className="p-4 border border-red-200 rounded-lg bg-red-50">
             <p className="text-red-600">Unknown cell type: {cell.type}</p>
           </div>
         );

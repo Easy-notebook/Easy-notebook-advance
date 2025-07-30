@@ -57,7 +57,8 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     continueButtonText,
     onTerminate,
     onContinue,
-    onCancelCountdown
+    onCancelCountdown,
+    setContinueCountdown
   } = useWorkflowControlStore();
 
   // Use store values or fallback values - define these first
@@ -93,6 +94,27 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       console.log('No valid fallback action available');
     }
   });
+
+  // Auto-countdown effect
+  useEffect(() => {
+    if (continueCountdown > 0 && !isReturnVisit && effectiveOnContinue) {
+      const timer = setInterval(() => {
+        setContinueCountdown((prev) => {
+          if (prev > 1) {
+            return prev - 1;
+          } else if (prev === 1) {
+            // When countdown reaches 0, automatically trigger continue
+            console.log('Auto-continue triggered by countdown');
+            setTimeout(() => effectiveOnContinue(), 0);
+            return 0;
+          }
+          return prev;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [continueCountdown, isReturnVisit, effectiveOnContinue, setContinueCountdown]);
 
   // Always show something - either the actual controls or a placeholder
   const hasAnyContent = effectiveIsGenerating || effectiveIsCompleted || !!effectiveOnTerminate || !!effectiveOnContinue;

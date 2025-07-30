@@ -47,10 +47,16 @@ const usePipelineStore = create((set, get) => ({
     // Set the current stage with animation
     setStage: (newStage, direction = 'next') => {
         const currentStage = get().currentStage;
+        
+        console.log(`setStage called: ${currentStage} -> ${newStage} (direction: ${direction})`);
 
         // Don't transition to the same stage
-        if (newStage === currentStage) return;
+        if (newStage === currentStage) {
+            console.log('Ignoring transition to same stage');
+            return;
+        }
 
+        console.log('Starting stage transition animation...');
         // Start animation
         set({
             isAnimating: true,
@@ -66,11 +72,13 @@ const usePipelineStore = create((set, get) => ({
 
         // After animation duration, update the actual stage
         setTimeout(() => {
+            console.log(`Completing stage transition to: ${newStage}`);
             set({
                 currentStage: newStage,
                 currentStageId: newStage, // Keep currentStageId in sync
                 isAnimating: false
             });
+            console.log(`Stage transition completed: now at ${newStage}`);
         }, 800); // Match the CSS transition duration
     },
 
@@ -130,14 +138,14 @@ const usePipelineStore = create((set, get) => ({
         });
     },
 
-    // Initialize workflow with static chapter_0_planning stage
+    // Initialize workflow with full VDS data analysis pipeline
     initializeWorkflow: async (planningRequest) => {
         try {
-            // Create static workflow template with only chapter_0_planning
+            // Create comprehensive workflow template with VDS data analysis stages
             const planning = {
-                id: "vds_agents_static_planning",
-                name: "VDS Agents Planning Workflow",
-                description: "Initial planning stage using PCS agent",
+                id: "vds_agents_data_analysis_workflow",
+                name: "VDS Data Analysis Workflow",
+                description: "Complete data science workflow using VDS principles",
                 version: "2.0",
                 stages: [
                     {
@@ -152,14 +160,71 @@ const usePipelineStore = create((set, get) => ({
                                 description: 'Analyze user goals and design optimal workflow using existence first principles'
                             }
                         ]
+                    },
+                    {
+                        id: 'stage_0_data_loading_and_hypothesis_proposal',
+                        name: 'Data Loading & Hypothesis Proposal',
+                        description: 'Load and preview data, propose initial hypothesis',
+                        steps: [
+                            {
+                                id: 'step_1_data_preview',
+                                step_id: 'step_1_data_preview',
+                                name: 'Data Preview',
+                                description: 'Load and preview dataset using VDS tools'
+                            },
+                            {
+                                id: 'step_2_hypothesis_proposal',
+                                step_id: 'step_2_hypothesis_proposal',
+                                name: 'Hypothesis Proposal',
+                                description: 'Propose research hypothesis based on data structure'
+                            }
+                        ]
+                    },
+                    {
+                        id: 'stage_1_data_cleaning',
+                        name: 'Data Cleaning',
+                        description: 'Clean and preprocess data for analysis',
+                        steps: [
+                            {
+                                id: 'step_1_missing_values',
+                                step_id: 'step_1_missing_values',
+                                name: 'Handle Missing Values',
+                                description: 'Detect and handle missing values in dataset'
+                            },
+                            {
+                                id: 'step_2_outlier_detection',
+                                step_id: 'step_2_outlier_detection',
+                                name: 'Outlier Detection',
+                                description: 'Identify and handle outliers'
+                            }
+                        ]
+                    },
+                    {
+                        id: 'stage_2_exploratory_data_analysis',
+                        name: 'Exploratory Data Analysis',
+                        description: 'Comprehensive EDA to understand data patterns',
+                        steps: [
+                            {
+                                id: 'step_1_descriptive_statistics',
+                                step_id: 'step_1_descriptive_statistics',
+                                name: 'Descriptive Statistics',
+                                description: 'Generate comprehensive descriptive statistics'
+                            },
+                            {
+                                id: 'step_2_correlation_analysis',
+                                step_id: 'step_2_correlation_analysis',
+                                name: 'Correlation Analysis',
+                                description: 'Analyze relationships between variables'
+                            }
+                        ]
                     }
                 ],
                 analysis: {
-                    promise: "PCS agent will analyze your goals and design an optimal workflow",
-                    minimal_workflow: ["Workflow Planning"]
+                    promise: "Complete data analysis workflow from data loading to insights",
+                    minimal_workflow: ["Planning", "Data Loading", "Data Cleaning", "EDA"]
                 },
                 execution_strategy: "sequential",
-                customization_reason: "Initial planning phase to determine optimal workflow"
+                customization_reason: "Full VDS data analysis pipeline"
             };
             
             set({
@@ -173,7 +238,10 @@ const usePipelineStore = create((set, get) => ({
             // Update dynamic stages
             PIPELINE_STAGES = { 
                 ...INITIAL_PIPELINE_STAGES, 
-                CHAPTER_0_PLANNING: 'chapter_0_planning' 
+                CHAPTER_0_PLANNING: 'chapter_0_planning',
+                STAGE_0_DATA_LOADING: 'stage_0_data_loading_and_hypothesis_proposal',
+                STAGE_1_DATA_CLEANING: 'stage_1_data_cleaning',
+                STAGE_2_EDA: 'stage_2_exploratory_data_analysis'
             };
             
             return planning;

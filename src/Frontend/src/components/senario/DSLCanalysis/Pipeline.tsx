@@ -134,35 +134,37 @@ const DSLCPipeline = ({onAddCell}) => {
                     <DynamicStageTemplate
                         key={currentStage} // Add key to prevent unnecessary remounts
                         onComplete={async () => {
-                            console.log(`Stage ${currentStage} completed`);
+                            console.log(`=== PIPELINE onComplete CALLED for stage ${currentStage} ===`);
                             console.log('Current workflow template:', workflowTemplate);
                             console.log('Current stage ID:', currentStageId);
                             
-                            // Use template-based navigation for reliability
-                            const currentTemplate = workflowTemplate;
-                            console.log('Available stages:', currentTemplate?.stages);
-                            
-                            if (currentTemplate && currentTemplate.stages) {
-                                const currentStageIndex = currentTemplate.stages.findIndex(stage => stage.id === currentStage);
-                                console.log(`Current stage "${currentStage}" found at index: ${currentStageIndex}`);
-                                const nextStageIndex = currentStageIndex + 1;
+                            try {
+                                // Use template-based navigation for reliability
+                                const currentTemplate = workflowTemplate;
+                                console.log('Available stages:', currentTemplate?.stages);
                                 
-                                if (nextStageIndex < currentTemplate.stages.length) {
-                                    const nextStageId = currentTemplate.stages[nextStageIndex].id;
-                                    console.log(`Transitioning to next stage: ${nextStageId}`);
+                                if (currentTemplate && currentTemplate.stages) {
+                                    const currentStageIndex = currentTemplate.stages.findIndex(stage => stage.id === currentStage);
+                                    console.log(`Current stage "${currentStage}" found at index: ${currentStageIndex}`);
+                                    const nextStageIndex = currentStageIndex + 1;
                                     
-                                    // Use setStage instead of nextStage for more reliable navigation
-                                    setTimeout(() => {
+                                    if (nextStageIndex < currentTemplate.stages.length) {
+                                        const nextStageId = currentTemplate.stages[nextStageIndex].id;
+                                        console.log(`Transitioning to next stage: ${nextStageId}`);
+                                        
+                                        // Get fresh pipeline state and call setStage directly without timeout
                                         const pipelineState = usePipelineStore.getState();
                                         pipelineState.setStage(nextStageId, 'next');
                                         console.log(`Successfully set next stage: ${nextStageId}`);
-                                    }, 50);
+                                    } else {
+                                        console.log('All stages completed - workflow finished');
+                                        // Could show completion message or return to main view
+                                    }
                                 } else {
-                                    console.log('All stages completed - workflow finished');
-                                    // Could show completion message or return to main view
+                                    console.error('No workflow template available - cannot transition to next stage');
                                 }
-                            } else {
-                                console.error('No workflow template available - cannot transition to next stage');
+                            } catch (error) {
+                                console.error('Error during stage transition:', error);
                             }
                         }}
                     />

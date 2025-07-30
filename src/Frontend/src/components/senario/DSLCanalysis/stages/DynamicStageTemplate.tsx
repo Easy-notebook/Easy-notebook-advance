@@ -202,28 +202,24 @@ const stageStateReducer = (state, action) => {
 
 // ==================== Dynamic Stage Component ====================
 const DynamicStageTemplate = ({ onComplete }) => {
+    console.log('DynamicStageTemplate mounted with onComplete:', !!onComplete);
+    
     // Get stage configuration from pipeline store with memoization
     const { 
         getCurrentStageConfig,
         markStepCompleted,
-        markStageCompleted: markPipelineStageCompleted,
-        initializeWorkflow,
-        isWorkflowActive,
-        currentStageId
+        markStageCompleted: markPipelineStageCompleted
     } = usePipelineStore();
     
     const currentStageConfig = useMemo(() => {
         const config = getCurrentStageConfig();
         console.log('getCurrentStageConfig result:', config);
-        console.log('Pipeline store state:', {
-            currentStageId: usePipelineStore.getState().currentStageId,
-            workflowTemplate: usePipelineStore.getState().workflowTemplate,
-            isWorkflowActive: usePipelineStore.getState().isWorkflowActive
-        });
         return config;
     }, [getCurrentStageConfig]);
     
     const { id: stageId, steps, name: stageTitle } = currentStageConfig || { id: '', steps: [], name: '' };
+    
+    console.log('Mount state:', { stageId, stepsLength: steps?.length || 0 });
     const config = useMemo(() => ({
         stageId,
         steps,
@@ -305,30 +301,6 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setNavigationHandler
     } = useWorkflowManager(stageId, currentStepIndex, stepsLoaded, isCompleted, steps);
 
-    // Auto-initialize workflow if not active
-    useEffect(() => {
-        const autoInitializeWorkflow = async () => {
-            if (!isWorkflowActive && !currentStageId) {
-                console.log('Auto-initializing workflow...');
-                try {
-                    const planningRequest = {
-                        problem_name: 'Data Analysis',
-                        user_goal: 'Analyze data to derive insights',
-                        problem_description: 'General data analysis task',
-                        context_description: 'Dataset analysis context'
-                    };
-                    
-                    await initializeWorkflow(planningRequest);
-                    console.log('Workflow auto-initialized');
-                } catch (error) {
-                    console.error('Failed to auto-initialize workflow:', error);
-                }
-            }
-        };
-        
-        autoInitializeWorkflow();
-    }, [isWorkflowActive, currentStageId, initializeWorkflow]);
-
     // ---------- step Switching Logic ----------
     const debouncedSwitchStep = useCallback((stepId) => {
         if (currentStepRef.current === stepId) return;
@@ -361,6 +333,18 @@ const DynamicStageTemplate = ({ onComplete }) => {
             stepsRef.current = steps;
 
             operationQueue.current.clear();
+            
+            // Force initial load for new stage if steps are available
+            if (steps.length > 0) {
+                console.log('Stage changed - scheduling immediate initial load for new stage');
+                setTimeout(() => {
+                    if (loadStepRef.current && !initialLoadCalledRef.current) {
+                        console.log('Executing forced initial load for stage change');
+                        initialLoadCalledRef.current = true;
+                        loadStepRef.current(0);
+                    }
+                }, 150); // Delay to ensure component state is fully reset
+            }
             
             // Only clear step if this is not a workflow update to preserve cell content
             if (currentStepRef.current && !isWorkflowUpdate) {
@@ -400,6 +384,18 @@ const DynamicStageTemplate = ({ onComplete }) => {
             if (currentStepIndex < steps.length &&
                 currentStepRef.current !== steps[currentStepIndex].step_id) {
                 debouncedSwitchStep(steps[currentStepIndex].step_id);
+            }
+            
+            // If this is a new stage with steps but no steps loaded yet, trigger initial load
+            if (steps.length > 0 && stepsLoaded.length === 0 && currentStepIndex === 0 && !initialLoadCalledRef.current) {
+                console.log('Steps changed for new stage - triggering initial load');
+                setTimeout(() => {
+                    if (loadStepRef.current && !initialLoadCalledRef.current) {
+                        console.log('Executing initial load due to steps change');
+                        initialLoadCalledRef.current = true;
+                        loadStepRef.current(0);
+                    }
+                }, 100);
             }
         }
     }, [stageId, steps, debouncedSwitchStep, clearStep, streamCompleted, isCompleted]);
@@ -950,7 +946,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             currentStepIndex === 0 &&
             !initialLoadCalledRef.current &&
             stepsRef.current.length > 0) {  // 确保有steps才执行
-            console.log('Triggering initial load for step 0');
+            console.log('Triggering initial load for step 0 - stage:', stageId);
             initialLoadCalledRef.current = true;
             
             // Clear any existing timeout
@@ -984,6 +980,22 @@ const DynamicStageTemplate = ({ onComplete }) => {
         }
     }, [stepsLoaded.length, currentStepIndex, isStageComplete, stageId, steps.length]);
 
+    // Backup initialization effect - ensures loading happens even if other effects miss it
+    useEffect(() => {
+        // Check if we have a valid stage with steps but nothing is loading or loaded
+        if (stageId && steps.length > 0 && stepsLoaded.length === 0 && !isLoading && !initialLoadCalledRef.current) {
+            console.log('Backup initialization triggered for stage:', stageId);
+            const timeoutId = setTimeout(() => {
+                if (loadStepRef.current && !initialLoadCalledRef.current) {
+                    console.log('Executing backup initial load');
+                    initialLoadCalledRef.current = true;
+                    loadStepRef.current(0);
+                }
+            }, 200);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [stageId, steps.length, stepsLoaded.length, isLoading]);
+
     // Define stable handlers using useCallback with minimal dependencies
     const handleTerminate = useCallback(() => {
         console.log('DSLC Terminate handler called');
@@ -998,7 +1010,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setWorkflowGenerating(false);
     }, [setWorkflowGenerating]);
 
-    const handleContinue = useCallback(() => {
+    const handleContinue = useCallback(async () => {
         console.log('DSLC Continue handler called');
         // Mark stage as complete
         markStageAsComplete(stageId);
@@ -1007,7 +1019,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
         if (onComplete && typeof onComplete === 'function') {
             console.log('Calling onComplete for stage navigation...');
             try {
-                onComplete();
+                // If onComplete is async, await it
+                await onComplete();
+                console.log('onComplete finished successfully');
                 
                 // Reset the workflow state after successful navigation
                 setTimeout(() => {
@@ -1056,9 +1070,34 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setContinueButtonText('Continue to Next Stage');
         
         // Set stable handler wrappers
-        setOnTerminate(() => handleTerminateRef.current());
-        setOnContinue(() => handleContinueRef.current());
-        setOnCancelCountdown(() => handleCancelCountdownRef.current());
+        console.log('Setting onTerminate, handleTerminateRef.current exists:', !!handleTerminateRef.current);
+        console.log('Setting onContinue, handleContinueRef.current exists:', !!handleContinueRef.current);
+        console.log('Setting onCancelCountdown, handleCancelCountdownRef.current exists:', !!handleCancelCountdownRef.current);
+        
+        setOnTerminate(() => {
+            console.log('onTerminate wrapper called, invoking handleTerminateRef.current');
+            if (handleTerminateRef.current) {
+                handleTerminateRef.current();
+            } else {
+                console.log('handleTerminateRef.current is null');
+            }
+        });
+        setOnContinue(() => {
+            console.log('onContinue wrapper called, invoking handleContinueRef.current');
+            if (handleContinueRef.current) {
+                handleContinueRef.current();
+            } else {
+                console.log('handleContinueRef.current is null');
+            }
+        });
+        setOnCancelCountdown(() => {
+            console.log('onCancelCountdown wrapper called, invoking handleCancelCountdownRef.current');
+            if (handleCancelCountdownRef.current) {
+                handleCancelCountdownRef.current();
+            } else {
+                console.log('handleCancelCountdownRef.current is null');
+            }
+        });
         
         return () => {
             // Cleanup handlers when stage changes or component unmounts
@@ -1068,7 +1107,26 @@ const DynamicStageTemplate = ({ onComplete }) => {
             setOnCancelCountdown(null);
             setContinueButtonText('Continue'); // Reset to default
         };
-    }, [stageId, setContinueButtonText, setOnTerminate, setOnContinue, setOnCancelCountdown]); // Include all setter dependencies
+    }, [stageId]); // Only depend on stageId to reduce re-runs
+
+    // Ensure handlers are set after component is fully initialized
+    useEffect(() => {
+        if (isCompleted && stageId) {
+            console.log('Stage completed, ensuring WorkflowControl handlers are properly set');
+            const timeoutId = setTimeout(() => {
+                console.log('Re-setting WorkflowControl handlers after stage completion');
+                setOnContinue(() => {
+                    console.log('Post-completion onContinue wrapper called');
+                    if (handleContinueRef.current) {
+                        handleContinueRef.current();
+                    } else {
+                        console.log('handleContinueRef.current is null in post-completion handler');
+                    }
+                });
+            }, 100);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [isCompleted, stageId, setOnContinue]);
 
     // Update WorkflowControl state based on stage progress  
     useEffect(() => {
@@ -1186,6 +1244,11 @@ const DynamicStageTemplate = ({ onComplete }) => {
     // If no stage config available, show loading
     if (!currentStageConfig) {
         console.log('DynamicStageTemplate: No stage config available, showing skeleton');
+        console.log('Debug info:', {
+            stageId: stageId,
+            steps: steps?.length || 0,
+            currentStageConfig: !!currentStageConfig
+        });
         return <SkeletonLoader count={3} />;
     }
 
