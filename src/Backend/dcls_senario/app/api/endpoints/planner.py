@@ -74,13 +74,26 @@ async def get_debug_status():
 @router.post("/actions", response_model=SequenceResponse)
 async def planner_sequence(request: SequenceRequest):
     """
-    获取指定章节和小节的操作序列
+    获取指定阶段和步骤的操作序列（适配前端stage_id/step_index）
     
     当 stream 为 true 时，将以流式输出（每一行 JSON）的方式返回操作序列。
     """
-    # 从请求中获取章节和小节信息 (需要修改前端传递chapter_id和section_id)
-    chapter_id = request.stage_id  # 暂时使用stage_id作为chapter_id
-    section_id = f"section_{request.step_index + 1}_workflow_initialization"  # 临时映射逻辑
+    # 适配前端参数：stage_id -> chapter_id, step_index -> section_id
+    chapter_id = request.stage_id
+    
+    # step_index现在是string类型的section_id，直接使用
+    section_id = request.step_index
+    
+    # 验证section_id是否有效
+    from app.core.workflow_manager import WorkflowManager
+    chapter_config = WorkflowManager.AVAILABLE_CHAPTERS.get(chapter_id)
+    if not chapter_config:
+        raise HTTPException(status_code=404, detail=f"Stage {chapter_id} not found")
+    
+    available_sections = chapter_config["sections"]
+    if section_id not in available_sections:
+        raise HTTPException(status_code=400, 
+            detail=f"Step {section_id} not found in stage {chapter_id}. Available steps: {available_sections}")
     
     chapter = get_chapter_or_abort(chapter_id)
     validate_section_id(chapter, section_id)
@@ -101,7 +114,12 @@ async def planner_sequence(request: SequenceRequest):
     current_section_index = sections.index(section_id) if section_id in sections else -1
     next_section = sections[current_section_index + 1] if current_section_index + 1 < len(sections) else None
     
-    # 添加元数据到序列中
+    # 添加元数据到序列中（适配前端术语）
+    sequence["stage_id"] = chapter_id
+    sequence["step_id"] = section_id  
+    sequence["step_index"] = section_id  # step_index现在就是section_id
+    sequence["next_step"] = next_section
+    # 保持向后兼容
     sequence["chapter_id"] = chapter_id
     sequence["section_id"] = section_id
     sequence["next_section"] = next_section
@@ -112,9 +130,14 @@ async def planner_sequence(request: SequenceRequest):
     else:
         # 返回常规JSON响应
         return {
+            "stage_id": chapter_id,
+            "step_id": section_id,
+            "step_index": section_id,  # step_index现在就是section_id
+            "sequence": sequence,
+            "next_step": next_section,
+            # 保持向后兼容
             "chapter_id": chapter_id,
             "section_id": section_id,
-            "sequence": sequence,
             "next_section": next_section
         }
 
@@ -123,13 +146,14 @@ async def planner_feedback(request: FeedbackRequest):
     """
     接收前端对执行结果的反馈
     """    
-    
     # 判断目标是否达成
     target_achieved = False
     if request.state:
         toDoList = request.state.get("toDoList", [])
         if toDoList == []:
             target_achieved = True
+        else:
+            logger.warning(f"Feedback not finished: {toDoList}")
 
     return {
         "status": "received", 

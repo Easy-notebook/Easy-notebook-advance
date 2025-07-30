@@ -106,13 +106,22 @@ class WorkflowAPIClient {
     }
 
     /**
-     * 获取工作流模板配置 (无状态)
-     * Get workflow template configuration (stateless)
+     * 生成定制化工作流规划 (基于存在性第一原理)
+     * Generate customized workflow planning (based on existence first principles)
      */
-    async getWorkflowTemplate(templateType = 'data_analysis') {
+    async generatePlanning(planningRequest) {
         try {
-            const response = await fetch(`${this.baseURL}/template?type=${templateType}`, {
-                method: 'GET'
+            const response = await fetch(`${this.baseURL}/planning`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    problem_name: planningRequest.problem_name,
+                    user_goal: planningRequest.user_goal,
+                    problem_description: planningRequest.problem_description,
+                    context_description: planningRequest.context_description || ''
+                })
             });
 
             if (!response.ok) {
@@ -121,7 +130,7 @@ class WorkflowAPIClient {
 
             return await response.json();
         } catch (error) {
-            console.error('Failed to get workflow template:', error);
+            console.error('Failed to generate planning:', error);
             throw error;
         }
     }

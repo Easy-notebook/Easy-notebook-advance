@@ -177,6 +177,7 @@
   "rightSideBar": {
     "history": "History",
     "chat": "Chat",
+    "workflow": "Tasks",
     "noContent": "No content available",
     "collapseDetails": "Collapse Details",
     "viewDetails": "View Details",
@@ -186,6 +187,15 @@
     "ai": "AI",
     "linkedToQA": "Linked to Q&A",
     "processing": "Processing your request...",
+    "noWorkflowActive": "No workflow currently active",
+    "startWorkflowFirst": "Start a DSLC analysis workflow to see TODO items",
+    "workflowOverview": "Tasks Overview",
+    "objective": "Objective",
+    "totalStages": "Total Stages",
+    "completed": "Completed",
+    "currentStage": "Current Stage",
+    "workflowStages": "Tasks Stages",
+    "stepCompleted": "Step completed",
     "eventTypes": {
       "question": "Question",
       "instruction": "Instruction",

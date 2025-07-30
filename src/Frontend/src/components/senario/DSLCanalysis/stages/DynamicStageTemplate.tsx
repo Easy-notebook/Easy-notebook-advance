@@ -155,7 +155,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         initialChecklist: {}
     };
 
-    const [currentStepIndex, setCurrentStepIndex] = useState(0);
+    const [currentStepId, setCurrentStepId] = useState(null);
     const [stepsLoaded, setStepsLoaded] = useState([]);
     const [error, setError] = useState(null);
     const [errorDetails, setErrorDetails] = useState(null);
@@ -222,7 +222,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
     useEffect(() => {
         if (stageIdRef.current !== stageId) {
             console.log(`Stage ID changed from ${stageIdRef.current} to ${stageId}, resetting state`);
-            setCurrentStepIndex(0);
+            setCurrentStepId(steps?.[0]?.step_id || null);
             setStepsLoaded([]);
             setError(null);
             setErrorDetails(null);
@@ -250,16 +250,24 @@ const DynamicStageTemplate = ({ onComplete }) => {
         if (stepsChanged) {
             console.log('Steps configuration changed, updating...');
             stepsRef.current = steps;
-            if (currentStepIndex >= steps.length) {
-                setCurrentStepIndex(steps.length - 1);
+            
+            // 检查当前步骤是否仍然存在
+            const currentStepExists = steps.some(s => s.step_id === currentStepId);
+            if (!currentStepExists && steps.length > 0) {
+                setCurrentStepId(steps[0].step_id);
             }
-            setStepsLoaded(prevLoaded => prevLoaded.filter(index => index < steps.length));
-            if (currentStepIndex < steps.length &&
-                currentStepRef.current !== steps[currentStepIndex].step_id) {
-                debouncedSwitchStep(steps[currentStepIndex].step_id);
+            
+            // 清理不存在的step loaded状态
+            setStepsLoaded(prevLoaded => 
+                prevLoaded.filter(stepId => steps.some(s => s.step_id === stepId))
+            );
+            
+            // 切换到当前步骤
+            if (currentStepId && currentStepRef.current !== currentStepId) {
+                debouncedSwitchStep(currentStepId);
             }
         }
-    }, [stageId, steps, debouncedSwitchStep, clearStep, currentStepIndex, addVariable, setChecklist]);
+    }, [stageId, steps, debouncedSwitchStep, clearStep, currentStepId, addVariable, setChecklist]);
 
     const executeAction = useCallback(async (action) => {
         return operationQueue.current.enqueue({
@@ -282,7 +290,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
     }, [execAction, addEffect]);
 
     // ---------- Stream Request Processing (current step already updated in loadStep) ----------
-    const executeStepRequest = useCallback(async (stepIndex, stepId, controller, retryCount = 0) => {
+    const executeStepRequest = useCallback(async (stepId, controller, retryCount = 0) => {
         const MAX_RETRIES = 10; // 添加重试次数限制避免无限递归
         
         setIsLoading(true);
@@ -304,7 +312,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 signal: controller.signal,
                 body: JSON.stringify({
                     stage_id: stageId,
-                    step_index: stepIndex,
+                    step_index: stepId,
                     state: getContext(),
                     stream: true
                 })
@@ -352,12 +360,12 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 endpoint: constants.API.SEQUENCE_API_URL,
                 context: {
                     stage_id: stageId,
-                    step_index: stepIndex
+                    step_id: stepId
                 }
             };
 
             console.error("API request error:", errorObj);
-            setError(`Step ${stepIndex + 1} request failed: ${errorObj.message}`);
+            setError(`Step ${stepId} request failed: ${errorObj.message}`);
             setErrorDetails(errorObj);
             setIsLoading(false);
             return;
@@ -386,6 +394,15 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 }
                                 if (message.action.state) {
                                     setContext(message.action.state);
+                                }
+                                // 处理workflow更新
+                                if (message.action.updated_workflow) {
+                                    const updatedWorkflow = message.action.updated_workflow;
+                                    
+                                    // 直接使用后端返回的完整workflow
+                                    usePipelineStore.setState({ workflowTemplate: updatedWorkflow });
+                                    
+                                    console.log('Workflow updated from backend:', updatedWorkflow);
                                 }
                             }
                             // Check for errors in message
@@ -423,6 +440,15 @@ const DynamicStageTemplate = ({ onComplete }) => {
                         setUiLoaded(true);
                         firstDataReceived = true;
                     }
+                    // 处理workflow更新
+                    if (message.action.updated_workflow) {
+                        const updatedWorkflow = message.action.updated_workflow;
+                        
+                        // 直接使用后端返回的完整workflow
+                        usePipelineStore.setState({ workflowTemplate: updatedWorkflow });
+                        
+                        console.log('Workflow updated from backend:', updatedWorkflow);
+                    }
                 }
             } catch (e) {
                 console.error("Last line JSON parsing error:", e);
@@ -452,7 +478,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     stage_id: stageId,
-                    step_index: stepIndex,
+                    step_index: stepId,
                     state: getContext(),
                 })
             });
@@ -483,7 +509,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             if (!feedbackResult.targetAchieved) {
                 if (retryCount < MAX_RETRIES) {
                     console.log(`Target not achieved, retrying step (${retryCount + 1}/${MAX_RETRIES})`);
-                    await executeStepRequest(stepIndex, stepId, controller, retryCount + 1);
+                    await executeStepRequest(stepId, controller, retryCount + 1);
                     return;
                 } else {
                     console.log('Max retries reached, marking step as failed');
@@ -509,37 +535,43 @@ const DynamicStageTemplate = ({ onComplete }) => {
         }
     }, [executeAction, stageId, isReturnVisit, isStageComplete, getContext, setContext]);
 
-    // ---------- loadStep: Pre-update the current step and mark it as loaded to ensure the new stepId takes effect promptly ----------
-    const loadStep = useCallback(async (stepIndex) => {
+    // ---------- loadStep: Load step by step_id ----------
+    const loadStep = useCallback(async (stepId) => {
         const currentSteps = stepsRef.current;
-        if (stepIndex >= currentSteps.length) return;
+        const step = currentSteps.find(s => s.step_id === stepId);
+        if (!step) {
+            console.error(`Step ${stepId} not found in current steps`);
+            return;
+        }
+        
         operationQueue.current.clear();
         if (currentLoadStepControllerRef.current) {
             currentLoadStepControllerRef.current.abort();
         }
+        
         // Immediately update the current step and mark it as loaded
-        setCurrentStepIndex(stepIndex);
-        setStepsLoaded(prev => prev.includes(stepIndex) ? prev : [...prev, stepIndex]);
+        setCurrentStepId(stepId);
+        setStepsLoaded(prev => prev.includes(stepId) ? prev : [...prev, stepId]);
 
         setIsLoading(true);
         setStreamCompleted(false);
         setUiLoaded(false);
         setError(null);
         setErrorDetails(null);
-        const stepId = currentSteps[stepIndex].step_id;
+        
         debouncedSwitchStep(stepId);
         markStepIncomplete && markStepIncomplete(stepId);
 
         const controller = new AbortController();
         currentLoadStepControllerRef.current = controller;
         try {
-            await executeStepRequest(stepIndex, stepId, controller);
+            await executeStepRequest(stepId, controller);
         } catch (err) {
             if (err.name === 'AbortError') {
                 console.log("Step loading aborted");
             } else {
-                console.error(`Step ${stepIndex + 1} loading failed:`, err);
-                const stepTitle = currentSteps[stepIndex].name || `Step ${stepIndex + 1}`;
+                console.error(`Step ${stepId} loading failed:`, err);
+                const stepTitle = step.name || stepId;
                 setError(`${stepTitle} loading failed: ${err.message}`);
                 setErrorDetails({
                     message: err.message,
@@ -547,7 +579,6 @@ const DynamicStageTemplate = ({ onComplete }) => {
                     type: "Step loading error",
                     timestamp: new Date().toISOString(),
                     context: {
-                        step_index: stepIndex,
                         step_id: stepId
                     }
                 });
@@ -564,44 +595,58 @@ const DynamicStageTemplate = ({ onComplete }) => {
         const currentSteps = stepsRef.current;
         if (streamCompleted) {
             setIsLoading(false);
-            if (currentStepIndex === currentSteps.length - 1 && autoAdvance) {
+            
+            // 找到当前步骤的索引
+            const currentStepIndex = currentSteps.findIndex(s => s.step_id === currentStepId);
+            const isLastStep = currentStepIndex === currentSteps.length - 1;
+            
+            if (isLastStep && autoAdvance) {
                 setIsCompleted(true);
                 markStageAsComplete(stageId);
                 markStageCompleted(stageId);
-            } else if (autoAdvance) {
-                setTimeout(() => {
-                    loadStep(currentStepIndex + 1);
-                }, 500);
+            } else if (autoAdvance && currentStepIndex >= 0) {
+                // 获取下一步的step_id
+                const nextStep = currentSteps[currentStepIndex + 1];
+                if (nextStep) {
+                    setTimeout(() => {
+                        loadStep(nextStep.step_id);
+                    }, 500);
+                }
             }
         }
-    }, [streamCompleted, autoAdvance, currentStepIndex, loadStep, markStageAsComplete, markStageCompleted, stageId]);
+    }, [streamCompleted, autoAdvance, currentStepId, loadStep, markStageAsComplete, markStageCompleted, stageId]);
 
     useEffect(() => {
         if (isStageComplete && !historyLoaded) {
             const currentSteps = stepsRef.current;
             const lastStep = currentSteps[currentSteps.length - 1];
-            debouncedSwitchStep(lastStep.step_id);
-            setCurrentStepIndex(currentSteps.length - 1);
-            setStepsLoaded(currentSteps.map((_, i) => i));
-            setIsCompleted(true);
-            setAutoAdvance(false);
-            setHistoryLoaded(true);
+            if (lastStep) {
+                debouncedSwitchStep(lastStep.step_id);
+                setCurrentStepId(lastStep.step_id);
+                setStepsLoaded(currentSteps.map(s => s.step_id));
+                setIsCompleted(true);
+                setAutoAdvance(false);
+                setHistoryLoaded(true);
+            }
         }
     }, [historyLoaded, debouncedSwitchStep, isStageComplete]);
 
     useEffect(() => {
+        const currentSteps = stepsRef.current;
         if (!isStageComplete &&
             stepsLoaded.length === 0 &&
-            currentStepIndex === 0 &&
+            !currentStepId &&
             !initialLoadCalledRef.current &&
-            toDoList.length === 0) {
+            toDoList.length === 0 &&
+            currentSteps.length > 0) {
             initialLoadCalledRef.current = true;
+            const firstStep = currentSteps[0];
             // Use setTimeout to ensure this call is not executed within the rendering cycle
             setTimeout(() => {
-                loadStep(0);
+                loadStep(firstStep.step_id);
             }, 0);
         }
-    }, [stepsLoaded.length, currentStepIndex, loadStep, toDoList, isStageComplete, stageId]);
+    }, [stepsLoaded.length, currentStepId, loadStep, toDoList, isStageComplete, stageId]);
 
     const handleContinue = useCallback(() => {
         console.log('handleContinue called:', { 
@@ -637,12 +682,12 @@ const DynamicStageTemplate = ({ onComplete }) => {
         }
     }, [isCompleted, autoAdvance, isReturnVisit, setContinueCountdown]);
 
-    const navigateToStep = (stepIndex) => {
-        if (currentStepIndex === stepIndex) return;
+    const navigateToStep = (stepId) => {
+        if (currentStepId === stepId) return;
         if (operationQueue.current.active) return;
         setAutoAdvance(false);
         setTimeout(() => {
-            loadStep(stepIndex);
+            loadStep(stepId);
         }, 0);
     };
 
@@ -773,19 +818,19 @@ const DynamicStageTemplate = ({ onComplete }) => {
                             <div className="flex">
                                 {currentSteps.map((step, index) => (
                                     <button
-                                        key={step.id}
-                                        onClick={() => { if (isCompleted) { navigateToStep(index) } }}
+                                        key={step.step_id}
+                                        onClick={() => { if (isCompleted) { navigateToStep(step.step_id) } }}
                                         className={`
                                         flex items-center py-3 px-4 
                                         transition-colors whitespace-nowrap 
                                         focus:outline-none
-                                        ${currentStepIndex === index
+                                        ${currentStepId === step.step_id
                                                 ? 'text-theme-600 border-b-2 border-theme-500 bg-theme-50/50'
                                                 : 'text-gray-600 hover:bg-gray-100'
                                             } 
                                 ${!isCompleted ? 'opacity-50 cursor-not-allowed' : ''}
                                 `}
-                                        aria-selected={currentStepIndex === index}
+                                        aria-selected={currentStepId === step.step_id}
                                         disabled={!isCompleted}
                                     >
                                         <div
@@ -793,13 +838,13 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                             w-6 h-6 
                                             flex items-center justify-center 
                                             rounded-full mr-2
-                                            ${currentStepIndex === index
+                                            ${currentStepId === step.step_id
                                                     ? 'bg-theme-100 text-theme-600'
                                                     : 'bg-gray-200 text-gray-600'
                                                 }
                                         `}
                                         >
-                                            {stepsLoaded.includes(index) ? (
+                                            {stepsLoaded.includes(step.step_id) ? (
                                                 <CheckCircle size={14} />
                                             ) : (
                                                 <span className="text-xs font-semibold">{index + 1}</span>
@@ -824,13 +869,13 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 </div>
                             ) : (
                                 <div className="overflow-y-auto">
-                                    {stepsLoaded.includes(currentStepIndex) && currentStepIndex < currentSteps.length ? (
+                                    {stepsLoaded.includes(currentStepId) && currentStepId ? (
                                         <PersistentStepContainer
                                             showRemoveButton={false}
                                             autoScroll={true}
                                             className="content-start"
                                             emptyState={<EmptyState />}
-                                            stepId={currentSteps[currentStepIndex].step_id}
+                                            stepId={currentStepId}
                                         />
                                     ) : (
                                         <EmptyState />
@@ -847,7 +892,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 setError(null);
                                 setErrorDetails(null);
                                 setTimeout(() => {
-                                    loadStep(currentStepIndex);
+                                    loadStep(currentStepId);
                                 }, 0);
                             }}
                             onDismiss={() => {

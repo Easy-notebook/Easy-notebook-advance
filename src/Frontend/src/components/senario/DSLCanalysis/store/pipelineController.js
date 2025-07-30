@@ -30,6 +30,7 @@ const usePipelineStore = create((set, get) => ({
     // Frontend stores ALL workflow state (backend is stateless)
     isWorkflowActive: false,
     workflowTemplate: null,
+    workflowAnalysis: null, // Store workflow analysis from planning
     
     // Current execution state (stored in frontend)
     currentStageId: null,
@@ -117,6 +118,7 @@ const usePipelineStore = create((set, get) => ({
             isAnimating: false,
             isWorkflowActive: false,
             workflowTemplate: null,
+            workflowAnalysis: null,
             currentStageId: null,
             currentStepId: null,
             currentStepIndex: 0,
@@ -129,32 +131,33 @@ const usePipelineStore = create((set, get) => ({
         });
     },
 
-    // Initialize workflow (load template from backend)
-    initializeWorkflow: async (templateType = 'data_analysis') => {
+    // Initialize workflow with planning (based on existence first principles)
+    initializeWorkflow: async (planningRequest) => {
         try {
-            // Get workflow template from backend (stateless)
-            const response = await workflowAPIClient.getWorkflowTemplate(templateType);
-            const template = response.template || response; // Handle both response formats
+            // Generate customized workflow planning from backend
+            const response = await workflowAPIClient.generatePlanning(planningRequest);
+            const planning = response.planning || response; // Handle both response formats
             
             set({
                 isWorkflowActive: true,
-                workflowTemplate: template,
-                currentStageId: template.stages?.[0]?.id || null,
-                currentStage: template.stages?.[0]?.id || PIPELINE_STAGES.EMPTY
+                workflowTemplate: planning,
+                currentStageId: planning.stages?.[0]?.id || null,
+                currentStage: planning.stages?.[0]?.id || PIPELINE_STAGES.EMPTY,
+                workflowAnalysis: response.workflow_analysis || null
             });
 
-            // Update dynamic stages based on template
-            if (template.stages) {
+            // Update dynamic stages based on planning
+            if (planning.stages) {
                 const dynamicStages = {};
-                template.stages.forEach(stage => {
+                planning.stages.forEach(stage => {
                     dynamicStages[stage.id.toUpperCase()] = stage.id;
                 });
                 PIPELINE_STAGES = { ...INITIAL_PIPELINE_STAGES, ...dynamicStages };
             }
             
-            return template;
+            return planning;
         } catch (error) {
-            console.error('Failed to initialize workflow:', error);
+            console.error('Failed to initialize workflow with planning:', error);
             throw error;
         }
     },

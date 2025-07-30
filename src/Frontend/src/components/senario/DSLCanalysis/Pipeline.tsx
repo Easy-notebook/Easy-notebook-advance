@@ -5,6 +5,7 @@ import EmptyState from './preStage/EmptyState';
 import ProblemDefineState from './preStage/ProblemDefineState';
 import DynamicStageTemplate from './stages/DynamicStageTemplate';
 import useStore from '../../../store/notebookStore';
+import usePreStageStore from './store/preStageStore';
 
 
 import './pipelineAnimations.css';
@@ -65,52 +66,71 @@ const DSLCPipeline = ({onAddCell}) => {
                             // Set view mode to dslc for analysis workflow
                             setViewMode('dslc');
                             
-                            // Initialize workflow when starting data analysis stages
+                            // Initialize workflow with planning when starting data analysis stages
                             if (!isWorkflowActive) {
                                 try {
-                                    console.log('Initializing workflow...');
-                                    const template = await initializeWorkflow('data_analysis');
-                                    console.log('Workflow initialized, template:', template);
+                                    console.log('Initializing workflow with planning...');
+                                    
+                                    // Get planning data from preStageStore
+                                    const preStageState = usePreStageStore.getState();
+                                    const planningRequest = {
+                                        problem_name: preStageState.problem_name || 'Data Analysis',
+                                        user_goal: preStageState.problem_description || 'Analyze data to derive insights',
+                                        problem_description: preStageState.problem_description || 'General data analysis task',
+                                        context_description: preStageState.dataset_info || 'Dataset analysis context'
+                                    };
+                                    
+                                    console.log('Planning request:', planningRequest);
+                                    const planning = await initializeWorkflow(planningRequest);
+                                    console.log('Workflow planning initialized:', planning);
                                     
                                     // Wait a bit for state to update, then check
                                     setTimeout(() => {
                                         const currentState = usePipelineStore.getState();
-                                        console.log('Current state after init:', {
+                                        console.log('Current state after planning init:', {
                                             currentStage: currentState.currentStage,
                                             isWorkflowActive: currentState.isWorkflowActive,
-                                            currentStageId: currentState.currentStageId
+                                            currentStageId: currentState.currentStageId,
+                                            workflowAnalysis: currentState.workflowAnalysis
                                         });
                                     }, 100);
                                     
-                                    // initializeWorkflow already sets the currentStage to the first stage
-                                    // No need to call setStage again
-                                    if (!template.stages?.[0]?.id) {
-                                        console.error('No stages found in template');
-                                        // Try fallback to a simple stage
-                                        console.log('Using fallback stage progression');
-                                        usePipelineStore.getState().setStage('data_loading_and_hypothesis_proposal');
+                                    // Check if planning generated valid stages
+                                    if (!planning.stages?.[0]?.id) {
+                                        console.error('No stages found in planning result');
+                                        throw new Error('Planning did not generate valid stages');
                                     }
+                                    
                                 } catch (error) {
-                                    console.error('Failed to initialize workflow:', error);
-                                    console.log('Workflow API not available, using fallback stage');
+                                    console.error('Failed to initialize workflow with planning:', error);
+                                    console.log('Planning API not available, using mock workflow for development');
+                                    
                                     // Create a mock workflow state for development/testing
                                     const mockTemplate = {
+                                        id: "vds_agents_mock_planning",
+                                        name: "VDS Agents Mock Workflow",
+                                        description: "Mock data science workflow for development",
+                                        version: "2.0",
                                         stages: [
-                                            { id: 'data_loading_and_hypothesis_proposal', name: 'Data Loading & Hypothesis Proposal', steps: [] },
-                                            { id: 'exploratory_data_analysis', name: 'Exploratory Data Analysis', steps: [] },
-                                            { id: 'data_preprocessing', name: 'Data Preprocessing', steps: [] },
-                                            { id: 'model_building', name: 'Model Building', steps: [] },
-                                            { id: 'results_interpretation', name: 'Results Interpretation', steps: [] }
-                                        ]
+                                            { id: 'chapter_1_data_existence_establishment', name: 'Data Existence Establishment', steps: [] },
+                                            { id: 'chapter_3_data_insight_acquisition', name: 'Data Insight Acquisition', steps: [] },
+                                            { id: 'chapter_5_model_implementation_execution', name: 'Model Implementation Execution', steps: [] }
+                                        ],
+                                        analysis: {
+                                            promise: "Mock workflow for development and testing",
+                                            minimal_workflow: ["Data Existence Establishment", "Data Insight Acquisition", "Model Implementation Execution"]
+                                        },
+                                        execution_strategy: "sequential",
+                                        customization_reason: "Mock workflow for development/testing"
                                     };
                                     
                                     // Manually set the state for fallback
-                                    const store = usePipelineStore.getState();
                                     usePipelineStore.setState({
                                         isWorkflowActive: true,
                                         workflowTemplate: mockTemplate,
-                                        currentStage: 'data_loading_and_hypothesis_proposal',
-                                        currentStageId: 'data_loading_and_hypothesis_proposal'
+                                        workflowAnalysis: mockTemplate.analysis,
+                                        currentStage: 'chapter_1_data_existence_establishment',
+                                        currentStageId: 'chapter_1_data_existence_establishment'
                                     });
                                 }
                             } else {

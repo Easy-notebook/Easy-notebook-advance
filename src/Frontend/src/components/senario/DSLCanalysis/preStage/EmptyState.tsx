@@ -225,7 +225,7 @@ const AICommandInput = ({ files, setFiles }) => {
               // 设置VDS问题列表
               setPresetQuestions(map.message);
               // 填充第一个预设问题
-              if (map.message.length) {
+              if (map.message.length && map.message[0].problem_description) {
                 setInput(map.message[0].problem_description);
               }
               console.log('VDS questions set successfully');
@@ -446,10 +446,10 @@ const AICommandInput = ({ files, setFiles }) => {
           relative rounded-3xl transition-all duration-200
           border-0 margin-0 p-0
           ${isFocused ? 'shadow-lg' : 'shadow-sm'}
-          ${input.startsWith('/') ? 'bg-slate-50' : 'bg-white'}
+          ${input && input.startsWith('/') ? 'bg-slate-50' : 'bg-white'}
           focus:outline-none border-2 transition-all duration-200
           ${isFocused ? 'border-theme-400' : 'border-gray-200'}
-          ${input.startsWith('/') ? 'font-mono' : 'font-normal'}
+          ${input && input.startsWith('/') ? 'font-mono' : 'font-normal'}
         `}
       >
         {/* 左侧图标 */}
@@ -457,7 +457,7 @@ const AICommandInput = ({ files, setFiles }) => {
           <Sparkles
             className={`
               w-5 h-5 transition-colors duration-200
-              ${input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
+              ${input && input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
             `}
           />
         </div>
@@ -497,7 +497,7 @@ const AICommandInput = ({ files, setFiles }) => {
           placeholder={
             isVDSMode 
               ? 'VDS模式 - 描述您想对数据进行的分析...'
-              : input.startsWith('/')
+              : input && input.startsWith('/')
                 ? t('emptyState.commandPlaceholder')
                 : t('emptyState.questionPlaceholder')
           }
@@ -534,7 +534,7 @@ const AICommandInput = ({ files, setFiles }) => {
           `}
         >
           <SendHorizontal className="w-4 h-4" />
-          {input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
+          {input && input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
         </button>
 
         {/* VDS模式切换开关 - 只有上传文件后才显示 */}
@@ -592,12 +592,12 @@ const AICommandInput = ({ files, setFiles }) => {
         <div className="mt-2 ml-10">
           <div
             className={`
-              ${isVDSMode ? 'text-theme-600' : input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
+              ${isVDSMode ? 'text-theme-600' : input && input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
             `}
           >
             {isVDSMode 
               ? `🤖 VDS Agents Mode`
-              : input.startsWith('/') 
+              : input && input.startsWith('/') 
                 ? `⌘ ${t('emptyState.commandMode')}` 
                 : `💭 ${t('emptyState.questionMode')}`
             }

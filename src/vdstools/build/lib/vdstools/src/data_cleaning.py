@@ -1,5 +1,5 @@
 """
-Data cleaning tools - Wrapper for ml_tools functions
+Data cleaning tools
 Provide stable data processing methods for common data issues
 """
 
@@ -38,6 +38,12 @@ class DataCleaning(Display):
         """
         html_content = apply_cleaning_method(csv_file_path, "remove_invalid_values", **kwargs)
         self.show(html_content)
+    
+    # def list_all_remove_invalid_values_methods(self):
+    #     """
+    #     List all methods for removing invalid values
+    #     """
+    #     return remove_invalid_values_tools.list_all_methods()
     
     def fill_missing_values(self, csv_file_path: str, **kwargs):
         """

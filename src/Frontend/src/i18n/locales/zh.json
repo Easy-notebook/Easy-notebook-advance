@@ -177,6 +177,7 @@
   "rightSideBar": {
     "history": "历史记录",
     "chat": "聊天",
+    "workflow": "任务",
     "noContent": "暂无内容",
     "collapseDetails": "收起详情",
     "viewDetails": "查看详情",
@@ -186,6 +187,15 @@
     "ai": "AI",
     "linkedToQA": "关联问答",
     "processing": "正在处理您的请求...",
+    "noWorkflowActive": "当前没有活跃的工作流",
+    "startWorkflowFirst": "启动DSLC分析工作流来查看待办事项",
+    "workflowOverview": "任务概览",
+    "objective": "目标",
+    "totalStages": "总阶段数",
+    "completed": "已完成",
+    "currentStage": "当前阶段",
+    "workflowStages": "任务阶段",
+    "stepCompleted": "步骤已完成",
     "eventTypes": {
       "question": "问题",
       "instruction": "指令",

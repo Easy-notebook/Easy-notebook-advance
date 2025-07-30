@@ -21,7 +21,15 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
-  Edit
+  Edit,
+  List,
+  CheckCircle,
+  Circle,
+  Settings,
+  Target,
+  ArrowRight,
+  FolderOpen,
+  Folder
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,6 +38,7 @@ import remarkGfm from 'remark-gfm';
 
 import useStore from '../../../store/notebookStore';
 import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
+import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
 
 /**
  * 可折叠的 Markdown 渲染组件。
@@ -257,6 +266,190 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
   );
 };
 
+const WorkflowTODOPanel = () => {
+  const { t } = useTranslation();
+  const {
+    isWorkflowActive,
+    workflowTemplate,
+    currentStageId,
+    currentStepId,
+    completedSteps,
+    completedStages,
+    stepResults,
+    workflowAnalysis
+  } = usePipelineStore();
+
+  const [expandedStages, setExpandedStages] = useState({});
+
+  const toggleStage = useCallback((stageId) => {
+    setExpandedStages(prev => ({
+      ...prev,
+      [stageId]: !prev[stageId]
+    }));
+  }, []);
+
+  if (!isWorkflowActive || !workflowTemplate) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <Target className="w-12 h-12 mx-auto mb-3 opacity-50" />
+        <p className="text-sm">{t('rightSideBar.noWorkflowActive')}</p>
+        <p className="text-xs mt-1">{t('rightSideBar.startWorkflowFirst')}</p>
+      </div>
+    );
+  }
+
+  const renderStageStep = (step, stageId) => {
+    const isCompleted = completedSteps.includes(step.id);
+    const isCurrent = currentStepId === step.id;
+    const hasResult = stepResults[step.id];
+
+    return (
+      <div key={step.id} className="ml-6 py-1 flex items-start gap-2 text-sm">
+        <div className="flex-shrink-0 mt-1">
+          {isCompleted ? (
+            <CheckCircle className="w-4 h-4 text-green-600" />
+          ) : isCurrent ? (
+            <div className="w-4 h-4 rounded-full border-2 border-theme-600 animate-pulse" />
+          ) : (
+            <Circle className="w-4 h-4 text-gray-400" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`font-medium break-words ${
+            isCurrent ? 'text-theme-700' : 
+            isCompleted ? 'text-green-700' : 'text-gray-600'
+          }`}>
+            {step.name || step.id}
+          </div>
+          {step.description && (
+            <div className="text-xs text-gray-500 mt-0.5 break-words">
+              {step.description}
+            </div>
+          )}
+          {hasResult && (
+            <div className="text-xs text-blue-600 mt-1">
+              ✓ {t('rightSideBar.stepCompleted')}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStage = (stage) => {
+    const isCompleted = completedStages.includes(stage.id);
+    const isCurrent = currentStageId === stage.id;
+    const isExpanded = expandedStages[stage.id] || isCurrent;
+    const hasSteps = stage.steps && stage.steps.length > 0;
+
+    return (
+      <div key={stage.id} className="mb-3">
+        <div 
+          className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+            isCurrent ? 'bg-theme-100 ring-1 ring-theme-200' :
+            isCompleted ? 'bg-green-50 hover:bg-green-100' : 
+            'bg-gray-50 hover:bg-gray-100'
+          }`}
+          onClick={() => hasSteps && toggleStage(stage.id)}
+        >
+          <div className="flex-shrink-0">
+            {hasSteps ? (
+              isExpanded ? (
+                <FolderOpen className="w-5 h-5 text-gray-600" />
+              ) : (
+                <Folder className="w-5 h-5 text-gray-600" />
+              )
+            ) : (
+              isCompleted ? (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              ) : isCurrent ? (
+                <div className="w-5 h-5 rounded-full border-2 border-theme-600 animate-pulse" />
+              ) : (
+                <Circle className="w-5 h-5 text-gray-400" />
+              )
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className={`font-semibold text-sm break-words ${
+              isCurrent ? 'text-theme-800' : 
+              isCompleted ? 'text-green-800' : 'text-gray-700'
+            }`}>
+              {stage.name || stage.id}
+            </div>
+            {stage.description && (
+              <div className="text-xs text-gray-500 mt-0.5 break-words">
+                {stage.description}
+              </div>
+            )}
+          </div>
+          {hasSteps && (
+            <div className="flex-shrink-0">
+              {isExpanded ? (
+                <ChevronUp className="w-4 h-4 text-gray-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              )}
+            </div>
+          )}
+        </div>
+        
+        {hasSteps && isExpanded && (
+          <div className="mt-2 space-y-1">
+            {stage.steps.map(step => renderStageStep(step, stage.id))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4 py-4">
+      {/* Workflow Overview */}
+      <div className="bg-white/10 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Settings className="w-5 h-5 text-theme-600" />
+          <h3 className="font-semibold text-theme-800">
+            {t('rightSideBar.workflowOverview')}
+          </h3>
+        </div>
+        
+        {workflowAnalysis && (
+          <div className="text-sm text-gray-700 mb-3">
+            <div className="font-medium mb-1">{t('rightSideBar.objective')}:</div>
+            <div className="text-xs text-gray-600 break-words">
+              {workflowAnalysis.user_goal || workflowAnalysis.problem_description}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="bg-white/20 rounded p-2">
+            <div className="font-medium text-gray-700">{t('rightSideBar.totalStages')}</div>
+            <div className="text-lg font-semibold text-theme-700">
+              {workflowTemplate.stages?.length || 0}
+            </div>
+          </div>
+          <div className="bg-white/20 rounded p-2">
+            <div className="font-medium text-gray-700">{t('rightSideBar.completed')}</div>
+            <div className="text-lg font-semibold text-green-600">
+              {completedStages.length}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stages List */}
+      <div className="space-y-2">
+        <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+          <ArrowRight className="w-4 h-4" />
+          {t('rightSideBar.workflowStages')}
+        </h4>
+        {workflowTemplate.stages?.map(stage => renderStage(stage))}
+      </div>
+    </div>
+  );
+};
+
 const ViewSwitcher = () => {
   const { activeView, setActiveView } = useAIAgentStore();
   const { setIsRightSidebarCollapsed } = useStore();
@@ -265,7 +458,7 @@ const ViewSwitcher = () => {
   return (
     <div className="flex gap-2 text-lg items-center w-full justify-between">
       <div className="flex gap-1 flex-1 min-w-0">
-        {['script', 'qa'].map((view) => (
+        {['script', 'qa', 'todo'].map((view) => (
           <button
             key={view}
             onClick={() => setActiveView(view)}
@@ -280,10 +473,14 @@ const ViewSwitcher = () => {
           >
             {view === 'script' ? 
               <Clock className="w-5 h-5 flex-shrink-0" /> : 
-              <LucideMessageCircle className="w-5 h-5 flex-shrink-0" />
+              view === 'qa' ?
+              <LucideMessageCircle className="w-5 h-5 flex-shrink-0" /> :
+              <List className="w-5 h-5 flex-shrink-0" />
             }
             <span className="hidden sm:inline whitespace-nowrap overflow-hidden text-ellipsis">
-              {view === 'script' ? t('rightSideBar.history') : t('rightSideBar.chat')}
+              {view === 'script' ? t('rightSideBar.history') : 
+               view === 'qa' ? t('rightSideBar.chat') : 
+               t('rightSideBar.workflow')}
             </span>
           </button>
         ))}
@@ -592,6 +789,8 @@ const AIAgentSidebar = () => {
               )}
             </div>
           )}
+
+          {activeView === 'todo' && <WorkflowTODOPanel />}
 
           {isLoading && (
             <div

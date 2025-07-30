@@ -156,7 +156,7 @@ Return the code wrapped in ```python``` tags."""
         response = self.coding(input_data)
         return response
 
-    def select_stage_actions_cli(self, stage_name: str, stage_goal: str, required_states: list, 
+    def select_stage_actions_cli(self, stage_name: str, stage_goal: str,
                                 available_actions: list, current_data_state: str, user_goal: str):
         """
         为特定阶段选择必要的actions
@@ -164,7 +164,6 @@ Return the code wrapped in ```python``` tags."""
         参数：
         - stage_name: 阶段名称
         - stage_goal: 阶段目标
-        - required_states: 需要产生的存在状态
         - available_actions: 可用的actions列表
         - current_data_state: 当前数据状态
         - user_goal: 用户目标
@@ -180,7 +179,6 @@ Return the code wrapped in ```python``` tags."""
         input_data = STAGE_ACTION_SELECTION_TEMPLATE.format(
             stage_name=stage_name,
             stage_goal=stage_goal,
-            required_states=", ".join(required_states),
             available_actions=actions_str,
             current_data_state=current_data_state,
             user_goal=user_goal
@@ -197,7 +195,6 @@ Return the code wrapped in ```python``` tags."""
                 "error": f"Could not select actions for stage: {stage_name}",
                 "fallback": {
                     "stage_analysis": f"Default execution for {stage_name}",
-                    "required_existence_states": required_states,
                     "selected_actions": [{"action_id": action, "necessity": "必需", "reason": "Default selection", "provides": "Basic functionality"} for action in available_actions[:3]],
                     "execution_order": available_actions[:3],
                     "skip_actions": []

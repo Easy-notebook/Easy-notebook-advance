@@ -6,6 +6,15 @@ class StepTemplate:
     def __init__(self, step: Dict[str, Any], state: Dict[str, Any]):
         self.step = step
         self.state = state.copy()  # 复制上下文，避免直接修改传入的对象
+        
+        # 确保state包含必要的键，特别是variables
+        if "variables" not in self.state:
+            self.state["variables"] = {}
+        
+        # 如果step中有variables，将其合并到state中
+        if "variables" in step:
+            self.state["variables"].update(step["variables"])
+            
         self.actions: List[Dict[str, Any]] = []
         self.todo_list: List[str] = list(self.state.get("toDoList", []))
     
@@ -153,10 +162,16 @@ class StepTemplate:
         return self
     
     def add_variable(self, variable_name: str, variable: str):
+        # 确保variables键存在
+        if "variables" not in self.state:
+            self.state["variables"] = {}
         self.state["variables"][variable_name] = variable
         return self
     
     def push_variable(self, variable_name: str, variable: str):
+        # 确保variables键存在
+        if "variables" not in self.state:
+            self.state["variables"] = {}
         if variable_name not in self.state["variables"]:
             self.state["variables"][variable_name] = []
         self.state["variables"][variable_name].append(variable)
@@ -166,6 +181,10 @@ class StepTemplate:
         return self.add_variable(variable_name, variable)
     
     def get_variable(self, variable_name: str):
+        # 确保variables键存在
+        if "variables" not in self.state:
+            self.state["variables"] = {}
+        
         if variable_name in self.state["variables"]:
             return self.state["variables"][variable_name]
         else:
@@ -192,7 +211,12 @@ class StepTemplate:
 
     
     def get_variable_sub_key(self, variable_name: str, sub_key: str):
-        return self.state["variables"][variable_name][sub_key]
+        # 确保variables键存在
+        if "variables" not in self.state:
+            self.state["variables"] = {}
+        if variable_name not in self.state["variables"]:
+            return None
+        return self.state["variables"][variable_name].get(sub_key)
     
     def get_current_effect(self):
         return self.state["effect"]["current"][0]
@@ -258,8 +282,6 @@ class StepTemplate:
     
     def build(self) -> Dict[str, Any]:
         return {
-            "name": f"data-cleaning-{self.step['id']}",
-            "stepId": self.step["stepId"],
             "steps": generate_step_actions(self.actions)
         }
     
