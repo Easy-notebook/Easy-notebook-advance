@@ -443,14 +443,14 @@ p {
     color: #41B883;
 }
 
-/* 暗色模式 */
+/* 暗色模式 - 暂时注释掉，统一使用明亮模式 */
+/*
 @media (prefers-color-scheme: dark) {
     .markdown-cell {
         color: #d1d5db;
     }
 
     .markdown-cell h1 {
-        /* 保持渐变文本 */
         background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
         border-bottom-color: #6495ED;
     }
@@ -518,6 +518,7 @@ p {
         scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
     }
 }
+*/
 
 @keyframes cursorBlink {
     0%, 100% { opacity: 1; }
@@ -535,6 +536,110 @@ p {
         scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
         scrollbar-width: thin;
     }
+}
+
+/* ====================================================================
+   Code Cell Output 样式增强
+   为代码单元格输出中的表格提供与VDS相同的过宽表格处理策略
+   ==================================================================== */
+
+/* Code Cell HTML 输出容器 - 支持水平滚动 */
+.output-html-container {
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(65, 184, 131, 0.3) transparent;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Code Cell HTML 输出容器滚动条样式 */
+.output-html-container::-webkit-scrollbar {
+    height: 10px;
+}
+
+.output-html-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 5px;
+}
+
+.output-html-container::-webkit-scrollbar-thumb {
+    background: rgba(65, 184, 131, 0.4);
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.output-html-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(65, 184, 131, 0.6);
+}
+
+
+/* Code Cell 输出表格头部样式 */
+.output-html-container th {
+    background: #41B883;
+    color: #000000 !important;
+    font-weight: 500;
+    font-size: 0.875rem;
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border: none;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* Code Cell 输出表格数据单元格 - 正常模式下黑色文字 */
+.output-html-container td {
+    padding: 0.4rem 0.8rem;
+    text-align: left;
+    border: none;
+    border-bottom: 1px solid rgba(65, 184, 131, 0.08);
+    vertical-align: top;
+    white-space: nowrap;
+    overflow: visible;
+    color: #000000 !important;
+    background-color: #ffffff;
+}
+
+/* Code Cell 输出表格背景 - 确保正常模式下是白色背景 */
+.output-html-container table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
+    border: 1px solid rgba(65, 184, 131, 0.12);
+    margin: 0 0 1rem 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #000000;
+    table-layout: auto;
+    background-color: #ffffff;
+}
+
+/* Code Cell 输出表格行悬停效果 */
+.output-html-container tr:hover {
+    background-color: rgba(65, 184, 131, 0.03);
+}
+
+/* Code Cell 输出表格交替行背景 - 正常模式下浅灰色 */
+.output-html-container tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.01);
+}
+
+/* Code Cell 输出表格正常行背景 - 确保是白色 */
+.output-html-container tbody tr:nth-child(odd) {
+    background-color: #ffffff;
+}
+
+/* Code Cell 输出中的数值样式 */
+.output-html-container td[style*="text-align: right"],
+.output-html-container td.numeric {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    text-align: right;
+    color: #3490DC !important;
+    font-weight: 500;
 }
 
 /* ====================================================================
@@ -716,7 +821,7 @@ vds-tr {
 vds-th {
     display: table-cell;
     background: #41B883;
-    color: #ffffff;
+    color: #000000;
     font-weight: 500;
     font-size: 0.875rem;
     text-align: left;
@@ -935,8 +1040,38 @@ vds-cleaning-report {
     }
 }
 
-/* 暗色模式支持 */
+/* 暗色模式支持 - 暂时注释掉，统一使用明亮模式 */
+/*
 @media (prefers-color-scheme: dark) {
+    .output-html-container table {
+        border-color: rgba(65, 184, 131, 0.15);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        background-color: #1f2937;
+    }
+    
+    .output-html-container td {
+        border-bottom-color: rgba(65, 184, 131, 0.1);
+        color: #D1D5DB !important;
+        background-color: transparent;
+    }
+    
+    .output-html-container tbody tr:nth-child(even) {
+        background-color: rgba(65, 184, 131, 0.02);
+    }
+    
+    .output-html-container tbody tr:nth-child(odd) {
+        background-color: transparent;
+    }
+    
+    .output-html-container tr:hover {
+        background-color: rgba(65, 184, 131, 0.06);
+    }
+    
+    .output-html-container td[style*="text-align: right"],
+    .output-html-container td.numeric {
+        color: #3490DC !important;
+    }
+
     vds-info-panel {
         background: linear-gradient(135deg, rgba(65, 184, 131, 0.08), rgba(52, 144, 220, 0.08));
         border-color: rgba(65, 184, 131, 0.2);
@@ -972,3 +1107,4 @@ vds-cleaning-report {
         background-color: rgba(65, 184, 131, 0.06);
     }
 }
+*/

@@ -790,20 +790,42 @@ const DynamicStageTemplate = ({ onComplete }) => {
         
         // Always mark stage as complete first
         markStageAsComplete(stageId);
+        markStageCompleted(stageId);
         
-        // If onComplete exists, call it
+        // If onComplete exists, call it to navigate to next stage
         if (onComplete && typeof onComplete === 'function') {
-            console.log('Calling onComplete function...');
+            console.log('Calling onComplete function to navigate to next stage...');
             try {
                 onComplete();
-                console.log('onComplete function called successfully');
+                console.log('onComplete function called successfully - should navigate to next stage');
             } catch (error) {
                 console.error('Error calling onComplete:', error);
             }
         } else {
-            console.log('No onComplete function provided or not in DCLS mode');
+            console.log('No onComplete function provided - stage completed but no navigation');
+            
+            // Fallback: try to navigate to next stage manually
+            const currentState = usePipelineStore.getState();
+            const workflowTemplate = currentState.workflowTemplate;
+            
+            if (workflowTemplate && workflowTemplate.stages) {
+                const currentStageIndex = workflowTemplate.stages.findIndex(stage => stage.id === stageId);
+                const nextStageIndex = currentStageIndex + 1;
+                
+                if (nextStageIndex < workflowTemplate.stages.length) {
+                    const nextStageId = workflowTemplate.stages[nextStageIndex].id;
+                    console.log(`Fallback navigation: transitioning to next stage: ${nextStageId}`);
+                    
+                    usePipelineStore.setState({
+                        currentStage: nextStageId,
+                        currentStageId: nextStageId
+                    });
+                } else {
+                    console.log('All stages completed - workflow finished');
+                }
+            }
         }
-    }, [markStageAsComplete, onComplete, stageId, isStageComplete, isCompleted]);
+    }, [markStageAsComplete, markStageCompleted, onComplete, stageId, isStageComplete, isCompleted]);
 
     const [continueCountdown, cancelCountdown, setContinueCountdown] = useCountdown(0, handleContinue);
 

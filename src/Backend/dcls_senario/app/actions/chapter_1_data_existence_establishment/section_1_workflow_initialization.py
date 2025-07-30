@@ -97,39 +97,35 @@ class WorkflowInitialization(BaseAction):
     def action_selection(self):
         action_selection = self.get_thinking("action_selection")
         
-        # Add detailed information about the stage planning
-        result = self.add_text("## Stage Planning Analysis")
-        
-        if action_selection.get("goal_relevance"):
-            result = result.add_text(f"**Goal Relevance**: {action_selection['goal_relevance']}")
-        
-        result = result.add_text("### Selected Actions:")
-        selected_actions = action_selection.get("selected_actions", [])
-        for action in selected_actions:
-            if isinstance(action, dict):
-                necessity = action.get("necessity", "unknown")
-                action_id = action.get("action_id", "unknown")
-                contribution = action.get("contribution_to_goal", "")
-                if contribution:
-                    result = result.add_text(f"- **{action_id}** ({necessity}): {contribution}")
-                else:
-                    result = result.add_text(f"- **{action_id}** ({necessity})")
+        # if action_selection.get("goal_relevance"):
+        #     self.add_text(f"**Goal Relevance**: {action_selection['goal_relevance']}")
+        # result = result.add_text("### Selected Actions:")
+        # selected_actions = action_selection.get("selected_actions", [])
+        # for action in selected_actions:
+        #     if isinstance(action, dict):
+        #         necessity = action.get("necessity", "unknown")
+        #         action_id = action.get("action_id", "unknown")
+        #         contribution = action.get("contribution_to_goal", "")
+        #         if contribution:
+        #             result = result.add_text(f"- **{action_id}** ({necessity}): {contribution}")
+        #         else:
+        #             result = result.add_text(f"- **{action_id}** ({necessity})")
         
         # Show skipped actions if any
-        skip_actions = action_selection.get("skip_actions", [])
-        if skip_actions:
-            result = result.add_text("### Skipped Actions:")
-            for skip_action in skip_actions:
-                if isinstance(skip_action, dict):
-                    action_id = skip_action.get("action_id", "unknown")
-                    skip_reason = skip_action.get("skip_reason", "No reason provided")
-                    result = result.add_text(f"- **{action_id}**: {skip_reason}")
+        # skip_actions = action_selection.get("skip_actions", [])
+        # if skip_actions:
+        #     result = result.add_text("### Skipped Actions:")
+        #     for skip_action in skip_actions:
+        #         if isinstance(skip_action, dict):
+        #             action_id = skip_action.get("action_id", "unknown")
+        #             skip_reason = skip_action.get("skip_reason", "No reason provided")
+        #             result = result.add_text(f"- **{action_id}**: {skip_reason}")
         
-        result = result.add_text("### Execution Plan:")
-        result = result.add_text(action_selection["stage_execution_plan"])
+        # result = result.add_text("### Execution Plan:")
+        self.add_text(action_selection["stage_execution_plan"])
         
         # Update the workflow with selected steps
-        return result.update_stage_steps(action_selection["execution_order"]) \
+        return self.update_stage_steps(action_selection["execution_order"]) \
             .end_event()
 
 async def generate_data_loading_and_hypothesis_proposal_step_0(
