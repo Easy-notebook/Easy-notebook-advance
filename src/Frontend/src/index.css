@@ -362,7 +362,7 @@ p {
 
 .markdown-cell th {
     background-color: #41B883;
-    color: #fff;
+    color: #000000;
     font-weight: 500;
     font-size: 0.875rem;
     letter-spacing: 0.01em;
@@ -678,7 +678,7 @@ vds-title {
     color: transparent !important; /* 让渐变色生效 */
 }
 
-/* VDS表格头部保持白色文字 */
+/* VDS表格头部改为黑色文字 */
 vds-th,
 vds-th * {
     color: #ffffff !important; /* 表头保持白色 */

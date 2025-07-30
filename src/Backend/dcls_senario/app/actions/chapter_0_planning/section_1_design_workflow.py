@@ -55,18 +55,8 @@ class DesignWorkflow(BaseAction):
         else:
             # Fallback if no stages selected
             self.add_text("警告：没有选择任何workflow阶段")
-            print(f"DEBUG: workflow_analysis = {workflow_analysis}")
 
-        
-        # Get the final workflow state to return to frontend
-        # Don't use self.state.get("current_workflow") as it might contain invalid data
         final_workflow = workflow_result.get("workflow_config", {})
-        
-        # Debug logging
-        print(f"DEBUG: workflow_result = {workflow_result}")
-        print(f"DEBUG: workflow_result type = {type(workflow_result)}")
-        print(f"DEBUG: final_workflow = {final_workflow}")
-        print(f"DEBUG: final_workflow type = {type(final_workflow)}")
         
         # Ensure we have a valid workflow structure
         if not final_workflow or not isinstance(final_workflow, dict) or not final_workflow.get("stages"):
@@ -92,12 +82,8 @@ class DesignWorkflow(BaseAction):
                 ]
             }
         
-        print(f"DEBUG: Final workflow to be sent = {final_workflow}")
-        print(f"DEBUG: Final workflow type = {type(final_workflow)}")
-        
         self.finish_thinking()
         self.add_text(workflow_analysis.get("promise", f"Based on your goal: {self.input['user_goal']}, I will execute the necessary stages to deliver your requirements."))
-        self.add_text("Workflow has been successfully configured with the selected stages and execution plan.")
         self.update_workflow(final_workflow)
         
         return self.end_event()

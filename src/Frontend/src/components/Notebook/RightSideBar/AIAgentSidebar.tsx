@@ -25,11 +25,7 @@ import {
   List,
   CheckCircle,
   Circle,
-  Settings,
-  Target,
-  ArrowRight,
-  FolderOpen,
-  Folder
+  ArrowRight
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,6 +37,24 @@ import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
 import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
 
 /**
+ * 过滤文本内容，移除 section*(数字) 和 stage*(数字) 模式的字符串
+ */
+const filterSectionStageText = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  
+  // 移除各种可能的 section 和 stage 模式（不区分大小写）
+  // 支持格式：section1, section 1, section_1, section-1, Section1, SECTION1 等
+  return text
+    .replace(/section[\s_-]*\d+/gi, '')
+    .replace(/stage[\s_-]*\d+/gi, '')
+    .replace(/第?\s*\d+\s*章节?/gi, '') // 中文章节
+    .replace(/第?\s*\d+\s*阶段/gi, '') // 中文阶段
+    .replace(/^\s*[-:：]\s*/g, '') // 移除开头的分隔符
+    .replace(/\s+/g, ' ') // 将多个空格替换为单个空格
+    .trim(); // 去除首尾空格
+};
+
+/**
  * 可折叠的 Markdown 渲染组件。
  * 1. 默认仅显示一定行数（maxLines），并提供"展开/收起"按钮。
  * 2. 无需再区分是否是代码，任何输入都按 Markdown 进行渲染。
@@ -50,11 +64,14 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
   const toggleExpand = () => setIsExpanded(!isExpanded);
   const { t } = useTranslation();
 
-  if (!text || text.trim() === '') {
+  // 应用过滤函数
+  const filteredText = filterSectionStageText(text);
+
+  if (!filteredText || filteredText.trim() === '') {
     return <div className="text-sm text-gray-400 italic">{t('rightSideBar.noContent')}</div>;
   }
 
-  const lines = text.split('\n');
+  const lines = filteredText.split('\n');
   const exceedsMaxLines = lines.length > maxLines;
 
   return (
@@ -96,7 +113,7 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
             }
           }}
         >
-          {text}
+          {filteredText}
         </ReactMarkdown>
       </div>
 
@@ -269,7 +286,6 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
 const WorkflowTODOPanel = () => {
   const { t } = useTranslation();
   const {
-    isWorkflowActive,
     workflowTemplate,
     currentStageId,
     currentStepId,
@@ -287,16 +303,6 @@ const WorkflowTODOPanel = () => {
       [stageId]: !prev[stageId]
     }));
   }, []);
-
-  if (!isWorkflowActive || !workflowTemplate) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        <Target className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p className="text-sm">{t('rightSideBar.noWorkflowActive')}</p>
-        <p className="text-xs mt-1">{t('rightSideBar.startWorkflowFirst')}</p>
-      </div>
-    );
-  }
 
   const renderStageStep = (step, stageId) => {
     const isCompleted = completedSteps.includes(step.id);
@@ -319,13 +325,8 @@ const WorkflowTODOPanel = () => {
             isCurrent ? 'text-theme-700' : 
             isCompleted ? 'text-green-700' : 'text-gray-600'
           }`}>
-            {step.name || step.id}
+            {filterSectionStageText(step.name || step.id)}
           </div>
-          {step.description && (
-            <div className="text-xs text-gray-500 mt-0.5 break-words">
-              {step.description}
-            </div>
-          )}
           {hasResult && (
             <div className="text-xs text-blue-600 mt-1">
               ✓ {t('rightSideBar.stepCompleted')}
@@ -339,7 +340,7 @@ const WorkflowTODOPanel = () => {
   const renderStage = (stage) => {
     const isCompleted = completedStages.includes(stage.id);
     const isCurrent = currentStageId === stage.id;
-    const isExpanded = expandedStages[stage.id] || isCurrent;
+    const isExpanded = expandedStages[stage.id] || isCurrent; // 当前阶段自动展开
     const hasSteps = stage.steps && stage.steps.length > 0;
 
     return (
@@ -352,35 +353,20 @@ const WorkflowTODOPanel = () => {
           }`}
           onClick={() => hasSteps && toggleStage(stage.id)}
         >
-          <div className="flex-shrink-0">
-            {hasSteps ? (
-              isExpanded ? (
-                <FolderOpen className="w-5 h-5 text-gray-600" />
-              ) : (
-                <Folder className="w-5 h-5 text-gray-600" />
-              )
-            ) : (
-              isCompleted ? (
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              ) : isCurrent ? (
-                <div className="w-5 h-5 rounded-full border-2 border-theme-600 animate-pulse" />
-              ) : (
-                <Circle className="w-5 h-5 text-gray-400" />
-              )
-            )}
-          </div>
           <div className="flex-1 min-w-0">
-            <div className={`font-semibold text-sm break-words ${
-              isCurrent ? 'text-theme-800' : 
-              isCompleted ? 'text-green-800' : 'text-gray-700'
-            }`}>
-              {stage.name || stage.id}
-            </div>
-            {stage.description && (
-              <div className="text-xs text-gray-500 mt-0.5 break-words">
-                {stage.description}
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <div className={`font-semibold text-sm break-words ${
+                isCurrent ? 'text-theme-800' : 
+                isCompleted ? 'text-green-800' : 'text-gray-700'
+              }`}>
+                {filterSectionStageText(stage.name || stage.id)}
               </div>
-            )}
+              {isCurrent && (
+                <span className="text-xs px-2 py-0.5 bg-theme-200 text-theme-800 rounded-full font-medium">
+                  {t('rightSideBar.currentStage')}
+                </span>
+              )}
+            </div>
           </div>
           {hasSteps && (
             <div className="flex-shrink-0">
@@ -404,40 +390,6 @@ const WorkflowTODOPanel = () => {
 
   return (
     <div className="space-y-4 py-4">
-      {/* Workflow Overview */}
-      <div className="bg-white/10 rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Settings className="w-5 h-5 text-theme-600" />
-          <h3 className="font-semibold text-theme-800">
-            {t('rightSideBar.workflowOverview')}
-          </h3>
-        </div>
-        
-        {workflowAnalysis && (
-          <div className="text-sm text-gray-700 mb-3">
-            <div className="font-medium mb-1">{t('rightSideBar.objective')}:</div>
-            <div className="text-xs text-gray-600 break-words">
-              {workflowAnalysis.user_goal || workflowAnalysis.problem_description}
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="bg-white/20 rounded p-2">
-            <div className="font-medium text-gray-700">{t('rightSideBar.totalStages')}</div>
-            <div className="text-lg font-semibold text-theme-700">
-              {workflowTemplate.stages?.length || 0}
-            </div>
-          </div>
-          <div className="bg-white/20 rounded p-2">
-            <div className="font-medium text-gray-700">{t('rightSideBar.completed')}</div>
-            <div className="text-lg font-semibold text-green-600">
-              {completedStages.length}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Stages List */}
       <div className="space-y-2">
         <h4 className="font-semibold text-gray-800 flex items-center gap-2">

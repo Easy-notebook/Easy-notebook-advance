@@ -1025,7 +1025,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                         
                         <div className="mb-6">
                             <p className="text-gray-600 mb-3">
-                                The system has generated a new customized workflow with the following stages:
+                                According to your goal, PCS Agent has updated the TO-DO list:
                             </p>
                             
                             <div className="bg-gray-50 rounded p-4 max-h-60 overflow-y-auto">
@@ -1040,11 +1040,6 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                                     <div className="font-medium text-gray-900">
                                                         {stage.name || stage.id || `Stage ${index + 1}`}
                                                     </div>
-                                                    {stage.steps && (
-                                                        <div className="text-sm text-gray-500">
-                                                            {stage.steps.length} steps
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </li>
                                         ))}
@@ -1060,14 +1055,13 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 onClick={handleRejectWorkflowUpdate}
                                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
                             >
-                                Keep Current Workflow
+                                Reject
                             </button>
                             <button
                                 onClick={handleConfirmWorkflowUpdate}
                                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center"
                             >
-                                <CheckCircle className="w-4 h-4 mr-2" />
-                                Apply New Workflow
+                                Accept
                             </button>
                         </div>
                     </div>

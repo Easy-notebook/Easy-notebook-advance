@@ -220,18 +220,6 @@ const AgentList: React.FC<AgentListProps> = ({
           </div>
         </div>
       ))}
-      
-      {/* 如果没有活跃的agents，显示提示 */}
-      {Object.keys(agentMemories).length === 0 && (
-        <div className="px-4 py-6 text-center">
-          <div className="text-gray-400 text-sm">
-            No active agents yet
-          </div>
-          <div className="text-xs text-gray-400 mt-1">
-            Agents will appear after interaction
-          </div>
-        </div>
-      )}
     </div>
   );
 };

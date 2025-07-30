@@ -711,7 +711,7 @@ const NotebookApp = () => {
       )}
       
       {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
-      {viewMode === 'dslc' && <WorkflowControl 
+      {<WorkflowControl 
         fallbackIsExecuting={isExecuting}
         fallbackViewMode={viewMode}
         fallbackCurrentPhaseId={currentPhaseId}
