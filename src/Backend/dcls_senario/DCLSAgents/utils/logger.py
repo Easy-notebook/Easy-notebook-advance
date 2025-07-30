@@ -43,7 +43,7 @@ class ModernLogger:
     def __init__(
         self,
         name: str = "app",
-        level: str = "info",
+        level: str = "debug",
         log_file: Optional[str] = None,
         show_path: bool = False,
         rich_tracebacks: bool = True

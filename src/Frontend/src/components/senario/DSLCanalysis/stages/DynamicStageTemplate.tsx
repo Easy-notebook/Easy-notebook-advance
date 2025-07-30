@@ -53,7 +53,15 @@ class OperationQueue {
     }
 
     clear() {
-        this.queue.forEach(op => op._reject(new Error('Queue cleared')));
+        // Silently resolve pending operations instead of rejecting them
+        this.queue.forEach(op => {
+            try {
+                op._resolve(null); // Resolve with null instead of rejecting
+            } catch (error) {
+                // Ignore any errors from resolving
+                console.warn('Error resolving cleared operation:', error);
+            }
+        });
         this.queue = [];
         this.isProcessing = false;
     }
@@ -141,12 +149,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
     
     const currentStageConfig = getCurrentStageConfig();
     
-    // If no stage config available, show loading
-    if (!currentStageConfig) {
-        return <SkeletonLoader count={3} />;
-    }
-
-    const { id: stageId, steps, name: stageTitle } = currentStageConfig;
+    const { id: stageId, steps, name: stageTitle } = currentStageConfig || { id: '', steps: [], name: '' };
     const config = {
         stageId,
         steps,
@@ -155,7 +158,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         initialChecklist: {}
     };
 
-    const [currentStepId, setCurrentStepId] = useState(null);
+    const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [stepsLoaded, setStepsLoaded] = useState([]);
     const [error, setError] = useState(null);
     const [errorDetails, setErrorDetails] = useState(null);
@@ -166,6 +169,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
     const [autoAdvance, setAutoAdvance] = useState(true);
     const [isReturnVisit, setIsReturnVisit] = useState(false);
     const [historyLoaded, setHistoryLoaded] = useState(false);
+    const [workflowUpdated, setWorkflowUpdated] = useState(false);
+    const [workflowUpdateCount, setWorkflowUpdateCount] = useState(0);
+    const [pendingWorkflowUpdate, setPendingWorkflowUpdate] = useState(null);
+    const [showWorkflowConfirm, setShowWorkflowConfirm] = useState(false);
 
     // Save the latest step configuration and stageId
     const stepsRef = useRef(steps);
@@ -222,7 +229,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
     useEffect(() => {
         if (stageIdRef.current !== stageId) {
             console.log(`Stage ID changed from ${stageIdRef.current} to ${stageId}, resetting state`);
-            setCurrentStepId(steps?.[0]?.step_id || null);
+            setCurrentStepIndex(0);
             setStepsLoaded([]);
             setError(null);
             setErrorDetails(null);
@@ -233,6 +240,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
             setAutoAdvance(true);
             setIsReturnVisit(false);
             setHistoryLoaded(false);
+            setWorkflowUpdated(false);
+            setWorkflowUpdateCount(0);
+            setPendingWorkflowUpdate(null);
+            setShowWorkflowConfirm(false);
             initialLoadCalledRef.current = false;
             stageIdRef.current = stageId;
             stepsRef.current = steps;
@@ -250,47 +261,48 @@ const DynamicStageTemplate = ({ onComplete }) => {
         if (stepsChanged) {
             console.log('Steps configuration changed, updating...');
             stepsRef.current = steps;
-            
-            // 检查当前步骤是否仍然存在
-            const currentStepExists = steps.some(s => s.step_id === currentStepId);
-            if (!currentStepExists && steps.length > 0) {
-                setCurrentStepId(steps[0].step_id);
+            if (currentStepIndex >= steps.length) {
+                setCurrentStepIndex(steps.length - 1);
             }
-            
-            // 清理不存在的step loaded状态
-            setStepsLoaded(prevLoaded => 
-                prevLoaded.filter(stepId => steps.some(s => s.step_id === stepId))
-            );
-            
-            // 切换到当前步骤
-            if (currentStepId && currentStepRef.current !== currentStepId) {
-                debouncedSwitchStep(currentStepId);
+            setStepsLoaded(prevLoaded => prevLoaded.filter(index => index < steps.length));
+            if (currentStepIndex < steps.length &&
+                currentStepRef.current !== steps[currentStepIndex].step_id) {
+                debouncedSwitchStep(steps[currentStepIndex].step_id);
             }
         }
-    }, [stageId, steps, debouncedSwitchStep, clearStep, currentStepId, addVariable, setChecklist]);
+    }, [stageId, steps, debouncedSwitchStep, clearStep, currentStepIndex, addVariable, setChecklist]);
 
     const executeAction = useCallback(async (action) => {
-        return operationQueue.current.enqueue({
-            execute: async () => {
-                console.log(`Executing operation: ${action.action}`);
-                try {
-                    const output = await execAction(action);
-                    if (output) {
-                        console.log(`Operation result:`, output);
-                        addEffect(output);
+        try {
+            return await operationQueue.current.enqueue({
+                execute: async () => {
+                    console.log(`Executing operation: ${action.action}`);
+                    try {
+                        const output = await execAction(action);
+                        if (output) {
+                            console.log(`Operation result:`, output);
+                            addEffect(output);
+                        }
+                        return output;
+                    } catch (error) {
+                        console.error('Operation execution failed:', error);
+                        throw error;
                     }
-                    return output;
-                } catch (error) {
-                    console.error('Operation execution failed:', error);
-                    throw error;
-                }
-            },
-            delay: action.delay || 0
-        });
+                },
+                delay: action.delay || 0
+            });
+        } catch (error) {
+            // Handle queue cleared or other queue-related errors silently
+            if (error.message === 'Queue cleared') {
+                console.log('Operation cancelled due to queue clear');
+                return null;
+            }
+            throw error;
+        }
     }, [execAction, addEffect]);
 
     // ---------- Stream Request Processing (current step already updated in loadStep) ----------
-    const executeStepRequest = useCallback(async (stepId, controller, retryCount = 0) => {
+    const executeStepRequest = useCallback(async (stepIndex, stepId, controller, retryCount = 0) => {
         const MAX_RETRIES = 10; // 添加重试次数限制避免无限递归
         
         setIsLoading(true);
@@ -360,12 +372,12 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 endpoint: constants.API.SEQUENCE_API_URL,
                 context: {
                     stage_id: stageId,
-                    step_id: stepId
+                    step_index: stepId
                 }
             };
 
             console.error("API request error:", errorObj);
-            setError(`Step ${stepId} request failed: ${errorObj.message}`);
+            setError(`Step ${stepIndex + 1} request failed: ${errorObj.message}`);
             setErrorDetails(errorObj);
             setIsLoading(false);
             return;
@@ -386,7 +398,11 @@ const DynamicStageTemplate = ({ onComplete }) => {
                     if (lines[i].trim()) {
                         try {
                             const message = JSON.parse(lines[i]);
+                            console.log('=== STREAM MESSAGE RECEIVED ===');
+                            console.log('Raw message:', JSON.stringify(message, null, 2));
+                            
                             if (message.action) {
+                                console.log('Action type:', message.action.action);
                                 executeAction(message.action);
                                 if (!firstDataReceived) {
                                     setUiLoaded(true);
@@ -395,14 +411,90 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 if (message.action.state) {
                                     setContext(message.action.state);
                                 }
-                                // 处理workflow更新
+                                // Handle workflow updates
                                 if (message.action.updated_workflow) {
-                                    const updatedWorkflow = message.action.updated_workflow;
+                                    console.log('=== WORKFLOW UPDATE RECEIVED ===');
+                                    console.log('Raw workflow data:', JSON.stringify(message.action.updated_workflow, null, 2));
+                                    console.log('Workflow data type:', typeof message.action.updated_workflow);
+                                    console.log('Current pipeline store state:', usePipelineStore.getState());
                                     
-                                    // 直接使用后端返回的完整workflow
-                                    usePipelineStore.setState({ workflowTemplate: updatedWorkflow });
+                                    // Validate workflow structure
+                                    const workflow = message.action.updated_workflow;
+                                    if (!workflow) {
+                                        console.error('Workflow is null or undefined:', workflow);
+                                        setError('Empty workflow update received from backend');
+                                        return;
+                                    }
                                     
-                                    console.log('Workflow updated from backend:', updatedWorkflow);
+                                    if (!workflow.stages) {
+                                        console.error('Workflow has no stages property:', workflow);
+                                        setError('Workflow update missing stages information');
+                                        return;
+                                    }
+                                    
+                                    if (!Array.isArray(workflow.stages)) {
+                                        console.error('Workflow stages is not an array:', workflow.stages);
+                                        setError('Invalid workflow stages format');
+                                        return;
+                                    }
+                                    
+                                    console.log(`Workflow validation passed: ${workflow.stages.length} stages found`);
+                                    
+                                    // Store pending update and show confirmation
+                                    setPendingWorkflowUpdate(workflow);
+                                    setShowWorkflowConfirm(true);
+                                }
+                                
+                                // Handle current stage steps update
+                                if (message.action.action === 'update_stage_steps') {
+                                    console.log('=== STAGE STEPS UPDATE RECEIVED ===');
+                                    console.log('Stage update data:', JSON.stringify(message.action, null, 2));
+                                    
+                                    const stageId = message.action.stage_id;
+                                    const updatedSteps = message.action.updated_steps;
+                                    const nextStepId = message.action.next_step_id;
+                                    
+                                    if (stageId === stageIdRef.current) {
+                                        console.log(`Updating steps for current stage: ${stageId}`);
+                                        
+                                        // Update current workflow template with new steps for this stage
+                                        const currentState = usePipelineStore.getState();
+                                        const currentWorkflow = currentState.workflowTemplate;
+                                        
+                                        if (currentWorkflow && currentWorkflow.stages) {
+                                            const updatedWorkflow = {
+                                                ...currentWorkflow,
+                                                stages: currentWorkflow.stages.map(stage => 
+                                                    stage.id === stageId 
+                                                        ? { ...stage, steps: updatedSteps }
+                                                        : stage
+                                                )
+                                            };
+                                            
+                                            // Update pipeline store
+                                            usePipelineStore.setState({
+                                                workflowTemplate: updatedWorkflow
+                                            });
+                                            
+                                            console.log('Stage steps updated successfully');
+                                            
+                                            // Auto-navigate to first selected step if provided
+                                            if (nextStepId) {
+                                                console.log(`Auto-navigating to first step: ${nextStepId}`);
+                                                setTimeout(() => {
+                                                    // Find the step index
+                                                    const stepIndex = updatedSteps.findIndex(step => step.step_id === nextStepId);
+                                                    if (stepIndex >= 0) {
+                                                        setCurrentStepIndex(stepIndex);
+                                                        debouncedSwitchStep(nextStepId);
+                                                        console.log(`Successfully navigated to step ${stepIndex}: ${nextStepId}`);
+                                                    }
+                                                }, 100);
+                                            }
+                                        }
+                                    } else {
+                                        console.log(`Stage steps update for different stage: ${stageId}, current: ${stageIdRef.current}`);
+                                    }
                                 }
                             }
                             // Check for errors in message
@@ -440,14 +532,62 @@ const DynamicStageTemplate = ({ onComplete }) => {
                         setUiLoaded(true);
                         firstDataReceived = true;
                     }
-                    // 处理workflow更新
+                    // Handle workflow updates in last line
                     if (message.action.updated_workflow) {
-                        const updatedWorkflow = message.action.updated_workflow;
+                        console.log('Workflow update received (final):', message.action.updated_workflow);
                         
-                        // 直接使用后端返回的完整workflow
-                        usePipelineStore.setState({ workflowTemplate: updatedWorkflow });
+                        // Validate workflow structure
+                        const workflow = message.action.updated_workflow;
+                        if (!workflow || !workflow.stages || !Array.isArray(workflow.stages)) {
+                            console.error('Invalid workflow structure received (final):', workflow);
+                            setError('Invalid workflow update received from backend');
+                            return;
+                        }
                         
-                        console.log('Workflow updated from backend:', updatedWorkflow);
+                        // Store pending update and show confirmation (final)
+                        setPendingWorkflowUpdate(workflow);
+                        setShowWorkflowConfirm(true);
+                    }
+                    
+                    // Handle current stage steps update (final)
+                    if (message.action.action === 'update_stage_steps') {
+                        console.log('Stage steps update received (final):', message.action);
+                        
+                        const stageId = message.action.stage_id;
+                        const updatedSteps = message.action.updated_steps;
+                        const nextStepId = message.action.next_step_id;
+                        
+                        if (stageId === stageIdRef.current) {
+                            // Update current workflow template with new steps for this stage
+                            const currentState = usePipelineStore.getState();
+                            const currentWorkflow = currentState.workflowTemplate;
+                            
+                            if (currentWorkflow && currentWorkflow.stages) {
+                                const updatedWorkflow = {
+                                    ...currentWorkflow,
+                                    stages: currentWorkflow.stages.map(stage => 
+                                        stage.id === stageId 
+                                            ? { ...stage, steps: updatedSteps }
+                                            : stage
+                                    )
+                                };
+                                
+                                usePipelineStore.setState({
+                                    workflowTemplate: updatedWorkflow
+                                });
+                                
+                                // Auto-navigate to first selected step
+                                if (nextStepId) {
+                                    setTimeout(() => {
+                                        const stepIndex = updatedSteps.findIndex(step => step.step_id === nextStepId);
+                                        if (stepIndex >= 0) {
+                                            setCurrentStepIndex(stepIndex);
+                                            debouncedSwitchStep(nextStepId);
+                                        }
+                                    }, 100);
+                                }
+                            }
+                        }
                     }
                 }
             } catch (e) {
@@ -509,7 +649,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             if (!feedbackResult.targetAchieved) {
                 if (retryCount < MAX_RETRIES) {
                     console.log(`Target not achieved, retrying step (${retryCount + 1}/${MAX_RETRIES})`);
-                    await executeStepRequest(stepId, controller, retryCount + 1);
+                    await executeStepRequest(stepIndex, stepId, controller, retryCount + 1);
                     return;
                 } else {
                     console.log('Max retries reached, marking step as failed');
@@ -535,43 +675,37 @@ const DynamicStageTemplate = ({ onComplete }) => {
         }
     }, [executeAction, stageId, isReturnVisit, isStageComplete, getContext, setContext]);
 
-    // ---------- loadStep: Load step by step_id ----------
-    const loadStep = useCallback(async (stepId) => {
+    // ---------- loadStep: Pre-update the current step and mark it as loaded to ensure the new stepId takes effect promptly ----------
+    const loadStep = useCallback(async (stepIndex) => {
         const currentSteps = stepsRef.current;
-        const step = currentSteps.find(s => s.step_id === stepId);
-        if (!step) {
-            console.error(`Step ${stepId} not found in current steps`);
-            return;
-        }
-        
+        if (stepIndex >= currentSteps.length) return;
         operationQueue.current.clear();
         if (currentLoadStepControllerRef.current) {
             currentLoadStepControllerRef.current.abort();
         }
-        
         // Immediately update the current step and mark it as loaded
-        setCurrentStepId(stepId);
-        setStepsLoaded(prev => prev.includes(stepId) ? prev : [...prev, stepId]);
+        setCurrentStepIndex(stepIndex);
+        setStepsLoaded(prev => prev.includes(stepIndex) ? prev : [...prev, stepIndex]);
 
         setIsLoading(true);
         setStreamCompleted(false);
         setUiLoaded(false);
         setError(null);
         setErrorDetails(null);
-        
+        const stepId = currentSteps[stepIndex].step_id;
         debouncedSwitchStep(stepId);
         markStepIncomplete && markStepIncomplete(stepId);
 
         const controller = new AbortController();
         currentLoadStepControllerRef.current = controller;
         try {
-            await executeStepRequest(stepId, controller);
+            await executeStepRequest(stepIndex, stepId, controller);
         } catch (err) {
             if (err.name === 'AbortError') {
                 console.log("Step loading aborted");
             } else {
-                console.error(`Step ${stepId} loading failed:`, err);
-                const stepTitle = step.name || stepId;
+                console.error(`Step ${stepIndex + 1} loading failed:`, err);
+                const stepTitle = currentSteps[stepIndex].name || `Step ${stepIndex + 1}`;
                 setError(`${stepTitle} loading failed: ${err.message}`);
                 setErrorDetails({
                     message: err.message,
@@ -579,6 +713,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                     type: "Step loading error",
                     timestamp: new Date().toISOString(),
                     context: {
+                        step_index: stepIndex,
                         step_id: stepId
                     }
                 });
@@ -595,58 +730,54 @@ const DynamicStageTemplate = ({ onComplete }) => {
         const currentSteps = stepsRef.current;
         if (streamCompleted) {
             setIsLoading(false);
-            
-            // 找到当前步骤的索引
-            const currentStepIndex = currentSteps.findIndex(s => s.step_id === currentStepId);
-            const isLastStep = currentStepIndex === currentSteps.length - 1;
-            
-            if (isLastStep && autoAdvance) {
+            if (currentStepIndex === currentSteps.length - 1 && autoAdvance) {
                 setIsCompleted(true);
                 markStageAsComplete(stageId);
                 markStageCompleted(stageId);
-            } else if (autoAdvance && currentStepIndex >= 0) {
-                // 获取下一步的step_id
-                const nextStep = currentSteps[currentStepIndex + 1];
-                if (nextStep) {
-                    setTimeout(() => {
-                        loadStep(nextStep.step_id);
-                    }, 500);
-                }
+            } else if (autoAdvance) {
+                setTimeout(() => {
+                    loadStep(currentStepIndex + 1);
+                }, 500);
             }
         }
-    }, [streamCompleted, autoAdvance, currentStepId, loadStep, markStageAsComplete, markStageCompleted, stageId]);
+    }, [streamCompleted, autoAdvance, currentStepIndex, loadStep, markStageAsComplete, markStageCompleted, stageId]);
 
     useEffect(() => {
         if (isStageComplete && !historyLoaded) {
             const currentSteps = stepsRef.current;
             const lastStep = currentSteps[currentSteps.length - 1];
-            if (lastStep) {
-                debouncedSwitchStep(lastStep.step_id);
-                setCurrentStepId(lastStep.step_id);
-                setStepsLoaded(currentSteps.map(s => s.step_id));
-                setIsCompleted(true);
-                setAutoAdvance(false);
-                setHistoryLoaded(true);
-            }
+            debouncedSwitchStep(lastStep.step_id);
+            setCurrentStepIndex(currentSteps.length - 1);
+            setStepsLoaded(currentSteps.map((_, i) => i));
+            setIsCompleted(true);
+            setAutoAdvance(false);
+            setHistoryLoaded(true);
         }
     }, [historyLoaded, debouncedSwitchStep, isStageComplete]);
 
     useEffect(() => {
-        const currentSteps = stepsRef.current;
         if (!isStageComplete &&
             stepsLoaded.length === 0 &&
-            !currentStepId &&
+            currentStepIndex === 0 &&
             !initialLoadCalledRef.current &&
-            toDoList.length === 0 &&
-            currentSteps.length > 0) {
+            toDoList.length === 0) {
             initialLoadCalledRef.current = true;
-            const firstStep = currentSteps[0];
             // Use setTimeout to ensure this call is not executed within the rendering cycle
             setTimeout(() => {
-                loadStep(firstStep.step_id);
+                loadStep(0);
             }, 0);
         }
-    }, [stepsLoaded.length, currentStepId, loadStep, toDoList, isStageComplete, stageId]);
+    }, [stepsLoaded.length, currentStepIndex, loadStep, toDoList, isStageComplete, stageId]);
+
+    // Auto-hide workflow update notification after 5 seconds
+    useEffect(() => {
+        if (workflowUpdated) {
+            const timer = setTimeout(() => {
+                setWorkflowUpdated(false);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [workflowUpdateCount]);
 
     const handleContinue = useCallback(() => {
         console.log('handleContinue called:', { 
@@ -682,12 +813,12 @@ const DynamicStageTemplate = ({ onComplete }) => {
         }
     }, [isCompleted, autoAdvance, isReturnVisit, setContinueCountdown]);
 
-    const navigateToStep = (stepId) => {
-        if (currentStepId === stepId) return;
+    const navigateToStep = (stepIndex) => {
+        if (currentStepIndex === stepIndex) return;
         if (operationQueue.current.active) return;
         setAutoAdvance(false);
         setTimeout(() => {
-            loadStep(stepId);
+            loadStep(stepIndex);
         }, 0);
     };
 
@@ -702,6 +833,49 @@ const DynamicStageTemplate = ({ onComplete }) => {
         cancelCountdown();
         setAutoAdvance(false);
     }, [cancelCountdown]);
+
+    // Handle workflow update confirmation
+    const handleConfirmWorkflowUpdate = useCallback(() => {
+        if (pendingWorkflowUpdate) {
+            const currentState = usePipelineStore.getState();
+            console.log('Before workflow update - current state:', currentState);
+            
+            // Get first stage from new workflow
+            const firstStage = pendingWorkflowUpdate.stages?.[0];
+            if (!firstStage) {
+                console.error('No stages found in workflow update');
+                return;
+            }
+            
+            console.log('First stage to navigate to:', firstStage);
+            
+            usePipelineStore.setState({ 
+                workflowTemplate: pendingWorkflowUpdate,
+                isWorkflowActive: true,
+                currentStageId: firstStage.id,
+                currentStage: firstStage.id,
+                currentStepIndex: 0,
+                completedSteps: [],
+                completedStages: []
+            });
+            
+            const newState = usePipelineStore.getState();
+            console.log('After workflow update - new state:', newState);
+            
+            setWorkflowUpdated(true);
+            setWorkflowUpdateCount(prev => prev + 1);
+            setShowWorkflowConfirm(false);
+            setPendingWorkflowUpdate(null);
+            
+            console.log('Workflow update applied and navigated to first stage:', firstStage.id);
+        }
+    }, [pendingWorkflowUpdate]);
+
+    const handleRejectWorkflowUpdate = useCallback(() => {
+        console.log('Workflow update rejected by user');
+        setShowWorkflowConfirm(false);
+        setPendingWorkflowUpdate(null);
+    }, []);
 
     // Use refs to store latest function references to avoid infinite loops
     const handleTerminateRef = useRef(handleTerminate);
@@ -809,28 +983,107 @@ const DynamicStageTemplate = ({ onComplete }) => {
         );
     };
 
+    // If no stage config available, show loading
+    if (!currentStageConfig) {
+        return <SkeletonLoader count={3} />;
+    }
+
     return (
         <div className="w-full h-full overflow-y-auto">
+            {/* Workflow Update Confirmation Dialog */}
+            {showWorkflowConfirm && pendingWorkflowUpdate && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl mx-4">
+                        <div className="flex items-center mb-4">
+                            <AlertCircle className="w-6 h-6 text-blue-500 mr-3" />
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                Workflow Update Available
+                            </h3>
+                        </div>
+                        
+                        <div className="mb-6">
+                            <p className="text-gray-600 mb-3">
+                                The system has generated a new customized workflow with the following stages:
+                            </p>
+                            
+                            <div className="bg-gray-50 rounded p-4 max-h-60 overflow-y-auto">
+                                {pendingWorkflowUpdate.stages && pendingWorkflowUpdate.stages.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {pendingWorkflowUpdate.stages.map((stage, index) => (
+                                            <li key={stage.id || index} className="flex items-center">
+                                                <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
+                                                    {index + 1}
+                                                </span>
+                                                <div>
+                                                    <div className="font-medium text-gray-900">
+                                                        {stage.name || stage.id || `Stage ${index + 1}`}
+                                                    </div>
+                                                    {stage.steps && (
+                                                        <div className="text-sm text-gray-500">
+                                                            {stage.steps.length} steps
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-gray-500">No stages information available</p>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="flex justify-end space-x-3">
+                            <button
+                                onClick={handleRejectWorkflowUpdate}
+                                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                            >
+                                Keep Current Workflow
+                            </button>
+                            <button
+                                onClick={handleConfirmWorkflowUpdate}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center"
+                            >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Apply New Workflow
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Workflow Update Success Notification */}
+            {workflowUpdated && (
+                <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg animate-pulse">
+                    <div className="flex items-center">
+                        <CheckCircle className="w-5 h-5 mr-2" />
+                        <span className="font-medium">
+                            Workflow Updated ({workflowUpdateCount} {workflowUpdateCount === 1 ? 'time' : 'times'})
+                        </span>
+                    </div>
+                </div>
+            )}
+            
             {(
-                <div className="sticky top-4 z-50 bg-blue-50 bg-opacity-20 backdrop-blur-lg">
+                <div className="sticky top-4 z-40 bg-blue-50 bg-opacity-20 backdrop-blur-lg">
                     <div className="border-b border-gray-100 mb-4">
                         <div className="max-w-screen-xl mx-auto overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
                             <div className="flex">
                                 {currentSteps.map((step, index) => (
                                     <button
-                                        key={step.step_id}
-                                        onClick={() => { if (isCompleted) { navigateToStep(step.step_id) } }}
+                                        key={step.id}
+                                        onClick={() => { if (isCompleted) { navigateToStep(index) } }}
                                         className={`
                                         flex items-center py-3 px-4 
                                         transition-colors whitespace-nowrap 
                                         focus:outline-none
-                                        ${currentStepId === step.step_id
+                                        ${currentStepIndex === index
                                                 ? 'text-theme-600 border-b-2 border-theme-500 bg-theme-50/50'
                                                 : 'text-gray-600 hover:bg-gray-100'
                                             } 
                                 ${!isCompleted ? 'opacity-50 cursor-not-allowed' : ''}
                                 `}
-                                        aria-selected={currentStepId === step.step_id}
+                                        aria-selected={currentStepIndex === index}
                                         disabled={!isCompleted}
                                     >
                                         <div
@@ -838,13 +1091,13 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                             w-6 h-6 
                                             flex items-center justify-center 
                                             rounded-full mr-2
-                                            ${currentStepId === step.step_id
+                                            ${currentStepIndex === index
                                                     ? 'bg-theme-100 text-theme-600'
                                                     : 'bg-gray-200 text-gray-600'
                                                 }
                                         `}
                                         >
-                                            {stepsLoaded.includes(step.step_id) ? (
+                                            {stepsLoaded.includes(index) ? (
                                                 <CheckCircle size={14} />
                                             ) : (
                                                 <span className="text-xs font-semibold">{index + 1}</span>
@@ -869,13 +1122,13 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 </div>
                             ) : (
                                 <div className="overflow-y-auto">
-                                    {stepsLoaded.includes(currentStepId) && currentStepId ? (
+                                    {stepsLoaded.includes(currentStepIndex) && currentStepIndex < currentSteps.length ? (
                                         <PersistentStepContainer
                                             showRemoveButton={false}
                                             autoScroll={true}
                                             className="content-start"
                                             emptyState={<EmptyState />}
-                                            stepId={currentStepId}
+                                            stepId={currentSteps[currentStepIndex].step_id}
                                         />
                                     ) : (
                                         <EmptyState />
@@ -892,7 +1145,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 setError(null);
                                 setErrorDetails(null);
                                 setTimeout(() => {
-                                    loadStep(currentStepId);
+                                    loadStep(currentStepIndex);
                                 }, 0);
                             }}
                             onDismiss={() => {

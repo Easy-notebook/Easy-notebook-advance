@@ -217,8 +217,9 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         // 添加变量到规划上下文
         addVariable('csv_file_path', currentFile?.name);
         addVariable('problem_description', problem_description);
-        addVariable('context_description', datasetBackground);
+        addVariable('context_description', datasetBackground || 'No additional context provided');
         addVariable('problem_name', problem_name);
+        addVariable('user_goal', problem_description); // 使用problem_description作为user_goal
         
         // 设置背景信息到store
         if (datasetBackground) {

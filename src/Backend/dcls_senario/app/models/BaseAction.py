@@ -187,15 +187,19 @@ class BaseAction(StepTemplate):
         for stage_id in selected_stages:
             stage_info = available_chapters[stage_id]
             
+            # Get first section for this stage (only show first step, others added dynamically)
+            stage_sections = stage_info.get("sections", [])
+            first_section = stage_sections[0] if stage_sections else "section_1_workflow_initialization"
+            
             workflow_config["stages"].append({
                 "id": stage_id,
                 "name": stage_info["name"],
                 "description": stage_info["description"],
                 "steps": [{
-                    "id": "section_1_workflow_initialization",
-                    "step_id": "section_1_workflow_initialization",
-                    "name": "Workflow Initialization",
-                    "description": "Initialize workflow for this stage"
+                    "id": first_section,
+                    "step_id": first_section,
+                    "name": first_section.replace("_", " ").title(),
+                    "description": f"Execute {first_section} workflow step"
                 }]
             })
         
@@ -207,6 +211,7 @@ class BaseAction(StepTemplate):
             "selected_stages": selected_stages,
             "workflow_config": workflow_config,
             "initial_state": initial_state,
+            "stage_execution_plan": [],  # Add missing field
             "message": f"已初始化包含 {len(selected_stages)} 个阶段的workflow，每个阶段包含初始化step"
         }
     
@@ -268,6 +273,18 @@ class BaseAction(StepTemplate):
         
         # 更新状态
         self.state["current_workflow"] = current_workflow
+        
+        # 只发送当前阶段的步骤更新，不影响其他阶段
+        stage_update = {
+            "action": "update_stage_steps",
+            "stage_id": current_stage_id,
+            "updated_steps": new_steps,
+            "next_step_id": new_steps[0]["step_id"] if new_steps else None  # 第一个步骤作为跳转目标
+        }
+        
+        # 添加阶段步骤更新action
+        self.actions.append(stage_update)
+        
         return self
     
     def run(self) -> Dict[str, Any]:

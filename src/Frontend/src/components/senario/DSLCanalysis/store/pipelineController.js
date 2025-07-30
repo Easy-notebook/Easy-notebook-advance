@@ -1,6 +1,5 @@
 // pipelineController.js
 import { create } from 'zustand';
-import workflowAPIClient from '../services/WorkflowAPIClient';
 import { contextSummarizer } from '../utils/contextSummarizer';
 
 // Define initial pipeline stages (will be updated dynamically from backend)
@@ -131,33 +130,55 @@ const usePipelineStore = create((set, get) => ({
         });
     },
 
-    // Initialize workflow with planning (based on existence first principles)
+    // Initialize workflow with static chapter_0_planning stage
     initializeWorkflow: async (planningRequest) => {
         try {
-            // Generate customized workflow planning from backend
-            const response = await workflowAPIClient.generatePlanning(planningRequest);
-            const planning = response.planning || response; // Handle both response formats
+            // Create static workflow template with only chapter_0_planning
+            const planning = {
+                id: "vds_agents_static_planning",
+                name: "VDS Agents Planning Workflow",
+                description: "Initial planning stage using PCS agent",
+                version: "2.0",
+                stages: [
+                    {
+                        id: 'chapter_0_planning',
+                        name: 'Workflow Planning',
+                        description: 'PCS agent designs customized workflow based on user goals',
+                        steps: [
+                            {
+                                id: 'section_1_design_workflow',
+                                step_id: 'section_1_design_workflow',
+                                name: 'Design Workflow',
+                                description: 'Analyze user goals and design optimal workflow using existence first principles'
+                            }
+                        ]
+                    }
+                ],
+                analysis: {
+                    promise: "PCS agent will analyze your goals and design an optimal workflow",
+                    minimal_workflow: ["Workflow Planning"]
+                },
+                execution_strategy: "sequential",
+                customization_reason: "Initial planning phase to determine optimal workflow"
+            };
             
             set({
                 isWorkflowActive: true,
                 workflowTemplate: planning,
-                currentStageId: planning.stages?.[0]?.id || null,
-                currentStage: planning.stages?.[0]?.id || PIPELINE_STAGES.EMPTY,
-                workflowAnalysis: response.workflow_analysis || null
+                currentStageId: 'chapter_0_planning',
+                currentStage: 'chapter_0_planning',
+                workflowAnalysis: planning.analysis
             });
 
-            // Update dynamic stages based on planning
-            if (planning.stages) {
-                const dynamicStages = {};
-                planning.stages.forEach(stage => {
-                    dynamicStages[stage.id.toUpperCase()] = stage.id;
-                });
-                PIPELINE_STAGES = { ...INITIAL_PIPELINE_STAGES, ...dynamicStages };
-            }
+            // Update dynamic stages
+            PIPELINE_STAGES = { 
+                ...INITIAL_PIPELINE_STAGES, 
+                CHAPTER_0_PLANNING: 'chapter_0_planning' 
+            };
             
             return planning;
         } catch (error) {
-            console.error('Failed to initialize workflow with planning:', error);
+            console.error('Failed to initialize workflow:', error);
             throw error;
         }
     },
@@ -253,104 +274,116 @@ const usePipelineStore = create((set, get) => ({
         set({ currentAgentActivity: activity });
     },
 
-    // Execute workflow step (stateless - provide all context to backend)
+    // Execute workflow step (local frontend execution for planning stage)
     executeWorkflowStep: async (stepRequest) => {
         try {
             const state = get();
             
-            // 优化前端状态以减少传输大小
-            const optimizedFrontendState = contextSummarizer.optimizeContextForTransmission({
-                completed_steps: state.completedSteps,
-                completed_stages: state.completedStages,
-                step_results: state.stepResults,
-                stage_results: state.stageResults,
-                agent_thinking_history: state.agentThinkingHistory,
-                current_stage_id: state.currentStageId,
-                current_step_id: state.currentStepId
-            });
-            
-            // Prepare full context for stateless backend
-            const fullStepRequest = {
-                ...stepRequest,
-                context: stepRequest.context,
-                variables: stepRequest.variables,
-                frontend_state: optimizedFrontendState
-            };
+            // For chapter_0_planning, we execute the step directly
+            if (state.currentStageId === 'chapter_0_planning') {
+                console.log('Executing planning step locally:', stepRequest);
+                
+                // Simulate step execution result for planning stage
+                const result = {
+                    step_result: {
+                        status: 'completed',
+                        output: 'Workflow planning completed',
+                        generated_stages: stepRequest.generated_stages || []
+                    },
+                    agent_thinking: {
+                        agent_name: 'PCS Agent',
+                        activity: 'Planning workflow based on user goals',
+                        confidence_level: 0.95
+                    }
+                };
+                
+                // Update frontend state based on result
+                if (result.step_result) {
+                    get().updateStepResult(stepRequest.step_id, result.step_result);
+                }
 
-            // Execute step via stateless backend
-            const result = await workflowAPIClient.executeStep(fullStepRequest);
-            
-            // Update frontend state based on result
-            if (result.step_result) {
-                get().updateStepResult(stepRequest.step_id, result.step_result);
+                // Handle agent thinking updates
+                if (result.agent_thinking) {
+                    get().addAgentThinking(result.agent_thinking.agent_name, result.agent_thinking);
+                }
+
+                return result;
             }
-
-            // Handle agent thinking updates
-            if (result.agent_thinking) {
-                get().addAgentThinking(result.agent_thinking.agent_name, result.agent_thinking);
-            }
-
-            return result;
+            
+            // For other stages, we would need to implement actual execution
+            throw new Error('Workflow step execution not implemented for non-planning stages');
         } catch (error) {
             console.error('Failed to execute workflow step:', error);
             throw error;
         }
     },
 
-    // Get next step suggestion from backend (stateless)
+    // Get next step suggestion (frontend logic for planning stage)
     getNextStepSuggestion: async () => {
         try {
             const state = get();
             
-            const currentContext = {
-                current_stage: state.currentStageId,
-                current_step: state.currentStepId,
-                step_results: state.stepResults,
-                context: state.stageData,
-                variables: state.stageData
+            // For planning stage, suggest completion
+            if (state.currentStageId === 'chapter_0_planning') {
+                return {
+                    should_proceed: true,
+                    next_step: null,
+                    message: 'Planning stage completed, ready to execute planned workflow'
+                };
+            }
+            
+            return {
+                should_proceed: false,
+                next_step: null,
+                message: 'No next step suggestion available'
             };
-
-            return await workflowAPIClient.getNextStepSuggestion(currentContext);
         } catch (error) {
             console.error('Failed to get next step suggestion:', error);
             throw error;
         }
     },
 
-    // Get stage transition suggestion from backend (stateless)
+    // Get stage transition suggestion (frontend logic)
     getStageTransitionSuggestion: async () => {
         try {
             const state = get();
             
-            const currentContext = {
-                current_stage: state.currentStageId,
-                completed_steps: state.completedSteps,
-                context: state.stageData,
-                variables: state.stageData,
-                stage_results: state.stageResults
+            // For planning stage, suggest transition to actual data analysis stages
+            if (state.currentStageId === 'chapter_0_planning') {
+                return {
+                    should_proceed: true,
+                    next_stage: 'chapter_1_data_existence_establishment',
+                    next_stage_name: 'Data Existence Establishment',
+                    message: 'Planning completed, ready to start data analysis workflow',
+                    confidence: 0.95
+                };
+            }
+            
+            return {
+                should_proceed: false,
+                next_stage: null,
+                message: 'Stage transition not available'
             };
-
-            return await workflowAPIClient.getStageTransitionSuggestion(currentContext);
         } catch (error) {
             console.error('Failed to get stage transition suggestion:', error);
             throw error;
         }
     },
 
-    // Validate step completion (stateless)
+    // Validate step completion (frontend logic)
     validateStepCompletion: async (stepId) => {
         try {
             const state = get();
             
-            const validationRequest = {
-                stage_id: state.currentStageId,
-                step_id: stepId,
-                step_results: state.stepResults[stepId],
-                context: state.stageData,
-                variables: state.stageData
+            // Simple validation - check if step has results
+            const hasResults = state.stepResults[stepId] !== undefined;
+            
+            return {
+                step_completed: hasResults,
+                stage_completed: hasResults && state.currentStageId === 'chapter_0_planning',
+                confidence: hasResults ? 1.0 : 0.0,
+                message: hasResults ? 'Step completed successfully' : 'Step needs completion'
             };
-
-            return await workflowAPIClient.validateStepCompletion(validationRequest);
         } catch (error) {
             console.error('Failed to validate step completion:', error);
             throw error;

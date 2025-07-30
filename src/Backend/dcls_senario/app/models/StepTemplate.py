@@ -89,6 +89,21 @@ class StepTemplate:
         self.actions.append(action)
         return self
     
+    def update_workflow(self, workflow_data: Dict[str, Any]):
+        """
+        添加工作流更新action，前端会通过 message.action.updated_workflow 访问
+        
+        Args:
+            workflow_data: 更新后的工作流配置数据
+        """
+        action = {
+            "action": "update_workflow",
+            "updated_workflow": workflow_data,
+            "state": self._get_context()
+        }
+        self.actions.append(action)
+        return self
+    
     def set_effect_as_thinking(self, thinkingText: str = "finished thinking"):
         action = {
             "action": "set_effect_as_thinking",

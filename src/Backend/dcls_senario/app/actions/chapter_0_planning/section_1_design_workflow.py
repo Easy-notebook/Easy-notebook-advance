@@ -1,0 +1,106 @@
+from typing import Dict, Any, Optional
+from app.models.BaseAction import BaseAction, event, thinking
+from app.core.config import llm, PCSAgent
+
+
+class DesignWorkflow(BaseAction):
+    def __init__(self, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):
+        super().__init__(step, state, stream,
+            chapter_id="chapter_0_planning",
+            section_id="section_1_design_workflow", 
+            name="DesignWorkflow",
+            ability="Design a customized workflow based on existence first principles.",
+            require_variables=["problem_name", "user_goal", "problem_description", "context_description"],
+            )
+    
+    @event("start")
+    def generate_workflow(self):
+        return self.update_title(f"{self.input["problem_name"]}: Data Science Analysis") \
+                    .add_text("I will analyze your goal and design a customized workflow based on existence first principles.") \
+                    .next_thinking_event(event_tag="generate_workflow_thinking",
+                                        textArray=["PCS Agent is analyzing your goal...","Applying existence first principles...","Designing optimal workflow..."])\
+                    .end_event()
+    
+    @thinking("generate_workflow_thinking")
+    def generate_workflow_thinking(self):
+        # Define mapping from Chinese stage names to English chapter IDs
+        stage_name_mapping = {
+            "Data Existence Establishment": "chapter_1_data_existence_establishment",
+            "Data Integrity Assurance": "chapter_2_data_integrity_assurance", 
+            "Data Insight Acquisition": "chapter_3_data_insight_acquisition",
+            "Methodology Strategy Formulation": "chapter_4_methodology_strategy_formulation",
+            "Model Implementation Execution": "chapter_5_model_implementation_execution",
+            "Stability Validation": "chapter_6_stability_validation",
+            "Results Evaluation Confirmation": "chapter_7_results_evaluation_confirmation"
+        }
+        
+        pcs_agent = PCSAgent(problem_description=self.input["problem_description"], context_description=self.input["context_description"], llm=llm)
+        workflow_analysis = pcs_agent.generate_workflow_cli(self.input["user_goal"], self.input["problem_description"], self.input["context_description"])
+        
+        # The PCS agent returns "minimal_workflow" not "selected_stages"
+        selected_stages_raw = workflow_analysis.get("minimal_workflow", workflow_analysis.get("selected_stages", []))
+        
+        # Map Chinese stage names to English chapter IDs
+        selected_stages = []
+        for stage in selected_stages_raw:
+            mapped_stage = stage_name_mapping.get(stage, stage)
+            selected_stages.append(mapped_stage)
+        workflow_result = {}  # Initialize workflow_result
+        
+        if selected_stages:
+            workflow_result = self.initial_workflow_stages(selected_stages)
+            stage_execution_plan = workflow_result.get("stage_execution_plan", [])
+            if stage_execution_plan:
+                self.update_stage_steps(stage_execution_plan)
+        else:
+            # Fallback if no stages selected
+            self.add_text("警告：没有选择任何workflow阶段")
+            print(f"DEBUG: workflow_analysis = {workflow_analysis}")
+
+        
+        # Get the final workflow state to return to frontend
+        # Don't use self.state.get("current_workflow") as it might contain invalid data
+        final_workflow = workflow_result.get("workflow_config", {})
+        
+        # Debug logging
+        print(f"DEBUG: workflow_result = {workflow_result}")
+        print(f"DEBUG: workflow_result type = {type(workflow_result)}")
+        print(f"DEBUG: final_workflow = {final_workflow}")
+        print(f"DEBUG: final_workflow type = {type(final_workflow)}")
+        
+        # Ensure we have a valid workflow structure
+        if not final_workflow or not isinstance(final_workflow, dict) or not final_workflow.get("stages"):
+            print("WARNING: final_workflow is empty, invalid type, or has no stages, creating fallback workflow")
+            final_workflow = {
+                "id": "fallback_workflow",
+                "name": "Default VDS Workflow",
+                "description": "Fallback workflow configuration",
+                "stages": [
+                    {
+                        "id": "chapter_0_planning",
+                        "name": "Planning & Analysis",
+                        "description": "Initial problem analysis and workflow planning",
+                        "steps": [
+                            {
+                                "id": "section_1_design_workflow",
+                                "step_id": "section_1_design_workflow",
+                                "name": "Design Workflow",
+                                "description": "Design customized workflow based on requirements"
+                            }
+                        ]
+                    }
+                ]
+            }
+        
+        print(f"DEBUG: Final workflow to be sent = {final_workflow}")
+        print(f"DEBUG: Final workflow type = {type(final_workflow)}")
+        
+        self.finish_thinking()
+        self.add_text(workflow_analysis.get("promise", f"Based on your goal: {self.input['user_goal']}, I will execute the necessary stages to deliver your requirements."))
+        self.add_text("Workflow has been successfully configured with the selected stages and execution plan.")
+        self.update_workflow(final_workflow)
+        
+        return self.end_event()
+
+def generate_workflow(step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):
+    return DesignWorkflow(step, state, stream).run()

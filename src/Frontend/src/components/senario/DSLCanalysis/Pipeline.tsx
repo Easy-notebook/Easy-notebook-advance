@@ -103,35 +103,8 @@ const DSLCPipeline = ({onAddCell}) => {
                                     
                                 } catch (error) {
                                     console.error('Failed to initialize workflow with planning:', error);
-                                    console.log('Planning API not available, using mock workflow for development');
-                                    
-                                    // Create a mock workflow state for development/testing
-                                    const mockTemplate = {
-                                        id: "vds_agents_mock_planning",
-                                        name: "VDS Agents Mock Workflow",
-                                        description: "Mock data science workflow for development",
-                                        version: "2.0",
-                                        stages: [
-                                            { id: 'chapter_1_data_existence_establishment', name: 'Data Existence Establishment', steps: [] },
-                                            { id: 'chapter_3_data_insight_acquisition', name: 'Data Insight Acquisition', steps: [] },
-                                            { id: 'chapter_5_model_implementation_execution', name: 'Model Implementation Execution', steps: [] }
-                                        ],
-                                        analysis: {
-                                            promise: "Mock workflow for development and testing",
-                                            minimal_workflow: ["Data Existence Establishment", "Data Insight Acquisition", "Model Implementation Execution"]
-                                        },
-                                        execution_strategy: "sequential",
-                                        customization_reason: "Mock workflow for development/testing"
-                                    };
-                                    
-                                    // Manually set the state for fallback
-                                    usePipelineStore.setState({
-                                        isWorkflowActive: true,
-                                        workflowTemplate: mockTemplate,
-                                        workflowAnalysis: mockTemplate.analysis,
-                                        currentStage: 'chapter_1_data_existence_establishment',
-                                        currentStageId: 'chapter_1_data_existence_establishment'
-                                    });
+                                    // The static planning workflow should always work, so this is an unexpected error
+                                    throw error;
                                 }
                             } else {
                                 console.log('Workflow already active, transitioning to first stage');

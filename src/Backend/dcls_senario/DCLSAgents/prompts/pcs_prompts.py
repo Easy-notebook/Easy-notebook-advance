@@ -87,13 +87,13 @@ Your core method: **Reason backwards from the final goal**, identifying the nece
 
 The project operates in five progressive stages, each with specific deliverables:
 
-* {Data Existence Establishment} – Establishes variable definitions, observation units, relevance analysis, and forms the PCS hypothesis.
-* {Data Integrity Assurance} – Ensures the dataset is clean, complete, and structurally valid.
-* {Data Insight Acquisition} – Extracts exploratory data analysis (EDA) summaries and builds structured data understanding.
-* {Methodology Strategy Formulation} – Designs feature engineering, modeling methods, and training strategies aligned with the goal.
-* {Model Implementation Execution} – Executes model training and generates intermediate results for evaluation.
-* {Stability Validation} – Validates the robustness and generalizability of the model under varied conditions.
-* {Results Evaluation Confirmation} – Confirms effectiveness through a final DCLS report and provides actionable recommendations.
+* {{Data Existence Establishment}} – Establishes variable definitions, observation units, relevance analysis, and forms the PCS hypothesis.
+* {{Data Integrity Assurance}} – Ensures the dataset is clean, complete, and structurally valid.
+* {{Data Insight Acquisition}} – Extracts exploratory data analysis (EDA) summaries and builds structured data understanding.
+* {{Methodology Strategy Formulation}} – Designs feature engineering, modeling methods, and training strategies aligned with the goal.
+* {{Model Implementation Execution}} – Executes model training and generates intermediate results for evaluation.
+* {{Stability Validation}} – Validates the robustness and generalizability of the model under varied conditions.
+* {{Results Evaluation Confirmation}} – Confirms effectiveness through a final DCLS report and provides actionable recommendations.
 
 ---
 
@@ -101,9 +101,9 @@ The project operates in five progressive stages, each with specific deliverables
 
 Given the user’s goal and background, analyze the *precise* needs using existential dependency chains.
 
-**User Goal**: {user\_goal}
-**Project Description**: {problem\_description}
-**Data Context**: {context\_description}
+**User Goal**: {user_goal}
+**Project Description**: {problem_description}
+**Data Context**: {context_description}
 
 ---
 
@@ -125,26 +125,10 @@ Only reason based on the user’s specific goal. Do *not* generalize to typical 
 ### Output Format:
 
 ```json
-{
-  "target_analysis": "Clear interpretation of the user's specific goal and desired outcome.",
-  "existence_chain": [
-    {
-      "state": "The final required state",
-      "depends_on": "The prerequisite state(s) needed to reach it",
-      "provided_by": "The stage that delivers the prerequisite state"
-    }
-  ],
-  "stage_dependencies": {
-    "Problem Definition": {
-      "provides": ["States this stage delivers"],
-      "depends_on": ["States it depends on, if any"],
-      "necessity": "Is this stage required? Why or why not?"
-    }
-    // ...repeat for other stages
-  },
+{{  "target_analysis": "Clear interpretation of the user's specific goal and desired outcome.",
   "minimal_workflow": ["List of stages that must be executed in order"],
   "promise": "Based on the goal of {user_goal}, I will need to..., which corresponds to executing the ... stage to obtain..., then..., and finally I will deliver..."
-}
+}}
 ```
 """
 

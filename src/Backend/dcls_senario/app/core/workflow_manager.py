@@ -3,6 +3,13 @@ from typing import Dict, Any, List, Optional
 class WorkflowManager:
     # 定义可用章节和对应的actions
     AVAILABLE_CHAPTERS = {
+        "chapter_0_planning": {
+            "name": "Workflow Planning",
+            "description": "PCS agent designs customized workflow based on user goals using existence first principles",
+            "sections": [
+                "section_1_design_workflow"
+            ]
+        },
         "chapter_1_data_existence_establishment": {
             "name": "Data Existence Establishment",
             "description": "Establish variable definitions, observation units, and PCS hypothesis",
