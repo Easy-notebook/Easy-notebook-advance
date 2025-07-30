@@ -132,6 +132,7 @@ const DSLCPipeline = ({onAddCell}) => {
                     animationDirection={animationDirection}
                 >
                     <DynamicStageTemplate
+                        key={currentStage} // Add key to prevent unnecessary remounts
                         onComplete={async () => {
                             console.log(`Stage ${currentStage} completed`);
                             console.log('Current workflow template:', workflowTemplate);

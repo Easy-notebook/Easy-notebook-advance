@@ -1,6 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { CheckCircle, AlertCircle, Target, TargetIcon } from 'lucide-react';
-import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
+import React from 'react';
+import { CheckCircle, AlertCircle, Target} from 'lucide-react';
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
 
 interface WorkflowPanelProps {
@@ -167,10 +166,10 @@ const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
       {currentSteps.length > 0 && (
         <div className="sticky top-4 z-40 bg-blue-50 bg-opacity-20 backdrop-blur-lg">
           {/* Stage Info and Tracking Controls */}
-          <div className="border-b border-gray-100 px-4 py-2">
-            <div className="flex items-center justify-between text-sm">
+          {/* <div className="border-b border-gray-100 px-4 py-2">
+            <div className="flex items-center justify-between text-sm"> */}
               {/* Left: Current Stage */}
-              <div className="flex items-center space-x-4">
+              {/* <div className="flex items-center space-x-4">
                 <span className="text-gray-600">
                   {currentStage || `Step ${currentStepIndex + 1} of ${currentSteps.length}`}
                 </span>
@@ -180,10 +179,10 @@ const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
                     {plannedSteps.length > 2 && ` +${plannedSteps.length - 2}`}
                   </span>
                 )}
-              </div>
+              </div> */}
 
               {/* Right: Tracking Toggle */}
-              <button
+              {/* <button
                 onClick={toggleAutoTracking}
                 className={`
                   flex items-center px-2 py-1 text-xs rounded transition-colors
@@ -199,7 +198,7 @@ const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
               </button>
             </div>
           </div>
-          
+           */}
           {/* Step Navigation */}
           <div className="border-b border-gray-100 mb-4">
             <div className="max-w-screen-xl mx-auto overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">

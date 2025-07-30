@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
 import { CheckCircle, AlertCircle, XCircle, RefreshCw } from 'lucide-react';
 import PersistentStepContainer from '../cells/GrowingCellContainer';
 import { useScriptStore } from '../store/useScriptStore';
@@ -41,31 +41,69 @@ class OperationQueue {
         const operation = this.queue.shift();
         this.currentOperation = operation;
         try {
+            // Check if operation was cancelled before execution
+            if (operation.cancelled) {
+                console.log('Skipping cancelled operation');
+                operation._resolve({ cancelled: true, message: 'Operation was cancelled' });
+                setTimeout(() => this.processNext(), constants.DELAY.OPERATION_BUFFER_DELAY);
+                return;
+            }
+            
             if (operation.delay) {
                 await new Promise(resolve => setTimeout(resolve, operation.delay));
             }
+            
+            // Check again after delay
+            if (operation.cancelled) {
+                console.log('Operation cancelled during delay');
+                operation._resolve({ cancelled: true, message: 'Operation cancelled during delay' });
+                setTimeout(() => this.processNext(), constants.DELAY.OPERATION_BUFFER_DELAY);
+                return;
+            }
+            
             const result = await operation.execute();
-            operation._resolve(result);
+            
+            // Check if operation was cancelled during execution
+            if (operation.cancelled) {
+                console.log('Operation cancelled during execution');
+                operation._resolve({ cancelled: true, message: 'Operation cancelled during execution', partialResult: result });
+            } else {
+                operation._resolve(result);
+            }
             setTimeout(() => this.processNext(), constants.DELAY.OPERATION_BUFFER_DELAY);
         } catch (error) {
             console.error('Operation execution error:', error);
-            operation._reject(error);
+            if (operation.cancelled) {
+                operation._resolve({ cancelled: true, message: 'Operation cancelled with error', error });
+            } else {
+                operation._reject(error);
+            }
             setTimeout(() => this.processNext(), constants.DELAY.OPERATION_BUFFER_DELAY);
+        } finally {
+            this.currentOperation = null;
         }
     }
 
     clear() {
-        // Silently resolve pending operations instead of rejecting them
-        this.queue.forEach(op => {
+        console.log(`Clearing operation queue with ${this.queue.length} pending operations`);
+        // Cancel current operation first
+        if (this.currentOperation) {
+            console.log('Cancelling current operation');
+            this.currentOperation.cancelled = true;
+        }
+        
+        // Resolve pending operations with cancellation signal
+        this.queue.forEach((op, index) => {
             try {
-                op._resolve(null); // Resolve with null instead of rejecting
+                console.log(`Resolving cancelled operation ${index + 1}`);
+                op._resolve({ cancelled: true, message: 'Operation cancelled due to queue clear' });
             } catch (error) {
-                // Ignore any errors from resolving
                 console.warn('Error resolving cleared operation:', error);
             }
         });
         this.queue = [];
         this.isProcessing = false;
+        this.currentOperation = null;
     }
 
     setOnQueueEmpty(callback) {
@@ -100,37 +138,120 @@ const SkeletonLoader = ({ count = 2 }) => (
     </div>
 );
 
+// ==================== State Management ====================
+const initialStageState = {
+    currentStepIndex: 0,
+    stepsLoaded: [],
+    error: null,
+    errorDetails: null,
+    isLoading: false,
+    streamCompleted: false,
+    uiLoaded: false,
+    isCompleted: false,
+    autoAdvance: true,
+    isReturnVisit: false,
+    historyLoaded: false
+};
+
+const stageStateReducer = (state, action) => {
+    switch (action.type) {
+        case 'RESET_STATE':
+            return { ...initialStageState };
+        case 'SET_CURRENT_STEP_INDEX':
+            return { ...state, currentStepIndex: action.payload };
+        case 'ADD_LOADED_STEP':
+            return { 
+                ...state, 
+                stepsLoaded: state.stepsLoaded.includes(action.payload) 
+                    ? state.stepsLoaded 
+                    : [...state.stepsLoaded, action.payload] 
+            };
+        case 'FILTER_LOADED_STEPS':
+            return { 
+                ...state, 
+                stepsLoaded: state.stepsLoaded.filter(index => index < action.payload) 
+            };
+        case 'SET_LOADING':
+            return { ...state, isLoading: action.payload };
+        case 'SET_ERROR':
+            return { 
+                ...state, 
+                error: action.payload.error, 
+                errorDetails: action.payload.errorDetails 
+            };
+        case 'CLEAR_ERROR':
+            return { ...state, error: null, errorDetails: null };
+        case 'SET_STREAM_COMPLETED':
+            return { ...state, streamCompleted: action.payload };
+        case 'SET_UI_LOADED':
+            return { ...state, uiLoaded: action.payload };
+        case 'SET_COMPLETED':
+            return { ...state, isCompleted: action.payload };
+        case 'SET_AUTO_ADVANCE':
+            return { ...state, autoAdvance: action.payload };
+        case 'SET_RETURN_VISIT':
+            return { ...state, isReturnVisit: action.payload };
+        case 'SET_HISTORY_LOADED':
+            return { ...state, historyLoaded: action.payload };
+        case 'SET_MULTIPLE':
+            return { ...state, ...action.payload };
+        default:
+            return state;
+    }
+};
+
 // ==================== Dynamic Stage Component ====================
 const DynamicStageTemplate = ({ onComplete }) => {
-    // Get stage configuration from pipeline store
+    // Get stage configuration from pipeline store with memoization
     const { 
         getCurrentStageConfig,
         markStepCompleted,
-        markStageCompleted: markPipelineStageCompleted
+        markStageCompleted: markPipelineStageCompleted,
+        initializeWorkflow,
+        isWorkflowActive,
+        currentStageId
     } = usePipelineStore();
     
-    const currentStageConfig = getCurrentStageConfig();
+    const currentStageConfig = useMemo(() => {
+        const config = getCurrentStageConfig();
+        console.log('getCurrentStageConfig result:', config);
+        console.log('Pipeline store state:', {
+            currentStageId: usePipelineStore.getState().currentStageId,
+            workflowTemplate: usePipelineStore.getState().workflowTemplate,
+            isWorkflowActive: usePipelineStore.getState().isWorkflowActive
+        });
+        return config;
+    }, [getCurrentStageConfig]);
     
     const { id: stageId, steps, name: stageTitle } = currentStageConfig || { id: '', steps: [], name: '' };
-    const config = {
+    const config = useMemo(() => ({
         stageId,
         steps,
         stageTitle,
         initialVariables: {},
         initialChecklist: {}
-    };
+    }), [stageId, steps, stageTitle]);
 
-    const [currentStepIndex, setCurrentStepIndex] = useState(0);
-    const [stepsLoaded, setStepsLoaded] = useState([]);
-    const [error, setError] = useState(null);
-    const [errorDetails, setErrorDetails] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [streamCompleted, setStreamCompleted] = useState(false);
-    const [uiLoaded, setUiLoaded] = useState(false);
-    const [isCompleted, setIsCompleted] = useState(false);
-    const [autoAdvance, setAutoAdvance] = useState(true);
-    const [isReturnVisit, setIsReturnVisit] = useState(false);
-    const [historyLoaded, setHistoryLoaded] = useState(false);
+    // Use reducer for main state management
+    const [stageState, dispatch] = useReducer(stageStateReducer, initialStageState);
+    const {
+        currentStepIndex,
+        stepsLoaded,
+        error,
+        errorDetails,
+        isLoading,
+        streamCompleted,
+        uiLoaded,
+        isCompleted,
+        autoAdvance,
+        isReturnVisit,
+        historyLoaded
+    } = stageState;
+    
+    // Timeout tracking refs to prevent overlapping timeouts
+    const autoAdvanceTimeoutRef = useRef(null);
+    const initialLoadTimeoutRef = useRef(null);
+    const navigationTimeoutRef = useRef(null);
 
     // Save the latest step configuration and stageId
     const stepsRef = useRef(steps);
@@ -146,13 +267,11 @@ const DynamicStageTemplate = ({ onComplete }) => {
         markStageAsComplete,
         setChecklist,
         addVariable,
-        markStageCompleted,
     } = useAIPlanningContextStore();
 
     // Use refs to store stable function references
     const loadStepRef = useRef(null);
     const markStageAsCompleteRef = useRef(markStageAsComplete);
-    const markStageCompletedRef = useRef(markStageCompleted);
 
     // WorkflowControl integration for DSLC stages
     const {
@@ -186,6 +305,30 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setNavigationHandler
     } = useWorkflowManager(stageId, currentStepIndex, stepsLoaded, isCompleted, steps);
 
+    // Auto-initialize workflow if not active
+    useEffect(() => {
+        const autoInitializeWorkflow = async () => {
+            if (!isWorkflowActive && !currentStageId) {
+                console.log('Auto-initializing workflow...');
+                try {
+                    const planningRequest = {
+                        problem_name: 'Data Analysis',
+                        user_goal: 'Analyze data to derive insights',
+                        problem_description: 'General data analysis task',
+                        context_description: 'Dataset analysis context'
+                    };
+                    
+                    await initializeWorkflow(planningRequest);
+                    console.log('Workflow auto-initialized');
+                } catch (error) {
+                    console.error('Failed to auto-initialize workflow:', error);
+                }
+            }
+        };
+        
+        autoInitializeWorkflow();
+    }, [isWorkflowActive, currentStageId, initializeWorkflow]);
+
     // ---------- step Switching Logic ----------
     const debouncedSwitchStep = useCallback((stepId) => {
         if (currentStepRef.current === stepId) return;
@@ -199,23 +342,20 @@ const DynamicStageTemplate = ({ onComplete }) => {
         if (stageIdRef.current !== stageId) {
             console.log(`Stage ID changed from ${stageIdRef.current} to ${stageId}, resetting state`);
             
+            // Abort any ongoing requests first
+            if (currentLoadStepControllerRef.current) {
+                console.log('Aborting ongoing request due to stage change');
+                currentLoadStepControllerRef.current.abort();
+                currentLoadStepControllerRef.current = null;
+            }
+            
             // Check if this is a workflow update scenario
             const workflowPanelState = useWorkflowPanelStore.getState();
             const isWorkflowUpdate = streamCompleted || isCompleted || 
                                    workflowPanelState.showWorkflowConfirm || 
                                    workflowPanelState.workflowUpdated;
             
-            setCurrentStepIndex(0);
-            setStepsLoaded([]);
-            setError(null);
-            setErrorDetails(null);
-            setIsLoading(false);
-            setStreamCompleted(false);
-            setUiLoaded(false);
-            setIsCompleted(false);
-            setAutoAdvance(true);
-            setIsReturnVisit(false);
-            setHistoryLoaded(false);
+            dispatch({ type: 'RESET_STATE' });
             initialLoadCalledRef.current = false;
             stageIdRef.current = stageId;
             stepsRef.current = steps;
@@ -231,6 +371,20 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 console.log('Preserving step content during workflow update');
                 currentStepRef.current = null;
             }
+            
+            // Clear timeouts when stage changes
+            if (autoAdvanceTimeoutRef.current) {
+                clearTimeout(autoAdvanceTimeoutRef.current);
+                autoAdvanceTimeoutRef.current = null;
+            }
+            if (initialLoadTimeoutRef.current) {
+                clearTimeout(initialLoadTimeoutRef.current);
+                initialLoadTimeoutRef.current = null;
+            }
+            if (navigationTimeoutRef.current) {
+                clearTimeout(navigationTimeoutRef.current);
+                navigationTimeoutRef.current = null;
+            }
 
             return;
         }
@@ -240,19 +394,19 @@ const DynamicStageTemplate = ({ onComplete }) => {
             console.log('Steps configuration changed, updating...');
             stepsRef.current = steps;
             if (currentStepIndex >= steps.length) {
-                setCurrentStepIndex(steps.length - 1);
+                dispatch({ type: 'SET_CURRENT_STEP_INDEX', payload: steps.length - 1 });
             }
-            setStepsLoaded(prevLoaded => prevLoaded.filter(index => index < steps.length));
+            dispatch({ type: 'FILTER_LOADED_STEPS', payload: steps.length });
             if (currentStepIndex < steps.length &&
                 currentStepRef.current !== steps[currentStepIndex].step_id) {
                 debouncedSwitchStep(steps[currentStepIndex].step_id);
             }
         }
-    }, [stageId, steps, debouncedSwitchStep, clearStep]);
+    }, [stageId, steps, debouncedSwitchStep, clearStep, streamCompleted, isCompleted]);
 
     const executeAction = useCallback(async (action) => {
         try {
-            return await operationQueue.current.enqueue({
+            const result = await operationQueue.current.enqueue({
                 execute: async () => {
                     console.log(`Executing operation: ${action.action}`);
                     try {
@@ -269,6 +423,14 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 },
                 delay: action.delay || 0
             });
+            
+            // Handle cancelled operations
+            if (result && result.cancelled) {
+                console.log('Operation was cancelled:', result.message);
+                return null;
+            }
+            
+            return result;
         } catch (error) {
             // Handle queue cleared or other queue-related errors silently
             if (error.message === 'Queue cleared') {
@@ -283,14 +445,39 @@ const DynamicStageTemplate = ({ onComplete }) => {
     const executeStepRequest = useCallback(async (stepIndex, stepId, controller, retryCount = 0) => {
         const MAX_RETRIES = 10; // 添加重试次数限制避免无限递归
         
-        setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, constants.DELAY.API_REQUEST_DELAY));
+        // Check if request was aborted before starting
+        if (controller.signal.aborted) {
+            console.log('Request aborted before execution');
+            return;
+        }
+        
+        dispatch({ type: 'SET_LOADING', payload: true });
+        await new Promise(resolve => {
+            const timeoutId = setTimeout(resolve, constants.DELAY.API_REQUEST_DELAY);
+            // Handle abortion during delay
+            controller.signal.addEventListener('abort', () => {
+                clearTimeout(timeoutId);
+                resolve();
+            });
+        });
+
+        // Check again after delay
+        if (controller.signal.aborted) {
+            console.log('Request aborted during delay');
+            dispatch({ type: 'SET_LOADING', payload: false });
+            return;
+        }
 
         const currentIsReturnVisit = isStageComplete || isReturnVisit;
         if (currentIsReturnVisit) {
-            setUiLoaded(true);
-            setStreamCompleted(true);
-            setIsLoading(false);
+            dispatch({ 
+                type: 'SET_MULTIPLE', 
+                payload: {
+                    uiLoaded: true,
+                    streamCompleted: true,
+                    isLoading: false
+                }
+            });
             return;
         }
 
@@ -355,9 +542,8 @@ const DynamicStageTemplate = ({ onComplete }) => {
             };
 
             console.error("API request error:", errorObj);
-            setError(`Step ${stepIndex + 1} request failed: ${errorObj.message}`);
-            setErrorDetails(errorObj);
-            setIsLoading(false);
+            dispatch({ type: 'SET_ERROR', payload: { error: `Step ${stepIndex + 1} request failed: ${errorObj.message}`, errorDetails: errorObj } });
+            dispatch({ type: 'SET_LOADING', payload: false });
             return;
         }
 
@@ -366,8 +552,20 @@ const DynamicStageTemplate = ({ onComplete }) => {
         let resultText = "";
         let firstDataReceived = false;
 
+        // Handle abortion during stream reading
+        const abortHandler = () => {
+            reader.cancel();
+        };
+        controller.signal.addEventListener('abort', abortHandler);
+
         try {
             while (true) {
+                // Check for abortion before each read
+                if (controller.signal.aborted) {
+                    console.log('Stream reading aborted');
+                    break;
+                }
+                
                 const { done, value } = await reader.read();
                 if (done) break;
                 resultText += decoder.decode(value, { stream: true });
@@ -383,7 +581,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 console.log('Action type:', message.action.action);
                                 executeAction(message.action);
                                 if (!firstDataReceived) {
-                                    setUiLoaded(true);
+                                    dispatch({ type: 'SET_UI_LOADED', payload: true });
                                     firstDataReceived = true;
                                 }
                                 if (message.action.state) {
@@ -393,7 +591,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 if (message.action.updated_workflow) {
                                     const success = processWorkflowUpdate(message.action.updated_workflow);
                                     if (!success) {
-                                        setError('Invalid workflow update received from backend');
+                                        dispatch({ type: 'SET_ERROR', payload: { error: 'Invalid workflow update received from backend', errorDetails: null } });
                                         return;
                                     }
                                 }
@@ -418,7 +616,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                         } catch (e) {
                             console.error("JSON parsing error:", e);
                             if (e.message !== "Unexpected end of JSON input") {
-                                setError(`Data parsing error: ${e.message}`);
+                                dispatch({ type: 'SET_ERROR', payload: { error: `Data parsing error: ${e.message}`, errorDetails: null } });
                             }
                         }
                     }
@@ -426,15 +624,24 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 resultText = lines[lines.length - 1];
             }
         } catch (streamError) {
+            if (streamError.name === 'AbortError' || controller.signal.aborted) {
+                console.log('Stream processing aborted');
+                return;
+            }
             console.error("Stream processing error:", streamError);
-            setError(`Stream processing error: ${streamError.message}`);
-            setErrorDetails({
-                message: streamError.message,
-                type: "Stream processing error",
-                timestamp: new Date().toISOString()
-            });
-            setIsLoading(false);
+            dispatch({ type: 'SET_ERROR', payload: { error: `Stream processing error: ${streamError.message}`, errorDetails: { message: streamError.message, type: "Stream processing error", timestamp: new Date().toISOString() } } });
+            // Error details already set in dispatch above
+            dispatch({ type: 'SET_LOADING', payload: false });
             return;
+        } finally {
+            // Cleanup abort handler
+            controller.signal.removeEventListener('abort', abortHandler);
+            // Ensure reader is properly closed
+            try {
+                await reader.cancel();
+            } catch (e) {
+                // Ignore cleanup errors
+            }
         }
 
         if (resultText.trim()) {
@@ -443,14 +650,14 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 if (message.action) {
                     executeAction(message.action);
                     if (!firstDataReceived) {
-                        setUiLoaded(true);
+                        dispatch({ type: 'SET_UI_LOADED', payload: true });
                         firstDataReceived = true;
                     }
                     // Handle workflow updates in last line
                     if (message.action.updated_workflow) {
                         const success = processWorkflowUpdate(message.action.updated_workflow);
                         if (!success) {
-                            setError('Invalid workflow update received from backend');
+                            dispatch({ type: 'SET_ERROR', payload: { error: 'Invalid workflow update received from backend', errorDetails: null } });
                             return;
                         }
                     }
@@ -486,7 +693,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         });
 
         if (isStageComplete) {
-            setStreamCompleted(true);
+            dispatch({ type: 'SET_STREAM_COMPLETED', payload: true });
             return;
         }
 
@@ -525,109 +732,186 @@ const DynamicStageTemplate = ({ onComplete }) => {
             console.log('feedbackResult', feedbackResult);
 
             if (!feedbackResult.targetAchieved) {
-                if (retryCount < MAX_RETRIES) {
+                if (retryCount < MAX_RETRIES && !controller.signal.aborted) {
                     console.log(`Target not achieved, retrying step (${retryCount + 1}/${MAX_RETRIES})`);
-                    await executeStepRequest(stepIndex, stepId, controller, retryCount + 1);
+                    // Create new controller for retry to avoid abort signal inheritance
+                    const newController = new AbortController();
+                    // Link to parent controller
+                    controller.signal.addEventListener('abort', () => {
+                        newController.abort();
+                    });
+                    await executeStepRequest(stepIndex, stepId, newController, retryCount + 1);
                     return;
                 } else {
-                    console.log('Max retries reached, marking step as failed');
-                    setError(`Step failed after ${MAX_RETRIES} attempts: Target not achieved`);
-                    setIsLoading(false);
+                    const reason = controller.signal.aborted ? 'Request aborted' : 'Max retries reached';
+                    console.log(`${reason}, marking step as failed`);
+                    if (!controller.signal.aborted) {
+                        dispatch({ type: 'SET_ERROR', payload: { error: `Step failed after ${MAX_RETRIES} attempts: Target not achieved`, errorDetails: null } });
+                    }
+                    dispatch({ type: 'SET_LOADING', payload: false });
                     return;
                 }
             }
 
             console.log('Target achieved! Proceeding to next step');
-            setStreamCompleted(true);
+            dispatch({ type: 'SET_STREAM_COMPLETED', payload: true });
         } catch (error) {
             console.error("Feedback API error:", error);
-            setError(`Feedback request error: ${error.message}`);
-            setErrorDetails({
-                message: error.message,
-                type: "Feedback API error",
-                timestamp: new Date().toISOString(),
-                endpoint: constants.API.FEEDBACK_API_URL
-            });
+            dispatch({ type: 'SET_ERROR', payload: { 
+                error: `Feedback request error: ${error.message}`, 
+                errorDetails: {
+                    message: error.message,
+                    type: "Feedback API error", 
+                    timestamp: new Date().toISOString(),
+                    endpoint: constants.API.FEEDBACK_API_URL
+                }
+            }});
         } finally {
-            setIsLoading(false);
+            dispatch({ type: 'SET_LOADING', payload: false });
         }
     }, [executeAction, stageId, isReturnVisit, isStageComplete, getContext, setContext]);
 
     // Update refs when functions change
     useEffect(() => {
         markStageAsCompleteRef.current = markStageAsComplete;
-        markStageCompletedRef.current = markStageCompleted;
-    }, [markStageAsComplete, markStageCompleted]);
+    }, [markStageAsComplete]);
 
     // ---------- loadStep: Pre-update the current step and mark it as loaded to ensure the new stepId takes effect promptly ----------
     const loadStep = useCallback(async (stepIndex) => {
+        console.log(`loadStep called with stepIndex: ${stepIndex}`);
         const currentSteps = stepsRef.current;
-        if (stepIndex >= currentSteps.length) return;
-        operationQueue.current.clear();
-        if (currentLoadStepControllerRef.current) {
-            currentLoadStepControllerRef.current.abort();
+        console.log(`currentSteps.length: ${currentSteps.length}`);
+        if (stepIndex >= currentSteps.length) {
+            console.log('stepIndex >= currentSteps.length, returning early');
+            return;
         }
+        
+        // Prevent concurrent step loading
+        if (currentLoadStepControllerRef.current) {
+            console.log('Aborting previous step loading');
+            currentLoadStepControllerRef.current.abort();
+            // Wait a bit for cleanup
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        operationQueue.current.clear();
         // Immediately update the current step and mark it as loaded
-        setCurrentStepIndex(stepIndex);
-        setStepsLoaded(prev => prev.includes(stepIndex) ? prev : [...prev, stepIndex]);
-
-        setIsLoading(true);
-        setStreamCompleted(false);
-        setUiLoaded(false);
-        setError(null);
-        setErrorDetails(null);
+        dispatch({ type: 'SET_CURRENT_STEP_INDEX', payload: stepIndex });
+        dispatch({ type: 'ADD_LOADED_STEP', payload: stepIndex });
+        dispatch({ 
+            type: 'SET_MULTIPLE', 
+            payload: {
+                isLoading: true,
+                streamCompleted: false,
+                uiLoaded: false,
+                error: null,
+                errorDetails: null
+            }
+        });
         const stepId = currentSteps[stepIndex].step_id;
         debouncedSwitchStep(stepId);
         markStepIncomplete && markStepIncomplete(stepId);
 
         const controller = new AbortController();
         currentLoadStepControllerRef.current = controller;
+        
+        // Add cleanup on component unmount
+        const cleanup = () => {
+            if (currentLoadStepControllerRef.current === controller) {
+                controller.abort();
+                currentLoadStepControllerRef.current = null;
+            }
+        };
+        
         try {
             await executeStepRequest(stepIndex, stepId, controller);
         } catch (err) {
-            if (err.name === 'AbortError') {
+            if (err.name === 'AbortError' || controller.signal.aborted) {
                 console.log("Step loading aborted");
             } else {
                 console.error(`Step ${stepIndex + 1} loading failed:`, err);
                 const stepTitle = currentSteps[stepIndex].name || `Step ${stepIndex + 1}`;
-                setError(`${stepTitle} loading failed: ${err.message}`);
-                setErrorDetails({
-                    message: err.message,
-                    stack: err.stack,
-                    type: "Step loading error",
-                    timestamp: new Date().toISOString(),
-                    context: {
-                        step_index: stepIndex,
-                        step_id: stepId
-                    }
-                });
-                setIsLoading(false);
+                if (!controller.signal.aborted) {
+                    dispatch({ 
+                        type: 'SET_ERROR', 
+                        payload: {
+                            error: `${stepTitle} loading failed: ${err.message}`,
+                            errorDetails: {
+                                message: err.message,
+                                stack: err.stack,
+                                type: "Step loading error",
+                                timestamp: new Date().toISOString(),
+                                context: {
+                                    step_index: stepIndex,
+                                    step_id: stepId
+                                }
+                            }
+                        }
+                    });
+                    dispatch({ type: 'SET_LOADING', payload: false });
+                }
             }
         } finally {
-            if (currentLoadStepControllerRef.current === controller) {
-                currentLoadStepControllerRef.current = null;
-            }
+            cleanup();
         }
     }, [debouncedSwitchStep, executeStepRequest, markStepIncomplete]);
     
-    // Update loadStep ref
+    // Update loadStep ref and setup cleanup on unmount
     useEffect(() => {
         loadStepRef.current = loadStep;
+        
+        // Cleanup function for component unmount
+        return () => {
+            console.log('DynamicStageTemplate unmounting, cleaning up...');
+            // Abort any ongoing requests
+            if (currentLoadStepControllerRef.current) {
+                currentLoadStepControllerRef.current.abort();
+                currentLoadStepControllerRef.current = null;
+            }
+            // Clear operation queue
+            operationQueue.current.clear();
+            // Clear all timeouts
+            if (autoAdvanceTimeoutRef.current) {
+                clearTimeout(autoAdvanceTimeoutRef.current);
+                autoAdvanceTimeoutRef.current = null;
+            }
+            if (initialLoadTimeoutRef.current) {
+                clearTimeout(initialLoadTimeoutRef.current);
+                initialLoadTimeoutRef.current = null;
+            }
+            if (navigationTimeoutRef.current) {
+                clearTimeout(navigationTimeoutRef.current);
+                navigationTimeoutRef.current = null;
+            }
+            // Reset initial load flag so it can be triggered again on remount
+            initialLoadCalledRef.current = false;
+        };
     }, [loadStep]);
 
     useEffect(() => {
         const currentSteps = stepsRef.current;
         if (streamCompleted) {
-            setIsLoading(false);
+            dispatch({ type: 'SET_LOADING', payload: false });
             if (currentStepIndex === currentSteps.length - 1 && autoAdvance) {
-                setIsCompleted(true);
+                dispatch({ type: 'SET_COMPLETED', payload: true });
                 markStageAsCompleteRef.current(stageId);
-                markStageCompletedRef.current(stageId);
-            } else if (autoAdvance) {
-                const timeoutId = setTimeout(() => {
-                    loadStepRef.current(currentStepIndex + 1);
+            } else if (autoAdvance && currentStepIndex < currentSteps.length - 1) {
+                // Clear any existing timeout
+                if (autoAdvanceTimeoutRef.current) {
+                    clearTimeout(autoAdvanceTimeoutRef.current);
+                }
+                autoAdvanceTimeoutRef.current = setTimeout(() => {
+                    autoAdvanceTimeoutRef.current = null;
+                    if (loadStepRef.current) {
+                        loadStepRef.current(currentStepIndex + 1);
+                    }
                 }, 500);
-                return () => clearTimeout(timeoutId);
+                return () => {
+                    if (autoAdvanceTimeoutRef.current) {
+                        clearTimeout(autoAdvanceTimeoutRef.current);
+                        autoAdvanceTimeoutRef.current = null;
+                    }
+                };
             }
         }
     }, [streamCompleted, autoAdvance, currentStepIndex, stageId]);
@@ -637,11 +921,16 @@ const DynamicStageTemplate = ({ onComplete }) => {
             const currentSteps = stepsRef.current;
             const lastStep = currentSteps[currentSteps.length - 1];
             debouncedSwitchStep(lastStep.step_id);
-            setCurrentStepIndex(currentSteps.length - 1);
-            setStepsLoaded(currentSteps.map((_, i) => i));
-            setIsCompleted(true);
-            setAutoAdvance(false);
-            setHistoryLoaded(true);
+            dispatch({ 
+                type: 'SET_MULTIPLE', 
+                payload: {
+                    currentStepIndex: currentSteps.length - 1,
+                    stepsLoaded: currentSteps.map((_, i) => i),
+                    isCompleted: true,
+                    autoAdvance: false,
+                    historyLoaded: true
+                }
+            });
         }
     }, [historyLoaded, debouncedSwitchStep, isStageComplete]);
 
@@ -663,25 +952,49 @@ const DynamicStageTemplate = ({ onComplete }) => {
             stepsRef.current.length > 0) {  // 确保有steps才执行
             console.log('Triggering initial load for step 0');
             initialLoadCalledRef.current = true;
-            // 直接调用 loadStep，不依赖引用
-            const timeoutId = setTimeout(async () => {
-                console.log('Executing initial loadStep(0) directly');
+            
+            // Clear any existing timeout
+            if (initialLoadTimeoutRef.current) {
+                clearTimeout(initialLoadTimeoutRef.current);
+            }
+            
+            initialLoadTimeoutRef.current = setTimeout(async () => {
+                initialLoadTimeoutRef.current = null;
+                console.log('Executing initial loadStep(0) via ref');
                 try {
-                    await loadStep(0);
+                    // Use ref to avoid dependency cycle
+                    if (loadStepRef.current) {
+                        console.log('About to call loadStepRef.current(0)');
+                        await loadStepRef.current(0);
+                        console.log('loadStepRef.current(0) completed');
+                    } else {
+                        console.log('loadStepRef.current is null, cannot load step');
+                    }
                 } catch (error) {
                     console.error('Initial loadStep(0) failed:', error);
                 }
-            }, 0);
-            return () => clearTimeout(timeoutId);
+            }, 100); // Increased delay to ensure loadStep ref is set
+            
+            return () => {
+                if (initialLoadTimeoutRef.current) {
+                    clearTimeout(initialLoadTimeoutRef.current);
+                    initialLoadTimeoutRef.current = null;
+                }
+            };
         }
-    }, [stepsLoaded.length, currentStepIndex, isStageComplete, stageId, steps.length, loadStep]);
+    }, [stepsLoaded.length, currentStepIndex, isStageComplete, stageId, steps.length]);
 
     // Define stable handlers using useCallback with minimal dependencies
     const handleTerminate = useCallback(() => {
         console.log('DSLC Terminate handler called');
         operationQueue.current.clear();
-        setIsCompleted(true);
-        setAutoAdvance(false);
+        dispatch({ 
+            type: 'SET_MULTIPLE', 
+            payload: {
+                isCompleted: true,
+                autoAdvance: false
+            }
+        });
         setWorkflowGenerating(false);
     }, [setWorkflowGenerating]);
 
@@ -689,7 +1002,6 @@ const DynamicStageTemplate = ({ onComplete }) => {
         console.log('DSLC Continue handler called');
         // Mark stage as complete
         markStageAsComplete(stageId);
-        markStageCompleted(stageId);
         
         // Call onComplete if provided for navigation
         if (onComplete && typeof onComplete === 'function') {
@@ -717,7 +1029,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             setWorkflowGenerating(false);
             setContinueCountdown(0);
         }
-    }, [stageId, onComplete, markStageAsComplete, markStageCompleted, setWorkflowCompleted, setWorkflowGenerating, setContinueCountdown]);
+    }, [stageId, onComplete, markStageAsComplete, setWorkflowCompleted, setWorkflowGenerating, setContinueCountdown]);
 
     const handleCancelCountdown = useCallback(() => {
         console.log('DSLC Cancel countdown handler called');
@@ -738,7 +1050,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     // WorkflowControl integration - set stable handler references
     useEffect(() => {
-        console.log('DynamicStageTemplate: Setting up WorkflowControl integration');
+        console.log('DynamicStageTemplate: Setting up WorkflowControl integration for stage:', stageId);
         
         // Set continue button text for DSLC stages
         setContinueButtonText('Continue to Next Stage');
@@ -749,12 +1061,14 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setOnCancelCountdown(() => handleCancelCountdownRef.current());
         
         return () => {
-            // Cleanup handlers when component unmounts
+            // Cleanup handlers when stage changes or component unmounts
+            console.log('DynamicStageTemplate: Cleaning up WorkflowControl integration for stage:', stageId);
             setOnTerminate(null);
             setOnContinue(null);
             setOnCancelCountdown(null);
+            setContinueButtonText('Continue'); // Reset to default
         };
-    }, [stageId]); // Only depend on stageId
+    }, [stageId, setContinueButtonText, setOnTerminate, setOnContinue, setOnCancelCountdown]); // Include all setter dependencies
 
     // Update WorkflowControl state based on stage progress  
     useEffect(() => {
@@ -779,16 +1093,27 @@ const DynamicStageTemplate = ({ onComplete }) => {
         if (isCompleted && autoAdvance && !isReturnVisit) {
             // Mark stage as complete for internal state
             markStageAsComplete(stageId);
-            markStageCompleted(stageId);
         }
-    }, [isCompleted, autoAdvance, isReturnVisit, stageId, markStageAsComplete, markStageCompleted]);
+    }, [isCompleted, autoAdvance, isReturnVisit, stageId, markStageAsComplete]);
 
     const navigateToStep = useCallback((stepIndex) => {
         if (currentStepIndex === stepIndex) return;
-        if (operationQueue.current.active) return;
-        setAutoAdvance(false);
-        setTimeout(() => {
-            loadStepRef.current && loadStepRef.current(stepIndex);
+        if (operationQueue.current.active) {
+            console.log('Navigation blocked - operation queue active');
+            return;
+        }
+        dispatch({ type: 'SET_AUTO_ADVANCE', payload: false });
+        
+        // Clear any existing navigation timeout
+        if (navigationTimeoutRef.current) {
+            clearTimeout(navigationTimeoutRef.current);
+        }
+        
+        navigationTimeoutRef.current = setTimeout(() => {
+            navigationTimeoutRef.current = null;
+            if (loadStepRef.current) {
+                loadStepRef.current(stepIndex);
+            }
         }, 0);
     }, [currentStepIndex]);
 
@@ -797,7 +1122,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setNavigationHandler(navigateToStep);
     }, [navigateToStep, setNavigationHandler]);
 
-    const EmptyState = () => <SkeletonLoader count={1} />;
+    const EmptyState = useMemo(() => React.memo(() => <SkeletonLoader count={1} />), []);
 
     const currentSteps = stepsRef.current;
 
@@ -860,8 +1185,15 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     // If no stage config available, show loading
     if (!currentStageConfig) {
+        console.log('DynamicStageTemplate: No stage config available, showing skeleton');
         return <SkeletonLoader count={3} />;
     }
+
+    console.log('DynamicStageTemplate: Stage config available:', {
+        stageId,
+        stepsLength: steps.length,
+        stageTitle
+    });
 
 
     // Debug logging
@@ -915,15 +1247,13 @@ const DynamicStageTemplate = ({ onComplete }) => {
                             error={error}
                             errorDetails={errorDetails}
                             onRetry={() => {
-                                setError(null);
-                                setErrorDetails(null);
+                                dispatch({ type: 'CLEAR_ERROR' });
                                 setTimeout(() => {
                                     loadStepRef.current && loadStepRef.current(currentStepIndex);
                                 }, 0);
                             }}
                             onDismiss={() => {
-                                setError(null);
-                                setErrorDetails(null);
+                                dispatch({ type: 'CLEAR_ERROR' });
                             }}
                         />
                     )}
