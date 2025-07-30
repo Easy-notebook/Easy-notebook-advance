@@ -24,9 +24,12 @@ import PreviewApp from './Display/PreviewApp';
 import Header from './MainContainer/Header';
 import MainContent from './MainContainer/MainContent';
 import WorkflowControl from './MainContainer/WorkflowControl';
+import WorkflowPanel from './MainContainer/WorkflowPanel';
 import { useWorkflowControlStore } from './store/workflowControlStore';
+import { useWorkflowPanelStore } from './store/workflowPanelStore';
 import AgentDetail from '../Agents/AgentDetail';
 import { AgentType } from '../../services/agentMemoryService';
+import useAutoTracking from './hooks/useAutoTracking';
 
 
 
@@ -48,6 +51,7 @@ const NotebookApp = () => {
 
   const [currentView, setCurrentView] = useState<'notebook' | 'agent'>('notebook');
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
+  
   
   const {
     notebookId,
@@ -83,6 +87,9 @@ const NotebookApp = () => {
   } = useStore();
 
   const { setShowCommandInput } = useAIAgentStore();
+
+  // Initialize auto-tracking functionality
+  const { toggleAutoTracking } = useAutoTracking();
 
   const fileInputRef = useRef(null);
   
@@ -503,9 +510,9 @@ const NotebookApp = () => {
       currentPhaseId 
     });
     
-    if (viewMode === 'dslc') {
-      // In DSLC mode, DynamicStageTemplate will manage the state
-      console.log('NotebookApp: Setting DSLC mode state - clearing handlers for DynamicStageTemplate');
+    if (viewMode === 'dslc' || viewMode === 'demo' || viewMode === 'create') {
+      // In DSLC mode or demo/create modes with DSLC functionality, DynamicStageTemplate will manage the state
+      console.log('NotebookApp: Setting DSLC-enabled mode state - clearing handlers for DynamicStageTemplate');
       setContinueButtonText('Continue to Next Stage');
       // Clear handlers to let DynamicStageTemplate set them
       setOnTerminate(null);
@@ -564,9 +571,15 @@ const NotebookApp = () => {
       }
 
       // Alt + Ctrl to toggle view mode
-      if (e.altKey && e.ctrlKey) {
+      if (e.altKey && e.ctrlKey && !e.shiftKey) {
         e.preventDefault();
         handleModeChange(viewMode === 'create' ? 'step' : 'create'); // 切换模式
+      }
+      
+      // Alt + Shift + T for tracking toggle
+      if (e.altKey && e.shiftKey && e.key === 'T') {
+        e.preventDefault();
+        toggleAutoTracking();
       }
     };
 
@@ -582,6 +595,7 @@ const NotebookApp = () => {
     getTotalSteps,
     handleModeChange,
     currentPhaseId,
+    toggleAutoTracking,
     notebookId
   ]);
 
@@ -709,6 +723,8 @@ const NotebookApp = () => {
           </div>
         </div>
       )}
+      
+      {/* WorkflowPanel moved to MainContainer */}
       
       {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
       {<WorkflowControl 

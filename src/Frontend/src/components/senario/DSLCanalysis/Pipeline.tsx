@@ -24,7 +24,7 @@ const DSLCPipeline = ({onAddCell}) => {
         getStageTransitionSuggestion
     } = usePipelineStore();
     
-    const { setViewMode } = useStore();
+    const { setViewMode, viewMode } = useStore();
 
     // Render current stage component based on backend configuration
     const rendercurrentStage = () => {
@@ -63,8 +63,11 @@ const DSLCPipeline = ({onAddCell}) => {
                 >
                     <ProblemDefineState 
                         confirmProblem={async () => {
-                            // Set view mode to dslc for analysis workflow
-                            setViewMode('dslc');
+                            // Set appropriate view mode for simplified workflow control
+                            // Support both demo and create modes as specified by user
+                            if (viewMode === 'step') {
+                                setViewMode('demo');
+                            }
                             
                             // Initialize workflow with planning when starting data analysis stages
                             if (!isWorkflowActive) {
@@ -146,9 +149,16 @@ const DSLCPipeline = ({onAddCell}) => {
                                 if (nextStageIndex < currentTemplate.stages.length) {
                                     const nextStageId = currentTemplate.stages[nextStageIndex].id;
                                     console.log(`Transitioning to next stage: ${nextStageId}`);
-                                    nextStage(nextStageId);
+                                    
+                                    // Use setStage instead of nextStage for more reliable navigation
+                                    setTimeout(() => {
+                                        const pipelineState = usePipelineStore.getState();
+                                        pipelineState.setStage(nextStageId, 'next');
+                                        console.log(`Successfully set next stage: ${nextStageId}`);
+                                    }, 50);
                                 } else {
-                                    console.log('All stages completed - no more stages to transition to');
+                                    console.log('All stages completed - workflow finished');
+                                    // Could show completion message or return to main view
                                 }
                             } else {
                                 console.error('No workflow template available - cannot transition to next stage');
@@ -159,48 +169,6 @@ const DSLCPipeline = ({onAddCell}) => {
             );
         }
 
-        // Fallback: If workflow should be active but we don't have the right conditions
-        if (isWorkflowActive) {
-            return (
-                <PipelineStageWrapper
-                    stage={currentStage}
-                    currentStage={currentStage}
-                    isAnimating={isAnimating}
-                    animationDirection={animationDirection}
-                >
-                    <div className="text-center p-8">
-                        <h2 className="text-xl font-semibold text-gray-700 mb-4">
-                            Analysis Stage: {currentStage}
-                        </h2>
-                        <p className="text-gray-500 mb-4">
-                            Backend workflow service is not available. This would normally show the dynamic analysis interface.
-                        </p>
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                            <p className="text-yellow-800 text-sm">
-                                <strong>Development Mode:</strong> The workflow API at localhost:28600 is not running.
-                                In production, this would load the appropriate analysis stage.
-                            </p>
-                        </div>
-                        <button 
-                            onClick={() => {
-                                if (workflowTemplate?.stages) {
-                                    const currentIndex = workflowTemplate.stages.findIndex(s => s.id === currentStage);
-                                    const nextIndex = currentIndex + 1;
-                                    if (nextIndex < workflowTemplate.stages.length) {
-                                        nextStage(workflowTemplate.stages[nextIndex].id);
-                                    }
-                                } else {
-                                    console.log('Analysis completed');
-                                }
-                            }}
-                            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                            Continue to Next Stage
-                        </button>
-                    </div>
-                </PipelineStageWrapper>
-            );
-        }
 
         // Fallback for unknown stages
         return (

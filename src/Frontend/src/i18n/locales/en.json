@@ -3,8 +3,7 @@
     "completeMode": "Create Mode",
     "createMode": "Create Mode",
     "demoMode": "Demo Mode",
-    "wysiwygMode": "WYSIWYG Mode",
-    "debugMode": "Debug Mode"
+    "wysiwygMode": "WYSIWYG Mode"
   },
   "cell": {
     "addCodeCell": "Add Code Cell",

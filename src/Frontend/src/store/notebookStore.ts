@@ -17,7 +17,7 @@ export type CellType = 'code' | 'markdown' | 'Hybrid' | 'image' | 'thinking';
 /**
  * 视图模式类型
  */
-export type ViewMode = 'step' | 'dslc' | 'create';
+export type ViewMode = 'step' | 'demo' | 'create';
 
 /**
  * 上传模式类型

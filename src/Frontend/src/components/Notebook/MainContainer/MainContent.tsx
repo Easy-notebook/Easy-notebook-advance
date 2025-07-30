@@ -2,6 +2,7 @@ import DSLCPipeline from '../../senario/DSLCanalysis/Pipeline';
 import CreateMode from '../../senario/BasicMode/CreateMode';
 import DemoMode from '../../senario/BasicMode/DemoMode';
 import DetachedCellView from './DetachedCellView';
+import WorkflowPanel from './WorkflowPanel';
 import { findCellsByStep } from '../../../utils/markdownParser';
 import useStore from '../../../store/notebookStore';
 
@@ -43,8 +44,13 @@ const MainContent: React.FC<MainContentProps> = ({
 }) => {
   const { detachedCellId, isDetachedCellFullscreen } = useStore();
   
-  // Always render DSLCPipeline to keep DynamicStageTemplate alive for WorkflowControl
-  const shouldShowDSLCUI = cells.length === 0 || viewMode === 'dslc';
+  // DSLCPipeline rendering logic:
+  // - Show DSLC UI when no cells exist (empty state) 
+  // - Run DSLC in background for demo/create modes to maintain workflow functionality
+  // - Always render DSLC for create mode to allow workflow functionality
+  const shouldShowDSLCUI = cells.length === 0;
+  const shouldRunDSLCInBackground = viewMode === 'demo' || viewMode === 'create';
+  const shouldAlwaysRenderDSLC = shouldShowDSLCUI || shouldRunDSLCInBackground;
 
   // 如果有独立窗口模式的 cell 且是全屏模式，优先显示独立视图
   if (detachedCellId && isDetachedCellFullscreen) {
@@ -59,12 +65,26 @@ const MainContent: React.FC<MainContentProps> = ({
         <div className="w-1/2 h-full border-r border-gray-200 overflow-hidden">
           <div className="w-full h-full overflow-auto">
             {shouldShowDSLCUI ? (
-              <div className="w-full h-full" style={{ zIndex: viewMode === 'dslc' ? 100 : 1 }}>
+              <div className="w-full h-full" style={{ zIndex: 1 }}>
                 <DSLCPipeline 
                   onAddCell={handleAddCell}
                   className="w-full h-full"
                 />
               </div>
+            ) : shouldRunDSLCInBackground ? (
+              <>
+                {/* Hidden DSLC for background workflow */}
+                <div className="hidden" style={{ zIndex: -1 }}>
+                  <DSLCPipeline 
+                    onAddCell={handleAddCell}
+                    className="w-full h-full"
+                  />
+                </div>
+                {/* Show other modes UI */}
+                <div style={{ zIndex: 10 }}>
+                  {renderOtherModes()}
+                </div>
+              </>
             ) : (
               <div style={{ zIndex: 10 }}>
                 {renderOtherModes()}
@@ -83,13 +103,21 @@ const MainContent: React.FC<MainContentProps> = ({
 
   return (
     <>
-      {/* Always render DSLCPipeline but conditionally display it with layered positioning */}
-      <div className={shouldShowDSLCUI ? 'block w-full h-full' : 'hidden'} style={{ zIndex: viewMode === 'dslc' ? 100 : 1 }}>
-        <DSLCPipeline 
-          onAddCell={handleAddCell}
-          className="w-full h-full"
-        />
-      </div>
+      {/* WorkflowPanel - 工作流面板组件，显示工作流确认对话框和进度条 */}
+      <WorkflowPanel />
+      
+      {/* Always render DSLCPipeline when needed - visible or invisible */}
+      {shouldAlwaysRenderDSLC && (
+        <div 
+          className={shouldShowDSLCUI ? 'block w-full h-full' : 'absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none'} 
+          style={{ zIndex: shouldShowDSLCUI ? 100 : -1 }}
+        >
+          <DSLCPipeline 
+            onAddCell={handleAddCell}
+            className="w-full h-full"
+          />
+        </div>
+      )}
       
       {/* Render other modes when DSLC UI is hidden */}
       {!shouldShowDSLCUI && (

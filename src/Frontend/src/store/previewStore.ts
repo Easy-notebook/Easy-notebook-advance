@@ -245,7 +245,6 @@ const usePreviewStore = create<PreviewStore>()(
             error: null,
 
             changePreviewMode: () => {
-                console.log("[debug]change preview mode: ", get().previewMode)
                 if (get().previewMode === 'notebook') {
                     set({ previewMode: 'file' });
                 } else {

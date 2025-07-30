@@ -63,8 +63,8 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
   // Use store values or fallback values - define these first
   const effectiveIsGenerating = isGenerating || fallbackIsExecuting;
   
-  // For non-DCLS modes, we need to show completed state when not generating
-  const effectiveIsCompleted = isCompleted || (!isGenerating && !fallbackIsExecuting && fallbackViewMode !== 'dslc');
+  // For non-workflow modes, show completed state only when actually completed or when step mode and not executing
+  const effectiveIsCompleted = isCompleted || (fallbackViewMode === 'step' && !isGenerating && !fallbackIsExecuting);
   
   // Always prefer store handlers over fallback
   const effectiveOnTerminate = onTerminate || (() => {
@@ -86,21 +86,9 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       } catch (error) {
         console.error('Error calling fallbackHandleNextPhase:', error);
       }
-    } else if (fallbackViewMode === 'dslc') {
-      console.log('DSLC mode: checking window._dslcStageInfo');
-      console.log('window._dslcStageInfo:', window._dslcStageInfo);
-      const stageInfo = window._dslcStageInfo;
-      
-      if (stageInfo?.onComplete) {
-        console.log('Found DSLC onComplete, executing...');
-        try {
-          stageInfo.onComplete();
-        } catch (error) {
-          console.error('Error calling DSLC onComplete:', error);
-        }
-      } else {
-        console.log('No DSLC onComplete found in window._dslcStageInfo');
-      }
+    } else if (fallbackViewMode === 'demo' || fallbackViewMode === 'create') {
+      // For DSLC stages, provide a basic continue action if no handler is set
+      console.log('DSLC mode detected but no continue handler set - stage should have handled this');
     } else {
       console.log('No valid fallback action available');
     }
@@ -128,7 +116,7 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
   });
 
   return (
-    <div className="fixed bottom-72 right-36 flex items-center gap-3" style={{ zIndex: fallbackViewMode === 'dslc' ? 9999 : 1000 }}>
+    <div className="fixed bottom-72 right-36 flex items-center gap-3" style={{ zIndex: (fallbackViewMode === 'demo' || fallbackViewMode === 'create') ? 9999 : 1000 }}>
       {/* Generate/Stop Button */}
       {effectiveIsGenerating && !effectiveIsCompleted && effectiveOnTerminate && (
         <GeneratingIndicator handleTerminate={effectiveOnTerminate} />
