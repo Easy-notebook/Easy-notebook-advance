@@ -27,9 +27,9 @@ async def generate_data_cleaning_sequence_step1(
     if step_template.event("start"):
         step_template.new_section("Dimension Analysis") \
                     .add_code(
-                            f"""import pandas as pd
-data = pd.read_csv('{csv_file_path}')
-print(data.info())
+                            f"""from vdstools import DataPreview
+data_preview = DataPreview("{csv_file_path}")
+data_preview.data_info()
 """) \
                     .exe_code_cli(mark_finnish="glance at current data info.") \
                     .next_event("glance at current data info.")

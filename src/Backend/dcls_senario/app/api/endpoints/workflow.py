@@ -4,12 +4,12 @@ FastAPI workflow endpoints
 
 from fastapi import APIRouter, Query, HTTPException
 from typing import Dict, Any, Optional
-import logging
 
-from app.core.config import STAGES
+from app.core.workflow_manager import WorkflowManager
+from app.utils.logger import ModernLogger
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = ModernLogger("workflow", level="info")
 
 @router.get("/template")
 async def get_workflow_template(
@@ -21,35 +21,34 @@ async def get_workflow_template(
     GET /api/workflow/template?type=<template_type>
     """
     try:
-        # Convert STAGES config to template format
+        # Convert WorkflowManager chapters to template format
         template = {
-            "id": "dcls_data_analysis_workflow",
-            "name": "DCLS Data Analysis Workflow", 
-            "description": "Complete data science lifecycle workflow",
-            "version": "1.0",
-            "stages": []
+            "id": "vds_agents_workflow",
+            "name": "VDS Agents Workflow", 
+            "description": "Existence First Principle driven data science workflow",
+            "version": "2.0",
+            "chapters": []
         }
         
-        # Convert each stage to template format
-        for stage_id, stage_config in STAGES.items():
-            stage_template = {
-                "id": stage_id,
-                "name": stage_config["title"],
-                "description": stage_config["description"],
-                "steps": []
+        # Convert each chapter to template format
+        for chapter_id, chapter_config in WorkflowManager.AVAILABLE_CHAPTERS.items():
+            chapter_template = {
+                "id": chapter_id,
+                "name": chapter_config["name"],
+                "description": chapter_config["description"],
+                "sections": []
             }
             
-            # Convert steps
-            for step in stage_config["steps"]:
-                step_template = {
-                    "id": step["id"],
-                    "name": step["title"],
-                    "description": step.get("description", ""),
-                    "step_id": step["stepId"]
+            # Convert sections
+            for section_id in chapter_config["sections"]:
+                section_template = {
+                    "id": section_id,
+                    "name": section_id.replace("_", " ").title(),
+                    "description": f"Execute {section_id} workflow step"
                 }
-                stage_template["steps"].append(step_template)
+                chapter_template["sections"].append(section_template)
             
-            template["stages"].append(stage_template)
+            template["chapters"].append(chapter_template)
         
         return {
             "status": "success",
@@ -72,30 +71,29 @@ async def validate_step_completion(
     验证步骤完成度
     """
     try:
-        stage_id = request.get("stage_id")
-        step_id = request.get("step_id")
-        step_results = request.get("step_results", {})
+        chapter_id = request.get("chapter_id")
+        section_id = request.get("section_id")
+        section_results = request.get("section_results", {})
         
-        # Simple validation logic - assume step is completed if it has results
-        step_completed = bool(step_results)
+        # Simple validation logic - assume section is completed if it has results
+        section_completed = bool(section_results)
         
-        # Get stage config to check if this is the last step
-        from app.core.config import STAGES
-        stage_config = STAGES.get(stage_id)
-        if not stage_config:
-            return {"step_completed": step_completed, "stage_completed": False}
+        # Get chapter config to check if this is the last section
+        chapter_config = WorkflowManager.AVAILABLE_CHAPTERS.get(chapter_id)
+        if not chapter_config:
+            return {"section_completed": section_completed, "chapter_completed": False}
             
-        steps = stage_config.get("steps", [])
-        current_step_index = next((i for i, step in enumerate(steps) if step["id"] == step_id), -1)
+        sections = chapter_config.get("sections", [])
+        current_section_index = sections.index(section_id) if section_id in sections else -1
         
-        # Stage is completed if this is the last step and it's completed
-        stage_completed = step_completed and (current_step_index == len(steps) - 1)
+        # Chapter is completed if this is the last section and it's completed
+        chapter_completed = section_completed and (current_section_index == len(sections) - 1)
         
         return {
-            "step_completed": step_completed,
-            "stage_completed": stage_completed,
-            "confidence": 1.0 if step_completed else 0.0,
-            "message": "Step validation completed" if step_completed else "Step needs completion"
+            "section_completed": section_completed,
+            "chapter_completed": chapter_completed,
+            "confidence": 1.0 if section_completed else 0.0,
+            "message": "Section validation completed" if section_completed else "Section needs completion"
         }
         
     except Exception as e:
@@ -113,42 +111,41 @@ async def get_stage_transition_suggestion(
     获取阶段转换建议
     """
     try:
-        current_stage = request.get("current_stage")
-        completed_steps = request.get("completed_steps", [])
-        stage_results = request.get("stage_results", {})
+        current_chapter = request.get("current_chapter")
+        completed_sections = request.get("completed_sections", [])
+        chapter_results = request.get("chapter_results", {})
         
-        # Get all stages from config
-        from app.core.config import STAGES
-        stage_ids = list(STAGES.keys())
+        # Get all chapters from WorkflowManager
+        chapter_ids = list(WorkflowManager.AVAILABLE_CHAPTERS.keys())
         
-        # Find current stage index
+        # Find current chapter index
         try:
-            current_stage_index = stage_ids.index(current_stage)
+            current_chapter_index = chapter_ids.index(current_chapter)
         except ValueError:
             return {
                 "should_proceed": False,
-                "next_stage": None,
-                "message": f"Unknown current stage: {current_stage}"
+                "next_chapter": None,
+                "message": f"Unknown current chapter: {current_chapter}"
             }
         
-        # Check if there's a next stage
-        next_stage_index = current_stage_index + 1
-        if next_stage_index < len(stage_ids):
-            next_stage_id = stage_ids[next_stage_index]
-            next_stage_config = STAGES[next_stage_id]
+        # Check if there's a next chapter
+        next_chapter_index = current_chapter_index + 1
+        if next_chapter_index < len(chapter_ids):
+            next_chapter_id = chapter_ids[next_chapter_index]
+            next_chapter_config = WorkflowManager.AVAILABLE_CHAPTERS[next_chapter_id]
             
             return {
                 "should_proceed": True,
-                "next_stage": next_stage_id,
-                "next_stage_name": next_stage_config["title"],
-                "message": f"Ready to proceed to {next_stage_config['title']}",
+                "next_chapter": next_chapter_id,
+                "next_chapter_name": next_chapter_config["name"],
+                "message": f"Ready to proceed to {next_chapter_config['name']}",
                 "confidence": 0.9
             }
         else:
             return {
                 "should_proceed": False,
-                "next_stage": None,
-                "message": "All stages completed",
+                "next_chapter": None,
+                "message": "All chapters completed",
                 "workflow_completed": True
             }
         

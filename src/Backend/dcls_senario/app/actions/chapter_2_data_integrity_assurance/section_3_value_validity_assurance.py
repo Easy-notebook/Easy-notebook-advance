@@ -29,9 +29,9 @@ async def generate_data_cleaning_sequence_step2(
     if step_template.event("start"):
         step_template.new_section("Invalid Value Analysis") \
                     .add_code(
-                            f"""import pandas as pd
-data = pd.read_csv('{csv_file_path}')
-print(data.info())
+                            f"""from vdstools import DataPreview
+data_preview = DataPreview("{csv_file_path}")
+data_preview.data_info()
 """) \
                     .exe_code_cli(mark_finnish="glance at current data info.") \
                     .next_event("glance at current data info.")
@@ -46,10 +46,9 @@ print(data.info())
         step_template.add_text("Let's see the value range of each variable:") \
                     .add_code(
 f"""
-data = pd.read_csv("{csv_file_path}")
-data_describe = data.select_dtypes('number').describe()
-data_describe = data_describe.to_string()
-print(data_describe)
+from vdstools import DataPreview
+data_preview = DataPreview("{csv_file_path}")
+data_preview.column_range()
 """
                     ) \
                     .exe_code_cli( 

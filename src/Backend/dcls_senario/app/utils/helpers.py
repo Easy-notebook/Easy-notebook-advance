@@ -6,28 +6,29 @@ import os
 from fastapi.responses import StreamingResponse
 from typing import AsyncIterable, Dict, Any, List
 
-from app.core.config import STAGES
+from app.core.workflow_manager import WorkflowManager
+from app.utils.logger import ModernLogger
 
 
-logger = logging.getLogger("app")
+logger = ModernLogger("helpers", level="info")
 
 # 是否启用调试模式（可从环境变量读取）
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
 # 调试模式下的延迟倍数
 DEBUG_DELAY_MULTIPLIER = float(os.environ.get("DEBUG_DELAY_MULTIPLIER", "3"))
 
-def get_stage_or_abort(stage_id: str) -> dict:
-    """获取指定阶段信息，如果不存在则抛出异常"""
-    stage = STAGES.get(stage_id)
-    if not stage:
-        raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
-    return stage
+def get_chapter_or_abort(chapter_id: str) -> dict:
+    """获取指定章节信息，如果不存在则抛出异常"""
+    chapter = WorkflowManager.AVAILABLE_CHAPTERS.get(chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail=f"Chapter {chapter_id} not found")
+    return chapter
 
-def validate_step_index(stage: dict, step_index: int) -> dict:
-    """验证步骤索引是否有效"""
-    if not isinstance(step_index, int) or step_index < 0 or step_index >= len(stage["steps"]):
-        raise HTTPException(status_code=404, detail=f"Step index {step_index} out of range")
-    return stage["steps"][step_index]
+def validate_section_id(chapter: dict, section_id: str) -> str:
+    """验证小节ID是否有效"""
+    if section_id not in chapter.get("sections", []):
+        raise HTTPException(status_code=404, detail=f"Section {section_id} not found in chapter")
+    return section_id
 
 async def generate_streaming_response(sequence: dict):
     """生成流式响应"""    

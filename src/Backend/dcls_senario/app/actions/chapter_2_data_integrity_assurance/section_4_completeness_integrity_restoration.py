@@ -36,9 +36,9 @@ async def generate_data_cleaning_sequence_step3(
     if step_template.think_event("check_data_info"):
         step_template.add_text("First, let me check the basic information about our dataset:") \
                     .add_code(
-                            f"""import pandas as pd
-data = pd.read_csv('{csv_file_path}')
-print(data.info())
+                            f"""from vdstools import DataPreview
+data_preview = DataPreview("{csv_file_path}")
+data_preview.data_info()
 """) \
                     .exe_code_cli() \
                     .next_thinking_event(event_tag="analyze_missing_values",

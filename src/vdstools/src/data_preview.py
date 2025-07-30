@@ -37,6 +37,17 @@ class DataPreview(Display):
             print(f"Error loading data: {e}")
             self.data = None
     
+    def column_range(self, csv_file_path: str = None):
+        """
+        Display column range
+        """
+        file_path = csv_file_path or self.csv_file_path
+        if not file_path:
+            html_content = self._create_error_report("No CSV file path provided")
+        else:
+            html_content = show_column_range(file_path)
+        self.show(html_content)
+    
     def top5line(self, csv_file_path: str = None):
         """
         Display first 5 rows with comprehensive data information
@@ -48,7 +59,7 @@ class DataPreview(Display):
         if not file_path:
             html_content = self._create_error_report("No CSV file path provided")
         else:
-            html_content = enhanced_data_preview(file_path, n_rows=5)
+            html_content = data_preview(file_path, n_rows=5)
         self.show(html_content)
     
     def top10line(self, csv_file_path: str = None):
@@ -62,7 +73,7 @@ class DataPreview(Display):
         if not file_path:
             html_content = self._create_error_report("No CSV file path provided")
         else:
-            html_content = enhanced_data_preview(file_path, n_rows=10)
+            html_content = data_preview(file_path, n_rows=10)
         self.show(html_content)
     
     def custom_preview(self, csv_file_path: str = None, n_rows: int = 5, 
@@ -120,6 +131,17 @@ class DataPreview(Display):
             </table>
         </vds-error-panel>
         """
+    
+    def data_info(self, csv_file_path: str = None):
+        """
+        Display data info
+        """
+        file_path = csv_file_path or self.csv_file_path
+        if not file_path:
+            html_content = self._create_error_report("No CSV file path provided")
+        else:
+            html_content = smart_data_info(file_path)
+        self.show(html_content)
         
     def help(self):
         """
@@ -266,6 +288,255 @@ def datapreview(csv_file_path: str) -> DataPreview:
         DataPreviewToolkit instance
     """
     return DataPreview(csv_file_path)
+
+def remove_columns(csv_file_path: str, columns: List[str], save_path: str = None) -> str:
+    """
+    Remove columns from dataset and save the new CSV file
+    
+    Args:
+        csv_file_path: Path to CSV file
+        columns: List of column names to remove
+        save_path: Path to save the new CSV file
+    Returns:
+        Formatted HTML string with removed columns
+    """
+    try:
+        # Read data
+        data = pd.read_csv(csv_file_path)
+        
+        # Check if columns exist in the dataset
+        existing_columns = data.columns.tolist()
+        columns_to_remove = [col for col in columns if col in existing_columns]
+        missing_columns = [col for col in columns if col not in existing_columns]
+        
+        if not columns_to_remove:
+            return f"""
+            <vds-container>
+                <vds-error-panel>
+                    <vds-title>Column Removal Error</vds-title>
+                    <p>None of the specified columns exist in the dataset.</p>
+                    <p>Available columns: {', '.join(existing_columns)}</p>
+                    <p>Requested columns: {', '.join(columns)}</p>
+                </vds-error-panel>
+            </vds-container>
+            """
+        
+        # Remove columns
+        data_cleaned = data.drop(columns=columns_to_remove)
+        
+        # Save if path provided
+        if save_path:
+            data_cleaned.to_csv(save_path, index=False)
+        
+        # Generate report
+        html_content = f"""
+        <vds-container>
+            <vds-title>Column Removal Report</vds-title>
+            <vds-info-panel>
+                <h3>Removal Summary</h3>
+                <p><strong>Original columns:</strong> {len(existing_columns)}</p>
+                <p><strong>Columns removed:</strong> {len(columns_to_remove)}</p>
+                <p><strong>Remaining columns:</strong> {len(data_cleaned.columns)}</p>
+                {f"<p><strong>Saved to:</strong> {save_path}</p>" if save_path else ""}
+            </vds-info-panel>
+            
+            <vds-section>
+                <h3>Removed Columns</h3>
+                <ul>
+                    {''.join([f"<li>{col}</li>" for col in columns_to_remove])}
+                </ul>
+            </vds-section>
+            
+            {f'''<vds-section>
+                <h3>Warning: Missing Columns</h3>
+                <p>The following columns were not found in the dataset:</p>
+                <ul>
+                    {''.join([f"<li>{col}</li>" for col in missing_columns])}
+                </ul>
+            </vds-section>''' if missing_columns else ""}
+            
+            <vds-section>
+                <h3>Remaining Columns</h3>
+                <ul>
+                    {''.join([f"<li>{col}</li>" for col in data_cleaned.columns])}
+                </ul>
+            </vds-section>
+        </vds-container>
+        """
+        
+        return html_content
+        
+    except Exception as e:
+        return f"""
+        <vds-container>
+            <vds-error-panel>
+                <vds-title>Column Removal Error</vds-title>
+                <p>Error occurred while removing columns: {str(e)}</p>
+            </vds-error-panel>
+        </vds-container>
+        """
+
+def data_preview(csv_file_path: str, n_rows: int = 5) -> str:
+    """
+    Data preview function, replacing simple data.head()
+    
+    Args:
+        csv_file_path: Path to CSV file
+        n_rows: Number of rows to display
+
+    Returns:
+        Formatted HTML string with data preview and basic info
+    """
+    try:
+        # Read data
+        data = pd.read_csv(csv_file_path)
+        
+        # Generate data preview table
+        preview_html = f"""
+        <vds-container>
+            <vds-title>Data Preview - First {n_rows} Rows</vds-title>
+            <vds-table>
+                <table class="vds-data-table">
+                    <thead>
+                        <tr>
+        """
+        
+        # Add column headers
+        for col in data.columns:
+            preview_html += f'<th class="vds-col-header">{col}</th>'
+        
+        preview_html += """
+                        </tr>
+                    </thead>
+                    <tbody>
+        """
+        
+        # Add data rows
+        preview_data = data.head(n_rows)
+        for idx, row in preview_data.iterrows():
+            preview_html += '<tr>'
+            for col in data.columns:
+                value = row[col]
+                # Handle different data types for display
+                if pd.isna(value):
+                    display_value = '<span class="vds-null">NaN</span>'
+                elif isinstance(value, (int, float)):
+                    if isinstance(value, float):
+                        display_value = f'{value:.3f}' if not pd.isna(value) else 'NaN'
+                    else:
+                        display_value = str(value)
+                else:
+                    display_value = str(value)
+                preview_html += f'<td class="vds-cell">{display_value}</td>'
+            preview_html += '</tr>'
+        
+        preview_html += """
+                    </tbody>
+                </table>
+            </vds-table>
+        </vds-container>
+        """
+        
+        return preview_html
+        
+    except FileNotFoundError:
+        return '<vds-container><vds-error>Error: File not found</vds-error></vds-container>'
+    except pd.errors.EmptyDataError:
+        return '<vds-container><vds-error>Error: Empty CSV file</vds-error></vds-container>'
+    except Exception as e:
+        return f'<vds-container><vds-error>Error reading file: {str(e)}</vds-error></vds-container>'
+
+
+def missing_values_preview(csv_file_path: str) -> str:
+    """
+    Missing values preview function
+    
+    Args:
+        csv_file_path: Path to CSV file
+        
+    Returns:
+        Formatted HTML string with missing values analysis
+    """
+    try:
+        # Read data
+        data = pd.read_csv(csv_file_path)
+        
+        # Calculate missing values statistics
+        missing_stats = data.isnull().sum()
+        missing_percentage = (missing_stats / len(data)) * 100
+        total_missing = missing_stats.sum()
+        
+        # Build HTML content
+        html_content = f"""
+        <vds-container>
+            <vds-title>Missing Values Analysis</vds-title>
+            
+            <vds-info-panel>
+                <table class="vds-info-table">
+                    <tr><td class="vds-label">Total Missing Values</td><td class="vds-value">{total_missing:,} cells</td></tr>
+                    <tr><td class="vds-label">Dataset Size</td><td class="vds-value">{data.shape[0]:,} rows × {data.shape[1]} columns</td></tr>
+                    <tr><td class="vds-label">Overall Missing Percentage</td><td class="vds-value">{(total_missing / (data.shape[0] * data.shape[1]) * 100):.2f}%</td></tr>
+                </table>
+            </vds-info-panel>
+            
+            <vds-section>
+                <vds-subtitle>Missing Values by Column</vds-subtitle>
+                <vds-table>
+                    <table class="vds-data-table">
+                        <thead>
+                            <tr>
+                                <th class="vds-col-header">Column Name</th>
+                                <th class="vds-col-header">Data Type</th>
+                                <th class="vds-col-header">Missing Count</th>
+                                <th class="vds-col-header">Missing Percentage</th>
+                                <th class="vds-col-header">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        """
+        
+        # Add rows for each column
+        for col in data.columns:
+            missing_count = missing_stats[col]
+            missing_pct = missing_percentage[col]
+            dtype_str = str(data[col].dtype)
+            
+            # Determine status based on missing percentage
+            if missing_pct == 0:
+                status = '<span class="vds-status-good">Complete</span>'
+            elif missing_pct < 10:
+                status = '<span class="vds-status-warning">Few Missing</span>'
+            elif missing_pct < 50:
+                status = '<span class="vds-status-caution">Many Missing</span>'
+            else:
+                status = '<span class="vds-status-danger">Mostly Missing</span>'
+            
+            html_content += f"""
+                            <tr>
+                                <td class="vds-cell">{col}</td>
+                                <td class="vds-cell">{dtype_str}</td>
+                                <td class="vds-cell">{missing_count:,}</td>
+                                <td class="vds-cell">{missing_pct:.2f}%</td>
+                                <td class="vds-cell">{status}</td>
+                            </tr>
+            """
+        
+        html_content += """
+                        </tbody>
+                    </table>
+                </vds-table>
+            </vds-section>
+        </vds-container>
+        """
+        
+        return html_content
+        
+    except FileNotFoundError:
+        return '<vds-container><vds-error>Error: File not found</vds-error></vds-container>'
+    except pd.errors.EmptyDataError:
+        return '<vds-container><vds-error>Error: Empty CSV file</vds-error></vds-container>'
+    except Exception as e:
+        return f'<vds-container><vds-error>Error reading file: {str(e)}</vds-error></vds-container>'
 
 def enhanced_data_preview(csv_file_path: str, n_rows: int = 5) -> str:
     """
@@ -454,7 +725,6 @@ def smart_data_info(csv_file_path: str) -> str:
                 <tr><td class="vds-stat-label">Categorical Columns</td><td class="vds-stat-value">{len(categorical_cols)}</td></tr>
                 <tr><td class="vds-stat-label">Missing Ratio</td><td class="vds-stat-value">{missing_ratio:.2f}%</td></tr>
                 <tr><td class="vds-stat-label">Duplicate Rows</td><td class="vds-stat-value">{duplicate_count}</td></tr>
-                <tr><td class="vds-stat-label">Memory Usage</td><td class="vds-stat-value">{data.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB</td></tr>
             </table>
         </vds-info-panel>
         """
@@ -468,6 +738,81 @@ def smart_data_info(csv_file_path: str) -> str:
         </vds-error-panel>
         """
 
+def show_column_range(csv_file_path: str) -> str:
+    """
+    Show column range
+    """
+    data = pd.read_csv(csv_file_path)
+    """
+    Display value ranges for each column in the dataset
+    
+    Args:
+        csv_file_path: Path to CSV file
+        
+    Returns:
+        HTML formatted column range information
+    """
+    try:
+        data = pd.read_csv(csv_file_path)
+        
+        html_content = """
+        <vds-container>
+            <vds-title>Column Value Range Analysis</vds-title>
+            <vds-section>
+                <table class="vds-range-table">
+                    <thead>
+                        <tr>
+                            <th>Column Name</th>
+                            <th>Data Type</th>
+                            <th>Value Range</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        """
+        
+        for col in data.columns:
+            col_data = data[col]
+            dtype = str(col_data.dtype)
+            
+            # Determine value range based on data type
+            if pd.api.types.is_numeric_dtype(col_data):
+                min_val = col_data.min()
+                max_val = col_data.max()
+                value_range = f"{min_val} ~ {max_val}"
+            else:
+                # For categorical/object columns
+                unique_values = col_data.dropna().unique()
+                if len(unique_values) <= 5:
+                    value_range = f"[{', '.join(map(str, unique_values))}]"
+                else:
+                    value_range = f"{len(unique_values)} unique values"
+            
+            html_content += f"""
+                        <tr>
+                            <td class="vds-col-name">{col}</td>
+                            <td class="vds-col-type">{dtype}</td>
+                            <td class="vds-col-range">{value_range}</td>
+                        </tr>
+            """
+        
+        html_content += """
+                    </tbody>
+                </table>
+            </vds-section>
+        </vds-container>
+        """
+        
+        return html_content
+        
+    except Exception as e:
+        return f"""
+        <vds-container>
+            <vds-error-panel>
+                <vds-title>Column Range Analysis Error</vds-title>
+                <p>Error reading file: {str(e)}</p>
+            </vds-error-panel>
+        </vds-container>
+        """
 
 def get_column_list(csv_file_path: str) -> List[str]:
     """

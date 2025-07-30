@@ -1,4 +1,3 @@
-import logging
 import os
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
@@ -11,11 +10,12 @@ from app.models.planner import (
     GenerateRequest,
     GenerateResponse,
 )
-from app.utils.helpers import get_stage_or_abort, validate_step_index, create_streaming_response
+from app.utils.helpers import get_chapter_or_abort, validate_section_id, create_streaming_response
 from app.actions import get_sequence_generator
 from app.actions import general_response
+from app.utils.logger import ModernLogger
 
-logger = logging.getLogger("app")
+logger = ModernLogger("planner", level="info")
 router = APIRouter()
 
 @router.post("/debug/toggle", response_model=Dict[str, Any])
@@ -74,30 +74,37 @@ async def get_debug_status():
 @router.post("/actions", response_model=SequenceResponse)
 async def planner_sequence(request: SequenceRequest):
     """
-    获取指定阶段和步骤的操作序列
+    获取指定章节和小节的操作序列
     
     当 stream 为 true 时，将以流式输出（每一行 JSON）的方式返回操作序列。
     """
-    stage = get_stage_or_abort(request.stage_id)
-    step = validate_step_index(stage, request.step_index)
+    # 从请求中获取章节和小节信息 (需要修改前端传递chapter_id和section_id)
+    chapter_id = request.stage_id  # 暂时使用stage_id作为chapter_id
+    section_id = f"section_{request.step_index + 1}_workflow_initialization"  # 临时映射逻辑
+    
+    chapter = get_chapter_or_abort(chapter_id)
+    validate_section_id(chapter, section_id)
     
     # 获取序列生成器并生成序列
     sequence = await get_sequence_generator(
-        request.stage_id, 
-        request.step_index, 
+        chapter_id, 
+        section_id, 
         request.state,
         stream=request.stream  # 传递流式参数
     )
     
     if not sequence:
-        raise HTTPException(status_code=404, detail=f"Sequence for step {request.step_index} not found")
+        raise HTTPException(status_code=404, detail=f"Sequence for section {section_id} not found")
     
-    next_step = request.step_index + 1 if request.step_index + 1 < len(stage["steps"]) else None
+    # 获取下一个小节
+    sections = chapter["sections"]
+    current_section_index = sections.index(section_id) if section_id in sections else -1
+    next_section = sections[current_section_index + 1] if current_section_index + 1 < len(sections) else None
     
     # 添加元数据到序列中
-    sequence["stage_id"] = request.stage_id
-    sequence["step"] = step
-    sequence["next_step"] = next_step
+    sequence["chapter_id"] = chapter_id
+    sequence["section_id"] = section_id
+    sequence["next_section"] = next_section
     
     if 1:
         # 返回流式响应
@@ -105,10 +112,10 @@ async def planner_sequence(request: SequenceRequest):
     else:
         # 返回常规JSON响应
         return {
-            "stage_id": request.stage_id,
-            "step": step,
+            "chapter_id": chapter_id,
+            "section_id": section_id,
             "sequence": sequence,
-            "next_step": next_step
+            "next_section": next_section
         }
 
 @router.post("/reflection", response_model=FeedbackResponse)

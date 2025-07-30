@@ -46,8 +46,6 @@ print(variables)''',
         else:
             # Fallback or debug information
             variables_str = str(variables)
-            print(f"Debug - Type of variables: {type(variables)}")
-            print(f"Debug - Value of variables: {variables}")
             if isinstance(variables, list) and len(variables) > 0:
                 print(f"Debug - Type of variables[0]: {type(variables[0])}")
         
@@ -59,7 +57,11 @@ print(variables)''',
             .add_text(
                 f"ok we know there are {len(variables_list)} variables, let's see the top 5 rows of the data"
             ) \
-            .add_code("data.head()") \
+            .add_code(f"""
+            from vdstools import DataPreview
+            data_preview = DataPreview("{csv_file_path}")
+            data_preview.top5line()
+            """) \
             .exe_code_cli(mark_finnish="finished glance at the top 5 rows of the data")
         
         return step_template.end_event()
