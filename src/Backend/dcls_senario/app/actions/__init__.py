@@ -94,35 +94,24 @@ async def general_response(issue: str, context: Dict[str, Any]) -> Dict[str, Any
     """
     通用响应生成器
     """
-    try:
-        # 处理特定的业务逻辑
-        if issue == 'generate_question_choice_map':
-            from app.actions.general import generate_question_choice_map
-            question_choice_map = await generate_question_choice_map(context)
-            return {
-                "status": "success",
-                "message": question_choice_map
-            }
-        
-        # 基础实现 - 其他通用请求
+    # 处理特定的业务逻辑
+    if issue == 'generate_question_choice_map':
+        from app.actions.general import generate_question_choice_map
+        question_choice_map = await generate_question_choice_map(context)
+        logger.info(f"Question choice map: {question_choice_map}")
         return {
             "status": "success",
-            "message": [
-                {
-                    "type": "text",
-                    "content": f"Processing issue: {issue}",
-                    "context": context
-                }
-            ]
+            "message": question_choice_map
         }
-    except Exception as e:
-        logger.error(f"Error in general_response: {str(e)}")
-        return {
-            "status": "error", 
-            "message": [
-                {
-                    "type": "error",
-                    "content": str(e)
-                }
-            ]
-        }
+    
+    # 基础实现 - 其他通用请求
+    return {
+        "status": "success",
+        "message": [
+            {
+                "type": "text",
+                "content": f"Processing issue: {issue}",
+                "context": context
+            }
+        ]
+    }

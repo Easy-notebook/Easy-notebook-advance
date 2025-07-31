@@ -13,6 +13,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class Oracle(ParallelProcessor):
     # enum for model names
     SUPPORTED_MODELS = {
+        "doubao-1-5-lite-32k-250115": 32768,
         "gpt-4o-mini": 128000,
         "gpt-4o": 128000,
         "o4-mini": 200000,
@@ -58,30 +59,27 @@ class Oracle(ParallelProcessor):
         Returns:
             dict: Dictionary containing the query, answer, and log probabilities.
         """
-        try:
-            completion = self.client.chat.completions.create(
-                model=self._check_token_limits(prompt_sys, prompt_user, self.model),
-                messages=[
-                    {"role": "system", "content": prompt_sys},
-                    {"role": "user", "content": prompt_user},
-                ],
-                stream=False,
-                temperature=temp,
-                top_p=top_p,
-                logprobs=logprobs,
-            )
+        completion = self.client.chat.completions.create(
+            model=self._check_token_limits(prompt_sys, prompt_user, self.model),
+            messages=[
+                {"role": "system", "content": prompt_sys},
+                {"role": "user", "content": prompt_user},
+            ],
+            stream=False,
+            temperature=temp,
+            top_p=top_p,
+            logprobs=logprobs,
+        )
 
-            response_result = ""
-            # for chunk in stream:
-            if completion.choices[0].message and completion.choices[0].message.content:
-                response_result = completion.choices[0].message.content
-            
-            if not query_key:
-                query_key = prompt_user 
-            return response_result
+        response_result = ""
+        # for chunk in stream:
+        if completion.choices[0].message and completion.choices[0].message.content:
+            response_result = completion.choices[0].message.content
+        
+        if not query_key:
+            query_key = prompt_user 
+        return response_result
 
-        except Exception as e:
-            return f"QUERY_FAILED:{str(e)}"
     
     def query_all(self, prompt_sys, prompt_user_all, workers=None, temp=0.0, top_p=0.9, query_key_list=[], batch_size=10, max_retries=2, timeout=3000, **kwargs):
         """

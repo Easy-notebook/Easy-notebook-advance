@@ -208,14 +208,18 @@ const DynamicStageTemplate = ({ onComplete }) => {
     const { 
         getCurrentStageConfig,
         markStepCompleted,
-        markStageCompleted: markPipelineStageCompleted
+        markStageCompleted: markPipelineStageCompleted,
+        currentStepId: pipelineCurrentStepId,
+        setCurrentStepId: setPipelineCurrentStepId,
+        workflowTemplate,
+        currentStageId
     } = usePipelineStore();
     
     const currentStageConfig = useMemo(() => {
         const config = getCurrentStageConfig();
         console.log('getCurrentStageConfig result:', config);
         return config;
-    }, [getCurrentStageConfig]);
+    }, [workflowTemplate, currentStageId]);
     
     const { id: stageId, steps, name: stageTitle } = currentStageConfig || { id: '', steps: [], name: '' };
     
@@ -226,7 +230,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         stageTitle,
         initialVariables: {},
         initialChecklist: {}
-    }), [stageId, steps, stageTitle]);
+    }), [stageId, JSON.stringify(steps), stageTitle]);
 
     // Use reducer for main state management
     const [stageState, dispatch] = useReducer(stageStateReducer, initialStageState);
@@ -293,6 +297,8 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     // Retrieve variable state
     const variables = useAIPlanningContextStore(state => state.variables);
+
+    // Removed: useWorkflowPanelStore setCurrentStepIndex - now using pipeline store directly
 
     // Use workflow manager hook to handle workflow-related logic
     const {
@@ -398,7 +404,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 }, 100);
             }
         }
-    }, [stageId, steps, debouncedSwitchStep, clearStep, streamCompleted, isCompleted]);
+    }, [stageId, steps?.length, debouncedSwitchStep, clearStep, streamCompleted, isCompleted]);
 
     const executeAction = useCallback(async (action) => {
         try {
@@ -599,7 +605,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                         message.action.updated_steps,
                                         message.action.next_step_id,
                                         (stepIndex, stepId) => {
-                                            setCurrentStepIndex(stepIndex);
+                                            // Update both local state and pipeline store
+                                            dispatch({ type: 'SET_CURRENT_STEP_INDEX', payload: stepIndex });
+                                            setPipelineCurrentStepId(stepId);
                                             debouncedSwitchStep(stepId);
                                         }
                                     );
@@ -665,7 +673,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
                             message.action.updated_steps,
                             message.action.next_step_id,
                             (stepIndex, stepId) => {
-                                setCurrentStepIndex(stepIndex);
+                                // Update both local state and pipeline store
+                                dispatch({ type: 'SET_CURRENT_STEP_INDEX', payload: stepIndex });
+                                setPipelineCurrentStepId(stepId);
                                 debouncedSwitchStep(stepId);
                             }
                         );
@@ -689,6 +699,20 @@ const DynamicStageTemplate = ({ onComplete }) => {
         });
 
         if (isStageComplete) {
+            // CRITICAL FIX: Even when stage is complete, mark current step as completed for pipeline store
+            console.log('Stage is complete, but ensuring current step is marked as completed:', stepId);
+            markStepCompleted(stepId);
+            
+            // Notify WorkflowControl that step is completed (for already completed stages)
+            window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
+                detail: { 
+                    stepId, 
+                    result: { targetAchieved: true, alreadyCompleted: true },
+                    stageId,
+                    timestamp: Date.now()
+                }
+            }));
+            
             dispatch({ type: 'SET_STREAM_COMPLETED', payload: true });
             return;
         }
@@ -750,6 +774,21 @@ const DynamicStageTemplate = ({ onComplete }) => {
             }
 
             console.log('Target achieved! Proceeding to next step');
+            
+            // CRITICAL FIX: Mark step as completed in pipeline store
+            console.log('Marking step as completed in pipeline store:', stepId);
+            markStepCompleted(stepId);
+            
+            // Notify WorkflowControl that step is completed
+            window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
+                detail: { 
+                    stepId, 
+                    result: feedbackResult,
+                    stageId,
+                    timestamp: Date.now()
+                }
+            }));
+            
             dispatch({ type: 'SET_STREAM_COMPLETED', payload: true });
         } catch (error) {
             console.error("Feedback API error:", error);
@@ -805,6 +844,11 @@ const DynamicStageTemplate = ({ onComplete }) => {
             }
         });
         const stepId = currentSteps[stepIndex].step_id;
+        
+        // CRITICAL FIX: Update pipeline store with current step
+        console.log('LoadStep: Updating pipeline store currentStepId to:', stepId);
+        setPipelineCurrentStepId(stepId);
+        
         debouncedSwitchStep(stepId);
         markStepIncomplete && markStepIncomplete(stepId);
 
@@ -886,20 +930,37 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     useEffect(() => {
         const currentSteps = stepsRef.current;
+        console.log('Auto-advance effect triggered:', {
+            streamCompleted,
+            autoAdvance,
+            currentStepIndex,
+            totalSteps: currentSteps.length,
+            stageId
+        });
+        
         if (streamCompleted) {
             dispatch({ type: 'SET_LOADING', payload: false });
             if (currentStepIndex === currentSteps.length - 1 && autoAdvance) {
+                console.log('Last step completed, marking stage as complete');
                 dispatch({ type: 'SET_COMPLETED', payload: true });
+                
+                // CRITICAL FIX: Mark stage as completed in pipeline store  
+                console.log('Marking stage as completed in pipeline store:', stageId);
+                markPipelineStageCompleted(stageId);
                 markStageAsCompleteRef.current(stageId);
             } else if (autoAdvance && currentStepIndex < currentSteps.length - 1) {
+                console.log(`Auto-advancing from step ${currentStepIndex} to step ${currentStepIndex + 1}`);
                 // Clear any existing timeout
                 if (autoAdvanceTimeoutRef.current) {
                     clearTimeout(autoAdvanceTimeoutRef.current);
                 }
                 autoAdvanceTimeoutRef.current = setTimeout(() => {
                     autoAdvanceTimeoutRef.current = null;
+                    console.log('Executing auto-advance to next step:', currentStepIndex + 1);
                     if (loadStepRef.current) {
                         loadStepRef.current(currentStepIndex + 1);
+                    } else {
+                        console.error('loadStepRef.current is null, cannot auto-advance');
                     }
                 }, 500);
                 return () => {
@@ -908,9 +969,15 @@ const DynamicStageTemplate = ({ onComplete }) => {
                         autoAdvanceTimeoutRef.current = null;
                     }
                 };
+            } else {
+                console.log('Auto-advance conditions not met:', {
+                    autoAdvance,
+                    isLastStep: currentStepIndex === currentSteps.length - 1,
+                    hasMoreSteps: currentStepIndex < currentSteps.length - 1
+                });
             }
         }
-    }, [streamCompleted, autoAdvance, currentStepIndex, stageId]);
+    }, [streamCompleted, autoAdvance, currentStepIndex, stageId, markPipelineStageCompleted]);
 
     useEffect(() => {
         if (isStageComplete && !historyLoaded) {
@@ -1012,7 +1079,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     const handleContinue = useCallback(async () => {
         console.log('DSLC Continue handler called');
-        // Mark stage as complete
+        // Mark stage as complete in both stores
+        console.log('Marking stage as completed in both stores:', stageId);
+        markPipelineStageCompleted(stageId);
         markStageAsComplete(stageId);
         
         // Call onComplete if provided for navigation
@@ -1137,6 +1206,106 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setWorkflowCompleted(isCompleted);
     }, [isCompleted]);
     
+    // Listen for WorkflowControl step trigger events
+    useEffect(() => {
+        const handleWorkflowStepTrigger = (event) => {
+            const { stepId, action, timestamp } = event.detail;
+            console.log(`[DynamicStageTemplate] Received workflowStepTrigger:`, { stepId, action, timestamp, currentStageId: stageId });
+            
+            // Check if this trigger is for a step in our current stage
+            const currentSteps = stepsRef.current;
+            const targetStepIndex = currentSteps.findIndex(step => 
+                (step.step_id === stepId || step.id === stepId)
+            );
+            
+            if (targetStepIndex >= 0) {
+                console.log(`[DynamicStageTemplate] Triggering action ${action} for step ${stepId} at index ${targetStepIndex}`);
+                
+                switch (action) {
+                    case 'auto_execute':
+                    case 'auto_start':
+                    case 'resume_execute':
+                    case 'auto_advance':
+                    case 'stage_ready_execute':
+                        // Execute the step
+                        if (loadStepRef.current) {
+                            console.log(`[DynamicStageTemplate] Executing step ${targetStepIndex} via ${action}`);
+                            loadStepRef.current(targetStepIndex);
+                        } else {
+                            console.error('[DynamicStageTemplate] loadStepRef.current is null, cannot execute step');
+                        }
+                        break;
+                        
+                    case 'retry':
+                        // Retry current step - clear error state and re-execute
+                        dispatch({ type: 'CLEAR_ERROR' });
+                        if (loadStepRef.current) {
+                            setTimeout(() => {
+                                loadStepRef.current(targetStepIndex);
+                            }, 100);
+                        }
+                        break;
+                        
+                    case 'restart':
+                        // Restart step - clear all state and re-execute
+                        dispatch({ 
+                            type: 'SET_MULTIPLE', 
+                            payload: {
+                                error: null,
+                                errorDetails: null,
+                                streamCompleted: false,
+                                uiLoaded: false
+                            }
+                        });
+                        if (loadStepRef.current) {
+                            setTimeout(() => {
+                                loadStepRef.current(targetStepIndex);
+                            }, 100);
+                        }
+                        break;
+                        
+                    case 'resume':
+                        // Resume from pause - continue execution
+                        if (loadStepRef.current && targetStepIndex === currentStepIndex) {
+                            loadStepRef.current(targetStepIndex);
+                        }
+                        break;
+                        
+                    default:
+                        console.log(`[DynamicStageTemplate] Unknown action: ${action}`);
+                }
+            } else {
+                console.log(`[DynamicStageTemplate] Step ${stepId} not found in current stage ${stageId}`);
+            }
+        };
+        
+        window.addEventListener('workflowStepTrigger', handleWorkflowStepTrigger);
+        
+        return () => {
+            window.removeEventListener('workflowStepTrigger', handleWorkflowStepTrigger);
+        };
+    }, [stageId, currentStepIndex]);
+    
+    // Notify WorkflowControl when DynamicStageTemplate is ready
+    useEffect(() => {
+        if (stageId && stepsRef.current.length > 0) {
+            console.log(`[DynamicStageTemplate] Stage ${stageId} is ready with ${stepsRef.current.length} steps`);
+            // Notify WorkflowControl that this stage is ready for execution
+            window.dispatchEvent(new CustomEvent('dynamicStageReady', {
+                detail: { 
+                    stageId,
+                    stepCount: stepsRef.current.length,
+                    steps: stepsRef.current.map(step => ({
+                        id: step.id,
+                        step_id: step.step_id,
+                        name: step.name
+                    })),
+                    timestamp: Date.now()
+                }
+            }));
+        }
+    }, [stageId, steps.length]); // Depend on steps.length to notify when steps are available
+    
     useEffect(() => {
         // Set countdown if stage is completed and auto advance is enabled
         if (isCompleted && autoAdvance && !isReturnVisit) {
@@ -1149,10 +1318,12 @@ const DynamicStageTemplate = ({ onComplete }) => {
     // Stage completion handling - core logic only (simplified) 
     useEffect(() => {
         if (isCompleted && autoAdvance && !isReturnVisit) {
-            // Mark stage as complete for internal state
+            // Mark stage as complete for both internal state and pipeline store
+            console.log('Auto-advance stage completion - marking in both stores:', stageId);
+            markPipelineStageCompleted(stageId);
             markStageAsComplete(stageId);
         }
-    }, [isCompleted, autoAdvance, isReturnVisit, stageId, markStageAsComplete]);
+    }, [isCompleted, autoAdvance, isReturnVisit, stageId, markStageAsComplete, markPipelineStageCompleted]);
 
     const navigateToStep = useCallback((stepIndex) => {
         if (currentStepIndex === stepIndex) return;

@@ -23,7 +23,8 @@ import {
   Terminal,
   Table as TableIcon,
   Image as ImageIcon,
-  Sigma as FunctionIcon
+  Sigma as FunctionIcon,
+  Brain
 } from 'lucide-react'
 
 import Table from '@tiptap/extension-table'
@@ -1360,6 +1361,16 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         >
           <FunctionIcon size={14} />
         </button>
+        
+        <div className="w-px h-4 bg-gray-600 mx-1" />
+        
+        <button
+          onClick={insertThinkingCell}
+          className="p-2 rounded hover:bg-gray-700"
+          title="Insert AI Thinking Cell"
+        >
+          <Brain size={14} />
+        </button>
       </BubbleMenu>
 
       {/* 主编辑器内容 - 恢复正常显示 */}
@@ -1387,6 +1398,15 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         /* AI思考单元格样式 */
         .thinking-cell-wrapper {
           margin: 1.5em 0;
+          position: relative;
+          width: 100%;
+        }
+        
+        .thinking-cell-container {
+          position: relative;
+          width: 100%;
+          min-height: 40px;
+          padding: 8px 16px;
         }
        
         /* 表格样式 */

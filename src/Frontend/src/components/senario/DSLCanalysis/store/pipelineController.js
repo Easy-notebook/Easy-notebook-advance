@@ -161,67 +161,10 @@ const usePipelineStore = create((set, get) => ({
                             }
                         ]
                     },
-                    {
-                        id: 'stage_0_data_loading_and_hypothesis_proposal',
-                        name: 'Data Loading & Hypothesis Proposal',
-                        description: 'Load and preview data, propose initial hypothesis',
-                        steps: [
-                            {
-                                id: 'step_1_data_preview',
-                                step_id: 'step_1_data_preview',
-                                name: 'Data Preview',
-                                description: 'Load and preview dataset using VDS tools'
-                            },
-                            {
-                                id: 'step_2_hypothesis_proposal',
-                                step_id: 'step_2_hypothesis_proposal',
-                                name: 'Hypothesis Proposal',
-                                description: 'Propose research hypothesis based on data structure'
-                            }
-                        ]
-                    },
-                    {
-                        id: 'stage_1_data_cleaning',
-                        name: 'Data Cleaning',
-                        description: 'Clean and preprocess data for analysis',
-                        steps: [
-                            {
-                                id: 'step_1_missing_values',
-                                step_id: 'step_1_missing_values',
-                                name: 'Handle Missing Values',
-                                description: 'Detect and handle missing values in dataset'
-                            },
-                            {
-                                id: 'step_2_outlier_detection',
-                                step_id: 'step_2_outlier_detection',
-                                name: 'Outlier Detection',
-                                description: 'Identify and handle outliers'
-                            }
-                        ]
-                    },
-                    {
-                        id: 'stage_2_exploratory_data_analysis',
-                        name: 'Exploratory Data Analysis',
-                        description: 'Comprehensive EDA to understand data patterns',
-                        steps: [
-                            {
-                                id: 'step_1_descriptive_statistics',
-                                step_id: 'step_1_descriptive_statistics',
-                                name: 'Descriptive Statistics',
-                                description: 'Generate comprehensive descriptive statistics'
-                            },
-                            {
-                                id: 'step_2_correlation_analysis',
-                                step_id: 'step_2_correlation_analysis',
-                                name: 'Correlation Analysis',
-                                description: 'Analyze relationships between variables'
-                            }
-                        ]
-                    }
                 ],
                 analysis: {
-                    promise: "Complete data analysis workflow from data loading to insights",
-                    minimal_workflow: ["Planning", "Data Loading", "Data Cleaning", "EDA"]
+                    promise: "",
+                    minimal_workflow: []
                 },
                 execution_strategy: "sequential",
                 customization_reason: "Full VDS data analysis pipeline"
@@ -276,6 +219,12 @@ const usePipelineStore = create((set, get) => ({
                 ? state.completedSteps 
                 : [...state.completedSteps, stepId]
         }));
+    },
+
+    // Set current step ID (frontend state)
+    setCurrentStepId: (stepId) => {
+        console.log('PipelineStore: Setting currentStepId to:', stepId);
+        set({ currentStepId: stepId });
     },
 
     // Mark stage as completed (frontend state)

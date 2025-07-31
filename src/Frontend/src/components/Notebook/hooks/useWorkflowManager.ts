@@ -177,13 +177,17 @@ export const useWorkflowManager = (
     }
   }, []);
 
-  // Sync panel state with component state
+  // REMOVED: Sync panel state with component state
+  // This was causing workflow state inconsistency - panel store should reflect pipeline store, not component state
+  // The real workflow state is managed by pipeline store
+  
+  // Only sync necessary UI state to panel for display purposes
   useEffect(() => {
     setCurrentSteps(currentSteps);
-    setCurrentStepIndex(currentStepIndex);
     setStepsLoaded(stepsLoaded);
     setPanelIsCompleted(isCompleted);
-  }, [currentSteps, currentStepIndex, stepsLoaded, isCompleted, setCurrentSteps, setCurrentStepIndex, setStepsLoaded, setPanelIsCompleted]);
+    // REMOVED: setCurrentStepIndex - this should come from pipeline store only
+  }, [currentSteps, stepsLoaded, isCompleted, setCurrentSteps, setStepsLoaded, setPanelIsCompleted]);
 
   // Set up handlers in the store
   useEffect(() => {

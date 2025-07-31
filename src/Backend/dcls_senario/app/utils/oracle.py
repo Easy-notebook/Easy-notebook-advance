@@ -13,6 +13,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 class Oracle(ParallelProcessor):
     # enum for model names
     SUPPORTED_MODELS = {
+        "doubao-1-5-lite-32k-250115": 32768,
         "gpt-4o-mini": 128000,
         "gpt-4o": 128000,
         "o4-mini": 200000,
@@ -45,7 +46,7 @@ class Oracle(ParallelProcessor):
         return model
     
     # for chat completion
-    def query(self, prompt_sys, prompt_user, temp=0.0, top_p=0.9, logprobs=True, query_key=None):
+    def query(self, prompt_sys, prompt_user, temp=0.0, top_p=0.9, query_key=None):
         """
         Query the model with a system prompt and user prompt.
         Args:
@@ -53,14 +54,13 @@ class Oracle(ParallelProcessor):
             prompt_user (str): User prompt.
             temp (float): Temperature for the model.
             top_p (float): Top-p sampling parameter.
-            logprobs (bool): Whether to return log probabilities.
             query_key (str): Key for the query.
         Returns:
             dict: Dictionary containing the query, answer, and log probabilities.
         """
         try:
             completion = self.client.chat.completions.create(
-                model=self._check_token_limits(prompt_sys, prompt_user, self.model),
+                model=self.model,
                 messages=[
                     {"role": "system", "content": prompt_sys},
                     {"role": "user", "content": prompt_user},
@@ -68,20 +68,30 @@ class Oracle(ParallelProcessor):
                 stream=False,
                 temperature=temp,
                 top_p=top_p,
-                logprobs=logprobs,
             )
 
             response_result = ""
-            # for chunk in stream:
             if completion.choices[0].message and completion.choices[0].message.content:
                 response_result = completion.choices[0].message.content
             
             if not query_key:
                 query_key = prompt_user 
-            return response_result
+            
+            result = {
+                "query": query_key,
+                "answer": response_result
+            }
+            
+            return result
 
         except Exception as e:
-            return f"QUERY_FAILED:{str(e)}"
+            logging.error(f"Query failed for problem({query_key}): due to {e}")
+            if not query_key:
+                query_key = prompt_user 
+            return {
+                "query": query_key,
+                "answer": f"QUERY_FAILED:{e}"
+            }
     
     def query_all(self, prompt_sys, prompt_user_all, workers=None, temp=0.0, top_p=0.9, query_key_list=[], batch_size=10, max_retries=2, timeout=3000, **kwargs):
         """

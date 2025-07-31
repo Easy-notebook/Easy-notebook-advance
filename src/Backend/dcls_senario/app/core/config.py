@@ -16,4 +16,4 @@ from DCLSAgents.agents import (ProblemDefinitionAndDataCollectionAgent, DataClea
 
 from .workflow_manager import WorkflowManager
 
-llm = "gpt-4o-mini"
+llm = "doubao-1-5-lite-32k-250115"

@@ -6,6 +6,7 @@ import ProblemDefineState from './preStage/ProblemDefineState';
 import DynamicStageTemplate from './stages/DynamicStageTemplate';
 import useStore from '../../../store/notebookStore';
 import usePreStageStore from './store/preStageStore';
+import { useWorkflowPanelStore } from '../../Notebook/store/workflowPanelStore';
 
 
 import './pipelineAnimations.css';
@@ -70,9 +71,10 @@ const DSLCPipeline = ({onAddCell}) => {
                             }
                             
                             // Initialize workflow with planning when starting data analysis stages
+                            // This activates the workflow and makes it available for WorkflowPanel confirmation
                             if (!isWorkflowActive) {
                                 try {
-                                    console.log('Initializing workflow with planning...');
+                                    console.log('[Pipeline] Problem confirmed, initializing workflow...');
                                     
                                     // Get planning data from preStageStore
                                     const preStageState = usePreStageStore.getState();
@@ -83,14 +85,14 @@ const DSLCPipeline = ({onAddCell}) => {
                                         context_description: preStageState.dataset_info || 'Dataset analysis context'
                                     };
                                     
-                                    console.log('Planning request:', planningRequest);
+                                    console.log('[Pipeline] Planning request:', planningRequest);
                                     const planning = await initializeWorkflow(planningRequest);
-                                    console.log('Workflow planning initialized:', planning);
+                                    console.log('[Pipeline] Workflow initialized successfully:', planning);
                                     
                                     // Wait a bit for state to update, then check
                                     setTimeout(() => {
                                         const currentState = usePipelineStore.getState();
-                                        console.log('Current state after planning init:', {
+                                        console.log('[Pipeline] Current state after workflow init:', {
                                             currentStage: currentState.currentStage,
                                             isWorkflowActive: currentState.isWorkflowActive,
                                             currentStageId: currentState.currentStageId,
@@ -100,17 +102,16 @@ const DSLCPipeline = ({onAddCell}) => {
                                     
                                     // Check if planning generated valid stages
                                     if (!planning.stages?.[0]?.id) {
-                                        console.error('No stages found in planning result');
+                                        console.error('[Pipeline] No stages found in planning result');
                                         throw new Error('Planning did not generate valid stages');
                                     }
                                     
                                 } catch (error) {
-                                    console.error('Failed to initialize workflow with planning:', error);
-                                    // The static planning workflow should always work, so this is an unexpected error
+                                    console.error('[Pipeline] Failed to initialize workflow:', error);
                                     throw error;
                                 }
                             } else {
-                                console.log('Workflow already active, transitioning to first stage');
+                                console.log('[Pipeline] Workflow already active, transitioning to first stage');
                                 // If workflow is already active, just go to the first stage
                                 if (workflowTemplate?.stages?.[0]?.id) {
                                     usePipelineStore.getState().setStage(workflowTemplate.stages[0].id);

@@ -1,6 +1,7 @@
 import React from 'react';
-import { CheckCircle, AlertCircle, Target} from 'lucide-react';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
+import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
 
 interface WorkflowPanelProps {
   // Props are now optional since we use store for state management
@@ -8,8 +9,6 @@ interface WorkflowPanelProps {
   pendingWorkflowUpdate?: any;
   onConfirmWorkflowUpdate?: () => void;
   onRejectWorkflowUpdate?: () => void;
-  workflowUpdated?: boolean;
-  workflowUpdateCount?: number;
   currentSteps?: any[];
   currentStepIndex?: number;
   stepsLoaded?: number[];
@@ -23,8 +22,6 @@ const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
   pendingWorkflowUpdate: fallbackPendingWorkflowUpdate,
   onConfirmWorkflowUpdate: fallbackOnConfirmWorkflowUpdate,
   onRejectWorkflowUpdate: fallbackOnRejectWorkflowUpdate,
-  workflowUpdated: fallbackWorkflowUpdated,
-  workflowUpdateCount: fallbackWorkflowUpdateCount,
   currentSteps: fallbackCurrentSteps,
   currentStepIndex: fallbackCurrentStepIndex,
   stepsLoaded: fallbackStepsLoaded,
@@ -35,32 +32,63 @@ const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
   const {
     showWorkflowConfirm: storeShowWorkflowConfirm,
     pendingWorkflowUpdate: storePendingWorkflowUpdate,
-    workflowUpdated: storeWorkflowUpdated,
-    workflowUpdateCount: storeWorkflowUpdateCount,
     currentSteps: storeCurrentSteps,
-    currentStepIndex: storeCurrentStepIndex,
     stepsLoaded: storeStepsLoaded,
     isCompleted: storeIsCompleted,
     isAutoTracking,
-    currentStage,
-    plannedSteps,
     confirmWorkflowUpdate,
     rejectWorkflowUpdate,
     navigateToStep,
     toggleAutoTracking,
-    setCurrentStage,
-    setPlannedSteps
+    setCurrentStage
   } = useWorkflowPanelStore();
+
+  // Get real-time workflow state from pipeline store
+  const {
+    workflowTemplate,
+    currentStageId,
+    currentStepId,
+    completedSteps
+  } = usePipelineStore();
 
   // Use store values or fallback to props
   const showWorkflowConfirm = storeShowWorkflowConfirm ?? fallbackShowWorkflowConfirm ?? false;
   const pendingWorkflowUpdate = storePendingWorkflowUpdate ?? fallbackPendingWorkflowUpdate;
-  const workflowUpdated = storeWorkflowUpdated ?? fallbackWorkflowUpdated ?? false;
-  const workflowUpdateCount = storeWorkflowUpdateCount ?? fallbackWorkflowUpdateCount ?? 0;
-  const currentSteps = storeCurrentSteps.length > 0 ? storeCurrentSteps : (fallbackCurrentSteps ?? []);
-  const currentStepIndex = storeCurrentStepIndex ?? fallbackCurrentStepIndex ?? 0;
-  const stepsLoaded = storeStepsLoaded.length > 0 ? storeStepsLoaded : (fallbackStepsLoaded ?? []);
-  const isCompleted = storeIsCompleted ?? fallbackIsCompleted ?? false;
+  
+  // Extract steps from CURRENT STAGE only for proper tracking
+  const currentStageSteps = React.useMemo(() => {
+    if (!workflowTemplate?.stages || !currentStageId) return fallbackCurrentSteps ?? [];
+    
+    // Find the current stage
+    const currentStage = workflowTemplate.stages.find(stage => stage.id === currentStageId);
+    if (!currentStage?.steps) return fallbackCurrentSteps ?? [];
+    
+    // Return only the steps from current stage
+    return currentStage.steps.map(step => ({
+      ...step,
+      stageName: currentStage.name,
+      stageId: currentStage.id
+    }));
+  }, [workflowTemplate, currentStageId, fallbackCurrentSteps]);
+  
+  // Find current step index within current stage based on currentStepId
+  const realCurrentStepIndex = React.useMemo(() => {
+    if (!currentStepId || currentStageSteps.length === 0) return fallbackCurrentStepIndex ?? 0;
+    
+    const index = currentStageSteps.findIndex(step => step.id === currentStepId || step.step_id === currentStepId);
+    return index >= 0 ? index : fallbackCurrentStepIndex ?? 0;
+  }, [currentStepId, currentStageSteps, fallbackCurrentStepIndex]);
+  
+  // Use current stage steps or fallback to props
+  const currentSteps = currentStageSteps.length > 0 ? currentStageSteps : (storeCurrentSteps.length > 0 ? storeCurrentSteps : (fallbackCurrentSteps ?? []));
+  const currentStepIndex = realCurrentStepIndex;
+  
+  // Only show completion status for steps in current stage
+  const stepsLoaded = completedSteps
+    .map(stepId => currentStageSteps.findIndex(step => step.id === stepId || step.step_id === stepId))
+    .filter(index => index >= 0);
+  
+  const isCompleted = storeIsCompleted ?? fallbackIsCompleted ?? true; // Default to true so steps are clickable
 
   // Use store methods or fallback to props
   const handleConfirmWorkflowUpdate = () => {
@@ -95,55 +123,80 @@ const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
     <>
       {/* Workflow Update Confirmation Dialog */}
       {showWorkflowConfirm && pendingWorkflowUpdate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl mx-4">
-            <div className="flex items-center mb-4">
-              <AlertCircle className="w-6 h-6 text-blue-500 mr-3" />
-              <h3 className="text-lg font-semibold text-gray-900">
-                Workflow Update Available
-              </h3>
-            </div>
-            
-            <div className="mb-6">
-              <p className="text-gray-600 mb-3">
-                According to your goal, PCS Agent has updated the TO-DO list:
-              </p>
-              
-              <div className="bg-gray-50 rounded p-4 max-h-60 overflow-y-auto">
-                {pendingWorkflowUpdate.stages && pendingWorkflowUpdate.stages.length > 0 ? (
-                  <ul className="space-y-2">
-                    {pendingWorkflowUpdate.stages.map((stage: any, index: number) => (
-                      <li key={stage.id || index} className="flex items-center">
-                        <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
-                          {index + 1}
-                        </span>
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {stage.name || stage.id || `Stage ${index + 1}`}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-gray-500">No stages information available</p>
-                )}
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/20" onClick={handleRejectWorkflowUpdate} />
+          <div className="relative bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-xl mx-4">
+            <div className="sticky top-0 bg-white border-b z-10">
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="w-5 h-5 text-theme-600" />
+                  <h3 className="text-xl font-bold text-gray-800">
+                    Workflow Update Available
+                  </h3>
+                </div>
+                <button
+                  onClick={handleRejectWorkflowUpdate}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  aria-label="Close Dialog"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
             
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={handleRejectWorkflowUpdate}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-              >
-                Reject
-              </button>
-              <button
-                onClick={handleConfirmWorkflowUpdate}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center"
-              >
-                Accept
-              </button>
+            <div className="p-6">
+              <div className="mb-6">
+                <p className="text-lg text-gray-600 mb-4">
+                  According to your goal, PCS Agent has updated the TO-DO list:
+                </p>
+                
+                <div className="bg-gray-50 rounded-3xl p-6 max-h-60 overflow-y-auto">
+                  {pendingWorkflowUpdate.stages && pendingWorkflowUpdate.stages.length > 0 ? (
+                    <ul className="space-y-4">
+                      {pendingWorkflowUpdate.stages.map((stage: any, index: number) => (
+                        <li key={stage.id || index} className="flex items-center">
+                          <span className="w-8 h-8 bg-theme-100 text-theme-600 rounded-full flex items-center justify-center text-sm font-medium mr-4">
+                            {index + 1}
+                          </span>
+                          <div>
+                            <div className="text-lg font-medium text-gray-900">
+                              {stage.name || stage.id || `Stage ${index + 1}`}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-lg text-gray-500">No stages information available</p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={handleRejectWorkflowUpdate}
+                  className="px-6 py-3 text-lg font-medium text-gray-600 border border-gray-300 rounded-3xl hover:bg-gray-50 transition-colors"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={handleConfirmWorkflowUpdate}
+                  className="px-6 py-3 text-lg font-medium bg-theme-500 text-white rounded-3xl hover:bg-theme-600 transition-colors focus:outline-none focus:ring-2 focus:ring-theme-500 focus:ring-offset-2"
+                >
+                  Accept
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -153,40 +206,22 @@ const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
       {/* Step Navigation Bar - Only show if we have steps */}
       {currentSteps.length > 0 && (
         <div className="sticky top-4 z-40 bg-blue-50 bg-opacity-20 backdrop-blur-lg">
-          {/* Stage Info and Tracking Controls */}
-          {/* <div className="border-b border-gray-100 px-4 py-2">
-            <div className="flex items-center justify-between text-sm"> */}
-              {/* Left: Current Stage */}
-              {/* <div className="flex items-center space-x-4">
-                <span className="text-gray-600">
-                  {currentStage || `Step ${currentStepIndex + 1} of ${currentSteps.length}`}
-                </span>
-                {plannedSteps.length > 0 && (
-                  <span className="text-gray-500">
-                    → {plannedSteps.slice(0, 2).join(' → ')}
-                    {plannedSteps.length > 2 && ` +${plannedSteps.length - 2}`}
+          {/* Current Stage Header */}
+          {currentStageSteps.length > 0 && currentStageSteps[0]?.stageName && (
+            <div className="px-4 py-2 border-b border-gray-100">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center space-x-4">
+                  <span className="text-gray-600 font-medium">
+                    Agents are working on {currentStageSteps[0].stageName}
                   </span>
-                )}
-              </div> */}
-
-              {/* Right: Tracking Toggle */}
-              {/* <button
-                onClick={toggleAutoTracking}
-                className={`
-                  flex items-center px-2 py-1 text-xs rounded transition-colors
-                  ${isAutoTracking
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }
-                `}
-                title={`Auto-tracking: ${isAutoTracking ? 'On' : 'Off'} (Alt+Shift+T)`}
-              >
-                <Target size={12} className="mr-1" />
-                {isAutoTracking ? 'Track' : 'Off'}
-              </button>
+                  <span className="text-gray-500">
+                    Step {currentStepIndex + 1} of {currentSteps.length}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-           */}
+          )}
+          
           {/* Step Navigation */}
           <div className="border-b border-gray-100 mb-4">
             <div className="max-w-screen-xl mx-auto overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">

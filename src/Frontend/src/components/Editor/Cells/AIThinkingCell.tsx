@@ -184,14 +184,38 @@ const AIThinkingCell: React.FC<AIThinkingCellProps> = ({
             data-cell-id={cell.id}
             className={`thinking-cell-container ${
                 isInDetachedView 
-                    ? 'bg-white h-full' 
-                    : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm'
+                    ? 'bg-white h-full p-4' 
+                    : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm p-2 my-2'
             }`}
             onMouseEnter={() => setShowToolbar(true)}
             onMouseLeave={() => setShowToolbar(false)}
         >
-                {/* AI Thinking 内容区域 */}
-                <div className="w-full relative overflow-hidden rounded-full">
+            {/* Toolbar */}
+            {showToolbar && !isInDetachedView && (
+                <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200 p-1 z-20">
+                    {!isDetached && (
+                        <button
+                            onClick={() => setDetachedCellId(cell.id)}
+                            className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
+                            title="Open in split view"
+                        >
+                            <ExternalLink className="w-4 h-4" />
+                        </button>
+                    )}
+                    {onDelete && (
+                        <button
+                            onClick={() => onDelete(cell.id)}
+                            className="p-1.5 hover:bg-red-100 rounded text-red-600"
+                            title="Delete cell"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* AI Thinking 内容区域 */}
+            <div className="w-full relative overflow-hidden rounded-full">
                     {/* 流动渐变效果的整行背景 - 从右向左流动，无过渡以避免卡顿 */}
                     <div
                         className="absolute inset-0 w-full h-full"

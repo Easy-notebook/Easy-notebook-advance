@@ -14,11 +14,23 @@ class BaseAgent(ModernLogger):
         
     def answer(self, question:str) -> str:
         response = self.model.query(self.system_prompt, question)
-        if response.startswith('QUERY_FAILED:'):
-            self.error(f"Query failed for model {self.model_name} with error: {response}")
-        self.debug(f"Question: {question}")
         self.debug(f"Response: {response}")
-        return response
+        
+        # Handle dict response format from Oracle
+        if isinstance(response, dict):
+            answer = response.get("answer", "")
+            if answer.startswith('QUERY_FAILED:'):
+                self.error(f"Query failed for model {self.model_name} with error: {answer}")
+            self.debug(f"Question: {question}")
+            self.debug(f"Response: {answer}")
+            return answer
+        else:
+            # Handle string response (backward compatibility)
+            if response.startswith('QUERY_FAILED:'):
+                self.error(f"Query failed for model {self.model_name} with error: {response}")
+            self.debug(f"Question: {question}")
+            self.debug(f"Response: {response}")
+            return response
     
     def answer_multiple(self, questions:List[str]) -> List[str]:
         responses = self.model.query_all(self.system_prompt, questions)
@@ -26,7 +38,7 @@ class BaseAgent(ModernLogger):
     
     def _parse_json(self, response):
         """Parse JSON data from LLM response with multiple fallback strategies"""
-        import json
+        self.info(f"Parsing JSON from response: {response}")
         
         # Strategy 1: Try standard markdown code block format
         code_match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
@@ -49,7 +61,7 @@ class BaseAgent(ModernLogger):
             
             return json.loads(cleaned_response)
         except json.JSONDecodeError:
-            pass
+            self.error(f"JSON decode error in markdown block: {e}")
         
         # Strategy 3: Extract JSON-like content using regex
         json_pattern = r'\{.*\}'
@@ -59,7 +71,7 @@ class BaseAgent(ModernLogger):
                 json_str = json_match.group(0)
                 return json.loads(json_str)
             except json.JSONDecodeError:
-                pass
+                self.error(f"JSON decode error in regex: {e}")
         
         # All strategies failed
         self.error(f"Failed to parse JSON from response using all strategies. Response: {response[:500]}...")
@@ -79,16 +91,32 @@ class BaseAgent(ModernLogger):
         return self._parse_code(response)
     
     def analyzing(self, question:str) -> str:
-        response = self.answer(question)
-        if response.startswith('QUERY_FAILED:'):
+        max_retries = 3
+        for attempt in range(max_retries):
             response = self.answer(question)
+            
+            # If query failed, try again
+            if response.startswith('QUERY_FAILED:'):
+                self.warning(f"Query failed on attempt {attempt + 1}: {response}")
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    self.error(f"All {max_retries} query attempts failed")
+                    raise ValueError(f"Model query failed after {max_retries} attempts: {response}")
+            
+            # Try to parse JSON response
+            parsed_result = self._parse_json(response)
+            if parsed_result is not None:
+                return parsed_result
+            
+            # If JSON parsing failed, log and retry
+            self.warning(f"JSON parsing failed on attempt {attempt + 1}")
+            if attempt < max_retries - 1:
+                continue
         
-        parsed_result = self._parse_json(response)
-        if parsed_result is None:
-            self.error(f"JSON parsing failed completely for question: {question[:100]}...")
-            raise ValueError(f"Failed to parse JSON response from LLM")
-        
-        return parsed_result
+        # All attempts failed
+        self.error(f"JSON parsing failed completely after {max_retries} attempts for question: {question[:100]}...")
+        raise ValueError(f"Failed to parse JSON response from LLM after {max_retries} attempts")
     
     def code_multiple(self, questions:List[str]) -> List[str]:
         responses = self.model.query_all(self.system_prompt, questions)
