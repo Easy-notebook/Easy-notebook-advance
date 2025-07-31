@@ -269,10 +269,6 @@ const DynamicStageTemplate = ({ onComplete }) => {
         addVariable,
     } = useAIPlanningContextStore();
 
-    // Use refs to store stable function references
-    const loadStepRef = useRef(null);
-    const markStageAsCompleteRef = useRef(markStageAsComplete);
-
     // WorkflowControl integration for DSLC stages
     const {
         setIsGenerating: setWorkflowGenerating,
@@ -291,8 +287,21 @@ const DynamicStageTemplate = ({ onComplete }) => {
     const setContext = useAIPlanningContextStore(state => state.setContext);
     const addEffect = useAIPlanningContextStore(state => state.addEffect);
 
-    // Get stage completion status for use as an effect dependency
-    const isStageComplete = useAIPlanningContextStore(state => state.isStageComplete(stageId));
+    // Use refs to store stable function references (after variables are defined)
+    const loadStepRef = useRef(null);
+    const markStageAsCompleteRef = useRef(markStageAsComplete);
+    const getContextRef = useRef(getContext);
+    const setContextRef = useRef(setContext);
+    const execActionRef = useRef(execAction);
+    const addEffectRef = useRef(addEffect);
+    const switchStepRef = useRef(switchStep);
+    const setNavigationHandlerRef = useRef(null);
+    const clearStepRef = useRef(clearStep);
+    const markStepIncompleteRef = useRef(markStepIncomplete);
+
+    // Get stage completion status for use as an effect dependency - avoid function calls in selector
+    const stageCompletionStatus = useAIPlanningContextStore(state => state.completedStages);
+    const isStageComplete = stageCompletionStatus ? stageCompletionStatus.includes(stageId) : false;
     const toDoList = useAIPlanningContextStore(state => state.toDoList);
 
     // Retrieve variable state
@@ -300,20 +309,30 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     // Removed: useWorkflowPanelStore setCurrentStepIndex - now using pipeline store directly
 
-    // Use workflow manager hook to handle workflow-related logic
-    const {
-        processWorkflowUpdate,
-        processStageStepsUpdate,
-        setNavigationHandler
-    } = useWorkflowManager(stageId, currentStepIndex, stepsLoaded, isCompleted, steps);
+    // Temporarily disable useWorkflowManager to test for infinite loops
+    // const {
+    //     processWorkflowUpdate,
+    //     processStageStepsUpdate,
+    //     setNavigationHandler
+    // } = useWorkflowManager(stageId, currentStepIndex, stepsLoaded, isCompleted, steps);
+
+    // Create dummy functions to avoid breaking the component
+    const processWorkflowUpdate = useCallback(() => true, []);
+    const processStageStepsUpdate = useCallback(() => {}, []);
+    const setNavigationHandler = useCallback(() => {}, []);
+
+    // Update navigation handler ref
+    useEffect(() => {
+        setNavigationHandlerRef.current = setNavigationHandler;
+    }, [setNavigationHandler]);
 
     // ---------- step Switching Logic ----------
     const debouncedSwitchStep = useCallback((stepId) => {
         if (currentStepRef.current === stepId) return;
         stepSwitchCounterRef.current += 1;
         currentStepRef.current = stepId;
-        switchStep(stepId);
-    }, [switchStep]);
+        switchStepRef.current(stepId);
+    }, []);
 
     // ---------- Monitor Configuration Changes ----------
     useEffect(() => {
@@ -355,7 +374,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             // Only clear step if this is not a workflow update to preserve cell content
             if (currentStepRef.current && !isWorkflowUpdate) {
                 console.log('Clearing step due to stage change (not workflow update)');
-                clearStep(currentStepRef.current);
+                clearStepRef.current(currentStepRef.current);
                 currentStepRef.current = null;
             } else if (currentStepRef.current) {
                 console.log('Preserving step content during workflow update');
@@ -404,7 +423,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 }, 100);
             }
         }
-    }, [stageId, steps?.length, debouncedSwitchStep, clearStep, streamCompleted, isCompleted]);
+    }, [stageId, steps?.length, debouncedSwitchStep, streamCompleted, isCompleted]);
 
     const executeAction = useCallback(async (action) => {
         try {
@@ -412,10 +431,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 execute: async () => {
                     console.log(`Executing operation: ${action.action}`);
                     try {
-                        const output = await execAction(action);
+                        const output = await execActionRef.current(action);
                         if (output) {
                             console.log(`Operation result:`, output);
-                            addEffect(output);
+                            addEffectRef.current(output);
                         }
                         return output;
                     } catch (error) {
@@ -441,7 +460,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             }
             throw error;
         }
-    }, [execAction, addEffect]);
+    }, []);
 
     // ---------- Stream Request Processing (current step already updated in loadStep) ----------
     const executeStepRequest = useCallback(async (stepIndex, stepId, controller, retryCount = 0) => {
@@ -492,7 +511,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 body: JSON.stringify({
                     stage_id: stageId,
                     step_index: stepId,
-                    state: getContext(),
+                    state: getContextRef.current(),
                     stream: true
                 })
             });
@@ -724,7 +743,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 body: JSON.stringify({
                     stage_id: stageId,
                     step_index: stepId,
-                    state: getContext(),
+                    state: getContextRef.current(),
                 })
             });
 
@@ -804,12 +823,19 @@ const DynamicStageTemplate = ({ onComplete }) => {
         } finally {
             dispatch({ type: 'SET_LOADING', payload: false });
         }
-    }, [executeAction, stageId, isReturnVisit, isStageComplete, getContext, setContext]);
+    }, [executeAction, stageId, isReturnVisit, isStageComplete]);
 
     // Update refs when functions change
     useEffect(() => {
         markStageAsCompleteRef.current = markStageAsComplete;
-    }, [markStageAsComplete]);
+        getContextRef.current = getContext;
+        setContextRef.current = setContext;
+        execActionRef.current = execAction;
+        addEffectRef.current = addEffect;
+        switchStepRef.current = switchStep;
+        clearStepRef.current = clearStep;
+        markStepIncompleteRef.current = markStepIncomplete;
+    }, [markStageAsComplete, getContext, setContext, execAction, addEffect, switchStep, clearStep, markStepIncomplete]);
 
     // ---------- loadStep: Pre-update the current step and mark it as loaded to ensure the new stepId takes effect promptly ----------
     const loadStep = useCallback(async (stepIndex) => {
@@ -850,7 +876,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         setPipelineCurrentStepId(stepId);
         
         debouncedSwitchStep(stepId);
-        markStepIncomplete && markStepIncomplete(stepId);
+        markStepIncompleteRef.current && markStepIncompleteRef.current(stepId);
 
         const controller = new AbortController();
         currentLoadStepControllerRef.current = controller;
@@ -894,7 +920,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         } finally {
             cleanup();
         }
-    }, [debouncedSwitchStep, executeStepRequest, markStepIncomplete]);
+    }, [debouncedSwitchStep, executeStepRequest]);
     
     // Update loadStep ref and setup cleanup on unmount
     useEffect(() => {
@@ -1082,7 +1108,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
         // Mark stage as complete in both stores
         console.log('Marking stage as completed in both stores:', stageId);
         markPipelineStageCompleted(stageId);
-        markStageAsComplete(stageId);
+        markStageAsCompleteRef.current(stageId);
         
         // Call onComplete if provided for navigation
         if (onComplete && typeof onComplete === 'function') {
@@ -1112,7 +1138,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             setWorkflowGenerating(false);
             setContinueCountdown(0);
         }
-    }, [stageId, onComplete, markStageAsComplete, setWorkflowCompleted, setWorkflowGenerating, setContinueCountdown]);
+    }, [stageId, onComplete, setWorkflowCompleted, setWorkflowGenerating, setContinueCountdown]);
 
     const handleCancelCountdown = useCallback(() => {
         console.log('DSLC Cancel countdown handler called');
@@ -1321,9 +1347,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
             // Mark stage as complete for both internal state and pipeline store
             console.log('Auto-advance stage completion - marking in both stores:', stageId);
             markPipelineStageCompleted(stageId);
-            markStageAsComplete(stageId);
+            markStageAsCompleteRef.current(stageId);
         }
-    }, [isCompleted, autoAdvance, isReturnVisit, stageId, markStageAsComplete, markPipelineStageCompleted]);
+    }, [isCompleted, autoAdvance, isReturnVisit, stageId, markPipelineStageCompleted]);
 
     const navigateToStep = useCallback((stepIndex) => {
         if (currentStepIndex === stepIndex) return;
@@ -1348,8 +1374,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     // Set up the navigation handler in the workflow panel store
     useEffect(() => {
-        setNavigationHandler(navigateToStep);
-    }, [navigateToStep, setNavigationHandler]);
+        if (setNavigationHandlerRef.current) {
+            setNavigationHandlerRef.current(navigateToStep);
+        }
+    }, [navigateToStep]);
 
     const EmptyState = useMemo(() => React.memo(() => <SkeletonLoader count={1} />), []);
 
