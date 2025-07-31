@@ -298,6 +298,8 @@ const DynamicStageTemplate = ({ onComplete }) => {
     const setNavigationHandlerRef = useRef(null);
     const clearStepRef = useRef(clearStep);
     const markStepIncompleteRef = useRef(markStepIncomplete);
+    const processWorkflowUpdateRef = useRef(null);
+    const processStageStepsUpdateRef = useRef(null);
 
     // Get stage completion status for use as an effect dependency - avoid function calls in selector
     const stageCompletionStatus = useAIPlanningContextStore(state => state.completedStages);
@@ -309,22 +311,22 @@ const DynamicStageTemplate = ({ onComplete }) => {
 
     // Removed: useWorkflowPanelStore setCurrentStepIndex - now using pipeline store directly
 
-    // Temporarily disable useWorkflowManager to test for infinite loops
-    // const {
-    //     processWorkflowUpdate,
-    //     processStageStepsUpdate,
-    //     setNavigationHandler
-    // } = useWorkflowManager(stageId, currentStepIndex, stepsLoaded, isCompleted, steps);
+    // Use memoized steps to avoid infinite loops while preserving functionality
+    const stepsForWorkflowManager = useMemo(() => steps, [JSON.stringify(steps)]);
+    
+    // Use workflow manager hook to handle workflow-related logic
+    const {
+        processWorkflowUpdate,
+        processStageStepsUpdate,
+        setNavigationHandler
+    } = useWorkflowManager(stageId, currentStepIndex, stepsLoaded, isCompleted, stepsForWorkflowManager);
 
-    // Create dummy functions to avoid breaking the component
-    const processWorkflowUpdate = useCallback(() => true, []);
-    const processStageStepsUpdate = useCallback(() => {}, []);
-    const setNavigationHandler = useCallback(() => {}, []);
-
-    // Update navigation handler ref
+    // Update workflow manager refs
     useEffect(() => {
         setNavigationHandlerRef.current = setNavigationHandler;
-    }, [setNavigationHandler]);
+        processWorkflowUpdateRef.current = processWorkflowUpdate;
+        processStageStepsUpdateRef.current = processStageStepsUpdate;
+    }, [setNavigationHandler, processWorkflowUpdate, processStageStepsUpdate]);
 
     // ---------- step Switching Logic ----------
     const debouncedSwitchStep = useCallback((stepId) => {
@@ -610,7 +612,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 }
                                 // Handle workflow updates
                                 if (message.action.updated_workflow) {
-                                    const success = processWorkflowUpdate(message.action.updated_workflow);
+                                    const success = processWorkflowUpdateRef.current ? processWorkflowUpdateRef.current(message.action.updated_workflow) : true;
                                     if (!success) {
                                         dispatch({ type: 'SET_ERROR', payload: { error: 'Invalid workflow update received from backend', errorDetails: null } });
                                         return;
@@ -619,7 +621,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                                 
                                 // Handle current stage steps update
                                 if (message.action.action === 'update_stage_steps') {
-                                    processStageStepsUpdate(
+                                    processStageStepsUpdateRef.current && processStageStepsUpdateRef.current(
                                         message.action.stage_id,
                                         message.action.updated_steps,
                                         message.action.next_step_id,
@@ -678,7 +680,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                     }
                     // Handle workflow updates in last line
                     if (message.action.updated_workflow) {
-                        const success = processWorkflowUpdate(message.action.updated_workflow);
+                        const success = processWorkflowUpdateRef.current ? processWorkflowUpdateRef.current(message.action.updated_workflow) : true;
                         if (!success) {
                             dispatch({ type: 'SET_ERROR', payload: { error: 'Invalid workflow update received from backend', errorDetails: null } });
                             return;
@@ -687,7 +689,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
                     
                     // Handle current stage steps update (final)
                     if (message.action.action === 'update_stage_steps') {
-                        processStageStepsUpdate(
+                        processStageStepsUpdateRef.current && processStageStepsUpdateRef.current(
                             message.action.stage_id,
                             message.action.updated_steps,
                             message.action.next_step_id,
