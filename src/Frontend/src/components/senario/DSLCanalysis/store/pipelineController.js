@@ -186,6 +186,27 @@ const usePipelineStore = create((set, get) => ({
                 stageResults: {}
             });
 
+            // Set required variables in AI Planning Context
+            try {
+                const { useAIPlanningContextStore } = await import('./aiPlanningContext');
+                const aiPlanningStore = useAIPlanningContextStore.getState();
+                
+                // Add planning request variables to context
+                aiPlanningStore.addVariable('problem_name', planningRequest.problem_name);
+                aiPlanningStore.addVariable('user_goal', planningRequest.user_goal);
+                aiPlanningStore.addVariable('problem_description', planningRequest.problem_description);
+                aiPlanningStore.addVariable('context_description', planningRequest.context_description);
+                
+                console.log('[Pipeline] Added variables to AI Planning Context:', {
+                    problem_name: planningRequest.problem_name,
+                    user_goal: planningRequest.user_goal,
+                    problem_description: planningRequest.problem_description,
+                    context_description: planningRequest.context_description
+                });
+            } catch (error) {
+                console.warn('[Pipeline] Could not set AI Planning Context variables:', error);
+            }
+
             // Reset state machine to ensure clean start
             const { stateMachine } = get();
             if (stateMachine) {

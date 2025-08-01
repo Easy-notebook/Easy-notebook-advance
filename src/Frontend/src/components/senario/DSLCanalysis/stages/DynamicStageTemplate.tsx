@@ -228,14 +228,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 const { reset } = useWorkflowStateMachine.getState();
                 reset();
                 
-                // Clear completion flags in stores
-                console.log('[DynamicStageTemplate] Clearing completion states in stores');
-                const pipelineStore = usePipelineStore.getState();
-                pipelineStore.clearAllCompletionStates();
-                
+                // Only reset stage completion status, keep other states intact
+                console.log('[DynamicStageTemplate] Clearing stage completion status only');
                 const aiPlanningStore = useAIPlanningContextStore.getState();
                 aiPlanningStore.clearStageStatus(stageId);
-                aiPlanningStore.resetAIPlanningContext();
                 
                 // Small delay to allow state to update
                 await new Promise(resolve => setTimeout(resolve, 50));
@@ -249,11 +245,8 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 const { reset } = useWorkflowStateMachine.getState();
                 reset();
                 
-                // Also clear store completion states
-                console.log('[DynamicStageTemplate] Clearing completion states in stores (retry)');
-                const pipelineStore = usePipelineStore.getState();
-                pipelineStore.clearAllCompletionStates();
-                
+                // Only clear stage completion status for retry  
+                console.log('[DynamicStageTemplate] Clearing stage completion status (retry)');
                 const aiPlanningStore = useAIPlanningContextStore.getState();
                 aiPlanningStore.clearStageStatus(stageId);
                 
@@ -285,10 +278,12 @@ const DynamicStageTemplate = ({ onComplete }) => {
             
             // Execute API call for the step
             console.log('[DynamicStageTemplate] Making API request to:', constants.API.SEQUENCE_API_URL);
+            const currentContext = getContext();
+            console.log('[DynamicStageTemplate] Current context variables:', currentContext.variables);
             console.log('[DynamicStageTemplate] Request payload:', {
                 stage_id: stageId,
                 step_index: stepId,
-                state: getContext(),
+                state: currentContext,
                 stream: true
             });
             
