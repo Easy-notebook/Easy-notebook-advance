@@ -31,10 +31,8 @@ const MainContent: React.FC<MainContentProps> = ({
   tasks,
   currentPhaseId,
   currentStepIndex,
-  getCurrentViewCells,
   handleAddCell,
   renderCell,
-  renderStepNavigation,
   handlePreviousStep,
   handleNextStep,
   handlePreviousPhase,
@@ -51,6 +49,15 @@ const MainContent: React.FC<MainContentProps> = ({
   const shouldShowDSLCUI = cells.length === 0;
   const shouldRunDSLCInBackground = viewMode === 'demo' || viewMode === 'create';
   const shouldAlwaysRenderDSLC = shouldShowDSLCUI || shouldRunDSLCInBackground;
+
+  // Debug logging
+  console.log('[MainContent] Render state:', {
+    cellsCount: cells.length,
+    viewMode,
+    shouldShowDSLCUI,
+    shouldRunDSLCInBackground,
+    shouldAlwaysRenderDSLC
+  });
 
   // 如果有独立窗口模式的 cell 且是全屏模式，优先显示独立视图
   if (detachedCellId && isDetachedCellFullscreen) {

@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useState, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useState, useRef, useEffect } from 'react';
 import useStore from '../../store/notebookStore';
 import CodeCell from './Cells/CodeCell';
 import HybridCell from './Cells/HybridCell';
@@ -16,6 +16,12 @@ const JupyterNotebookEditor = forwardRef(({
   const { cells, setCells } = useStore();
   const containerRef = useRef(null);
   const [focusedCellId, setFocusedCellId] = useState(null);
+
+  // Add debug logging for cells changes
+  useEffect(() => {
+    console.log('[JupyterNotebookEditor] Cells updated:', cells.length, 'cells');
+    console.log('[JupyterNotebookEditor] Cell types:', cells.map(c => c.type));
+  }, [cells]);
 
   const generateCellId = () => {
     return `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

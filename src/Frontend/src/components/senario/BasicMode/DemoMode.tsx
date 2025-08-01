@@ -1,6 +1,4 @@
 import React from 'react';
-import TiptapNotebookEditor from '../../Editor/TiptapNotebookEditor';
-import JupyterNotebookEditor from '../../Editor/JupyterNotebookEditor';
 import StepNavigation from '../../Notebook/MainContainer/StepNavigation';
 import { useSettings } from '../../../store/settingsStore';
 
@@ -28,8 +26,6 @@ interface DemoModeProps {
  * It provides a demonstration mode with step-by-step navigation and proper cell filtering.
  */
 const DemoMode: React.FC<DemoModeProps> = ({ 
-  className = "",
-  readOnly = false,
   tasks = [],
   currentPhaseId,
   currentStepIndex = 0,
@@ -47,9 +43,6 @@ const DemoMode: React.FC<DemoModeProps> = ({
   
   // Determine which editor to render based on the current settings.
   const editorType = settings.editorSettings?.editorType || 'tiptap';
-  
-  console.log('[DemoMode] Current editor type:', editorType);
-  console.log('[DemoMode] Settings:', settings);
 
   // If no phase is selected, show editor selection interface
   if (!currentPhaseId) {

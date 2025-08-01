@@ -228,7 +228,6 @@ export type NotebookStore = NotebookStoreState & NotebookStoreActions;
 // 序列化工具
 const serializeOutput = (output: any): any => {
   if (!output) return null;
-  console.log(output);
 
   if (Array.isArray(output)) {
     return output.map(serializeOutput);
@@ -272,14 +271,11 @@ const deserializeOutput = (output: any): any => {
 // 辅助函数：更新单个单元格的输出
 const updateCellOutputs = (set: any, cellId: string, outputs: OutputItem[]) => {
   const serializedOutputs = serializeOutput(outputs);
-  console.log('updateCellOutputs', outputs);
 
   set(
     produce((state: NotebookStoreState) => {
       const cell = state.cells.find((c) => c.id === cellId);
       if (cell) {
-        console.log(serializedOutputs);
-        console.log(serializedOutputs.length);
         if (serializedOutputs.length > 0) {
           if ((state as any).checkOutputsIsError(serializedOutputs)) {
             cell.outputs = [{
@@ -437,9 +433,7 @@ const useStore = create<NotebookStore>(
           };
           state.cells.splice(targetIndex, 0, cell);
           state.tasks = parseMarkdownCells(state.cells);
-          // console.log('addCell', state.tasks);
           if (state.tasks.length == 0) {
-            console.log('addCell and temp tasks is null');
             state.cells.splice(targetIndex, 0, {
               id: uuidv4(),
               type: 'markdown',
@@ -523,18 +517,10 @@ const useStore = create<NotebookStore>(
     addNewContent2CurrentCellDescription: (content: string) => {
       const currentCellId = get().currentCellId;
       if (!currentCellId) {
-        console.log({
-          message: '当前没有选中的单元格',
-          type: 'error',
-        });
         return;
       }
       const currentCell = get().cells.find((c) => c.id === currentCellId);
       if (!currentCell) {
-        console.log({
-          message: '找不到当前选中的单元格',
-          type: 'error',
-        });
         return;
       }
       const updatedDescription = `${currentCell.description || ''}${content}`;
@@ -552,7 +538,6 @@ const useStore = create<NotebookStore>(
           
           // 防止删除默认标题cell
           if (cellToDelete?.metadata?.isDefaultTitle) {
-            console.log('Cannot delete default title cell');
             return; // 直接返回，不删除
           }
           

@@ -3,12 +3,10 @@ import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineContr
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
 
 /**
- * Hook to manage workflow-related logic that was previously embedded in DynamicStageTemplate
  * This centralizes workflow confirmation, navigation, and state management
  */
 export const useWorkflowManager = (
   stageId: string,
-  currentStepIndex: number,
   stepsLoaded: number[],
   isCompleted: boolean,
   currentSteps: any[]
@@ -19,7 +17,6 @@ export const useWorkflowManager = (
     setWorkflowUpdated,
     incrementWorkflowUpdateCount,
     setCurrentSteps,
-    setCurrentStepIndex,
     setStepsLoaded,
     setIsCompleted: setPanelIsCompleted,
     setOnConfirmWorkflowUpdate,

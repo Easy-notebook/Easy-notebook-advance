@@ -436,9 +436,19 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       triggerStepExecution(stepId, 'auto_execute', EXECUTION_DELAYS.AUTO_START);
     }
     else if (currentStepId && workflowState.hasUncompletedSteps && currentState === WORKFLOW_STATES.IDLE) {
-      hasTriggeredExecution.current = true;
-      startStep(currentStepId, currentStageId, workflowState.completedStepsCount);
-      triggerStepExecution(currentStepId, 'resume_execute', EXECUTION_DELAYS.RESUME);
+      // Check if the current step actually exists in the uncompleted steps
+      const currentStepExists = workflowState.uncompletedSteps?.some(step => 
+        (step.step_id === currentStepId || step.id === currentStepId)
+      );
+      
+      if (currentStepExists) {
+        hasTriggeredExecution.current = true;
+        startStep(currentStepId, currentStageId, workflowState.completedStepsCount);
+        triggerStepExecution(currentStepId, 'resume_execute', EXECUTION_DELAYS.RESUME);
+      } else {
+        console.log(`[WorkflowControl] Current step ${currentStepId} not found in uncompleted steps, skipping resume`);
+        hasTriggeredExecution.current = false; // Allow re-triggering with correct step
+      }
     }
   }, [isWorkflowActive, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, workflowState.completedStepsCount,
       currentStepId, currentStageId, setCurrentStepId, recordStepState, prerequisitesMet.bothMet, 

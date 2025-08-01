@@ -60,7 +60,6 @@ export const useAutoTracking = () => {
           const latestStep = currentStage.steps[latestStepIndex];
           
           if (latestStepIndex !== currentStepIndex && latestStep) {
-            console.log('AutoTracking: Navigating to latest step:', latestStep.step_id || latestStep.id);
             setPipelineCurrentStepId(latestStep.step_id || latestStep.id);
           }
         }

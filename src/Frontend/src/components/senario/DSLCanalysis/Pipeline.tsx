@@ -1,18 +1,15 @@
-// Pipeline.jsx
+// Pipeline.tsx
+import React, { useState } from 'react';
 import { usePipelineStore, PIPELINE_STAGES } from './store/pipelineController';
 import PipelineStageWrapper from '../utils/PipelineStageWrapper';
 import EmptyState from './preStage/EmptyState';
 import ProblemDefineState from './preStage/ProblemDefineState';
-import DynamicStageTemplate from './stages/DynamicStageTemplate';
-import useStore from '../../../store/notebookStore';
 import usePreStageStore from './store/preStageStore';
-import { useWorkflowPanelStore } from '../../Notebook/store/workflowPanelStore';
-
-
-import './pipelineAnimations.css';
-
+import DynamicStageTemplate from './stages/DynamicStageTemplate';
 
 const DSLCPipeline = ({onAddCell}) => {
+    const [viewMode, setViewMode] = useState('step');
+    
     const { 
         currentStage, 
         isAnimating, 
@@ -21,11 +18,8 @@ const DSLCPipeline = ({onAddCell}) => {
         isWorkflowActive,
         workflowTemplate,
         currentStageId,
-        nextStage,
-        getStageTransitionSuggestion
     } = usePipelineStore();
     
-    const { setViewMode, viewMode } = useStore();
 
     // Render current stage component based on backend configuration
     const rendercurrentStage = () => {
@@ -64,16 +58,12 @@ const DSLCPipeline = ({onAddCell}) => {
                 >
                     <ProblemDefineState 
                         confirmProblem={async () => {
-                            // Set appropriate view mode for simplified workflow control
-                            // Support both demo and create modes as specified by user
-                            if (viewMode === 'step') {
-                                setViewMode('demo');
-                            }
-                            
-                            // Initialize workflow with planning when starting data analysis stages
-                            // This activates the workflow and makes it available for WorkflowPanel confirmation
-                            if (!isWorkflowActive) {
-                                try {
+                            try {
+                                if (viewMode === 'step') {
+                                    setViewMode('demo');
+                                }
+                                
+                                if (!isWorkflowActive) {
                                     console.log('[Pipeline] Problem confirmed, initializing workflow...');
                                     
                                     // Get planning data from preStageStore
@@ -89,6 +79,12 @@ const DSLCPipeline = ({onAddCell}) => {
                                     const planning = await initializeWorkflow(planningRequest);
                                     console.log('[Pipeline] Workflow initialized successfully:', planning);
                                     
+                                    // Check if planning generated valid stages
+                                    if (!planning?.stages?.[0]?.id) {
+                                        console.error('[Pipeline] No stages found in planning result');
+                                        throw new Error('Planning did not generate valid stages');
+                                    }
+                                    
                                     // Wait a bit for state to update, then check
                                     setTimeout(() => {
                                         const currentState = usePipelineStore.getState();
@@ -100,106 +96,62 @@ const DSLCPipeline = ({onAddCell}) => {
                                         });
                                     }, 100);
                                     
-                                    // Check if planning generated valid stages
-                                    if (!planning.stages?.[0]?.id) {
-                                        console.error('[Pipeline] No stages found in planning result');
-                                        throw new Error('Planning did not generate valid stages');
-                                    }
-                                    
-                                } catch (error) {
-                                    console.error('[Pipeline] Failed to initialize workflow:', error);
-                                    throw error;
-                                }
-                            } else {
-                                console.log('[Pipeline] Workflow already active, transitioning to first stage');
-                                // If workflow is already active, just go to the first stage
-                                if (workflowTemplate?.stages?.[0]?.id) {
-                                    usePipelineStore.getState().setStage(workflowTemplate.stages[0].id);
-                                }
-                            } 
-                        }}
-                    />
-                </PipelineStageWrapper>
-            );
-        }
-
-        // For all data analysis stages, use dynamic template with backend configuration
-        if (isWorkflowActive && currentStage !== PIPELINE_STAGES.EMPTY && currentStage !== PIPELINE_STAGES.PROBLEM_DEFINE) {
-            return (
-                <PipelineStageWrapper
-                    stage={currentStage}
-                    currentStage={currentStage}
-                    isAnimating={isAnimating}
-                    animationDirection={animationDirection}
-                >
-                    <DynamicStageTemplate
-                        key={currentStage} // Add key to prevent unnecessary remounts
-                        onComplete={async () => {
-                            console.log(`=== PIPELINE onComplete CALLED for stage ${currentStage} ===`);
-                            console.log('Current workflow template:', workflowTemplate);
-                            console.log('Current stage ID:', currentStageId);
-                            
-                            try {
-                                // Use template-based navigation for reliability
-                                const currentTemplate = workflowTemplate;
-                                console.log('Available stages:', currentTemplate?.stages);
-                                
-                                if (currentTemplate && currentTemplate.stages) {
-                                    const currentStageIndex = currentTemplate.stages.findIndex(stage => stage.id === currentStage);
-                                    console.log(`Current stage "${currentStage}" found at index: ${currentStageIndex}`);
-                                    const nextStageIndex = currentStageIndex + 1;
-                                    
-                                    if (nextStageIndex < currentTemplate.stages.length) {
-                                        const nextStageId = currentTemplate.stages[nextStageIndex].id;
-                                        console.log(`Transitioning to next stage: ${nextStageId}`);
-                                        
-                                        // Get fresh pipeline state and call setStage directly without timeout
-                                        const pipelineState = usePipelineStore.getState();
-                                        pipelineState.setStage(nextStageId, 'next');
-                                        console.log(`Successfully set next stage: ${nextStageId}`);
-                                    } else {
-                                        console.log('All stages completed - workflow finished');
-                                        // Could show completion message or return to main view
-                                    }
                                 } else {
-                                    console.error('No workflow template available - cannot transition to next stage');
+                                    console.log('[Pipeline] Workflow already active, transitioning to first stage');
+                                    // If workflow is already active, just go to the first stage
+                                    if (workflowTemplate?.stages?.[0]?.id) {
+                                        usePipelineStore.getState().setStage(workflowTemplate.stages[0].id);
+                                    }
                                 }
                             } catch (error) {
-                                console.error('Error during stage transition:', error);
+                                console.error('[Pipeline] Failed to confirm problem and initialize workflow:', error);
+                                // You might want to show a user-friendly error message here
+                                alert('Failed to initialize workflow. Please try again.');
                             }
                         }}
                     />
                 </PipelineStageWrapper>
             );
         }
-
-
-        // Fallback for unknown stages
+        
+        // Handle workflow-driven stages
+        if (isWorkflowActive && workflowTemplate?.stages && currentStageId) {
+            const currentStageConfig = workflowTemplate.stages.find(stage => stage.id === currentStageId);
+            
+            if (!currentStageConfig) {
+                console.error(`[Pipeline] Stage config not found for ${currentStageId}`);
+                return (
+                    <div className="flex items-center justify-center h-full">
+                        <p className="text-red-500">Error: Stage configuration not found</p>
+                    </div>
+                );
+            }
+            
+            return (
+                <PipelineStageWrapper
+                    stage={currentStageId}
+                    currentStage={currentStage}
+                    isAnimating={isAnimating}
+                    animationDirection={animationDirection}
+                >
+                    <DynamicStageTemplate 
+                        stageConfig={currentStageConfig}
+                        onAddCell={onAddCell}
+                    />
+                </PipelineStageWrapper>
+            );
+        }
+        
+        // Default fallback
         return (
-            <PipelineStageWrapper
-                stage={currentStage}
-                currentStage={currentStage}
-                isAnimating={isAnimating}
-                animationDirection={animationDirection}
-            >
-                <div className="text-center p-8">
-                    <h2 className="text-xl font-semibold text-gray-700 mb-4">
-                        Unknown Stage: {currentStage}
-                    </h2>
-                    <p className="text-gray-500">
-                        This stage is not recognized. Please check the backend configuration.
-                    </p>
-                </div>
-            </PipelineStageWrapper>
+            <div className="flex items-center justify-center h-full">
+                <p className="text-gray-500">No stage to render</p>
+            </div>
         );
     };
-
+    
     return (
         <div className="w-full h-full">
-            {/* Navigation header */}
-            {/* <PipelineNavigation /> */}
-
-            {/* Pipeline stage container - ensures proper positioning for animations */}
             <div className="w-full h-full flex items-center justify-center">
                 {rendercurrentStage()}
             </div>

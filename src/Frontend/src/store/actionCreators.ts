@@ -48,8 +48,6 @@ const createAction = (
         relatedQAIds = [];
     }
 
-    console.log(`Creating action of type "${type}" with relatedQAIds:`, relatedQAIds);
-
     return {
         id: uuidv4(),
         type,

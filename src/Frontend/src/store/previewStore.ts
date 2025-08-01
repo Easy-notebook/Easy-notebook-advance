@@ -276,8 +276,6 @@ const usePreviewStore = create<PreviewStore>()(
 
             // Fetch and preview a file
             previewFile: async (notebookId: string, filePath: string, fileMetadata: FileMetadata = {} as FileMetadata): Promise<FileObject | undefined> => {
-                console.log('previewFile', notebookId, filePath, fileMetadata);
-
                 // Generate a unique ID for the file
                 const fileId = `${notebookId}-${filePath}`;
 
@@ -289,7 +287,6 @@ const usePreviewStore = create<PreviewStore>()(
                     set({ error: 'File not found' });
                     return;
                 }
-                console.log('file', file);
 
                 // Determine if we need to fetch from backend
                 const needsFetch = !cachedFile ||
@@ -334,8 +331,6 @@ const usePreviewStore = create<PreviewStore>()(
                     // Save to IndexedDB
                     await saveFileToCache(fileObject);
 
-                    console.log('fileObject', fileObject);
-
                     // Set as active file
                     set({
                         activeFile: fileObject,
@@ -354,13 +349,11 @@ const usePreviewStore = create<PreviewStore>()(
                             }]
                         });
                     }
-                    console.log('fileObject', fileObject);
 
                     get().currentPreviewFiles.pop();
                     get().currentPreviewFiles.push(fileObject as any);
                     return fileObject;
                 } else {
-                    console.log('cachedFile', cachedFile);
                     set({
                         activeFile: cachedFile,
                         isLoading: false

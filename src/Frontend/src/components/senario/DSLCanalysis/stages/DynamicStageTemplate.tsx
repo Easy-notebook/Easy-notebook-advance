@@ -1,7 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { AlertCircle, XCircle, RefreshCw } from 'lucide-react';
-import PersistentStepContainer from '../cells/GrowingCellContainer';
 import { useScriptStore } from '../store/useScriptStore';
 import { usePipelineStore } from '../store/pipelineController';
 import { useAIPlanningContextStore } from '../store/aiPlanningContext';
@@ -76,33 +75,8 @@ class OperationQueue {
     }
 }
 
-// ==================== Skeleton Loader ====================
-const SkeletonLoader = ({ count = 2 }) => (
-    <div className="animate-pulse">
-        {Array.from({ length: count }).map((_, i) => (
-            <div key={i} className="mb-6">
-                <div className="h-5 bg-gray-200 rounded w-1/3 mb-3"></div>
-                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-11/12 mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-4/5"></div>
-                {i === 1 && (
-                    <div className="mt-4 p-4 border border-gray-200 rounded-md bg-gray-50">
-                        <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-11/12"></div>
-                    </div>
-                )}
-            </div>
-        ))}
-    </div>
-);
-
 // ==================== Dynamic Stage Component (Store-Only Architecture) ====================
 const DynamicStageTemplate = ({ onComplete }) => {
-    console.log('DynamicStageTemplate mounted with onComplete:', !!onComplete);
-    
-    // ==== ALL DATA FROM STORES ONLY ====
-    // Pipeline Store - workflow template and stage/step management
     const {
         getCurrentStageConfig,
         workflowTemplate,
@@ -134,14 +108,22 @@ const DynamicStageTemplate = ({ onComplete }) => {
     } = useWorkflowStateMachine();
     
     // Script Store - step execution
-    const { execAction, switchStep, clearStep } = useScriptStore();
+    const { execAction } = useScriptStore();
+    
+    // Get real-time state from pipeline store to force re-render when stage changes
+    const { currentStageId: pipelineCurrentStageId, workflowTemplate: pipelineWorkflowTemplate } = usePipelineStore();
     
     // ==== DERIVED STATE FROM STORES ====
     const currentStageConfig = useMemo(() => {
         const config = getCurrentStageConfig();
+        console.log('=== [DynamicStageTemplate] STAGE CONFIG UPDATE ===');
+        console.log('Pipeline currentStageId:', pipelineCurrentStageId);
         console.log('getCurrentStageConfig result:', config);
+        console.log('Stage ID:', config?.id);
+        console.log('Steps count:', config?.steps?.length || 0);
+        console.log('Steps details:', config?.steps?.map(s => ({ id: s.id, step_id: s.step_id, name: s.name })) || []);
         return config;
-    }, [getCurrentStageConfig]);
+    }, [getCurrentStageConfig, pipelineCurrentStageId, pipelineWorkflowTemplate]);
     
     const { id: stageId, steps = [], name: stageTitle } = currentStageConfig || {};
     
@@ -200,11 +182,17 @@ const DynamicStageTemplate = ({ onComplete }) => {
     
     // ==== STEP EXECUTION LOGIC ====
     const executeStep = useCallback(async (stepId, stageId, stepIndex) => {
+        console.log('=== [DynamicStageTemplate] EXECUTE STEP CALLED ===');
         console.log(`[DynamicStageTemplate] Executing step: ${stepId}`);
+        console.log(`[DynamicStageTemplate] Stage: ${stageId}`);
+        console.log(`[DynamicStageTemplate] Step Index: ${stepIndex}`);
+        console.log(`[DynamicStageTemplate] Current executing step ref: ${executingStepRef.current}`);
+        console.log(`[DynamicStageTemplate] Current state machine state: ${currentState}`);
+        console.log(`[DynamicStageTemplate] Is stage complete: ${isStageComplete}`);
         
         // Prevent duplicate execution
         if (executingStepRef.current === stepId) {
-            console.log(`[DynamicStageTemplate] Step ${stepId} is already executing, skipping duplicate`);
+            console.log(`[DynamicStageTemplate] ❌ BLOCKED: Step ${stepId} is already executing, skipping duplicate`);
             return;
         }
         
@@ -219,9 +207,6 @@ const DynamicStageTemplate = ({ onComplete }) => {
         abortControllerRef.current = controller;
         
         try {
-            // Switch to the step in the UI
-            switchStep(stepId);
-            
             // Force reset state machine if it's in completed state
             if (currentState === WORKFLOW_STATES.WORKFLOW_COMPLETED) {
                 console.log('[DynamicStageTemplate] Resetting completed workflow state machine');
@@ -460,15 +445,33 @@ const DynamicStageTemplate = ({ onComplete }) => {
             }
         }
     }, [
-        switchStep, startStep, isStageComplete, markStepCompleted, completeStep,
         getContext, setContext, execAction, failStep, addThinkingLog
     ]);
     
     // ==== EVENT LISTENERS ====
     useEffect(() => {
         const handleWorkflowStepTrigger = (event) => {
-            const { stepId, action, timestamp } = event.detail;
-            console.log(`[DynamicStageTemplate] Received workflowStepTrigger:`, { stepId, action, timestamp, currentStageId: stageId });
+            const { stepId, action, timestamp, stageId: triggerStageId } = event.detail;
+            console.log('=== [DynamicStageTemplate] WORKFLOW STEP TRIGGER RECEIVED ===');
+            console.log(`[DynamicStageTemplate] Event details:`, { 
+                stepId, 
+                action, 
+                timestamp, 
+                triggerStageId,
+                currentStageId: stageId 
+            });
+            console.log('[DynamicStageTemplate] Current component state:', {
+                stageId,
+                steps: steps.map(s => s.step_id || s.id),
+                stepCount: steps.length
+            });
+            
+            // Check if this trigger is for our current stage
+            if (triggerStageId && triggerStageId !== stageId) {
+                console.log(`[DynamicStageTemplate] ❌ IGNORING: Trigger for stage ${triggerStageId}, but component is on stage ${stageId}`);
+                console.log(`[DynamicStageTemplate] This component will update when getCurrentStageConfig() returns the new stage`);
+                return;
+            }
             
             // Check if this trigger is for a step in our current stage
             const targetStepIndex = steps.findIndex(step => 
@@ -476,10 +479,31 @@ const DynamicStageTemplate = ({ onComplete }) => {
             );
             
             if (targetStepIndex >= 0) {
+                console.log('=== [DynamicStageTemplate] STEP EXECUTION TRIGGERED ===');
                 console.log(`[DynamicStageTemplate] Executing step ${stepId} at index ${targetStepIndex}`);
+                console.log(`[DynamicStageTemplate] Step details:`, steps[targetStepIndex]);
+                console.log(`[DynamicStageTemplate] Stage: ${stageId}`);
                 executeStep(stepId, stageId, targetStepIndex);
             } else {
-                console.log(`[DynamicStageTemplate] Step ${stepId} not found in current stage ${stageId}`);
+                console.log('=== [DynamicStageTemplate] STEP NOT FOUND ===');
+                console.log(`[DynamicStageTemplate] Step ${stepId} not found in current stage ${stageId}, retrying...`);
+                console.log(`[DynamicStageTemplate] Current steps:`, steps.map(s => s.step_id || s.id));
+                console.log(`[DynamicStageTemplate] Looking for step ID: ${stepId}`);
+                
+                // Retry after a short delay in case the component is still updating
+                setTimeout(() => {
+                    const retriedStepIndex = steps.findIndex(step => 
+                        (step.step_id === stepId || step.id === stepId)
+                    );
+                    
+                    if (retriedStepIndex >= 0) {
+                        console.log(`[DynamicStageTemplate] Retry successful! Executing step ${stepId} at index ${retriedStepIndex}`);
+                        executeStep(stepId, stageId, retriedStepIndex);
+                    } else {
+                        console.warn(`[DynamicStageTemplate] Step ${stepId} still not found after retry in stage ${stageId}`);
+                        console.log(`[DynamicStageTemplate] Available steps after retry:`, steps.map(s => s.step_id || s.id));
+                    }
+                }, 500);
             }
         };
         
@@ -521,7 +545,14 @@ const DynamicStageTemplate = ({ onComplete }) => {
     // ==== STAGE READY NOTIFICATION ====
     useEffect(() => {
         if (stageId && steps.length > 0) {
+            console.log('=== [DynamicStageTemplate] STAGE READY ===');
             console.log(`[DynamicStageTemplate] Stage ${stageId} is ready with ${steps.length} steps`);
+            console.log('[DynamicStageTemplate] Steps available:', steps.map(step => ({
+                id: step.id,
+                step_id: step.step_id,
+                name: step.name
+            })));
+            
             window.dispatchEvent(new CustomEvent('dynamicStageReady', {
                 detail: { 
                     stageId,
@@ -534,6 +565,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
                     timestamp: Date.now()
                 }
             }));
+            
+            console.log(`[DynamicStageTemplate] dynamicStageReady event dispatched for stage ${stageId}`);
+        } else {
+            console.log(`[DynamicStageTemplate] Stage not ready - stageId: ${stageId}, steps: ${steps.length}`);
         }
     }, [stageId, steps.length]);
     
@@ -579,69 +614,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
         </div>
     );
     
-    // ==== RENDER LOGIC ====
-    if (!currentStageConfig) {
-        console.log('DynamicStageTemplate: No stage config available, showing skeleton');
-        return <SkeletonLoader count={3} />;
-    }
-    
-    const shouldShowContent = currentStepInfo && (isStepExecuting || isStepCompleted);
-    const showLoading = isStepExecuting && hasUncompletedTodos;
-    
-    console.log('DynamicStageTemplate render state:', {
-        stageId,
-        currentStepId,
-        currentStepIndex,
-        stepsLength: steps.length,
-        isStepExecuting,
-        isStepCompleted,
-        hasUncompletedTodos,
-        shouldShowContent
-    });
-    
-    return (
-        <div className="w-full h-full overflow-y-auto">
-            <div className="flex w-full">
-                <div className="max-w-screen-xl w-full mx-auto">
-                    <div className="flex-1 h-full w-full">
-                        <div className="p-2 h-full w-full">
-                            {showLoading ? (
-                                <div className="p-1">
-                                    <div className="text-xs text-gray-500 mb-2">
-                                        Loading step {currentStepIndex + 1}: {currentStepInfo?.name}...
-                                    </div>
-                                    <SkeletonLoader count={3} />
-                                </div>
-                            ) : shouldShowContent ? (
-                                <div className="overflow-y-auto">
-                                    <PersistentStepContainer
-                                        showRemoveButton={false}
-                                        autoScroll={true}
-                                        className="content-start"
-                                        emptyState={
-                                            <div className="p-4 text-center">
-                                                <div className="text-sm text-gray-600">
-                                                    Step completed but no content generated
-                                                </div>
-                                            </div>
-                                        }
-                                        stepId={currentStepId}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="p-4 text-center">
-                                    <div className="text-xs text-gray-500 mb-2">
-                                        Waiting for step execution...
-                                    </div>
-                                    <SkeletonLoader count={1} />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    // This is a headless component - it manages workflow logic and state
+    // The actual UI rendering is handled by BasicMode components
+    return null;
 };
 
 export default DynamicStageTemplate;

@@ -28,7 +28,6 @@ const ImportNotebook4JsonOrJupyter = () => {
             const notebook_id = await notebookApiIntegration.initializeNotebook();
             if (notebook_id) {
                 setNotebookId(notebook_id);
-                console.log('New Notebook created:', notebook_id);
                 toast({
                     title: "Success",
                     description: "New Notebook created successfully",
@@ -113,15 +112,8 @@ const ImportNotebook4JsonOrJupyter = () => {
             throw new Error('Invalid Notebook format: Missing cells array');
         }
 
-        clearCells(); // 清除现有单元格
-
-        // 处理 notebook_id
-        // if (importedData.notebook_id) {
-        //     console.log('Imported Notebook ID:', importedData.notebook_id);
-        //     setNotebookId(importedData.notebook_id);
-        // } else {
+        clearCells(); 
         await initializeNotebook();
-        // }
 
         const titleStack: number[] = []; // 初始化标题堆栈
 

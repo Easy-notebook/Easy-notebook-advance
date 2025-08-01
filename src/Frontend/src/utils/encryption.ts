@@ -118,16 +118,12 @@ export const decrypt = async (encryptedText: string): Promise<string> => {
 export const testEncryption = async (): Promise<boolean> => {
     try {
         const testText: string = 'Hello, World!';
-        console.log('Testing encryption with text:', testText);
-
+        
         const encrypted: string = await encrypt(testText);
-        console.log('Encrypted:', encrypted);
 
         const decrypted: string = await decrypt(encrypted);
-        console.log('Decrypted:', decrypted);
 
         if (testText === decrypted) {
-            console.log('Encryption test passed!');
             return true;
         } else {
             console.error('Encryption test failed: decrypted text does not match original');

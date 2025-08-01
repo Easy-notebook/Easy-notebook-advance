@@ -126,8 +126,6 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
             action.relatedQAIds = [];
         }
 
-        console.log('Adding action:', action);
-
         set((state) => ({
             actions: [
                 {
@@ -197,7 +195,6 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
 
     // 初始化流式回答
     initStreamingAnswer: (qaId: string) => {
-        console.log('initStreamingAnswer', qaId);
         set((state) => {
             // 1. 找到目标 QA
             const targetIndex = state.qaList.findIndex((qa) => qa.id === qaId);
@@ -236,7 +233,6 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
 
     // 追加内容到答案
     addContentToAnswer: (qaId: string, content: string) => {
-        console.log('addContentToAnswer', qaId, content);
         set((state) => ({
             qaList: state.qaList.map((qa) =>
                 qa.id === qaId
@@ -248,7 +244,6 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
 
     // 完成回答
     finishStreamingAnswer: (qaId: string) => {
-        console.log('finishStreamingAnswer', qaId);
         set((state) => ({
             qaList: state.qaList.map((qa) => {
                 if (qa.id === qaId) {

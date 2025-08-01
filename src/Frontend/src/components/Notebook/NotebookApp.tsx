@@ -510,9 +510,7 @@ const NotebookApp = () => {
       currentPhaseId 
     });
     
-    if (viewMode === 'dslc' || viewMode === 'demo' || viewMode === 'create') {
-      // In DSLC mode or demo/create modes with DSLC functionality, DynamicStageTemplate will manage the state
-      console.log('NotebookApp: Setting DSLC-enabled mode state - clearing handlers for DynamicStageTemplate');
+    if (viewMode === 'demo' || viewMode === 'create') {
       setContinueButtonText('Continue to Next Stage');
       // Clear handlers to let DynamicStageTemplate set them
       setOnTerminate(null);

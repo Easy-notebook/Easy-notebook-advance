@@ -132,8 +132,6 @@ const useCodeStore = create<CodeStore>((set, get) => ({
     setError: (err: string | null) => set({ error: err }),
 
     initializeKernel: async (): Promise<string | false> => {
-        // 如果已经就绪，直接返回
-        console.log('initializeKernel:', get().isKernelReady, "notebookId:", useStore.getState().notebookId);
         if (get().isKernelReady) return useStore.getState().notebookId || false;
 
         try {
@@ -144,8 +142,6 @@ const useCodeStore = create<CodeStore>((set, get) => ({
                 if (result.notebook_id) {
                     useStore.getState().setNotebookId(result.notebook_id);
                 }
-                console.log('change notebookId:', useStore.getState().notebookId);
-                console.log('内核初始化成功');
                 return result.notebook_id || '';
             } else {
                 throw new Error(result.message || '内核初始化失败');
@@ -164,7 +160,6 @@ const useCodeStore = create<CodeStore>((set, get) => ({
             const result: KernelInitResult = await NotebookApiService.restartNotebook();
             if (result.status === 'ok') {
                 get().setKernelReady(true);
-                console.log('内核重启成功');
                 return true;
             } else {
                 throw new Error(result.message || '内核重启失败');
@@ -368,8 +363,6 @@ const useCodeStore = create<CodeStore>((set, get) => ({
                 elapsedTime: 0,
             });
 
-            // console.log('执行结果:', result);
-
             if (hasError) {
                 return { success: false, error: error || 'Unknown error' };
             }
@@ -388,7 +381,6 @@ const useCodeStore = create<CodeStore>((set, get) => ({
 
     // ========== 显示模式管理 ==========
     setCellMode: (cellId: string, mode: DisplayMode) => {
-        console.log(`[setCellMode] cellId=${cellId}, mode=${mode}`);
         set((prev) => ({
             cellModes: {
                 ...prev.cellModes,
@@ -398,14 +390,12 @@ const useCodeStore = create<CodeStore>((set, get) => ({
     },
 
     setCurrentCellMode_onlyCode: () => {
-        console.log('设置当前cell模式为只有代码');
         const cellId = useStore.getState().currentCellId;
         if (cellId) {
             get().setCellMode(cellId, DISPLAY_MODES.CODE_ONLY);
         }
     },
     setCurrentCellMode_onlyOutput: () => {
-        console.log('设置当前cell模式为只有输出');
         const cellId = useStore.getState().currentCellId;
         if (cellId) {
             get().setCellMode(cellId, DISPLAY_MODES.OUTPUT_ONLY);
