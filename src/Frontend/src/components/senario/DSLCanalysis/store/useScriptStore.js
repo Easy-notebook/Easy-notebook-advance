@@ -954,6 +954,221 @@ export const useScriptStore = create((set, get) => ({
                 globalUpdateInterface.createSystemEvent(`Updated title: ${step.title}`, '', [], null);
                 break;
             }
+            case 'update_workflow': {
+                console.log('Received workflow update:', step.updated_workflow);
+                
+                // Import stores dynamically to avoid circular dependency
+                const { useWorkflowPanelStore } = await import('../../../Notebook/store/workflowPanelStore');
+                const { usePipelineStore } = await import('./pipelineController');
+                
+                const workflowPanelStore = useWorkflowPanelStore.getState();
+                const pipelineStore = usePipelineStore.getState();
+                
+                // Set the pending workflow update in the WorkflowPanel store
+                workflowPanelStore.setPendingWorkflowUpdate(step.updated_workflow);
+                workflowPanelStore.setShowWorkflowConfirm(true);
+                
+                // Set up event handlers for user confirmation
+                workflowPanelStore.setOnConfirmWorkflowUpdate(async () => {
+                    console.log('User confirmed workflow update');
+                    
+                    // Update the pipeline store with the new workflow template
+                    if (step.updated_workflow) {
+                        // Use Zustand's direct state update approach
+                        const { usePipelineStore } = await import('./pipelineController');
+                        const currentPipelineState = usePipelineStore.getState();
+                        
+                        // Get the current step ID to mark as completed
+                        const currentStepId = currentPipelineState.currentStepId;
+                        const currentStageId = currentPipelineState.currentStageId;
+                        
+                        // Update workflow template
+                        usePipelineStore.setState({
+                            workflowTemplate: {
+                                ...currentPipelineState.workflowTemplate,
+                                stages: step.updated_workflow.stages || currentPipelineState.workflowTemplate?.stages || []
+                            },
+                            // Keep current step completion but reset stages for new workflow
+                            completedStages: [], // Reset stages since we have new workflow
+                            // Mark current step as completed since workflow update means step is done
+                            completedSteps: currentStepId ? [...currentPipelineState.completedSteps, currentStepId] : currentPipelineState.completedSteps
+                        });
+                        
+                        // Mark current step as completed in pipeline store
+                        if (currentStepId) {
+                            currentPipelineState.markStepCompleted(currentStepId);
+                            console.log('Marked current step as completed after workflow update:', currentStepId);
+                        }
+                        
+                        // Update AI Planning Context if needed
+                        try {
+                            const { useAIPlanningContextStore } = await import('./aiPlanningContext');
+                            const aiPlanningStore = useAIPlanningContextStore.getState();
+                            // Clear previous stage completion status but keep step progress
+                            if (aiPlanningStore.clearAllStageStatus) {
+                                aiPlanningStore.clearAllStageStatus();
+                            }
+                        } catch (error) {
+                            console.warn('Could not update AI Planning Context:', error);
+                        }
+                        
+                        // Trigger workflow step completion event to notify other components
+                        if (currentStepId && currentStageId) {
+                            window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
+                                detail: { 
+                                    stepId: currentStepId, 
+                                    result: { 
+                                        targetAchieved: true, 
+                                        workflowUpdated: true,
+                                        newWorkflow: step.updated_workflow 
+                                    },
+                                    stageId: currentStageId,
+                                    timestamp: Date.now()
+                                }
+                            }));
+                        }
+                        
+                        // Navigate to next stage in new workflow directly through pipeline store
+                        const newWorkflowStages = step.updated_workflow.stages || [];
+                        if (newWorkflowStages.length > 0) {
+                            const nextStageId = newWorkflowStages[0].id;
+                            console.log('New workflow available, navigating to next stage:', nextStageId);
+                            
+                            // Directly update pipeline store to navigate to new stage
+                            setTimeout(() => {
+                                // Set new stage as current
+                                usePipelineStore.setState({
+                                    currentStageId: nextStageId,
+                                    currentStage: nextStageId
+                                });
+                                
+                                // Get first step of new stage and set it as current
+                                const newFirstStage = newWorkflowStages[0];
+                                if (newFirstStage.steps && newFirstStage.steps.length > 0) {
+                                    const firstStep = newFirstStage.steps[0];
+                                    const firstStepId = firstStep.step_id || firstStep.id;
+                                    
+                                    usePipelineStore.setState({
+                                        currentStepId: firstStepId
+                                    });
+                                    
+                                    console.log('Set next stage and step:', { nextStageId, firstStepId });
+                                    
+                                    // Trigger step execution for first step of new stage
+                                    setTimeout(() => {
+                                        window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
+                                            detail: {
+                                                stepId: firstStepId,
+                                                action: 'execute_step',
+                                                timestamp: Date.now()
+                                            }
+                                        }));
+                                    }, 500);
+                                }
+                            }, 1500);
+                        }
+                    }
+                    
+                    // Hide the confirmation dialog
+                    workflowPanelStore.setShowWorkflowConfirm(false);
+                    workflowPanelStore.setPendingWorkflowUpdate(null);
+                    workflowPanelStore.setWorkflowUpdated(true);
+                    workflowPanelStore.incrementWorkflowUpdateCount();
+                    
+                    // Create system event
+                    globalUpdateInterface.createSystemEvent('Workflow updated successfully, transitioning to next stage', '', [], null);
+                });
+                
+                workflowPanelStore.setOnRejectWorkflowUpdate(() => {
+                    console.log('User rejected workflow update');
+                    
+                    // Hide the confirmation dialog without applying changes
+                    workflowPanelStore.setShowWorkflowConfirm(false);
+                    workflowPanelStore.setPendingWorkflowUpdate(null);
+                    
+                    // Create system event
+                    globalUpdateInterface.createSystemEvent('Workflow update rejected by user', '', [], null);
+                });
+                
+                // Create system event for workflow update received
+                globalUpdateInterface.createSystemEvent('Workflow update received, awaiting user confirmation', '', [], null);
+                break;
+            }
+            case 'update_stage_steps': {
+                console.log('Received stage steps update:', step.updated_steps);
+                
+                // Import stores dynamically to avoid circular dependency
+                const { usePipelineStore } = await import('./pipelineController');
+                const currentPipelineState = usePipelineStore.getState();
+                
+                // Update the current stage's steps in the workflow template
+                if (step.updated_steps && step.stage_id) {
+                    const currentWorkflowTemplate = currentPipelineState.workflowTemplate;
+                    if (currentWorkflowTemplate && currentWorkflowTemplate.stages) {
+                        // Find and update the specific stage
+                        const updatedStages = currentWorkflowTemplate.stages.map(stage => {
+                            if (stage.id === step.stage_id) {
+                                return {
+                                    ...stage,
+                                    steps: step.updated_steps
+                                };
+                            }
+                            return stage;
+                        });
+                        
+                        // Update the workflow template with new steps
+                        usePipelineStore.setState({
+                            workflowTemplate: {
+                                ...currentWorkflowTemplate,
+                                stages: updatedStages
+                            }
+                        });
+                        
+                        console.log(`Updated steps for stage ${step.stage_id}:`, step.updated_steps);
+                        
+                        // Find the next unexecuted step to jump to
+                        const completedSteps = currentPipelineState.completedSteps || [];
+                        const nextUncompletedStep = step.updated_steps.find(stepInfo => 
+                            !completedSteps.includes(stepInfo.step_id) && 
+                            !completedSteps.includes(stepInfo.id) &&
+                            stepInfo.status !== 'completed'
+                        );
+                        
+                        if (nextUncompletedStep) {
+                            const nextStepId = nextUncompletedStep.step_id || nextUncompletedStep.id;
+                            
+                            usePipelineStore.setState({
+                                currentStepId: nextStepId
+                            });
+                            
+                            // Mark current workflow initialization step as completed since it just updated the steps
+                            const currentStepId = currentPipelineState.currentStepId;
+                            if (currentStepId) {
+                                currentPipelineState.markStepCompleted(currentStepId);
+                            }
+                            
+                            // Trigger next step execution after a short delay
+                            setTimeout(() => {
+                                window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
+                                    detail: {
+                                        stepId: nextStepId,
+                                        action: 'execute_step',
+                                        timestamp: Date.now()
+                                    }
+                                }));
+                            }, 500);
+                            
+                            console.log(`Jumping to next uncompleted step: ${nextStepId}`);
+                        } else {
+                            console.log('No uncompleted steps found, staying on current step');
+                        }
+                        
+                        // Create system event
+                        globalUpdateInterface.createSystemEvent(`Stage steps updated for ${step.stage_id}`, '', [], null);
+                    }
+                }
+                break;
+            }
             default:
                 console.warn(`Unknown sequence action: ${step.action}`);
                 globalUpdateInterface.createSystemEvent(`Unknown action: ${step.action}`, '', [], null);

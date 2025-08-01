@@ -280,6 +280,12 @@ const DynamicStageTemplate = ({ onComplete }) => {
             console.log('[DynamicStageTemplate] Making API request to:', constants.API.SEQUENCE_API_URL);
             const currentContext = getContext();
             console.log('[DynamicStageTemplate] Current context variables:', currentContext.variables);
+            console.log('[DynamicStageTemplate] Required variables check:', {
+                problem_name: currentContext.variables?.problem_name,
+                user_goal: currentContext.variables?.user_goal,
+                problem_description: currentContext.variables?.problem_description,
+                context_description: currentContext.variables?.context_description
+            });
             console.log('[DynamicStageTemplate] Request payload:', {
                 stage_id: stageId,
                 step_index: stepId,
@@ -308,6 +314,8 @@ const DynamicStageTemplate = ({ onComplete }) => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
             let resultText = "";
+            let hasError = false;
+            let errorMessage = "";
             
             console.log('[DynamicStageTemplate] Starting stream processing...');
             
@@ -395,6 +403,7 @@ const DynamicStageTemplate = ({ onComplete }) => {
             
             if (feedbackResponse.ok) {
                 const feedbackResult = await feedbackResponse.json();
+                console.log('[DynamicStageTemplate] Feedback result:', feedbackResult);
                 
                 if (feedbackResult.targetAchieved) {
                     console.log('Step completed successfully:', stepId);
