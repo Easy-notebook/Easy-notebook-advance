@@ -36,13 +36,80 @@ export const useAIPlanningContextStore = create((set, get) => ({
         cache: {}
     },
 
+    isCurStepCompleted: () => {
+        const { toDoList } = get();
+        return toDoList.length === 0;
+    },
+
+    // Check if stage can auto-advance to next step
+    canAutoAdvanceToNextStep: () => {
+        const { toDoList } = get();
+        return toDoList.length === 0;
+    },
+
+    // Check if stage can auto-advance to next stage
+    canAutoAdvanceToNextStage: (stageId) => {
+        const { stageStatus, toDoList } = get();
+        return toDoList.length === 0 && !!stageStatus[stageId];
+    },
+
+    // Check if workflow update is confirmed
+    isWorkflowUpdateConfirmed: () => {
+        // This should be integrated with workflow panel state
+        return true; // For now, assume always confirmed
+    },
+
+    // State machine integration methods
+    notifyStepStarted: (stepId) => {
+        console.log('AI Planning: Step started:', stepId);
+        // Can add any AI planning specific logic here
+    },
+
+    notifyStepCompleted: (stepId, result) => {
+        const { toDoList } = get();
+        console.log('AI Planning: Step completed:', stepId, 'TodoList length:', toDoList.length);
+        
+        // Mark step completion if todo list is empty
+        if (toDoList.length === 0) {
+            set(state => ({
+                checklist: {
+                    ...state.checklist,
+                    completed: [...state.checklist.completed, `step_${stepId}_completed`]
+                }
+            }));
+        }
+    },
+
+    notifyStageCompleted: (stageId) => {
+        console.log('AI Planning: Stage completed:', stageId);
+        get().markStageAsComplete(stageId);
+        
+        // Clear current context for new stage
+        set({
+            toDoList: [],
+            checklist: { current: [], completed: [] },
+            thinking: []
+        });
+    },
+
+    // Enhanced completion checks for state machine
+    isStepReadyForCompletion: (stepId) => {
+        const { toDoList, checklist } = get();
+        return toDoList.length === 0 && checklist.current.length === 0;
+    },
+
+    isStageReadyForCompletion: (stageId) => {
+        const { stageStatus, toDoList } = get();
+        return toDoList.length === 0 && !!stageStatus[stageId];
+    },
+
     setChecklist: (current, completed) => set({ checklist: { current, completed } }),
 
     addToDoList: (item) => {
         set({ toDoList: [...get().toDoList, item] });
     },
 
-    newChecklistCurrentItem: (item) => {
+    addChecklistCurrentItem: (item) => {
         const { checklist } = get();
         if (!checklist.current.includes(item)) {
             set({
@@ -53,6 +120,9 @@ export const useAIPlanningContextStore = create((set, get) => ({
             });
         }
     },
+
+    // Backward compatibility alias
+    newChecklistCurrentItem: (item) => get().addChecklistCurrentItem(item),
 
     addChecklistCompletedItem: (item) => {
         const { checklist } = get();
@@ -126,6 +196,21 @@ export const useAIPlanningContextStore = create((set, get) => ({
         effect: { current: [], history: [] },
     }),
 
+    // Clear stage completion status
+    clearStageStatus: (stageId) => {
+        const { stageStatus } = get();
+        set({ 
+            stageStatus: { 
+                ...stageStatus, 
+                [stageId]: false 
+            } 
+        });
+    },
+
+    clearAllStageStatus: () => {
+        set({ stageStatus: {} });
+    },
+
     setContext: (state) => set({
         checklist: state.checklist,
         thinking: state.thinking,
@@ -148,12 +233,12 @@ export const useAIPlanningContextStore = create((set, get) => ({
     
     addEffect: (effect) => {
         const { effect: { current: currentEffect, history } } = get();
-        const updatedHistory = [...history, ...currentEffect];
+        const updatedCurrent = [...currentEffect, effect];
 
         set({
             effect: {
-                current: [effect],
-                history: updatedHistory
+                current: updatedCurrent,
+                history
             }
         });
     },

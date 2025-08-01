@@ -184,8 +184,8 @@ const AIThinkingCell: React.FC<AIThinkingCellProps> = ({
             data-cell-id={cell.id}
             className={`thinking-cell-container ${
                 isInDetachedView 
-                    ? 'bg-white h-full p-4' 
-                    : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm p-2 my-2'
+                    ? 'bg-white h-full' 
+                    : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm'
             }`}
             onMouseEnter={() => setShowToolbar(true)}
             onMouseLeave={() => setShowToolbar(false)}

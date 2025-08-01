@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FaStopCircle, FaRedo, FaPlay, FaPause } from 'react-icons/fa';
 import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
-import { useWorkflowPanelStore } from '../store/workflowPanelStore';
+import { useAIPlanningContextStore } from '../../senario/DSLCanalysis/store/aiPlanningContext';
+import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS } from '../../senario/DSLCanalysis/store/workflowStateMachine';
 import usePreStageStore from '../../senario/DSLCanalysis/store/preStageStore';
 
 const EXECUTION_DELAYS = {
@@ -18,12 +19,6 @@ interface WorkflowControlProps {
   fallbackViewMode?: string;
 }
 
-interface StepInfo {
-  name: string;
-  id: string;
-  description?: string;
-}
-
 interface WorkflowState {
   isExecuting: boolean;
   hasUncompletedSteps: boolean;
@@ -33,17 +28,6 @@ interface WorkflowState {
   completedStepsCount: number;
 }
 
-interface StepStateRecord {
-  timestamp: number;
-  action: string;
-  stepId: string;
-  stageId: string | null;
-  executionContext: {
-    isPaused: boolean;
-    isAutoExecuting: boolean;
-    currentStepInfo: StepInfo | null;
-  };
-}
 
 interface AutoWorkflowControlsProps {
   isExecuting: boolean;
@@ -160,23 +144,44 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
 const WorkflowControl: React.FC<WorkflowControlProps> = ({
   fallbackViewMode = 'complete'
 }) => {
-  const [stepStateHistory, setStepStateHistory] = useState<Map<string, StepStateRecord>>(new Map());
-  const [isPaused, setIsPaused] = useState(false);
-  const [isAutoExecuting, setIsAutoExecuting] = useState(false);
   const executionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Pipeline store integration
   const {
     workflowTemplate,
     currentStageId,
     currentStepId,
     isWorkflowActive,
     completedSteps,
-    completedStages,
     setStage,
     setCurrentStepId,
     markStepCompleted,
     markStageCompleted: markPipelineStageCompleted,
+    initializeStateMachine,
   } = usePipelineStore();
+
+  // AI Planning store integration
+  const {
+    toDoList,
+    canAutoAdvanceToNextStage,
+    isWorkflowUpdateConfirmed,
+    markStageAsComplete,
+    addChecklistCompletedItem,
+    addThinkingLog,
+  } = useAIPlanningContextStore();
+
+  // State machine integration
+  const {
+    currentState,
+    transition,
+    startStep,
+    completeStep,
+    failStep,
+    completeStage,
+    reset,
+    canAutoAdvanceToNextStage: stateMachineCanAdvanceStage,
+    setStoreReferences
+  } = useWorkflowStateMachine();
 
   const currentStageInfo = useMemo(() => {
     if (!workflowTemplate?.stages || !currentStageId) return null;
@@ -189,6 +194,26 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       step.id === currentStepId || step.step_id === currentStepId
     );
   }, [currentStageInfo, currentStepId]);
+
+  // Initialize state machine integration on mount
+  useEffect(() => {
+    setStoreReferences(
+      { getState: () => useAIPlanningContextStore.getState() },
+      { getState: () => usePipelineStore.getState() }
+    );
+    initializeStateMachine({ getState: () => useWorkflowStateMachine.getState() });
+    
+    // Reset all states when workflow becomes active
+    if (isWorkflowActive) {
+      const aiPlanningStore = useAIPlanningContextStore.getState();
+      aiPlanningStore.resetAIPlanningContext();
+      
+      // Reset state machine if it's in completed state
+      if (currentState === WORKFLOW_STATES.WORKFLOW_COMPLETED) {
+        reset();
+      }
+    }
+  }, [isWorkflowActive]); // React to workflow activation
 
   const workflowState: WorkflowState = useMemo(() => {
     if (!isWorkflowActive || !workflowTemplate?.stages || !currentStageInfo) {
@@ -207,7 +232,9 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     
     const isStageCompleted = uncompletedStepsInStage.length === 0;
     const hasUncompletedSteps = uncompletedStepsInStage.length > 0;
-    const isExecuting = (hasUncompletedSteps && !isPaused) || (isAutoExecuting && !isPaused);
+    const isExecuting = currentState === WORKFLOW_STATES.STEP_EXECUTING;
+    const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED || 
+                    (currentState === WORKFLOW_STATES.STEP_EXECUTING && toDoList.length > 0);
     
     return {
       isExecuting,
@@ -217,40 +244,42 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       totalSteps: currentStageInfo.steps.length,
       completedStepsCount: currentStageInfo.steps.length - uncompletedStepsInStage.length
     };
-  }, [isWorkflowActive, workflowTemplate, currentStageInfo, completedSteps, isPaused, isAutoExecuting]);
+  }, [isWorkflowActive, workflowTemplate, currentStageInfo, completedSteps, currentState, toDoList]);
 
   const recordStepState = useCallback((stepId: string, action: string = 'execute') => {
-    const currentState: StepStateRecord = {
+    // Log to AI planning context
+    addThinkingLog({
       timestamp: Date.now(),
       action,
       stepId,
       stageId: currentStageId,
-      executionContext: {
-        isPaused,
-        isAutoExecuting,
-        currentStepInfo: currentStepInfo ? {
-          name: currentStepInfo.name,
-          id: currentStepInfo.step_id || currentStepInfo.id,
-          description: currentStepInfo.description
-        } : null
-      }
-    };
-    
-    setStepStateHistory(prev => new Map(prev.set(`${stepId}_${action}_${Date.now()}`, currentState)));
-  }, [currentStageId, isPaused, isAutoExecuting, currentStepInfo]);
+      stateMachineState: currentState
+    });
+  }, [currentStageId, currentState, addThinkingLog]);
 
   const handleAutoStageTransition = useCallback(() => {
     if (!workflowTemplate?.stages || !currentStageId || !workflowState.isStageCompleted) return;
+    
+    // Check if stage can transition using all three stores
+    if (!stateMachineCanAdvanceStage || !canAutoAdvanceToNextStage(currentStageId) || !isWorkflowUpdateConfirmed()) {
+      return;
+    }
     
     const currentStageIndex = workflowTemplate.stages.findIndex(stage => stage.id === currentStageId);
     const nextStage = workflowTemplate.stages[currentStageIndex + 1];
     
     if (nextStage) {
       recordStepState(currentStageId, 'stage_completed');
-      markPipelineStageCompleted(currentStageId);
       
-      const { setStage: setPipelineStage } = usePipelineStore.getState();
-      setPipelineStage(nextStage.id);
+      // Complete stage through state machine
+      completeStage(currentStageId);
+      
+      // Mark stage completed in pipeline and AI planning stores
+      markPipelineStageCompleted(currentStageId);
+      markStageAsComplete(currentStageId);
+      
+      // Transition to next stage
+      setStage(nextStage.id);
       
       if (nextStage.steps?.length > 0) {
         const firstStep = nextStage.steps[0];
@@ -258,22 +287,24 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
         setCurrentStepId(firstStepId);
         recordStepState(firstStepId, 'stage_transition');
         
+        // Start first step of next stage through state machine
         setTimeout(() => {
-          setIsAutoExecuting(true);
-          setIsPaused(false);
+          startStep(firstStepId, nextStage.id, 0);
         }, EXECUTION_DELAYS.STAGE_TRANSITION);
       }
     } else {
       recordStepState('workflow', 'completed');
-      setIsAutoExecuting(false);
+      // Complete workflow through state machine only if not already completed
+      if (currentState !== WORKFLOW_STATES.WORKFLOW_COMPLETED) {
+        transition(EVENTS.COMPLETE_WORKFLOW);
+      }
     }
-  }, [workflowTemplate, currentStageId, workflowState.isStageCompleted, setCurrentStepId, recordStepState, markPipelineStageCompleted]);
+  }, [workflowTemplate, currentStageId, workflowState.isStageCompleted, setCurrentStepId, recordStepState, 
+      markPipelineStageCompleted, markStageAsComplete, setStage, completeStage, startStep, transition,
+      stateMachineCanAdvanceStage, canAutoAdvanceToNextStage, isWorkflowUpdateConfirmed]);
 
-  // Step control handlers
+  // Step control handlers using state machine
   const handlePause = useCallback(() => {
-    setIsPaused(true);
-    setIsAutoExecuting(false);
-    
     if (executionTimeoutRef.current) {
       clearTimeout(executionTimeoutRef.current);
       executionTimeoutRef.current = null;
@@ -281,15 +312,17 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     
     if (currentStepId) {
       recordStepState(currentStepId, 'paused');
+      // Transition to failed state to pause execution
+      failStep(currentStepId, { message: 'Paused by user' });
     }
-  }, [currentStepId, recordStepState]);
+  }, [currentStepId, recordStepState, failStep]);
 
   const handleResume = useCallback(() => {
-    setIsPaused(false);
-    setIsAutoExecuting(true);
-    
     if (currentStepId) {
       recordStepState(currentStepId, 'resumed');
+      
+      // Resume step execution through state machine
+      startStep(currentStepId, currentStageId, workflowState.completedStepsCount);
       
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
@@ -301,14 +334,15 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
         }));
       }, 100);
     }
-  }, [currentStepId, recordStepState]);
+  }, [currentStepId, currentStageId, workflowState.completedStepsCount, recordStepState, startStep]);
 
   const handleRetryStep = useCallback(() => {
     if (!currentStepId) return;
     
     recordStepState(currentStepId, 'retry');
-    setIsPaused(false);
-    setIsAutoExecuting(true);
+    
+    // Retry step through state machine
+    startStep(currentStepId, currentStageId, workflowState.completedStepsCount);
     
     executionTimeoutRef.current = setTimeout(() => {
       window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
@@ -319,27 +353,23 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
         }
       }));
     }, EXECUTION_DELAYS.RETRY);
-  }, [currentStepId, recordStepState]);
+  }, [currentStepId, currentStageId, workflowState.completedStepsCount, recordStepState, startStep]);
 
   const handleRestartStep = useCallback(() => {
     if (!currentStepId) return;
     
-    const currentState = Array.from(stepStateHistory.entries())
-      .filter(([key]) => key.includes(currentStepId))
-      .pop()?.[1];
-    if (currentState) {
-      setStepStateHistory(prev => new Map(prev.set(`${currentStepId}_backup_${Date.now()}`, currentState)));
-    }
-    
     recordStepState(currentStepId, 'restart');
     
+    // Reset step completion in all stores
     const updatedCompletedSteps = completedSteps.filter(stepId => stepId !== currentStepId);
     usePipelineStore.setState({ completedSteps: updatedCompletedSteps });
     
-    setIsPaused(false);
-    setIsAutoExecuting(true);
+    // Reset state machine and restart step
+    reset();
     
     executionTimeoutRef.current = setTimeout(() => {
+      startStep(currentStepId, currentStageId, workflowState.completedStepsCount);
+      
       window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
         detail: { 
           stepId: currentStepId, 
@@ -349,7 +379,8 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
         }
       }));
     }, EXECUTION_DELAYS.RESTART);
-  }, [currentStepId, stepStateHistory, recordStepState, completedSteps]);
+  }, [currentStepId, currentStageId, workflowState.completedStepsCount, recordStepState, 
+      completedSteps, reset, startStep]);
 
 
   const prerequisitesMet = useMemo(() => {
@@ -376,29 +407,50 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     }, delay);
   }, []);
 
+  // Auto-execution logic with loop prevention
+  const hasTriggeredExecution = useRef(false);
+  
   useEffect(() => {
-    if (!isWorkflowActive || !workflowState.hasUncompletedSteps || isPaused || !prerequisitesMet.bothMet) return;
+    const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED;
+    
+    if (!isWorkflowActive || !workflowState.hasUncompletedSteps || isPaused || !prerequisitesMet.bothMet) {
+      hasTriggeredExecution.current = false;
+      return;
+    }
+    
+    // Prevent multiple triggers of the same execution
+    if (hasTriggeredExecution.current) return;
     
     if (!currentStepId && workflowState.uncompletedSteps?.length > 0) {
       const firstUncompletedStep = workflowState.uncompletedSteps[0];
       const stepId = firstUncompletedStep.step_id || firstUncompletedStep.id;
       setCurrentStepId(stepId);
       recordStepState(stepId, 'auto_start');
-      setIsAutoExecuting(true);
       
+      // Only start step if not already executing
+      if (currentState === WORKFLOW_STATES.IDLE) {
+        startStep(stepId, currentStageId, 0);
+      }
+      
+      hasTriggeredExecution.current = true;
       triggerStepExecution(stepId, 'auto_execute', EXECUTION_DELAYS.AUTO_START);
     }
-    else if (currentStepId && workflowState.hasUncompletedSteps && !isAutoExecuting) {
-      setIsAutoExecuting(true);
+    else if (currentStepId && workflowState.hasUncompletedSteps && currentState === WORKFLOW_STATES.IDLE) {
+      hasTriggeredExecution.current = true;
+      startStep(currentStepId, currentStageId, workflowState.completedStepsCount);
       triggerStepExecution(currentStepId, 'resume_execute', EXECUTION_DELAYS.RESUME);
     }
-  }, [isWorkflowActive, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, currentStepId, setCurrentStepId, isPaused, recordStepState, isAutoExecuting, prerequisitesMet.bothMet, triggerStepExecution]);
+  }, [isWorkflowActive, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, workflowState.completedStepsCount,
+      currentStepId, currentStageId, setCurrentStepId, recordStepState, prerequisitesMet.bothMet, 
+      triggerStepExecution, startStep, currentState]);
 
   useEffect(() => {
+    const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED;
+    
     if (workflowState.isStageCompleted && !isPaused && isWorkflowActive && prerequisitesMet.bothMet) {
       setTimeout(handleAutoStageTransition, 2000);
     }
-  }, [workflowState.isStageCompleted, handleAutoStageTransition, isPaused, isWorkflowActive, prerequisitesMet.bothMet]);
+  }, [workflowState.isStageCompleted, handleAutoStageTransition, currentState, isWorkflowActive, prerequisitesMet.bothMet]);
 
   useEffect(() => {
     if (!isWorkflowActive || !workflowTemplate || !prerequisitesMet.bothMet) return;
@@ -418,30 +470,51 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       if (!currentStepId || currentStepId !== firstStepId) {
         setCurrentStepId(firstStepId);
         recordStepState(firstStepId, 'workflow_start');
+        
+        // Initialize state machine with first step only if idle
+        if (currentState === WORKFLOW_STATES.IDLE) {
+          startStep(firstStepId, firstStage.id, 0);
+          // Trigger immediate execution for the initial step
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
+              detail: { 
+                stepId: firstStepId, 
+                action: 'auto_execute',
+                timestamp: Date.now()
+              }
+            }));
+          }, 500);
+        }
       }
-      
-      setIsAutoExecuting(true);
-      setIsPaused(false);
     }
-  }, [isWorkflowActive, workflowTemplate, currentStageId, currentStepId, setStage, setCurrentStepId, recordStepState, prerequisitesMet.bothMet]);
+  }, [isWorkflowActive, workflowTemplate, currentStageId, currentStepId, setStage, setCurrentStepId, 
+      recordStepState, prerequisitesMet.bothMet, startStep, currentState]);
 
   useEffect(() => {
     const handleStepCompletion = (event: CustomEvent) => {
       const { stepId } = event.detail;
       
-      if (stepId === currentStepId && isAutoExecuting && !isPaused) {
+      if (stepId === currentStepId && currentState === WORKFLOW_STATES.STEP_EXECUTING) {
+        // Complete step through all stores
         markStepCompleted(stepId);
         recordStepState(stepId, 'completed');
+        
+        // Complete step through state machine
+        completeStep(stepId, { status: 'completed', timestamp: Date.now() });
+        
+        // Add to AI planning checklist
+        addChecklistCompletedItem(`step_${stepId}_completed`);
       }
     };
     
     const handleStageReady = (event: CustomEvent) => {
       const { stageId } = event.detail;
       
-      if (stageId === currentStageId && isAutoExecuting && !isPaused && workflowState.hasUncompletedSteps) {
+      if (stageId === currentStageId && currentState !== WORKFLOW_STATES.STEP_FAILED && workflowState.hasUncompletedSteps) {
         const firstUncompletedStep = workflowState.uncompletedSteps?.[0];
         if (firstUncompletedStep) {
           const stepId = firstUncompletedStep.step_id || firstUncompletedStep.id;
+          startStep(stepId, stageId, workflowState.completedStepsCount);
           triggerStepExecution(stepId, 'stage_ready_execute', EXECUTION_DELAYS.STAGE_READY);
         }
       }
@@ -454,7 +527,9 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       window.removeEventListener('workflowStepCompleted', handleStepCompletion as EventListener);
       window.removeEventListener('dynamicStageReady', handleStageReady as EventListener);
     };
-  }, [currentStepId, isAutoExecuting, isPaused, markStepCompleted, recordStepState, currentStageId, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, triggerStepExecution]);
+  }, [currentStepId, currentState, markStepCompleted, recordStepState, completeStep, addChecklistCompletedItem,
+      currentStageId, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, workflowState.completedStepsCount,
+      triggerStepExecution, startStep]);
 
   useEffect(() => {
     return () => {
@@ -464,7 +539,13 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     };
   }, []);
 
+  // Step advancement logic with loop prevention
+  const lastAdvancedStep = useRef(null);
+  
   useEffect(() => {
+    const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED;
+    const isAutoExecuting = currentState === WORKFLOW_STATES.STEP_EXECUTING;
+    
     if (!currentStepId || !completedSteps.includes(currentStepId) || !workflowState.hasUncompletedSteps || isPaused || !isAutoExecuting) {
       return;
     }
@@ -472,13 +553,20 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     const nextUncompletedStep = workflowState.uncompletedSteps?.[0];
     if (nextUncompletedStep) {
       const nextStepId = nextUncompletedStep.step_id || nextUncompletedStep.id;
-      if (nextStepId !== currentStepId) {
+      if (nextStepId !== currentStepId && nextStepId !== lastAdvancedStep.current) {
+        lastAdvancedStep.current = nextStepId;
         recordStepState(nextStepId, 'auto_advance');
         setCurrentStepId(nextStepId);
+        
+        // Start next step through state machine only if idle
+        if (currentState === WORKFLOW_STATES.IDLE || currentState === WORKFLOW_STATES.STEP_COMPLETED) {
+          startStep(nextStepId, currentStageId, workflowState.completedStepsCount);
+        }
         triggerStepExecution(nextStepId, 'auto_advance', EXECUTION_DELAYS.STEP_ADVANCE);
       }
     }
-  }, [currentStepId, completedSteps, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, isPaused, isAutoExecuting, recordStepState, setCurrentStepId, triggerStepExecution]);
+  }, [currentStepId, currentStageId, completedSteps, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, 
+      workflowState.completedStepsCount, currentState, recordStepState, setCurrentStepId, triggerStepExecution, startStep]);
 
   // Show WorkflowControl with different states based on prerequisites
   if (!prerequisitesMet.bothMet) {
@@ -528,8 +616,8 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       {/* Auto-executing Workflow Controls */}
       <AutoWorkflowControls
         isExecuting={workflowState.isExecuting}
-        isPaused={isPaused}
-        isAutoExecuting={isAutoExecuting}
+        isPaused={currentState === WORKFLOW_STATES.STEP_FAILED}
+        isAutoExecuting={currentState === WORKFLOW_STATES.STEP_EXECUTING}
         currentStepInfo={currentStepInfo ? {
           name: currentStepInfo.name || `Step ${currentStepInfo.step_id || currentStepInfo.id}`,
           progress: `${workflowState.completedStepsCount}/${workflowState.totalSteps}`

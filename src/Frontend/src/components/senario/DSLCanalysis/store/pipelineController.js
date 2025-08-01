@@ -43,6 +43,9 @@ const usePipelineStore = create((set, get) => ({
     // Agent thinking state (frontend managed)
     agentThinkingHistory: [],
     currentAgentActivity: null,
+    
+    // State machine integration
+    stateMachine: null,
 
     // Set the current stage with animation
     setStage: (newStage, direction = 'next') => {
@@ -175,8 +178,21 @@ const usePipelineStore = create((set, get) => ({
                 workflowTemplate: planning,
                 currentStageId: 'chapter_0_planning',
                 currentStage: 'chapter_0_planning',
-                workflowAnalysis: planning.analysis
+                workflowAnalysis: planning.analysis,
+                // Reset completion states to ensure steps execute properly
+                completedSteps: [],
+                completedStages: [],
+                stepResults: {},
+                stageResults: {}
             });
+
+            // Reset state machine to ensure clean start
+            const { stateMachine } = get();
+            if (stateMachine) {
+                stateMachine.getState().reset();
+            }
+
+            // Reset AI Planning Context will be handled by WorkflowControl initialization
 
             // Update dynamic stages
             PIPELINE_STAGES = { 
@@ -405,6 +421,178 @@ const usePipelineStore = create((set, get) => ({
             console.error('Failed to validate step completion:', error);
             throw error;
         }
+    },
+
+    // Check if current step is completed
+    isCurrentStepCompleted: () => {
+        const state = get();
+        return state.completedSteps.includes(state.currentStepId);
+    },
+
+    // Check if current stage is completed
+    isCurrentStageCompleted: () => {
+        const state = get();
+        return state.completedStages.includes(state.currentStageId);
+    },
+
+    // Check if can auto-advance to next step
+    canAutoAdvanceStep: () => {
+        const state = get();
+        const stageConfig = state.workflowTemplate?.stages?.find(stage => stage.id === state.currentStageId);
+        if (!stageConfig) return false;
+        
+        const currentStepIndex = stageConfig.steps.findIndex(step => step.step_id === state.currentStepId);
+        const hasNextStep = currentStepIndex >= 0 && currentStepIndex < stageConfig.steps.length - 1;
+        const currentStepCompleted = state.completedSteps.includes(state.currentStepId);
+        
+        return hasNextStep && currentStepCompleted;
+    },
+
+    // Clear completion states
+    clearCompletedSteps: () => {
+        set({ completedSteps: [] });
+    },
+
+    clearCompletedStages: () => {
+        set({ completedStages: [] });
+    },
+
+    clearAllCompletionStates: () => {
+        set({
+            completedSteps: [],
+            completedStages: [],
+            stepResults: {},
+            stageResults: {}
+        });
+    },
+
+    // Check if can auto-advance to next stage
+    canAutoAdvanceStage: () => {
+        const state = get();
+        const stageConfig = state.workflowTemplate?.stages?.find(stage => stage.id === state.currentStageId);
+        if (!stageConfig) return false;
+        
+        // Check if all steps in current stage are completed
+        const allStepsCompleted = stageConfig.steps.every(step => 
+            state.completedSteps.includes(step.step_id)
+        );
+        
+        // Check if there's a next stage
+        const currentStageIndex = state.workflowTemplate.stages.findIndex(stage => stage.id === state.currentStageId);
+        const hasNextStage = currentStageIndex >= 0 && currentStageIndex < state.workflowTemplate.stages.length - 1;
+        
+        return allStepsCompleted && hasNextStage;
+    },
+
+    // Get next stage ID
+    getNextStageId: () => {
+        const state = get();
+        if (!state.workflowTemplate) return null;
+        
+        const currentStageIndex = state.workflowTemplate.stages.findIndex(stage => stage.id === state.currentStageId);
+        if (currentStageIndex >= 0 && currentStageIndex < state.workflowTemplate.stages.length - 1) {
+            return state.workflowTemplate.stages[currentStageIndex + 1].id;
+        }
+        return null;
+    },
+
+    // Auto-advance to next stage (integrated logic)
+    autoAdvanceToNextStage: (onComplete) => {
+        const state = get();
+        if (!get().canAutoAdvanceStage()) return false;
+        
+        const nextStageId = get().getNextStageId();
+        if (!nextStageId) return false;
+        
+        // Mark current stage as completed
+        get().markStageCompleted(state.currentStageId);
+        
+        // Call onComplete callback for navigation
+        if (onComplete && typeof onComplete === 'function') {
+            console.log('Pipeline: Auto-advancing to next stage:', nextStageId);
+            setTimeout(() => {
+                onComplete();
+            }, 1000);
+        }
+        
+        return true;
+    },
+
+    // State machine integration methods
+    notifyStepStarted: (stepId, stageId) => {
+        console.log('Pipeline: Step started:', stepId, 'in stage:', stageId);
+        get().setCurrentStepId(stepId);
+        if (stageId) {
+            set({ currentStageId: stageId });
+        }
+    },
+
+    notifyStepCompleted: (stepId, result) => {
+        console.log('Pipeline: Step completed:', stepId);
+        get().markStepCompleted(stepId);
+        if (result) {
+            get().updateStepResult(stepId, result);
+        }
+    },
+
+    notifyStepFailed: (stepId, error) => {
+        console.log('Pipeline: Step failed:', stepId, error);
+        get().updateStepResult(stepId, {
+            status: 'failed',
+            error: error?.message || 'Step execution failed',
+            timestamp: new Date().toISOString()
+        });
+    },
+
+    notifyStageCompleted: (stageId) => {
+        console.log('Pipeline: Stage completed:', stageId);
+        get().markStageCompleted(stageId);
+    },
+
+    // Enhanced workflow management with state machine support
+    initializeStateMachine: (stateMachine) => {
+        set({ stateMachine });
+        
+        // Set up bidirectional communication
+        if (stateMachine) {
+            stateMachine.getState().setStoreReferences(
+                null, // Will be set by AI planning store
+                { getState: get }
+            );
+        }
+    },
+
+    // Workflow execution methods that integrate with state machine
+    executeStepWithStateMachine: async (stepId, stageId, stepIndex) => {
+        const { stateMachine } = get();
+        if (stateMachine) {
+            return stateMachine.getState().startStep(stepId, stageId, stepIndex);
+        }
+        return false;
+    },
+
+    completeStepWithStateMachine: (stepId, result) => {
+        const { stateMachine } = get();
+        if (stateMachine) {
+            return stateMachine.getState().completeStep(stepId, result);
+        }
+        return false;
+    },
+
+    failStepWithStateMachine: (stepId, error) => {
+        const { stateMachine } = get();
+        if (stateMachine) {
+            return stateMachine.getState().failStep(stepId, error);
+        }
+        return false;
+    },
+
+    completeStageWithStateMachine: (stageId) => {
+        const { stateMachine } = get();
+        if (stateMachine) {
+            return stateMachine.getState().completeStage(stageId);
+        }
+        return false;
     },
 }));
 
