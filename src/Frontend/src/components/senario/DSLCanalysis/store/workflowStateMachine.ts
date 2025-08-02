@@ -309,27 +309,9 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     },
     
     executeStateEffects: (state: WorkflowState, payload: any = {}): void => {
-        console.log(
-            `%c⚡ EXECUTING STATE EFFECTS ⚡\n` +
-            `%c🎭 STATE: ${state}`,
-            'color: #fd79a8; font-weight: bold; font-size: 12px;',
-            'color: #fdcb6e; font-weight: bold;'
-        );
-        
         const effects: Record<WorkflowState, () => void> = {
             [WORKFLOW_STATES.STEP_EXECUTING]: () => {
-                const { stepId, stageId, stepIndex } = payload;
-                console.log(
-                    `%c🚀 STEP EXECUTION STARTED\n` +
-                    `%c🎯 Step: ${stepId}\n` +
-                    `%c📁 Stage: ${stageId || get().currentStageId}\n` +
-                    `%c🔢 Index: ${stepIndex !== undefined ? stepIndex : get().currentStepIndex}`,
-                    'color: #00b894; font-weight: bold;',
-                    'color: #0984e3; font-weight: bold;',
-                    'color: #6c5ce7; font-weight: bold;',
-                    'color: #a29bfe; font-weight: bold;'
-                );
-                
+                const { stepId, stageId, stepIndex } = payload;                
                 set({
                     currentStepId: stepId,
                     currentStageId: stageId || get().currentStageId,
@@ -491,19 +473,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         const updateHandlers: Record<string, (payload: any) => void> = {
             [EVENTS.WORKFLOW_UPDATE]: (payload) => {
                 const { workflowTemplate, nextStageId } = payload;
-                console.log(
-                    `%c🔄 WORKFLOW UPDATE EVENT 🔄\n` +
-                    `%c📋 Template: ${workflowTemplate?.name || 'Unknown'}\n` +
-                    `%c🎯 Next Stage: ${nextStageId || 'None'}\n` +
-                    `%c📊 Stages Count: ${workflowTemplate?.stages?.length || 0}`,
-                    'color: #ff6b6b; font-weight: bold; font-size: 14px;',
-                    'color: #4ecdc4; font-weight: bold;',
-                    'color: #45b7d1; font-weight: bold;',
-                    'color: #96ceb4; font-weight: bold;'
-                );
                 
-                // Reset state machine state for new workflow
-                console.log('%c🔄 RESETTING STATE MACHINE FOR NEW WORKFLOW', 'color: #e74c3c; font-weight: bold;');
                 set({
                     currentStageId: nextStageId || workflowTemplate?.stages?.[0]?.id || null,
                     currentStepId: null,
@@ -518,15 +488,6 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                 const pipelineStore = get().pipelineStore;
                 if (pipelineStore && workflowTemplate) {
                     const targetStageId = nextStageId || workflowTemplate.stages?.[0]?.id;
-                    
-                    console.log(
-                        `%c🔄 UPDATING PIPELINE STORE FOR WORKFLOW UPDATE\n` +
-                        `%c📋 Workflow: ${workflowTemplate.name}\n` +
-                        `%c🎯 Target Stage: ${targetStageId}`,
-                        'color: #3498db; font-weight: bold; font-size: 12px;',
-                        'color: #2ecc71; font-weight: bold;',
-                        'color: #e67e22; font-weight: bold;'
-                    );
                     
                     // Use the proper setStage method to ensure UI updates
                     const pipelineState = pipelineStore.getState();
@@ -546,9 +507,6 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                         pipelineState.setStage(targetStageId, 'next');
                     }
                 }
-                
-                // Note: Auto-advance will be re-enabled by enableAutoAdvanceAfterConfirmation()
-                // which will handle starting the first step of the new workflow
             },
             
             [EVENTS.STAGE_STEPS_UPDATE]: (payload) => {
@@ -656,10 +614,13 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     startStep: (stepId: string, stageId?: string, stepIndex?: number): boolean => {
         const currentState = get().currentState;
         const currentStepId = get().currentStepId;
+        const currentStageId = get().currentStageId;
         
-        // If already executing the same step, just return true
-        if (currentState === WORKFLOW_STATES.STEP_EXECUTING && currentStepId === stepId) {
-            console.log(`[WorkflowStateMachine] Step ${stepId} is already executing, skipping duplicate start`);
+        // If already executing the same step in the same stage, just return true
+        if (currentState === WORKFLOW_STATES.STEP_EXECUTING && 
+            currentStepId === stepId && 
+            currentStageId === (stageId || currentStageId)) {
+            console.log(`[WorkflowStateMachine] Step ${stepId} in stage ${stageId || currentStageId} is already executing, skipping duplicate start`);
             return true;
         }
         
@@ -807,10 +768,11 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                         );
                         
                         // Force reset state machine by directly setting state
+                        const firstStepId = firstStep.step_id || firstStep.id;
                         set({
                             currentState: WORKFLOW_STATES.IDLE,
                             currentStageId: targetStage.id,
-                            currentStepId: null,
+                            currentStepId: firstStepId, // Set the first step ID immediately
                             currentStepIndex: 0
                         });
                         
@@ -820,9 +782,15 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                             pipelineState.setStage(targetStage.id, 'next');
                         }
                         
+                        // Also ensure pipeline store has the correct current step
+                        if (pipelineState.setCurrentStepId) {
+                            console.log(`%c🎯 SYNCING PIPELINE STEP TO: ${firstStepId}`, 'color: #9b59b6; font-weight: bold;');
+                            pipelineState.setCurrentStepId(firstStepId);
+                        }
+                        
                         setTimeout(() => {
                             console.log(`%c🎬 STARTING STEP AFTER STAGE TRANSITION`, 'color: #2ecc71; font-weight: bold;');
-                            get().startStep(firstStep.step_id || firstStep.id, targetStage.id, 0);
+                            get().startStep(firstStepId, targetStage.id, 0);
                             
                             // Wait additional time for DynamicStageTemplate to re-render with new stage
                             setTimeout(() => {
@@ -830,7 +798,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                                 // Dispatch event to trigger step execution with longer delay
                                 window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
                                     detail: { 
-                                        stepId: firstStep.step_id || firstStep.id,
+                                        stepId: firstStepId,
                                         stageId: targetStage.id,
                                         action: 'auto_execute_after_workflow_update',
                                         timestamp: Date.now()
@@ -910,7 +878,24 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         if (nextStage) {
             const firstStep = nextStage.steps?.[0];
             if (firstStep) {
-                return get().startStep(firstStep.step_id, nextStage.id, 0);
+                const started = get().startStep(firstStep.step_id, nextStage.id, 0);
+                
+                if (started) {
+                    // 发送事件触发步骤执行（类似于workflow update的逻辑）
+                    setTimeout(() => {
+                        console.log(`%c🎯 DISPATCHING STEP TRIGGER AFTER STAGE AUTO-ADVANCE`, 'color: #e74c3c; font-weight: bold;');
+                        window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
+                            detail: { 
+                                stepId: firstStep.step_id || firstStep.id,
+                                stageId: nextStage.id,
+                                action: 'auto_execute_after_stage_advance',
+                                timestamp: Date.now()
+                            }
+                        }));
+                    }, 1500); // 等待DynamicStageTemplate重新渲染新的阶段
+                }
+                
+                return started;
             }
         }
         return false;

@@ -75,6 +75,7 @@ export interface ExecutionStep {
     updated_workflow?: any;
     updated_steps?: any[];
     stage_id?: string;
+    shotType?: string; // 后端返回的shotType用于区分cell类型：'action'=代码，'dialogue'=文本
 }
 
 export interface ScriptStoreState {
@@ -661,6 +662,18 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
             const result = await useCodeStore.getState().executeCell(codecell_id);
             console.log(`[useScriptStore] Execution result for ${codecell_id}:`, result);
 
+            // Store execution result to AI Planning Context effect
+            if (result && result.success && result.outputs) {
+                try {
+                    const { useAIPlanningContextStore } = await import('./aiPlanningContext');
+                    const aiPlanningStore = useAIPlanningContextStore.getState();
+                    aiPlanningStore.addEffect(result.outputs);
+                    console.log(`[useScriptStore] Added execution result to effect for cell: ${codecell_id}`);
+                } catch (error) {
+                    console.warn('[useScriptStore] Could not update AI Planning Context effect:', error);
+                }
+            }
+
             // Handle auto-debug
             if (auto_debug && result && result.success === false) {
                 console.log(`[useScriptStore] Auto-debug triggered for cell: ${codecell_id}`);
@@ -757,14 +770,38 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
 
                 case ACTION_TYPES.ADD: {
                     const actionId = step.storeId || uuidv4();
+                    // 根据后端shotType确定cell类型
+                    let cellType = 'text'; // 默认为文本
+                    switch (step.shotType) {
+                        case 'action':
+                            cellType = 'code';
+                            break;
+                        case 'dialogue':
+                            cellType = 'text';
+                            break;
+                        case 'hybrid':
+                            cellType = 'Hybrid';
+                            break;
+                        case 'attachment':
+                        case 'outcome':
+                        case 'error':
+                            cellType = 'text'; // 这些都显示为文本
+                            break;
+                        case 'thinking':
+                            cellType = 'thinking';
+                            break;
+                        default:
+                            cellType = 'text';
+                    }
+                    
                     get().addAction({
                         id: actionId,
-                        type: step.contentType || 'text',
+                        type: cellType,
                         content: step.content || '',
                         metadata: step.metadata || {},
                     });
 
-                    if (step.contentType === 'code') {
+                    if (cellType === 'code') {
                         globalUpdateInterface.createAIGeneratingCode("", '', [], actionId);
                     } else {
                         globalUpdateInterface.createAIGeneratingText("", '', [], actionId);
@@ -888,6 +925,39 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     if (step.keepDebugButtonVisible !== false) {
                         set({ debugButtonVisible: true });
                     }
+
+                    // 通知状态机阶段完成，触发自动跳转到下一阶段
+                    try {
+                        const { useWorkflowStateMachine } = require('./workflowStateMachine.ts');
+                        const { usePipelineStore } = require('./pipelineController.ts');
+                        
+                        const stateMachine = useWorkflowStateMachine.getState();
+                        const pipelineStore = usePipelineStore.getState();
+                        const currentStageId = pipelineStore.currentStageId;
+                        
+                        if (currentStageId) {
+                            console.log(`[useScriptStore] Triggering stage completion for: ${currentStageId}`);
+                            
+                            // 触发阶段完成事件
+                            window.dispatchEvent(new CustomEvent('workflowStageCompleted', {
+                                detail: { 
+                                    stageId: currentStageId,
+                                    timestamp: Date.now()
+                                }
+                            }));
+                            
+                            // 检查是否可以自动推进到下一阶段
+                            if (stateMachine.autoAdvanceEnabled && stateMachine.canAutoAdvanceToNextStage()) {
+                                console.log('[useScriptStore] Auto-advancing to next stage...');
+                                setTimeout(() => {
+                                    stateMachine.autoAdvanceToNextStage();
+                                }, 1000);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('[useScriptStore] Error triggering stage completion:', error);
+                    }
+                    
                     break;
                 }
 

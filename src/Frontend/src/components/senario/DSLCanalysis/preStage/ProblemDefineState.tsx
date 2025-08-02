@@ -215,16 +215,31 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         const problem_name = usePreStageStore.getState().problem_name;
         
         // 添加变量到规划上下文
-        addVariable('csv_file_path', currentFile?.name);
-        addVariable('problem_description', problem_description);
-        addVariable('context_description', datasetBackground || 'No additional context provided');
-        addVariable('problem_name', problem_name);
-        addVariable('user_goal', problem_description); // 使用problem_description作为user_goal
+        const variables = {
+            csv_file_path: currentFile?.name || '',
+            problem_description: problem_description || '',
+            context_description: datasetBackground || 'No additional context provided',
+            problem_name: problem_name || '',
+            user_goal: problem_description || '' // 使用problem_description作为user_goal
+        };
+        
+        // 批量添加变量并记录日志
+        Object.entries(variables).forEach(([key, value]) => {
+            addVariable(key, value);
+            console.log(`[ProblemDefineState] Added variable ${key}:`, value);
+        });
         
         // 设置背景信息到store
         if (datasetBackground) {
             setDatasetInfoStore(datasetBackground);
         }
+        
+        // 确保背景信息也保存到preStageStore中
+        usePreStageStore.getState().setDataBackground(datasetBackground || '');
+        
+        // 验证变量存储
+        const aiPlanningStore = useAIPlanningContextStore.getState();
+        console.log('[ProblemDefineState] All stored variables:', aiPlanningStore.variables);
         
         // 调用确认回调
         await confirmProblem();

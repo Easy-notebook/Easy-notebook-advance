@@ -326,9 +326,24 @@ const AICommandInput = ({ files, setFiles }) => {
         );
         
         // 添加变量到规划上下文
-        useAIPlanningContextStore.getState().addVariable('csv_file_path', files[0]?.name);
-        useAIPlanningContextStore.getState().addVariable('problem_description', command.trim());
-        useAIPlanningContextStore.getState().addVariable('problem_name', 'VDS Analysis');
+        const currentFile = files[0];
+        const variables = {
+            csv_file_path: currentFile?.name || '',
+            problem_description: command.trim(),
+            context_description: 'No additional context provided',
+            problem_name: 'VDS Analysis',
+            user_goal: command.trim() // 使用问题描述作为用户目标
+        };
+        
+        // 批量添加变量并记录日志
+        const aiPlanningStore = useAIPlanningContextStore.getState();
+        Object.entries(variables).forEach(([key, value]) => {
+            aiPlanningStore.addVariable(key, value);
+            console.log(`[EmptyState] Added variable ${key}:`, value);
+        });
+        
+        // 验证变量存储
+        console.log('[EmptyState] All stored variables:', aiPlanningStore.variables);
         
         setStage(PIPELINE_STAGES.PROBLEM_DEFINE);
         return;

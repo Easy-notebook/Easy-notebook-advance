@@ -43,22 +43,9 @@ const MainContent: React.FC<MainContentProps> = ({
 }) => {
   const { detachedCellId, isDetachedCellFullscreen } = useStore();
   
-  // DSLCPipeline rendering logic:
-  // - Show DSLC UI when no cells exist (empty state) 
-  // - Run DSLC in background for demo/create modes to maintain workflow functionality
-  // - Always render DSLC for create mode to allow workflow functionality
   const shouldShowDSLCUI = cells.length === 0;
   const shouldRunDSLCInBackground = viewMode === 'demo' || viewMode === 'create';
   const shouldAlwaysRenderDSLC = shouldShowDSLCUI || shouldRunDSLCInBackground;
-
-  // Debug logging
-  console.log('[MainContent] Render state:', {
-    cellsCount: cells.length,
-    viewMode,
-    shouldShowDSLCUI,
-    shouldRunDSLCInBackground,
-    shouldAlwaysRenderDSLC
-  });
 
   // 如果有独立窗口模式的 cell 且是全屏模式，优先显示独立视图
   if (detachedCellId && isDetachedCellFullscreen) {
@@ -76,7 +63,6 @@ const MainContent: React.FC<MainContentProps> = ({
               <div className="w-full h-full" style={{ zIndex: 1 }}>
                 <DSLCPipeline 
                   onAddCell={handleAddCell}
-                  className="w-full h-full"
                 />
               </div>
             ) : shouldRunDSLCInBackground ? (
@@ -121,7 +107,6 @@ const MainContent: React.FC<MainContentProps> = ({
         >
           <DSLCPipeline 
             onAddCell={handleAddCell}
-            className="w-full h-full"
           />
         </div>
       )}
@@ -140,7 +125,7 @@ const MainContent: React.FC<MainContentProps> = ({
       return (
         <DemoMode
           tasks={tasks}
-          currentPhaseId={currentPhaseId}
+          currentPhaseId={currentPhaseId || ''}
           currentStepIndex={currentStepIndex}
           cells={cells}
           findCellsByStep={findCellsByStep}

@@ -203,15 +203,11 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     );
     initializeStateMachine({ getState: () => useWorkflowStateMachine.getState() });
     
-    // Reset all states when workflow becomes active
-    if (isWorkflowActive) {
-      const aiPlanningStore = useAIPlanningContextStore.getState();
-      aiPlanningStore.resetAIPlanningContext();
-      
-      // Reset state machine if it's in completed state
-      if (currentState === WORKFLOW_STATES.WORKFLOW_COMPLETED) {
-        reset();
-      }
+    // Only reset state machine when transitioning from completed state
+    // DO NOT reset aiPlanningContext during workflow execution to preserve preStage variables
+    if (isWorkflowActive && currentState === WORKFLOW_STATES.WORKFLOW_COMPLETED) {
+      console.log('[WorkflowControl] Resetting state machine only, preserving all aiPlanningContext variables');
+      reset();
     }
   }, [isWorkflowActive]); // React to workflow activation
 
@@ -287,9 +283,11 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
         setCurrentStepId(firstStepId);
         recordStepState(firstStepId, 'stage_transition');
         
-        // Start first step of next stage through state machine
+        // Start first step of next stage through state machine and dispatch execution trigger
         setTimeout(() => {
           startStep(firstStepId, nextStage.id, 0);
+          // Immediately notify DynamicStageTemplate to execute the first step of the new stage
+          triggerStepExecution(firstStepId, 'stage_auto_start', EXECUTION_DELAYS.STAGE_READY);
         }, EXECUTION_DELAYS.STAGE_TRANSITION);
       }
     } else {
@@ -410,6 +408,12 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
   // Auto-execution logic with loop prevention
   const hasTriggeredExecution = useRef(false);
   
+  // Reset execution flag when stage changes to prevent blocking
+  useEffect(() => {
+    console.log(`[WorkflowControl] Stage changed to ${currentStageId}, resetting execution flag`);
+    hasTriggeredExecution.current = false;
+  }, [currentStageId]);
+  
   useEffect(() => {
     const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED;
     
@@ -424,6 +428,7 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     if (!currentStepId && workflowState.uncompletedSteps?.length > 0) {
       const firstUncompletedStep = workflowState.uncompletedSteps[0];
       const stepId = firstUncompletedStep.step_id || firstUncompletedStep.id;
+      console.log(`[WorkflowControl] No current step, setting first uncompleted step: ${stepId}`);
       setCurrentStepId(stepId);
       recordStepState(stepId, 'auto_start');
       
@@ -442,12 +447,26 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
       );
       
       if (currentStepExists) {
+        console.log(`[WorkflowControl] Resuming existing step: ${currentStepId}`);
         hasTriggeredExecution.current = true;
         startStep(currentStepId, currentStageId, workflowState.completedStepsCount);
         triggerStepExecution(currentStepId, 'resume_execute', EXECUTION_DELAYS.RESUME);
       } else {
-        console.log(`[WorkflowControl] Current step ${currentStepId} not found in uncompleted steps, skipping resume`);
-        hasTriggeredExecution.current = false; // Allow re-triggering with correct step
+        console.log(`[WorkflowControl] Current step ${currentStepId} not found in uncompleted steps, auto-selecting first uncompleted`);
+        // Auto-select the first uncompleted step instead of blocking
+        if (workflowState.uncompletedSteps?.length > 0) {
+          const firstUncompletedStep = workflowState.uncompletedSteps[0];
+          const newStepId = firstUncompletedStep.step_id || firstUncompletedStep.id;
+          console.log(`[WorkflowControl] Auto-selecting first uncompleted step: ${newStepId}`);
+          setCurrentStepId(newStepId);
+          recordStepState(newStepId, 'auto_select_after_stage_change');
+          
+          hasTriggeredExecution.current = true;
+          startStep(newStepId, currentStageId, workflowState.completedStepsCount);
+          triggerStepExecution(newStepId, 'auto_execute_after_stage_change', EXECUTION_DELAYS.AUTO_START);
+        } else {
+          hasTriggeredExecution.current = false; // Allow re-triggering with correct step
+        }
       }
     }
   }, [isWorkflowActive, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, workflowState.completedStepsCount,
