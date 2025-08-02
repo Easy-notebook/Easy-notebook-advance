@@ -554,27 +554,31 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
   
   useEffect(() => {
     const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED;
-    const isAutoExecuting = currentState === WORKFLOW_STATES.STEP_EXECUTING;
     
-    if (!currentStepId || !completedSteps.includes(currentStepId) || !workflowState.hasUncompletedSteps || isPaused || !isAutoExecuting) {
+    // Auto-advance when current step is completed and there are uncompleted steps
+    if (!currentStepId || !completedSteps.includes(currentStepId) || !workflowState.hasUncompletedSteps || isPaused) {
       return;
     }
-      
-    const nextUncompletedStep = workflowState.uncompletedSteps?.[0];
-    if (nextUncompletedStep) {
-      const nextStepId = nextUncompletedStep.step_id || nextUncompletedStep.id;
-      if (nextStepId !== currentStepId && nextStepId !== lastAdvancedStep.current) {
-        lastAdvancedStep.current = nextStepId;
-        recordStepState(nextStepId, 'auto_advance');
-        setCurrentStepId(nextStepId);
-        
-        // Start next step through state machine only if idle
-        if (currentState === WORKFLOW_STATES.IDLE || currentState === WORKFLOW_STATES.STEP_COMPLETED) {
+    
+    // Wait a bit for state to settle after step completion
+    const advanceTimer = setTimeout(() => {
+      const nextUncompletedStep = workflowState.uncompletedSteps?.[0];
+      if (nextUncompletedStep) {
+        const nextStepId = nextUncompletedStep.step_id || nextUncompletedStep.id;
+        if (nextStepId !== currentStepId && nextStepId !== lastAdvancedStep.current) {
+          console.log(`[WorkflowControl] Auto-advancing from completed step ${currentStepId} to next step ${nextStepId}`);
+          lastAdvancedStep.current = nextStepId;
+          recordStepState(nextStepId, 'auto_advance');
+          setCurrentStepId(nextStepId);
+          
+          // Start next step through state machine
           startStep(nextStepId, currentStageId, workflowState.completedStepsCount);
+          triggerStepExecution(nextStepId, 'auto_advance', EXECUTION_DELAYS.STEP_ADVANCE);
         }
-        triggerStepExecution(nextStepId, 'auto_advance', EXECUTION_DELAYS.STEP_ADVANCE);
       }
-    }
+    }, 500); // Small delay to allow state to settle
+    
+    return () => clearTimeout(advanceTimer);
   }, [currentStepId, currentStageId, completedSteps, workflowState.hasUncompletedSteps, workflowState.uncompletedSteps, 
       workflowState.completedStepsCount, currentState, recordStepState, setCurrentStepId, triggerStepExecution, startStep]);
 

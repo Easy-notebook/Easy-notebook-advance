@@ -1,3 +1,4 @@
+import React from 'react';
 import DSLCPipeline from '../../senario/DSLCanalysis/Pipeline';
 import CreateMode from '../../senario/BasicMode/CreateMode';
 import DemoMode from '../../senario/BasicMode/DemoMode';
@@ -81,10 +82,9 @@ const MainContent: React.FC<MainContentProps> = ({
             ) : shouldRunDSLCInBackground ? (
               <>
                 {/* Hidden DSLC for background workflow */}
-                <div className="hidden" style={{ zIndex: -1 }}>
+                <div className="hidden w-full h-full" style={{ zIndex: -1 }}>
                   <DSLCPipeline 
                     onAddCell={handleAddCell}
-                    className="w-full h-full"
                   />
                 </div>
                 {/* Show other modes UI */}

@@ -1075,12 +1075,26 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                         const completedSteps = currentPipelineState.completedSteps || [];
                         const currentStepId = currentPipelineState.currentStepId;
                         
+                        // First check if current step should be marked as completed
+                        if (currentStepId) {
+                            const currentStepInfo = step.updated_steps.find((stepInfo: any) => {
+                                const stepId = stepInfo.step_id || stepInfo.id;
+                                return stepId === currentStepId;
+                            });
+                            
+                            // If current step is marked as completed in the update, mark it completed
+                            if (currentStepInfo && currentStepInfo.status === 'completed' && !completedSteps.includes(currentStepId)) {
+                                console.log(`[useScriptStore] Marking current step as completed: ${currentStepId}`);
+                                currentPipelineState.markStepCompleted(currentStepId);
+                            }
+                        }
+                        
+                        // Find next uncompleted step (now including current step if it's still not completed)
                         const nextUncompletedStep = step.updated_steps.find((stepInfo: any) => {
                             const stepId = stepInfo.step_id || stepInfo.id;
-                            return !completedSteps.includes(stepId) && 
+                            return !currentPipelineState.completedSteps.includes(stepId) && 
                                    stepInfo.status !== 'completed' &&
-                                   stepId !== 'section_1_workflow_initialization' &&
-                                   stepId !== currentStepId;
+                                   stepId !== 'section_1_workflow_initialization';
                         });
                         
                         const nextStepId = nextUncompletedStep ? 

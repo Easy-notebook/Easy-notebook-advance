@@ -52,19 +52,7 @@ export const useAutoTracking = () => {
     if (cells.length > lastCellCountRef.current && lastAddedCellId) {
       const latestCell = cells.find(cell => cell.id === lastAddedCellId);
       if (latestCell && workflowTemplate?.stages && currentStageId) {
-        // Get current stage steps
-        const currentStage = workflowTemplate.stages.find(stage => stage.id === currentStageId);
-        if (currentStage?.steps) {
-          // Navigate to the last step to show latest content
-          const latestStepIndex = Math.max(0, currentStage.steps.length - 1);
-          const latestStep = currentStage.steps[latestStepIndex];
-          
-          if (latestStepIndex !== currentStepIndex && latestStep) {
-            setPipelineCurrentStepId(latestStep.step_id || latestStep.id);
-          }
-        }
-        
-        // Scroll to the latest cell
+        // Scroll to the latest cell without changing steps - let WorkflowControl handle step navigation
         setTimeout(() => {
           const cellElement = document.querySelector(`[data-cell-id="${lastAddedCellId}"]`);
           if (cellElement) {
