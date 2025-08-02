@@ -29,12 +29,15 @@ export const useAIPlanningContextStore = create((set, get) => ({
         completed: [],
     },
 
-    // Context backup
+    // Context backup and request tracking
     backup: {
         lastStage: {},
         lastStep: {},
         cache: {}
     },
+    
+    // Track last request context for duplicate detection
+    lastRequestContext: {},
 
     isCurStepCompleted: () => {
         const { toDoList } = get();
@@ -103,6 +106,68 @@ export const useAIPlanningContextStore = create((set, get) => ({
     isStageReadyForCompletion: (stageId) => {
         const { stageStatus, toDoList } = get();
         return toDoList.length === 0 && !!stageStatus[stageId];
+    },
+
+    // Check if current request context is same as last request
+    isRequestContextSame: (stepId, stageId) => {
+        const { lastRequestContext, toDoList, variables, thinking } = get();
+        const currentContext = {
+            stepId,
+            stageId,
+            toDoList: [...toDoList],
+            variables: { ...variables },
+            thinkingLength: thinking.length
+        };
+        
+        const lastContext = lastRequestContext[`${stageId}_${stepId}`];
+        if (!lastContext) {
+            return false; // No previous context, allow execution
+        }
+        
+        // Compare contexts
+        const isSame = JSON.stringify(currentContext) === JSON.stringify(lastContext);
+        console.log('[AI Context] Request context comparison:', {
+            stepId,
+            stageId,
+            isSame,
+            current: currentContext,
+            last: lastContext
+        });
+        
+        return isSame;
+    },
+
+    // Update request context after execution starts
+    updateRequestContext: (stepId, stageId) => {
+        const { toDoList, variables, thinking } = get();
+        const contextKey = `${stageId}_${stepId}`;
+        const currentContext = {
+            stepId,
+            stageId,
+            toDoList: [...toDoList],
+            variables: { ...variables },
+            thinkingLength: thinking.length
+        };
+        
+        set(state => ({
+            lastRequestContext: {
+                ...state.lastRequestContext,
+                [contextKey]: currentContext
+            }
+        }));
+        
+        console.log('[AI Context] Updated request context for:', contextKey, currentContext);
+    },
+
+    // Clear request context for a step (useful for retries)
+    clearRequestContext: (stepId, stageId) => {
+        const contextKey = `${stageId}_${stepId}`;
+        set(state => {
+            const newContext = { ...state.lastRequestContext };
+            delete newContext[contextKey];
+            return { lastRequestContext: newContext };
+        });
+        console.log('[AI Context] Cleared request context for:', contextKey);
     },
 
     setChecklist: (current, completed) => set({ checklist: { current, completed } }),

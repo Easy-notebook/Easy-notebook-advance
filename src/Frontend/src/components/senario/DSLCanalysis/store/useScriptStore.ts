@@ -1139,7 +1139,6 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     const stateMachine = useWorkflowStateMachine.getState();
                     
                     if (step.updated_steps && step.stage_id) {
-                        console.log(`[useScriptStore] Processing stage steps update for ${step.stage_id}:`, step.updated_steps);
                         
                         // Find next uncompleted step
                         const completedSteps = currentPipelineState.completedSteps || [];
@@ -1184,7 +1183,6 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                 }
 
                 case ACTION_TYPES.NEXT_EVENT: {
-                    // No-op for next event
                     break;
                 }
 

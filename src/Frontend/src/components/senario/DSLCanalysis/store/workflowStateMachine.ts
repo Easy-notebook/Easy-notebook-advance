@@ -326,23 +326,21 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                     }, get().autoAdvanceDelay);
                 }
                 
-                // Check if stage is completed after a delay to allow state updates to propagate
-                setTimeout(() => {
-                    const isStageCompleted = get().isCurrentStageCompleted();
-                    console.log(
-                        `%c🏁 STAGE COMPLETION CHECK (DELAYED)\n` +
-                        `%c📁 Stage: ${get().currentStageId}\n` +
-                        `%c✅ Completed: ${isStageCompleted}`,
-                        'color: #fdcb6e; font-weight: bold;',
-                        'color: #6c5ce7; font-weight: bold;',
-                        'color: #00b894; font-weight: bold;'
-                    );
-                    
-                    if (isStageCompleted) {
-                        console.log('%c🎉 TRANSITIONING TO STAGE COMPLETED', 'color: #fd79a8; font-weight: bold; font-size: 12px;');
-                        get().transition(EVENTS.COMPLETE_STAGE, { stageId: get().currentStageId });
-                    }
-                }, 300); // Wait for all state updates to complete
+                // Check if stage is completed immediately - state should be synchronous
+                const isStageCompleted = get().isCurrentStageCompleted();
+                console.log(
+                    `%c🏁 STAGE COMPLETION CHECK\n` +
+                    `%c📁 Stage: ${get().currentStageId}\n` +
+                    `%c✅ Completed: ${isStageCompleted}`,
+                    'color: #fdcb6e; font-weight: bold;',
+                    'color: #6c5ce7; font-weight: bold;',
+                    'color: #00b894; font-weight: bold;'
+                );
+                
+                if (isStageCompleted) {
+                    console.log('%c🎉 TRANSITIONING TO STAGE COMPLETED', 'color: #fd79a8; font-weight: bold; font-size: 12px;');
+                    get().transition(EVENTS.COMPLETE_STAGE, { stageId: get().currentStageId });
+                }
             },
             
             [WORKFLOW_STATES.STEP_FAILED]: () => {
@@ -483,25 +481,26 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                     }
                 }
                 
-                // Mark current step as completed
+                // Mark current step as completed (only if not already completed)
                 const currentStepId = get().currentStepId;
-                if (currentStepId) {
+                if (currentStepId && !get().completedSteps.includes(currentStepId)) {
+                    console.log(`[WorkflowStateMachine] Marking step ${currentStepId} as completed due to stage steps update`);
                     set(state => ({
-                        completedSteps: state.completedSteps.includes(currentStepId) 
-                            ? state.completedSteps 
-                            : [...state.completedSteps, currentStepId]
+                        completedSteps: [...state.completedSteps, currentStepId]
                     }));
                     
                     get().notifyStepCompleted(currentStepId, { 
                         status: 'completed', 
                         reason: 'stage_steps_updated' 
                     });
+                } else if (currentStepId) {
+                    console.log(`[WorkflowStateMachine] Step ${currentStepId} already completed, skipping duplicate completion`);
                 }
                 
-                // Use delayed transition to next step, consistent with normal flow
+                // Transition to next step immediately - state should be synchronous
                 if (nextStepId) {
                     console.log(
-                        `%c🎯 DELAYED TRANSITION TO NEXT STEP: ${nextStepId}\n` +
+                        `%c🎯 DIRECT TRANSITION TO NEXT STEP: ${nextStepId}\n` +
                         `%c📁 Stage: ${stageId}`,
                         'color: #e67e22; font-weight: bold; font-size: 12px;',
                         'color: #3498db; font-weight: bold;'
@@ -517,31 +516,23 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                         (step: any) => (step.step_id || step.id) === nextStepId
                     ) || 0;
                     
-                    // Wait for state updates to propagate before starting next step
-                    setTimeout(() => {
-                        console.log(`%c🚀 STARTING NEXT STEP AFTER STAGE UPDATE: ${nextStepId}`, 'color: #27ae60; font-weight: bold;');
-                        get().startStep(nextStepId, stageId, nextStepIndex);
-                        
-                        // Dispatch event to trigger step execution after additional delay
-                        setTimeout(() => {
-                            window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
-                                detail: { 
-                                    stepId: nextStepId,
-                                    stageId: stageId,
-                                    action: 'execute_after_stage_steps_update',
-                                    timestamp: Date.now()
-                                }
-                            }));
-                        }, 200);
-                    }, 800); // Longer delay to ensure all state updates complete
+                    // Only dispatch event to trigger step execution
+                    // Don't call startStep here to avoid double execution
+                    console.log(`[WorkflowStateMachine] Dispatching step trigger for ${nextStepId}`);
+                    window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
+                        detail: { 
+                            stepId: nextStepId,
+                            stageId: stageId,
+                            action: 'execute_after_stage_steps_update',
+                            timestamp: Date.now()
+                        }
+                    }));
                 } else {
-                    // No next step specified, use delayed completion flow
-                    setTimeout(() => {
-                        get().transition(EVENTS.COMPLETE_STEP, { 
-                            stepId: currentStepId, 
-                            result: { status: 'completed', reason: 'stage_steps_updated' }
-                        });
-                    }, 300); // Delay to match normal completion flow
+                    // No next step specified, trigger immediate completion flow
+                    get().transition(EVENTS.COMPLETE_STEP, { 
+                        stepId: currentStepId, 
+                        result: { status: 'completed', reason: 'stage_steps_updated' }
+                    });
                 }
                 
                 console.log('[WorkflowStateMachine] Stage steps updated, navigation handled');
@@ -670,99 +661,18 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                 state.autoAdvanceToNextStage();
             }, state.autoAdvanceDelay);
         } else if (state.currentState === WORKFLOW_STATES.STEP_EXECUTING || state.currentState === WORKFLOW_STATES.IDLE) {
-            // Handle workflow update case: need to start first step of new workflow
-            console.log('%c🔄 WORKFLOW UPDATE: STARTING FIRST STEP OF NEW WORKFLOW', 'color: #e74c3c; font-weight: bold; font-size: 12px;');
-            
-            const pipelineStore = state.pipelineStore;
-            if (pipelineStore) {
-                const pipelineState = pipelineStore.getState();
-                const workflowTemplate = pipelineState.workflowTemplate;
-                
-                if (workflowTemplate?.stages?.length > 0) {
-                    // Start from the first stage (not skip planning)
-                    const targetStage = workflowTemplate.stages[0];
-                    const firstStep = targetStage.steps?.[0];
-                    
-                    if (firstStep && targetStage) {
-                        console.log(
-                            `%c🎯 STARTING NEW WORKFLOW FIRST STEP\n` +
-                            `%c📁 Stage: ${targetStage.id}\n` +
-                            `%c📝 Step: ${firstStep.step_id || firstStep.id}\n` +
-                            `%c📊 Workflow has ${workflowTemplate.stages?.length || 0} stages`,
-                            'color: #2ecc71; font-weight: bold;',
-                            'color: #3498db; font-weight: bold;',
-                            'color: #e67e22; font-weight: bold;',
-                            'color: #9b59b6; font-weight: bold;'
-                        );
-                        
-                        // Verify pipeline store has the new workflow
-                        const pipelineState = pipelineStore.getState();
-                        console.log(
-                            `%c🔍 PIPELINE STORE VERIFICATION\n` +
-                            `%c📋 Pipeline currentStageId: ${pipelineState.currentStageId}\n` +
-                            `%c📋 Pipeline currentStage: ${pipelineState.currentStage}\n` +
-                            `%c📋 Pipeline workflow stages: ${pipelineState.workflowTemplate?.stages?.length || 0}`,
-                            'color: #f39c12; font-weight: bold;',
-                            'color: #34495e; font-weight: bold;',
-                            'color: #34495e; font-weight: bold;',
-                            'color: #34495e; font-weight: bold;'
-                        );
-                        
-                        // Check if target stage exists in pipeline workflow template
-                        const targetStageInPipeline = pipelineState.workflowTemplate?.stages?.find(s => s.id === targetStage.id);
-                        console.log(
-                            `%c🎯 TARGET STAGE VERIFICATION\n` +
-                            `%c📋 Target stage in pipeline: ${targetStageInPipeline ? 'FOUND' : 'NOT FOUND'}\n` +
-                            `%c📋 Target stage steps: ${targetStageInPipeline?.steps?.length || 0}\n` +
-                            `%c📋 First step ID: ${targetStageInPipeline?.steps?.[0]?.step_id || targetStageInPipeline?.steps?.[0]?.id || 'NONE'}`,
-                            'color: #e74c3c; font-weight: bold;',
-                            'color: #34495e; font-weight: bold;',
-                            'color: #34495e; font-weight: bold;',
-                            'color: #34495e; font-weight: bold;'
-                        );
-                        
-                        // Force reset state machine by directly setting state
-                        const firstStepId = firstStep.step_id || firstStep.id;
-                        set({
-                            currentState: WORKFLOW_STATES.IDLE,
-                            currentStageId: targetStage.id,
-                            currentStepId: firstStepId, // Set the first step ID immediately
-                            currentStepIndex: 0
-                        });
-                        
-                        // Also ensure pipeline store is in sync
-                        if (pipelineState.setStage) {
-                            console.log(`%c🎯 SYNCING PIPELINE STAGE TO: ${targetStage.id}`, 'color: #9b59b6; font-weight: bold;');
-                            pipelineState.setStage(targetStage.id, 'next');
-                        }
-                        
-                        // Also ensure pipeline store has the correct current step
-                        if (pipelineState.setCurrentStepId) {
-                            console.log(`%c🎯 SYNCING PIPELINE STEP TO: ${firstStepId}`, 'color: #9b59b6; font-weight: bold;');
-                            pipelineState.setCurrentStepId(firstStepId);
-                        }
-                        
-                        setTimeout(() => {
-                            console.log(`%c🎬 STARTING STEP AFTER STAGE TRANSITION`, 'color: #2ecc71; font-weight: bold;');
-                            get().startStep(firstStepId, targetStage.id, 0);
-                            
-                            // Wait additional time for DynamicStageTemplate to re-render with new stage
-                            setTimeout(() => {
-                                console.log(`%c🎯 DISPATCHING STEP TRIGGER AFTER COMPONENT UPDATE`, 'color: #e74c3c; font-weight: bold;');
-                                // Dispatch event to trigger step execution with longer delay
-                                window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
-                                    detail: { 
-                                        stepId: firstStepId,
-                                        stageId: targetStage.id,
-                                        action: 'auto_execute_after_workflow_update',
-                                        timestamp: Date.now()
-                                    }
-                                }));
-                            }, 1500); // Wait for DynamicStageTemplate to re-render with new stage
-                        }, 1000); // Wait for stage transition animation (800ms) + buffer
-                    }
-                }
-            }
+            // Don't auto-start new workflow steps - let user manually trigger them
+            // This prevents the duplicate execution issue when stages switch
+            console.log(
+                '%c⏸️  WORKFLOW UPDATE: Auto-advance re-enabled but NOT auto-starting new workflow steps\n' +
+                '%c📋 Reason: New stages should be started manually to prevent duplicate executions\n' +
+                '%c🎯 Current State: ' + state.currentState + '\n' +
+                '%c📝 Note: Step-driven auto-advance will still work normally',
+                'color: #f39c12; font-weight: bold; font-size: 12px;',
+                'color: #95a5a6; font-weight: bold;',
+                'color: #3498db; font-weight: bold;',
+                'color: #27ae60; font-weight: bold;'
+            );
         } else {
             console.log(
                 `%c⏳ NO AUTO-ADVANCE TRIGGERED\n` +

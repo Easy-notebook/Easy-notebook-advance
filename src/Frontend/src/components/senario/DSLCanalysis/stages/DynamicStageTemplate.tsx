@@ -7,71 +7,99 @@ import { useAIPlanningContextStore } from '../store/aiPlanningContext';
 import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS } from '../store/workflowStateMachine';
 import constants from './constants';
 
-// ==================== Operation Queue Class (Plan Executor) ====================
-class OperationQueue {
+// ==================== Step Execution Queue (One at a time) ====================
+class StepExecutionQueue {
+    constructor() {
+        this.isExecuting = false;
+        this.currentStepId = null;
+        this.pendingExecution = null;
+    }
+
+    async executeStep(stepId, stageId, stepIndex, executeFunction) {        
+        console.log(`[StepQueue] 🚀 Starting execution of step ${stepId}`);
+        this.isExecuting = true;
+        this.currentStepId = stepId;
+
+        try {
+            const result = await executeFunction(stepId, stageId, stepIndex);
+            console.log(`[StepQueue] ✅ Completed execution of step ${stepId}`);
+            return result;
+        } catch (error) {
+            console.error(`[StepQueue] ❌ Failed execution of step ${stepId}:`, error);
+            throw error;
+        } finally {
+            console.log(`[StepQueue] 🧹 Cleaning up execution state for step ${stepId}`);
+            this.isExecuting = false;
+            this.currentStepId = null;
+        }
+    }
+
+    forceReset() {
+        console.log(`[StepQueue] 🔄 Force resetting queue state`);
+        this.isExecuting = false;
+        this.currentStepId = null;
+    }
+
+    get executing() {
+        return this.isExecuting;
+    }
+
+    get current() {
+        return this.currentStepId;
+    }
+}
+
+// ==================== Action Operation Queue ====================
+class ActionOperationQueue {
     constructor() {
         this.queue = [];
         this.isProcessing = false;
-        this.currentOperation = null;
-        this.onQueueEmpty = null;
+        this.results = [];
     }
 
     enqueue(operation) {
-        return new Promise((resolve, reject) => {
-            this.queue.push({
-                ...operation,
-                _resolve: resolve,
-                _reject: reject
-            });
-            if (!this.isProcessing) {
-                this.processNext();
-            }
-        });
+        this.queue.push(operation);
+        return this;
     }
 
-    async processNext() {
-        if (this.queue.length === 0) {
-            this.isProcessing = false;
-            if (this.onQueueEmpty) this.onQueueEmpty();
-            return;
+    async executeAll() {
+        if (this.isProcessing) {
+            console.warn('Action queue is already processing');
+            return this.results;
         }
+
         this.isProcessing = true;
-        const operation = this.queue.shift();
-        this.currentOperation = operation;
+        this.results = [];
+
         try {
-            if (operation.delay) {
-                await new Promise(resolve => setTimeout(resolve, operation.delay));
+            while (this.queue.length > 0) {
+                const operation = this.queue.shift();
+                console.log(`Executing action: ${operation.action || 'unknown'}`);
+                
+                try {
+                    const result = await operation.execute();
+                    this.results.push(result);
+                    console.log(`Action result:`, result);
+                } catch (error) {
+                    console.error('Action execution failed:', error);
+                    this.results.push({ error: error.message });
+                }
             }
-            const result = await operation.execute();
-            operation._resolve(result);
-            setTimeout(() => this.processNext(), constants.DELAY.OPERATION_BUFFER_DELAY);
-        } catch (error) {
-            console.error('Operation execution error:', error);
-            operation._reject(error);
-            setTimeout(() => this.processNext(), constants.DELAY.OPERATION_BUFFER_DELAY);
+        } finally {
+            this.isProcessing = false;
         }
+
+        return this.results;
     }
 
     clear() {
-        // Silently resolve pending operations instead of rejecting them
-        this.queue.forEach(op => {
-            try {
-                op._resolve(null); // Resolve with null instead of rejecting
-            } catch (error) {
-                // Ignore any errors from resolving
-                console.warn('Error resolving cleared operation:', error);
-            }
-        });
         this.queue = [];
+        this.results = [];
         this.isProcessing = false;
     }
 
-    setOnQueueEmpty(callback) {
-        this.onQueueEmpty = callback;
-    }
-
-    get active() {
-        return this.isProcessing || this.queue.length > 0;
+    get isEmpty() {
+        return this.queue.length === 0;
     }
 }
 
@@ -95,7 +123,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
         addThinkingLog,
         isStageComplete: isStageCompleteFromStore,
         getContext,
-        setContext
+        setContext,
+        isRequestContextSame,
+        updateRequestContext,
+        clearRequestContext
     } = useAIPlanningContextStore();
     
     // State Machine Store - execution state
@@ -148,55 +179,47 @@ const DynamicStageTemplate = ({ onComplete }) => {
     // ==== REFS FOR STABILITY ====
     const abortControllerRef = useRef(null);
     const stageCompletionHandledRef = useRef(false);
-    const operationQueue = useRef(new OperationQueue());
-    const executingStepRef = useRef(null);
+    const stepQueue = useRef(new StepExecutionQueue());
+    const actionQueue = useRef(new ActionOperationQueue());
     
-    // ==== ACTION EXECUTION WITH QUEUE ====
-    const executeAction = useCallback(async (action) => {
-        try {
-            return await operationQueue.current.enqueue({
-                execute: async () => {
-                    console.log(`Executing operation: ${action.action}`);
-                    try {
-                        const output = await execAction(action);
-                        if (output) {
-                            console.log(`Operation result:`, output);
-                        }
-                        return output;
-                    } catch (error) {
-                        console.error('Operation execution failed:', error);
-                        throw error;
+    // ==== ACTION EXECUTION WITH SEQUENTIAL QUEUE ====
+    const executeAction = useCallback((action) => {
+        actionQueue.current.enqueue({
+            action: action.action,
+            execute: async () => {
+                console.log(`Executing action: ${action.action}`);
+                try {
+                    const output = await execAction(action);
+                    if (output) {
+                        console.log(`Action result:`, output);
                     }
-                },
-                delay: action.delay || 0
-            });
-        } catch (error) {
-            // Handle queue cleared or other queue-related errors silently
-            if (error.message === 'Queue cleared') {
-                console.log('Operation cancelled due to queue clear');
-                return null;
+                    return output;
+                } catch (error) {
+                    console.error('Action execution failed:', error);
+                    throw error;
+                }
             }
-            throw error;
-        }
+        });
     }, [execAction]);
     
-    // ==== STEP EXECUTION LOGIC ====
-    const executeStep = useCallback(async (stepId, stageId, stepIndex) => {
+    // ==== INTERNAL STEP EXECUTION LOGIC ====
+    const executeStepInternal = useCallback(async (stepId, stageId, stepIndex) => {
         console.log('=== [DynamicStageTemplate] EXECUTE STEP CALLED ===');
         console.log(`[DynamicStageTemplate] Executing step: ${stepId}`);
         console.log(`[DynamicStageTemplate] Stage: ${stageId}`);
         console.log(`[DynamicStageTemplate] Step Index: ${stepIndex}`);
-        console.log(`[DynamicStageTemplate] Current executing step ref: ${executingStepRef.current}`);
         console.log(`[DynamicStageTemplate] Current state machine state: ${currentState}`);
         console.log(`[DynamicStageTemplate] Is stage complete: ${isStageComplete}`);
         
-        // Prevent duplicate execution
-        if (executingStepRef.current === stepId) {
-            console.log(`[DynamicStageTemplate] ❌ BLOCKED: Step ${stepId} is already executing, skipping duplicate`);
+        // Check if this is a duplicate request with same AI context
+        const isContextSame = isRequestContextSame(stepId, stageId);
+        if (isContextSame) {
+            console.log(`[DynamicStageTemplate] ❌ BLOCKED: Step ${stepId} request context is identical to last request`);
             return;
         }
         
-        executingStepRef.current = stepId;
+        // Update request context to track this execution
+        updateRequestContext(stepId, stageId);
         
         // Abort any existing execution
         if (abortControllerRef.current) {
@@ -355,29 +378,17 @@ const DynamicStageTemplate = ({ onComplete }) => {
                 }
             }
             
-            // Wait for all operations to complete before checking feedback
-            console.log('[DynamicStageTemplate] Waiting for operation queue to complete...');
-            console.log('[DynamicStageTemplate] Queue active:', operationQueue.current.active);
-            console.log('[DynamicStageTemplate] Queue length:', operationQueue.current.queue.length);
+            // Execute all actions sequentially
+            console.log('[DynamicStageTemplate] Executing action queue sequentially...');
+            console.log('[DynamicStageTemplate] Queue length:', actionQueue.current.queue.length);
             
-            await new Promise(resolve => {
-                if (!operationQueue.current.active) {
-                    console.log('[DynamicStageTemplate] Queue already empty, proceeding to feedback');
-                    resolve();
-                } else {
-                    console.log('[DynamicStageTemplate] Waiting for queue to empty...');
-                    const originalOnQueueEmpty = operationQueue.current.onQueueEmpty;
-                    operationQueue.current.setOnQueueEmpty(() => {
-                        console.log('[DynamicStageTemplate] Queue emptied, proceeding to feedback');
-                        resolve();
-                        operationQueue.current.setOnQueueEmpty(originalOnQueueEmpty);
-                    });
-                }
-            });
+            if (!actionQueue.current.isEmpty) {
+                const results = await actionQueue.current.executeAll();
+                console.log('[DynamicStageTemplate] All actions completed:', results);
+            } else {
+                console.log('[DynamicStageTemplate] Action queue is empty, proceeding to feedback');
+            }
             
-            // Wait additional time for state updates to propagate
-            console.log('[DynamicStageTemplate] Waiting for state updates to propagate...');
-            await new Promise(resolve => setTimeout(resolve, 500));
             
             // Check feedback to determine if step completed successfully
             const feedbackResponse = await fetch(constants.API.FEEDBACK_API_URL, {
@@ -410,19 +421,19 @@ const DynamicStageTemplate = ({ onComplete }) => {
                         result: feedbackResult
                     });
                     
-                    // Wait for state updates to propagate before notifying WorkflowControl
-                    console.log('Waiting for step completion state to propagate...');
-                    setTimeout(() => {
-                        // Notify WorkflowControl after state updates have propagated
-                        window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
-                            detail: { 
-                                stepId, 
-                                result: feedbackResult,
-                                stageId,
-                                timestamp: Date.now()
-                            }
-                        }));
-                    }, 200); // Small delay to ensure state updates are complete
+                    // Notify WorkflowControl immediately - state should be synchronous
+                    window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
+                        detail: { 
+                            stepId, 
+                            result: feedbackResult,
+                            stageId,
+                            timestamp: Date.now()
+                        }
+                    }));
+                    
+                    // Reset step queue state after successful completion
+                    console.log('[DynamicStageTemplate] Resetting step queue after successful completion');
+                    stepQueue.current.forceReset();
                 } else {
                     console.log('Step target not achieved, checking updated todoList status:', stepId);
                     
@@ -435,17 +446,15 @@ const DynamicStageTemplate = ({ onComplete }) => {
                     if (currentTodoList.length > 0) {
                         console.log('TodoList not empty, step is progressing. Scheduling automatic retry.');
                         // Don't call failStep - the step is making progress with remaining todos
-                        // Schedule automatic retry after a short delay
-                        setTimeout(() => {
-                            window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
-                                detail: { 
-                                    stepId, 
-                                    action: 'auto_retry_with_todos',
-                                    timestamp: Date.now(),
-                                    stageId
-                                }
-                            }));
-                        }, 300); // 3 second delay for automatic retry
+                        // Schedule immediate retry
+                        window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
+                            detail: { 
+                                stepId, 
+                                action: 'auto_retry_with_todos',
+                                timestamp: Date.now(),
+                                stageId
+                            }
+                        }));
                     } else {
                         console.log('Updated todoList empty but target not achieved. This might be a feedback API issue.');
                         console.log('Since all todos are completed, treating as successful completion.');
@@ -469,22 +478,22 @@ const DynamicStageTemplate = ({ onComplete }) => {
                             reason: 'TodoList empty indicates completion'
                         });
                         
-                        // Wait for state updates to propagate before notifying WorkflowControl
-                        console.log('Waiting for override completion state to propagate...');
-                        setTimeout(() => {
-                            // Notify WorkflowControl after state updates have propagated
-                            window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
-                                detail: { 
-                                    stepId, 
-                                    result: { 
-                                        targetAchieved: true, 
-                                        overrideReason: 'All todos completed'
-                                    },
-                                    stageId,
-                                    timestamp: Date.now()
-                                }
-                            }));
-                        }, 200); // Small delay to ensure state updates are complete
+                        // Notify WorkflowControl immediately - state should be synchronous
+                        window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
+                            detail: { 
+                                stepId, 
+                                result: { 
+                                    targetAchieved: true, 
+                                    overrideReason: 'All todos completed'
+                                },
+                                stageId,
+                                timestamp: Date.now()
+                            }
+                        }));
+                        
+                        // Reset step queue state after override completion
+                        console.log('[DynamicStageTemplate] Resetting step queue after override completion');
+                        stepQueue.current.forceReset();
                     }
                 }
             }
@@ -518,6 +527,10 @@ const DynamicStageTemplate = ({ onComplete }) => {
             } else {
                 console.log('TodoList empty and error occurred, marking as failed:', stepId);
                 failStep(stepId, error);
+                
+                // Reset step queue state after failure
+                console.log('[DynamicStageTemplate] Resetting step queue after failure');
+                stepQueue.current.forceReset();
             }
             
             addThinkingLog({
@@ -532,14 +545,15 @@ const DynamicStageTemplate = ({ onComplete }) => {
             if (abortControllerRef.current === controller) {
                 abortControllerRef.current = null;
             }
-            // Clear executing step reference
-            if (executingStepRef.current === stepId) {
-                executingStepRef.current = null;
-            }
         }
     }, [
         getContext, setContext, execAction, failStep, addThinkingLog
     ]);
+    
+    // ==== STEP EXECUTION WRAPPER (Queue-based) ====
+    const executeStep = useCallback(async (stepId, stageId, stepIndex) => {
+        return stepQueue.current.executeStep(stepId, stageId, stepIndex, executeStepInternal);
+    }, [executeStepInternal]);
     
     // ==== EVENT LISTENERS ====
     useEffect(() => {
@@ -671,8 +685,9 @@ const DynamicStageTemplate = ({ onComplete }) => {
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
-            // Clear operation queue on unmount
-            operationQueue.current.clear();
+            // Clear queues on unmount
+            actionQueue.current.clear();
+            stepQueue.current.forceReset();
         };
     }, []);
     
