@@ -251,41 +251,9 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         const currentState = get().currentState;
         const nextState = STATE_TRANSITIONS[currentState]?.[event];
         
-        // Debug logging for workflow update transitions
-        if (event === EVENTS.WORKFLOW_UPDATE) {
-            console.log(
-                `%c🔍 WORKFLOW UPDATE TRANSITION DEBUG 🔍\n` +
-                `%c📊 Current State: ${currentState}\n` +
-                `%c🎯 Event: ${event}\n` +
-                `%c🔄 Available Transitions: ${Object.keys(STATE_TRANSITIONS[currentState] || {}).join(', ')}\n` +
-                `%c✅ Next State: ${nextState || 'INVALID'}`,
-                'color: #e74c3c; font-weight: bold; font-size: 14px;',
-                'color: #3498db; font-weight: bold;',
-                'color: #f39c12; font-weight: bold;',
-                'color: #9b59b6; font-weight: bold;',
-                'color: #27ae60; font-weight: bold;'
-            );
-        }
-        
         if (!nextState) {
-            console.warn(`[WorkflowStateMachine] Invalid transition: ${event} from state ${currentState}`);
-            return false;
+             return false;
         }
-        
-        // State machine transition logging
-        console.log(
-            `%c🔄 STATE MACHINE TRANSITION 🔄\n` +
-            `%c📍 FROM: ${currentState}\n` +
-            `%c➡️  EVENT: ${event}\n` +
-            `%c🎯 TO: ${nextState}\n` +
-            `%c📦 PAYLOAD:`, 
-            'color: #ff6b6b; font-weight: bold; font-size: 14px;',
-            'color: #4ecdc4; font-weight: bold;',
-            'color: #45b7d1; font-weight: bold;',
-            'color: #96ceb4; font-weight: bold;',
-            'color: #ffeaa7; font-weight: bold;',
-            payload
-        );
         
         // Update state and execute side effects
         set(state => ({
@@ -331,16 +299,6 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                     return;
                 }
                 
-                console.log(
-                    `%c✅ STEP COMPLETED\n` +
-                    `%c🎯 Step: ${stepToComplete}\n` +
-                    `%c📊 Result:`,
-                    'color: #00b894; font-weight: bold;',
-                    'color: #0984e3; font-weight: bold;',
-                    'color: #6c5ce7; font-weight: bold;',
-                    result
-                );
-                
                 set(state => ({
                     completedSteps: state.completedSteps.includes(stepToComplete) 
                         ? state.completedSteps 
@@ -352,35 +310,14 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                 // Check if step result contains workflow update
                 const hasWorkflowUpdate = result?.workflowUpdated && result?.newWorkflow;
                 if (hasWorkflowUpdate) {
-                    console.log(
-                        `%c🔄 STEP RESULT CONTAINS WORKFLOW UPDATE\n` +
-                        `%c📋 New Workflow: ${result.newWorkflow?.name || 'Unknown'}\n` +
-                        `%c⏸️  Pausing auto-advance for workflow confirmation`,
-                        'color: #ff6b6b; font-weight: bold; font-size: 14px;',
-                        'color: #4ecdc4; font-weight: bold;',
-                        'color: #f39c12; font-weight: bold;'
-                    );
-                    
-                    // Disable auto-advance until workflow update is handled
                     set({ autoAdvanceEnabled: false });
-                    
-                    // The workflow update will be handled by useScriptStore
-                    // Auto-advance will be re-enabled by enableAutoAdvanceAfterConfirmation()
+                    get().handleWorkflowUpdate(result.newWorkflow, result.nextStageId);
                     return;
                 }
                 
                 // Check for auto-advance to next step (only if no workflow update)
                 const canAutoAdvance = get().autoAdvanceEnabled && get().canAutoAdvanceToNextStep();
-                console.log(
-                    `%c🤖 AUTO-ADVANCE CHECK\n` +
-                    `%c⚙️  Enabled: ${get().autoAdvanceEnabled}\n` +
-                    `%c🔍 Can Advance: ${get().canAutoAdvanceToNextStep()}\n` +
-                    `%c🎯 Will Advance: ${canAutoAdvance}`,
-                    'color: #e17055; font-weight: bold;',
-                    'color: #fdcb6e; font-weight: bold;',
-                    'color: #fd79a8; font-weight: bold;',
-                    'color: #74b9ff; font-weight: bold;'
-                );
+                
                 
                 if (canAutoAdvance) {
                     setTimeout(() => {
@@ -389,21 +326,23 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                     }, get().autoAdvanceDelay);
                 }
                 
-                // Check if stage is completed
-                const isStageCompleted = get().isCurrentStageCompleted();
-                console.log(
-                    `%c🏁 STAGE COMPLETION CHECK\n` +
-                    `%c📁 Stage: ${get().currentStageId}\n` +
-                    `%c✅ Completed: ${isStageCompleted}`,
-                    'color: #fdcb6e; font-weight: bold;',
-                    'color: #6c5ce7; font-weight: bold;',
-                    'color: #00b894; font-weight: bold;'
-                );
-                
-                if (isStageCompleted) {
-                    console.log('%c🎉 TRANSITIONING TO STAGE COMPLETED', 'color: #fd79a8; font-weight: bold; font-size: 12px;');
-                    get().transition(EVENTS.COMPLETE_STAGE, { stageId: get().currentStageId });
-                }
+                // Check if stage is completed after a delay to allow state updates to propagate
+                setTimeout(() => {
+                    const isStageCompleted = get().isCurrentStageCompleted();
+                    console.log(
+                        `%c🏁 STAGE COMPLETION CHECK (DELAYED)\n` +
+                        `%c📁 Stage: ${get().currentStageId}\n` +
+                        `%c✅ Completed: ${isStageCompleted}`,
+                        'color: #fdcb6e; font-weight: bold;',
+                        'color: #6c5ce7; font-weight: bold;',
+                        'color: #00b894; font-weight: bold;'
+                    );
+                    
+                    if (isStageCompleted) {
+                        console.log('%c🎉 TRANSITIONING TO STAGE COMPLETED', 'color: #fd79a8; font-weight: bold; font-size: 12px;');
+                        get().transition(EVENTS.COMPLETE_STAGE, { stageId: get().currentStageId });
+                    }
+                }, 300); // Wait for all state updates to complete
             },
             
             [WORKFLOW_STATES.STEP_FAILED]: () => {
@@ -559,10 +498,10 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                     });
                 }
                 
-                // Directly transition to next step if specified, bypassing normal auto-advance
+                // Use delayed transition to next step, consistent with normal flow
                 if (nextStepId) {
                     console.log(
-                        `%c🎯 DIRECT TRANSITION TO NEXT STEP: ${nextStepId}\n` +
+                        `%c🎯 DELAYED TRANSITION TO NEXT STEP: ${nextStepId}\n` +
                         `%c📁 Stage: ${stageId}`,
                         'color: #e67e22; font-weight: bold; font-size: 12px;',
                         'color: #3498db; font-weight: bold;'
@@ -578,16 +517,31 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                         (step: any) => (step.step_id || step.id) === nextStepId
                     ) || 0;
                     
-                    // Directly start the next step
+                    // Wait for state updates to propagate before starting next step
                     setTimeout(() => {
+                        console.log(`%c🚀 STARTING NEXT STEP AFTER STAGE UPDATE: ${nextStepId}`, 'color: #27ae60; font-weight: bold;');
                         get().startStep(nextStepId, stageId, nextStepIndex);
-                    }, 500);
+                        
+                        // Dispatch event to trigger step execution after additional delay
+                        setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
+                                detail: { 
+                                    stepId: nextStepId,
+                                    stageId: stageId,
+                                    action: 'execute_after_stage_steps_update',
+                                    timestamp: Date.now()
+                                }
+                            }));
+                        }, 200);
+                    }, 800); // Longer delay to ensure all state updates complete
                 } else {
-                    // No next step specified, trigger normal completion flow
-                    get().transition(EVENTS.COMPLETE_STEP, { 
-                        stepId: currentStepId, 
-                        result: { status: 'completed', reason: 'stage_steps_updated' }
-                    });
+                    // No next step specified, use delayed completion flow
+                    setTimeout(() => {
+                        get().transition(EVENTS.COMPLETE_STEP, { 
+                            stepId: currentStepId, 
+                            result: { status: 'completed', reason: 'stage_steps_updated' }
+                        });
+                    }, 300); // Delay to match normal completion flow
                 }
                 
                 console.log('[WorkflowStateMachine] Stage steps updated, navigation handled');
@@ -927,9 +881,9 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
             return currentStepCompleted && !!nextStep;
         }
         
-        // For normal step completion, check todo list
-        const todoListEmpty = aiPlanningStore.getState().toDoList?.length === 0;
-        return currentStepCompleted && !!nextStep && todoListEmpty;
+        // For normal step completion, only check if step is completed and has next step
+        // Don't check todoList - it's used for progress tracking, not completion blocking
+        return currentStepCompleted && !!nextStep;
     },
     
     canAutoAdvanceToNextStage: (): boolean => {
@@ -940,9 +894,10 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         
         const currentStageCompleted = get().isCurrentStageCompleted();
         const nextStage = get().getNextStage();
-        const todoListEmpty = aiPlanningStore.getState().toDoList?.length === 0;
         
-        return currentStageCompleted && !!nextStage && todoListEmpty;
+        // Only check if stage is completed and has next stage
+        // Don't check todoList - it's used for progress tracking, not completion blocking
+        return currentStageCompleted && !!nextStage;
     },
     
     isCurrentStageCompleted: (): boolean => {

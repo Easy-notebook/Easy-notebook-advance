@@ -58,7 +58,7 @@ const ToastManager = () => {
     // 设置自动移除 Toast 的定时器
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id));
-    }, 3000); // Toast 显示 3 秒后自动消失
+    }, 2000); // Toast 显示 3 秒后自动消失
   }, []);
   
   // 移除指定的 Toast

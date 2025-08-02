@@ -49,8 +49,10 @@ export const useAIPlanningContextStore = create((set, get) => ({
 
     // Check if stage can auto-advance to next stage
     canAutoAdvanceToNextStage: (stageId) => {
-        const { stageStatus, toDoList } = get();
-        return toDoList.length === 0 && !!stageStatus[stageId];
+        const { stageStatus } = get();
+        // Don't check todoList for stage transitions
+        // Stage completion should be based on step completion, not todoList
+        return !!stageStatus[stageId];
     },
 
     // Check if workflow update is confirmed

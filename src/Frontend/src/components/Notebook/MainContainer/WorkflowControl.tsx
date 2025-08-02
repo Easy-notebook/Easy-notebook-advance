@@ -8,7 +8,7 @@ import usePreStageStore from '../../senario/DSLCanalysis/store/preStageStore';
 const EXECUTION_DELAYS = {
   AUTO_START: 2000,
   RESUME: 1500,
-  STAGE_TRANSITION: 3000,
+  STAGE_TRANSITION: 300,
   STEP_ADVANCE: 20,
   RETRY: 500,
   RESTART: 500,
@@ -229,8 +229,7 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     const isStageCompleted = uncompletedStepsInStage.length === 0;
     const hasUncompletedSteps = uncompletedStepsInStage.length > 0;
     const isExecuting = currentState === WORKFLOW_STATES.STEP_EXECUTING;
-    const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED || 
-                    (currentState === WORKFLOW_STATES.STEP_EXECUTING && toDoList.length > 0);
+    const isPaused = currentState === WORKFLOW_STATES.STEP_FAILED;
     
     return {
       isExecuting,
@@ -254,12 +253,31 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
   }, [currentStageId, currentState, addThinkingLog]);
 
   const handleAutoStageTransition = useCallback(() => {
-    if (!workflowTemplate?.stages || !currentStageId || !workflowState.isStageCompleted) return;
+    console.log('=== STAGE TRANSITION CHECK ===');
+    console.log('workflowTemplate?.stages:', !!workflowTemplate?.stages);
+    console.log('currentStageId:', currentStageId);
+    console.log('workflowState.isStageCompleted:', workflowState.isStageCompleted);
     
-    // Check if stage can transition using all three stores
-    if (!stateMachineCanAdvanceStage || !canAutoAdvanceToNextStage(currentStageId) || !isWorkflowUpdateConfirmed()) {
+    if (!workflowTemplate?.stages || !currentStageId || !workflowState.isStageCompleted) {
+      console.log('❌ Stage transition blocked: missing requirements');
       return;
     }
+    
+    // Check if stage can transition using all three stores
+    const canAdvanceStateMachine = stateMachineCanAdvanceStage;
+    const canAdvanceAI = canAutoAdvanceToNextStage(currentStageId);
+    const isConfirmed = isWorkflowUpdateConfirmed();
+    
+    console.log('stateMachineCanAdvanceStage:', canAdvanceStateMachine);
+    console.log('AI canAutoAdvanceToNextStage:', canAdvanceAI);
+    console.log('isWorkflowUpdateConfirmed:', isConfirmed);
+    
+    if (!canAdvanceStateMachine || !canAdvanceAI || !isConfirmed) {
+      console.log('❌ Stage transition blocked by conditions');
+      return;
+    }
+    
+    console.log('✅ All conditions met, proceeding with stage transition');
     
     const currentStageIndex = workflowTemplate.stages.findIndex(stage => stage.id === currentStageId);
     const nextStage = workflowTemplate.stages[currentStageIndex + 1];
@@ -310,7 +328,6 @@ const WorkflowControl: React.FC<WorkflowControlProps> = ({
     
     if (currentStepId) {
       recordStepState(currentStepId, 'paused');
-      // Transition to failed state to pause execution
       failStep(currentStepId, { message: 'Paused by user' });
     }
   }, [currentStepId, recordStepState, failStep]);
