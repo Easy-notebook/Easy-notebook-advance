@@ -1,16 +1,39 @@
 /**
- * Workflow State Machine Store - TypeScript Version
- * 
- * This module provides a finite state machine for managing workflow execution states,
- * step transitions, stage completions, and auto-advance logic using Zustand.
- * 
- * States: IDLE -> STEP_EXECUTING -> STEP_COMPLETED -> STAGE_COMPLETED -> WORKFLOW_COMPLETED
- * 
- * @author Hu Silan
+ * Workflow State Machine & Executor - Final Integrated Version
+ *
+ * This single file contains both the finite state machine for managing workflow state
+ * and the executor responsible for carrying out the actual work of each step,
+ * such as making API calls and running actions. This co-location simplifies the
+ * architecture by centralizing the entire workflow lifecycle logic.
+ *
+ * Responsibilities:
+ * 1.  WorkflowStateMachine: The "Commander". Manages states (IDLE, STEP_EXECUTING, etc.)
+ * and transitions based on events. It decides *what* to do and *when*.
+ *
+ * 2.  WorkflowExecutor: The "Worker". Executes the commands from the state machine.
+ * It knows *how* to perform tasks like fetching actions from the sequence API,
+ * managing an action queue, and executing individual actions.
+ *
+ * Core Flow:
+ * - State machine transitions to STEP_EXECUTING.
+ * - Its side effect calls the WorkflowExecutor to start a new behaviour.
+ * - The executor fetches actions, queues them, and executes them sequentially.
+ * - When the executor finishes all actions for a behaviour, it notifies the state machine.
+ * - The state machine transitions to STEP_FEEDBACK.
+ * - Its side effect calls the feedback API to get the next command.
+ * - It parses the command and transitions to the next appropriate state, creating a loop.
+ *
+ * @author Hu Silan (Integrated by Gemini AI based on user feedback)
  * @project Easy-notebook
  * @file workflowStateMachine.ts
  */
 import { create } from 'zustand';
+import workflowAPIClient from '../services/WorkflowAPIClient.js';
+import constants from '../services/constants.js';
+import { useScriptStore } from './useScriptStore'; // Executor dependency
+// @ts-ignore
+import { useAIPlanningContextStore } from './aiPlanningContext.js'; // Executor dependency
+import { usePipelineStore } from './usePipelineStore';
 
 // ==============================================
 // Types and Interfaces
@@ -43,6 +66,12 @@ export interface ExecutionHistoryEntry {
     toState: string;
     event: string;
     payload: any;
+    hierarchicalId?: string | null;
+    stageId?: string | null;
+    stepId?: string | null;
+    stepIndex?: number;
+    behaviourCounter?: number;
+    actionCounter?: number;
 }
 
 export interface StepResult {
@@ -50,958 +79,629 @@ export interface StepResult {
     reason?: string;
     error?: string;
     timestamp?: string;
-    targetAchieved?: boolean;
-    workflowUpdated?: boolean;
-    newWorkflow?: WorkflowTemplate;
-}
-
-// Store references interfaces
-export interface StoreReference {
-    getState: () => any;
-    setState?: (state: any) => void;
+    result?: any;
 }
 
 // ==============================================
-// Constants
+// Constants (Refactored)
 // ==============================================
 
 export const WORKFLOW_STATES = {
+    // start
     IDLE: 'idle',
-    STEP_EXECUTING: 'step_executing',
-    STEP_COMPLETED: 'step_completed',
-    STEP_FAILED: 'step_failed',
+    // Stage
+    STAGE_RUNNING: 'stage_running',
     STAGE_COMPLETED: 'stage_completed',
+    // Step
+    STEP_RUNNING: 'step_running',
+    STEP_COMPLETED: 'step_completed',
+    // Behavior
+    BEHAVIOR_RUNNING: 'behavior_running',
+    BEHAVIOR_FEEDBACK: 'behavior_feedback',
+    BEHAVIOR_COMPLETED: 'behavior_completed',
+    // Action
+    ACTION_RUNNING: 'action_running',
+    ACTION_COMPLETED: 'action_completed',
+    // Workflow
     WORKFLOW_COMPLETED: 'workflow_completed',
-    CANCELLED: 'cancelled'
+    WORKFLOW_UPDATE_PENDING: 'workflow_update_pending',
+    STEP_UPDATE_PENDING: 'step_update_pending',
+    // General
+    ERROR: 'error',
+    CANCELLED: 'cancelled',
 } as const;
 
 export type WorkflowState = typeof WORKFLOW_STATES[keyof typeof WORKFLOW_STATES];
 
 export const EVENTS = {
-    START: 'START',
+    // ==============================================
+    // 1. Lifecycle: START Events
+    // ==============================================
+
+    /**
+     * @description Starts the entire workflow.
+     * @transition IDLE -> STAGE_RUNNING
+     */
+    START_WORKFLOW: 'START_WORKFLOW',
+
+    /**
+     * @description Starts the next step within the current stage.
+     * @transition STAGE_RUNNING -> STEP_RUNNING
+     */
     START_STEP: 'START_STEP',
+
+    /**
+     * @description Starts the next behavior within the current step.
+     * @transition STEP_RUNNING -> BEHAVIOR_RUNNING
+     */
+    START_BEHAVIOR: 'START_BEHAVIOR',
+
+    /**
+     * @description Starts the next action within the current behavior.
+     * @transition BEHAVIOR_RUNNING -> ACTION_RUNNING
+     */
+    START_ACTION: 'START_ACTION',
+
+    // ==============================================
+    // 2. Lifecycle: COMPLETE Events
+    // ==============================================
+
+    /**
+     * @description Declares the current action has finished.
+     * @transition ACTION_RUNNING -> BEHAVIOR_RUNNING (to decide next action or finish)
+     */
+    COMPLETE_ACTION: 'COMPLETE_ACTION',
+
+    /**
+     * @description Declares all actions in the current behavior are done, moving to feedback.
+     * @transition BEHAVIOR_RUNNING -> BEHAVIOR_FEEDBACK
+     */
+    EVALUATE_BEHAVIOR: 'EVALUATE_BEHAVIOR',
+
+    /**
+     * @description Declares the current behavior has passed feedback and is complete.
+     * @transition BEHAVIOR_FEEDBACK -> BEHAVIOR_COMPLETED
+     */
+    COMPLETE_BEHAVIOR: 'COMPLETE_BEHAVIOR',
+
+    /**
+     * @description Declares the current step has finished all its behaviors.
+     * @transition STEP_RUNNING -> STEP_COMPLETED
+     */
     COMPLETE_STEP: 'COMPLETE_STEP',
-    FAIL_STEP: 'FAIL_STEP',
+
+    /**
+     * @description Declares the current stage has finished all its steps.
+     * @transition STAGE_RUNNING -> STAGE_COMPLETED
+     */
     COMPLETE_STAGE: 'COMPLETE_STAGE',
+
+    /**
+     * @description Declares the final stage is complete, finishing the workflow.
+     * @transition STAGE_COMPLETED -> WORKFLOW_COMPLETED
+     */
     COMPLETE_WORKFLOW: 'COMPLETE_WORKFLOW',
+
+
+    // ==============================================
+    // 3. Feedback & Looping Events
+    // ==============================================
+
+    /**
+     * @description Feedback requires the current behavior to be re-executed.
+     * @transition BEHAVIOR_FEEDBACK -> BEHAVIOR_RUNNING
+     */
+    RETRY_BEHAVIOR: 'RETRY_BEHAVIOR',
+
+    /**
+     * @description After a behavior is completed, this starts the next behavior in the same step.
+     * @transition BEHAVIOR_COMPLETED -> BEHAVIOR_RUNNING
+     */
+    NEXT_BEHAVIOR: 'NEXT_BEHAVIOR',
+
+    /**
+     * @description After a step is completed, this starts the next stage (auto-advance).
+     * @transition STEP_COMPLETED -> STAGE_RUNNING
+     */
+    NEXT_STAGE: 'NEXT_STAGE',
+
+    // ==============================================
+    // 4. Update Events
+    // ==============================================
+
+    /**
+     * @description Requests a full workflow update.
+     * @transition any_running_state -> WORKFLOW_UPDATE_PENDING
+     */
+    UPDATE_WORKFLOW: 'UPDATE_WORKFLOW',
+
+    /**
+     * @description Confirms the workflow update, resetting the flow.
+     * @transition WORKFLOW_UPDATE_PENDING -> IDLE
+     */
+    UPDATE_WORKFLOW_CONFIRMED: 'UPDATE_WORKFLOW_CONFIRMED',
+
+    /**
+     * @description Rejects the workflow update, returning to the previous state.
+     * @transition WORKFLOW_UPDATE_PENDING -> (previous_state)
+     */
+    UPDATE_WORKFLOW_REJECTED: 'UPDATE_WORKFLOW_REJECTED',
+
+    /**
+     * @description Requests an update to the steps of a stage.
+     * @transition any_running_state -> STEP_UPDATE_PENDING
+     */
+    UPDATE_STEP: 'UPDATE_STEP',
+
+    /**
+     * @description Confirms the step update.
+     * @transition STEP_UPDATE_PENDING -> (previous_state)
+     */
+    UPDATE_STEP_CONFIRMED: 'UPDATE_STEP_CONFIRMED',
+
+    /**
+     * @description Rejects the step update.
+     * @transition STEP_UPDATE_PENDING -> (previous_state)
+     */
+    UPDATE_STEP_REJECTED: 'UPDATE_STEP_REJECTED',
+
+    // ==============================================
+    // 5. General Control Events
+    // ==============================================
+
+    /**
+     * @description A non-recoverable error occurred.
+     * @transition * -> ERROR
+     */
+    FAIL: 'FAIL',
+
+    /**
+     * @description The user or system cancels the workflow.
+     * @transition * -> CANCELLED
+     */
     CANCEL: 'CANCEL',
+
+    /**
+     * @description Resets the machine from a terminal state.
+     * @transition WORKFLOW_COMPLETED | ERROR | CANCELLED -> IDLE
+     */
     RESET: 'RESET',
-    AUTO_ADVANCE_STEP: 'AUTO_ADVANCE_STEP',
-    AUTO_ADVANCE_STAGE: 'AUTO_ADVANCE_STAGE',
-    WORKFLOW_UPDATE: 'WORKFLOW_UPDATE',
-    STAGE_STEPS_UPDATE: 'STAGE_STEPS_UPDATE'
-} as const;
+};
 
 export type WorkflowEvent = typeof EVENTS[keyof typeof EVENTS];
 
-// State transition rules
+// State transition rules (Refactored)
 const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, WorkflowState>>> = {
+    /**
+     * The machine is idle, waiting for the workflow to begin.
+     */
     [WORKFLOW_STATES.IDLE]: {
-        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_EXECUTING,
-        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED
+        [EVENTS.START_WORKFLOW]: WORKFLOW_STATES.STAGE_RUNNING,
     },
-    [WORKFLOW_STATES.STEP_EXECUTING]: {
-        [EVENTS.COMPLETE_STEP]: WORKFLOW_STATES.STEP_COMPLETED,
-        [EVENTS.FAIL_STEP]: WORKFLOW_STATES.STEP_FAILED,
-        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_EXECUTING,
-        [EVENTS.WORKFLOW_UPDATE]: WORKFLOW_STATES.STEP_EXECUTING,
-        [EVENTS.STAGE_STEPS_UPDATE]: WORKFLOW_STATES.STEP_EXECUTING,
-        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED
-    },
-    [WORKFLOW_STATES.STEP_COMPLETED]: {
-        [EVENTS.AUTO_ADVANCE_STEP]: WORKFLOW_STATES.STEP_EXECUTING,
+
+    /**
+     * A stage is active, ready to execute its steps.
+     */
+    [WORKFLOW_STATES.STAGE_RUNNING]: {
+        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_RUNNING,
         [EVENTS.COMPLETE_STAGE]: WORKFLOW_STATES.STAGE_COMPLETED,
-        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_EXECUTING,
-        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED
-    },
-    [WORKFLOW_STATES.STEP_FAILED]: {
-        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_EXECUTING,
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
-        [EVENTS.RESET]: WORKFLOW_STATES.IDLE
+        [EVENTS.UPDATE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING,
+        [EVENTS.UPDATE_STEP]: WORKFLOW_STATES.STEP_UPDATE_PENDING,
     },
+
+    /**
+     * A step is active, ready to execute its behaviors.
+     */
+    [WORKFLOW_STATES.STEP_RUNNING]: {
+        [EVENTS.START_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
+        [EVENTS.COMPLETE_STEP]: WORKFLOW_STATES.STEP_COMPLETED,
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+        [EVENTS.UPDATE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING,
+        [EVENTS.UPDATE_STEP]: WORKFLOW_STATES.STEP_UPDATE_PENDING,
+    },
+
+    /**
+     * A behavior is active, managing the execution of its actions. This is the main action loop.
+     */
+    [WORKFLOW_STATES.BEHAVIOR_RUNNING]: {
+        [EVENTS.START_ACTION]: WORKFLOW_STATES.ACTION_RUNNING,
+        [EVENTS.EVALUATE_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_FEEDBACK,
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+        [EVENTS.UPDATE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING,
+        [EVENTS.UPDATE_STEP]: WORKFLOW_STATES.STEP_UPDATE_PENDING,
+    },
+
+    /**
+     * A single, atomic action is being executed.
+     */
+    [WORKFLOW_STATES.ACTION_RUNNING]: {
+        // Corrected: Upon completion, an action moves to the ACTION_COMPLETED state.
+        [EVENTS.COMPLETE_ACTION]: WORKFLOW_STATES.ACTION_COMPLETED,
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+    },
+
+    /**
+     * An action has just completed. The machine is waiting for the next command
+     * from the parent behavior: either start the next action or finish.
+     */
+    [WORKFLOW_STATES.ACTION_COMPLETED]: {
+        [EVENTS.START_ACTION]: WORKFLOW_STATES.ACTION_RUNNING,      // Start the next action in the sequence.
+        [EVENTS.EVALUATE_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_FEEDBACK, // All actions for this behavior are done, proceed to feedback.
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+    },
+
+    /**
+     * The behavior's actions are complete, and the machine is awaiting feedback from the backend.
+     */
+    [WORKFLOW_STATES.BEHAVIOR_FEEDBACK]: {
+        [EVENTS.RETRY_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
+        [EVENTS.COMPLETE_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_COMPLETED,
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+    },
+
+    /**
+     * A behavior has successfully completed after passing feedback.
+     */
+    [WORKFLOW_STATES.BEHAVIOR_COMPLETED]: {
+        [EVENTS.NEXT_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING, // Start the next behavior in the same step
+        [EVENTS.COMPLETE_STEP]: WORKFLOW_STATES.STEP_COMPLETED,     // All behaviors for this step are done
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+    },
+
+    /**
+     * A step has successfully completed all its behaviors.
+     */
+    [WORKFLOW_STATES.STEP_COMPLETED]: {
+        [EVENTS.NEXT_STAGE]: WORKFLOW_STATES.STAGE_RUNNING,       // Auto-advance to the next stage
+        [EVENTS.COMPLETE_STAGE]: WORKFLOW_STATES.STAGE_COMPLETED,   // This was the last step of the stage
+        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+    },
+
+    /**
+     * A stage has successfully completed all its steps.
+     */
     [WORKFLOW_STATES.STAGE_COMPLETED]: {
-        [EVENTS.AUTO_ADVANCE_STAGE]: WORKFLOW_STATES.STEP_EXECUTING,
-        [EVENTS.COMPLETE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_COMPLETED,
-        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_EXECUTING,
-        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED
+        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_RUNNING,             // Start the first step of the next stage
+        [EVENTS.COMPLETE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_COMPLETED, // This was the last stage
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
+
+    /**
+     * The entire workflow has finished successfully.
+     */
     [WORKFLOW_STATES.WORKFLOW_COMPLETED]: {
-        [EVENTS.COMPLETE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_COMPLETED,
-        [EVENTS.WORKFLOW_UPDATE]: WORKFLOW_STATES.IDLE,
-        [EVENTS.RESET]: WORKFLOW_STATES.IDLE
+        [EVENTS.RESET]: WORKFLOW_STATES.IDLE,
     },
+    
+    /**
+     * Waiting for user confirmation on a major workflow update.
+     */
+    [WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING]: {
+        [EVENTS.UPDATE_WORKFLOW_CONFIRMED]: WORKFLOW_STATES.IDLE,
+        [EVENTS.UPDATE_WORKFLOW_REJECTED]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+    },
+
+    /**
+     * Waiting for user confirmation on a minor step update.
+     */
+    [WORKFLOW_STATES.STEP_UPDATE_PENDING]: {
+        [EVENTS.UPDATE_STEP_CONFIRMED]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
+        [EVENTS.UPDATE_STEP_REJECTED]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+    },
+
+    /**
+     * A terminal error state.
+     */
+    [WORKFLOW_STATES.ERROR]: {
+        [EVENTS.RESET]: WORKFLOW_STATES.IDLE,
+    },
+
+    /**
+     * A terminal cancelled state.
+     */
     [WORKFLOW_STATES.CANCELLED]: {
         [EVENTS.RESET]: WORKFLOW_STATES.IDLE,
-        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_EXECUTING
-    }
+    },
 };
 
+
 // ==============================================
-// Store State Interface
+// 3. TYPES & INTERFACES
 // ==============================================
 
-export interface WorkflowStateMachineState {
-    // Current state machine state
-    currentState: WorkflowState;
-    
-    // Current execution context
-    currentStageId: string | null;
-    currentStepId: string | null;
-    currentStepIndex: number;
-    
-    // Execution history and tracking
-    executionHistory: ExecutionHistoryEntry[];
-    completedSteps: string[];
-    completedStages: string[];
-    failedSteps: string[];
-    
-    // Auto-advance settings
-    autoAdvanceEnabled: boolean;
-    autoAdvanceDelay: number;
-    
-    // Integration with other stores
-    aiPlanningStore: StoreReference | null;
-    pipelineStore: StoreReference | null;
+interface FeedbackResponse {
+    targetAchieved: boolean;
+    stepCompleted?: boolean;
+    nextBehaviorId?: string;
 }
 
-export interface WorkflowStateMachineActions {
-    // State transition
-    transition: (event: WorkflowEvent, payload?: any) => boolean;
-    executeStateEffects: (state: WorkflowState, payload?: any) => void;
-    
-    // Public API methods
-    startStep: (stepId: string, stageId?: string, stepIndex?: number) => boolean;
-    completeStep: (stepId?: string, result?: StepResult) => boolean;
-    failStep: (stepId?: string, error?: Error | string) => boolean;
-    completeStage: (stageId?: string) => boolean;
-    cancel: () => boolean;
-    reset: () => boolean;
-    
-    // Workflow update handlers
-    handleWorkflowUpdate: (workflowTemplate: WorkflowTemplate, nextStageId?: string) => boolean;
-    handleStageStepsUpdate: (stageId: string, updatedSteps: WorkflowStep[], nextStepId?: string) => boolean;
-    enableAutoAdvanceAfterConfirmation: () => void;
-    
-    // Auto-advance logic
-    autoAdvanceToNextStep: () => boolean;
-    autoAdvanceToNextStage: () => boolean;
-    
-    // State check methods
-    canAutoAdvanceToNextStep: () => boolean;
-    canAutoAdvanceToNextStage: () => boolean;
-    isCurrentStageCompleted: () => boolean;
-    isWorkflowCompleted: () => boolean;
-    
-    // Helper methods
-    getNextStep: () => (WorkflowStep & { index: number }) | null;
-    getNextStage: () => WorkflowStage | null;
-    
-    // Integration methods
-    notifyStepStarted: (stepId: string, stageId?: string) => void;
-    notifyStepCompleted: (stepId: string, result?: StepResult) => void;
-    notifyStepFailed: (stepId: string, error?: Error | string) => void;
-    notifyStageCompleted: (stageId: string) => void;
-    notifyWorkflowCompleted: () => void;
-    notifyCancelled: () => void;
-    
-    // Store integration setup
-    setStoreReferences: (aiPlanningStore: StoreReference, pipelineStore: StoreReference) => void;
-    
-    // Configuration methods
-    setAutoAdvanceEnabled: (enabled: boolean) => void;
-    setAutoAdvanceDelay: (delay: number) => void;
-    
-    // Debug and monitoring methods
-    getCurrentContext: () => any;
-    getExecutionHistory: () => ExecutionHistoryEntry[];
+interface WorkflowContext {
+    currentStageId: string | null;
+    currentStepId: string | null;
+    currentBehaviorId: string | null;
+    currentBehaviorActions: any[];
+    currentActionIndex: number;
+}
+
+interface PendingUpdateData {
+    workflowTemplate: any;
+    nextStageId?: string;
+}
+
+interface WorkflowStateMachineState {
+    currentState: WorkflowState;
+    context: WorkflowContext;
+    executionHistory: any[];
+    pendingWorkflowData: PendingUpdateData | null;
+}
+
+interface WorkflowStateMachineActions {
+    transition: (event: WorkflowEvent, payload?: any) => void;
+    startWorkflow: (initialContext: { stageId: string, stepId: string }) => void;
+    fail: (error: Error, message?: string) => void;
+    cancel: () => void;
+    reset: () => void;
+    requestWorkflowUpdate: (payload: PendingUpdateData) => void;
+    confirmWorkflowUpdate: () => void;
+    rejectWorkflowUpdate: () => void;
 }
 
 export type WorkflowStateMachine = WorkflowStateMachineState & WorkflowStateMachineActions;
 
 // ==============================================
-// Store Implementation
+// 4. STATE EFFECTS (The Engine Logic)
+// ==============================================
+
+async function executeStateEffects(state: WorkflowState, payload: any) {
+    const { transition, context } = useWorkflowStateMachine.getState();
+    const { execAction } = useScriptStore.getState();
+    const { getContext } = useAIPlanningContextStore.getState();
+
+    console.log(`[FSM Effect] Executing for state: ${state}`, { context, payload });
+
+    try {
+        switch (state) {
+            case WORKFLOW_STATES.STAGE_RUNNING: {
+                const pipeline = usePipelineStore.getState();
+                const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
+                const firstStepId = stage?.steps[0]?.id;
+
+                if (firstStepId) {
+                    useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentStepId: firstStepId } }));
+                    transition(EVENTS.START_STEP);
+                } else {
+                    transition(EVENTS.FAIL, { error: new Error(`No steps found in stage ${context.currentStageId}`) });
+                }
+                break;
+            }
+
+            case WORKFLOW_STATES.STEP_RUNNING: {
+                // TODO: Replace with your logic to get the actual first behavior ID for a step.
+                // This could come from the step's definition in the workflow template.
+                const firstBehaviorId = 'behavior_1'; // Placeholder
+                
+                if (firstBehaviorId) {
+                    useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorId: firstBehaviorId } }));
+                    transition(EVENTS.START_BEHAVIOR);
+                } else {
+                    transition(EVENTS.FAIL, { error: new Error(`No behaviors found for step ${context.currentStepId}`) });
+                }
+                break;
+            }
+
+            case WORKFLOW_STATES.BEHAVIOR_RUNNING: {
+                console.log(`[FSM Effect] Fetching actions for behavior: ${context.currentBehaviorId}`);
+                const response = await fetch(constants.API.SEQUENCE_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stage_id: context.currentStageId,
+                        step_index: context.currentStepId,
+                        state: getContext(),
+                        stream: true,
+                    }),
+                });
+                if (!response.ok) throw new Error(`Sequence API failed: ${response.status}`);
+
+                const reader = response.body!.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let buffer = "";
+                const actions: any[] = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() || "";
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            const message = JSON.parse(line);
+                            if (message.action) actions.push(message.action);
+                        }
+                    }
+                }
+                
+                console.log(`[FSM Effect] Fetched ${actions.length} actions.`);
+                useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorActions: actions, currentActionIndex: 0 }}));
+
+                if (actions.length > 0) {
+                    transition(EVENTS.START_ACTION);
+                } else {
+                    transition(EVENTS.EVALUATE_BEHAVIOR);
+                }
+                break;
+            }
+
+            case WORKFLOW_STATES.ACTION_RUNNING: {
+                const currentAction = context.currentBehaviorActions[context.currentActionIndex];
+                console.log(`[FSM Effect] Executing action #${context.currentActionIndex + 1}:`, currentAction.action);
+                await execAction(currentAction); 
+                transition(EVENTS.COMPLETE_ACTION);
+                break;
+            }
+
+            case WORKFLOW_STATES.ACTION_COMPLETED: {
+                const nextActionIndex = context.currentActionIndex + 1;
+                if (nextActionIndex < context.currentBehaviorActions.length) {
+                    useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentActionIndex: nextActionIndex }}));
+                    transition(EVENTS.START_ACTION);
+                } else {
+                    transition(EVENTS.EVALUATE_BEHAVIOR);
+                }
+                break;
+            }
+
+            case WORKFLOW_STATES.BEHAVIOR_FEEDBACK: {
+                console.log(`[FSM Effect] Getting feedback for behavior: ${context.currentBehaviorId}`);
+                const feedbackResponse: FeedbackResponse = await workflowAPIClient.sendFeedback({
+                    stage_id: context.currentStageId!,
+                    step_index: context.currentStepId!,
+                    state: getContext() || {},
+                });
+
+                if (feedbackResponse.targetAchieved) {
+                    if (feedbackResponse.stepCompleted) {
+                        transition(EVENTS.COMPLETE_BEHAVIOR);
+                    } else if (feedbackResponse.nextBehaviorId) {
+                        useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorId: feedbackResponse.nextBehaviorId! }}));
+                        transition(EVENTS.NEXT_BEHAVIOR);
+                    } else {
+                        transition(EVENTS.COMPLETE_BEHAVIOR);
+                    }
+                } else {
+                    transition(EVENTS.RETRY_BEHAVIOR);
+                }
+                break;
+            }
+            
+            case WORKFLOW_STATES.BEHAVIOR_COMPLETED: {
+                transition(EVENTS.COMPLETE_STEP);
+                break;
+            }
+
+            case WORKFLOW_STATES.STEP_COMPLETED: {
+                const pipeline = usePipelineStore.getState();
+                const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
+                const currentStepIndex = stage?.steps.findIndex(st => st.id === context.currentStepId) ?? -1;
+                const isLastStep = currentStepIndex === (stage?.steps.length ?? 0) - 1;
+
+                if (isLastStep) {
+                    transition(EVENTS.COMPLETE_STAGE);
+                } else {
+                    // Auto-advance to the next step in the same stage
+                    const nextStep = stage?.steps[currentStepIndex + 1];
+                    if (nextStep && nextStep.id) {
+                        const nextStepId: string = nextStep.id;
+                        useWorkflowStateMachine.setState(state => ({
+                            ...state,
+                            context: { ...state.context, currentStepId: nextStepId }
+                        }));
+                        transition(EVENTS.START_STEP);
+                    } else {
+                        transition(EVENTS.FAIL, { error: new Error(`Could not find next step after ${context.currentStepId}`) });
+                    }
+                }
+                break;
+            }
+
+            case WORKFLOW_STATES.STAGE_COMPLETED: {
+                const pipeline = usePipelineStore.getState();
+                const currentStageIndex = pipeline.workflowTemplate?.stages.findIndex(s => s.id === context.currentStageId) ?? -1;
+                const isLastStage = currentStageIndex === (pipeline.workflowTemplate?.stages.length ?? 0) - 1;
+
+                if (isLastStage) {
+                    transition(EVENTS.COMPLETE_WORKFLOW);
+                } else {
+                    const nextStage = pipeline.workflowTemplate?.stages[currentStageIndex + 1];
+                    if (nextStage) {
+                        useWorkflowStateMachine.setState(state => ({
+                            ...state,
+                            context: { ...state.context, currentStageId: nextStage.id, currentStepId: null }
+                        }));
+                        transition(EVENTS.START_WORKFLOW); // Re-enter the running state for the new stage
+                    } else {
+                        transition(EVENTS.FAIL, { error: new Error(`Could not find next stage after ${context.currentStageId}`) });
+                    }
+                }
+                break;
+            }
+        }
+    } catch (error) {
+        console.error(`[FSM Effect] Unhandled error in state ${state}:`, error);
+        useWorkflowStateMachine.getState().transition(EVENTS.FAIL, { error: error instanceof Error ? error.message : String(error) });
+    }
+}
+
+// ==============================================
+// 5. ZUSTAND STORE DEFINITION
 // ==============================================
 
 export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) => ({
-    // ==============================================
-    // State
-    // ==============================================
     currentState: WORKFLOW_STATES.IDLE,
-    
-    currentStageId: null,
-    currentStepId: null,
-    currentStepIndex: 0,
-    
+    context: {
+        currentStageId: null,
+        currentStepId: null,
+        currentBehaviorId: null,
+        currentBehaviorActions: [],
+        currentActionIndex: 0,
+    },
     executionHistory: [],
-    completedSteps: [],
-    completedStages: [],
-    failedSteps: [],
-    
-    autoAdvanceEnabled: true,
-    autoAdvanceDelay: 1000,
-    
-    aiPlanningStore: null,
-    pipelineStore: null,
-    
-    // ==============================================
-    // Core State Machine Logic
-    // ==============================================
-    
-    transition: (event: WorkflowEvent, payload: any = {}): boolean => {
-        const currentState = get().currentState;
-        const nextState = STATE_TRANSITIONS[currentState]?.[event];
-        
-        if (!nextState) {
-             return false;
-        }
-        
-        // Update state and execute side effects
-        set(state => ({
-            currentState: nextState,
-            executionHistory: [
-                ...state.executionHistory,
-                {
-                    timestamp: Date.now(),
-                    fromState: currentState,
-                    toState: nextState,
-                    event,
-                    payload
-                }
-            ]
-        }));
-        
-        // Execute side effects based on new state
-        get().executeStateEffects(nextState, payload);
-        
-        return true;
-    },
-    
-    executeStateEffects: (state: WorkflowState, payload: any = {}): void => {
-        const effects: Record<WorkflowState, () => void> = {
-            [WORKFLOW_STATES.STEP_EXECUTING]: () => {
-                const { stepId, stageId, stepIndex } = payload;                
-                set({
-                    currentStepId: stepId,
-                    currentStageId: stageId || get().currentStageId,
-                    currentStepIndex: stepIndex !== undefined ? stepIndex : get().currentStepIndex
-                });
-                
-                get().notifyStepStarted(stepId, stageId);
-            },
-            
-            [WORKFLOW_STATES.STEP_COMPLETED]: () => {
-                const { stepId, result } = payload;
-                const currentStepId = get().currentStepId;
-                const stepToComplete = stepId || currentStepId;
-                
-                if (!stepToComplete) {
-                    console.warn('[WorkflowStateMachine] No step ID available for completion');
-                    return;
-                }
-                
-                set(state => ({
-                    completedSteps: state.completedSteps.includes(stepToComplete) 
-                        ? state.completedSteps 
-                        : [...state.completedSteps, stepToComplete]
-                }));
-                
-                get().notifyStepCompleted(stepToComplete, result);
-                
-                // Check if step result contains workflow update
-                const hasWorkflowUpdate = result?.workflowUpdated && result?.newWorkflow;
-                if (hasWorkflowUpdate) {
-                    set({ autoAdvanceEnabled: false });
-                    get().handleWorkflowUpdate(result.newWorkflow, result.nextStageId);
-                    return;
-                }
-                
-                // Check for auto-advance to next step (only if no workflow update)
-                const canAutoAdvance = get().autoAdvanceEnabled && get().canAutoAdvanceToNextStep();
-                
-                
-                if (canAutoAdvance) {
-                    setTimeout(() => {
-                        console.log('%c🚀 AUTO-ADVANCING TO NEXT STEP', 'color: #00b894; font-weight: bold; font-size: 12px;');
-                        get().autoAdvanceToNextStep();
-                    }, get().autoAdvanceDelay);
-                }
-                
-                // Check if stage is completed immediately - state should be synchronous
-                const isStageCompleted = get().isCurrentStageCompleted();
-                console.log(
-                    `%c🏁 STAGE COMPLETION CHECK\n` +
-                    `%c📁 Stage: ${get().currentStageId}\n` +
-                    `%c✅ Completed: ${isStageCompleted}`,
-                    'color: #fdcb6e; font-weight: bold;',
-                    'color: #6c5ce7; font-weight: bold;',
-                    'color: #00b894; font-weight: bold;'
-                );
-                
-                if (isStageCompleted) {
-                    console.log('%c🎉 TRANSITIONING TO STAGE COMPLETED', 'color: #fd79a8; font-weight: bold; font-size: 12px;');
-                    get().transition(EVENTS.COMPLETE_STAGE, { stageId: get().currentStageId });
-                }
-            },
-            
-            [WORKFLOW_STATES.STEP_FAILED]: () => {
-                const { stepId, error } = payload;
-                const currentStepId = get().currentStepId;
-                const stepToFail = stepId || currentStepId;
-                
-                if (!stepToFail) {
-                    console.warn('[WorkflowStateMachine] No step ID available for failure');
-                    return;
-                }
-                
-                set(state => ({
-                    failedSteps: state.failedSteps.includes(stepToFail)
-                        ? state.failedSteps
-                        : [...state.failedSteps, stepToFail]
-                }));
-                
-                get().notifyStepFailed(stepToFail, error);
-            },
-            
-            [WORKFLOW_STATES.STAGE_COMPLETED]: () => {
-                const { stageId } = payload;
-                const currentStageId = get().currentStageId;
-                const stageToComplete = stageId || currentStageId;
-                
-                if (!stageToComplete) {
-                    console.warn('[WorkflowStateMachine] No stage ID available for completion');
-                    return;
-                }
-                
-                set(state => ({
-                    completedStages: state.completedStages.includes(stageToComplete)
-                        ? state.completedStages
-                        : [...state.completedStages, stageToComplete]
-                }));
-                
-                get().notifyStageCompleted(stageToComplete);
-                
-                // Check for auto-advance to next stage
-                if (get().autoAdvanceEnabled && get().canAutoAdvanceToNextStage()) {
-                    setTimeout(() => {
-                        get().autoAdvanceToNextStage();
-                    }, get().autoAdvanceDelay);
-                }
-                
-                // Check if workflow is completed
-                if (get().isWorkflowCompleted()) {
-                    get().transition(EVENTS.COMPLETE_WORKFLOW);
-                }
-            },
-            
-            [WORKFLOW_STATES.WORKFLOW_COMPLETED]: () => {
-                get().notifyWorkflowCompleted();
-            },
-            
-            [WORKFLOW_STATES.CANCELLED]: () => {
-                get().notifyCancelled();
-            },
-            
-            [WORKFLOW_STATES.IDLE]: () => {
-                // No specific effects for idle state
-            }
-        };
-        
-        // Handle special update events regardless of state
-        const updateHandlers: Record<string, (payload: any) => void> = {
-            [EVENTS.WORKFLOW_UPDATE]: (payload) => {
-                const { workflowTemplate, nextStageId } = payload;
-                
-                set({
-                    currentStageId: nextStageId || workflowTemplate?.stages?.[0]?.id || null,
-                    currentStepId: null,
-                    currentStepIndex: 0,
-                    completedSteps: [],
-                    completedStages: [],
-                    failedSteps: [],
-                    autoAdvanceEnabled: false  // Disable temporarily, will be re-enabled by enableAutoAdvanceAfterConfirmation
-                });
-                
-                // Update workflow template in pipeline store
-                const pipelineStore = get().pipelineStore;
-                if (pipelineStore && workflowTemplate) {
-                    const targetStageId = nextStageId || workflowTemplate.stages?.[0]?.id;
-                    
-                    // Use the proper setStage method to ensure UI updates
-                    const pipelineState = pipelineStore.getState();
-                    
-                    // First update the core workflow data
-                    pipelineStore.setState({
-                        workflowTemplate,
-                        completedStages: [],
-                        completedSteps: [],
-                        currentStageId: targetStageId,
-                        isWorkflowActive: true
-                    });
-                    
-                    // Then trigger stage transition to ensure UI updates
-                    if (targetStageId && pipelineState.setStage) {
-                        console.log(`%c🚀 TRIGGERING STAGE TRANSITION TO: ${targetStageId}`, 'color: #e74c3c; font-weight: bold;');
-                        pipelineState.setStage(targetStageId, 'next');
-                    }
-                }
-            },
-            
-            [EVENTS.STAGE_STEPS_UPDATE]: (payload) => {
-                const { stageId, updatedSteps, nextStepId } = payload;
-                console.log(
-                    `%c📝 STAGE STEPS UPDATE EVENT 📝\n` +
-                    `%c📁 Stage: ${stageId}\n` +
-                    `%c📊 Steps Count: ${updatedSteps?.length || 0}\n` +
-                    `%c🎯 Next Step: ${nextStepId || 'None'}`,
-                    'color: #9b59b6; font-weight: bold; font-size: 14px;',
-                    'color: #3498db; font-weight: bold;',
-                    'color: #2ecc71; font-weight: bold;',
-                    'color: #e74c3c; font-weight: bold;'
-                );
-                
-                // Update stage steps in workflow template
-                if (get().pipelineStore && updatedSteps && stageId) {
-                    const pipelineState = get().pipelineStore?.getState();
-                    const currentWorkflowTemplate = pipelineState?.workflowTemplate;
-                    
-                    if (currentWorkflowTemplate?.stages && get().pipelineStore?.setState) {
-                        const updatedStages = currentWorkflowTemplate.stages.map((stage: WorkflowStage) => {
-                            if (stage.id === stageId) {
-                                return { ...stage, steps: updatedSteps };
-                            }
-                            return stage;
-                        });
-                        
-                        get().pipelineStore?.setState({
-                            workflowTemplate: {
-                                ...currentWorkflowTemplate,
-                                stages: updatedStages
-                            }
-                        });
-                    }
-                }
-                
-                // Mark current step as completed (only if not already completed)
-                const currentStepId = get().currentStepId;
-                if (currentStepId && !get().completedSteps.includes(currentStepId)) {
-                    console.log(`[WorkflowStateMachine] Marking step ${currentStepId} as completed due to stage steps update`);
-                    set(state => ({
-                        completedSteps: [...state.completedSteps, currentStepId]
-                    }));
-                    
-                    get().notifyStepCompleted(currentStepId, { 
-                        status: 'completed', 
-                        reason: 'stage_steps_updated' 
-                    });
-                } else if (currentStepId) {
-                    console.log(`[WorkflowStateMachine] Step ${currentStepId} already completed, skipping duplicate completion`);
-                }
-                
-                // Transition to next step immediately - state should be synchronous
-                if (nextStepId) {
-                    console.log(
-                        `%c🎯 DIRECT TRANSITION TO NEXT STEP: ${nextStepId}\n` +
-                        `%c📁 Stage: ${stageId}`,
-                        'color: #e67e22; font-weight: bold; font-size: 12px;',
-                        'color: #3498db; font-weight: bold;'
-                    );
-                    
-                    // Find the step index for the next step
-                    const pipelineState = get().pipelineStore?.getState();
-                    const currentStage = pipelineState?.workflowTemplate?.stages?.find(
-                        (stage: WorkflowStage) => stage.id === stageId
-                    );
-                    
-                    const nextStepIndex = currentStage?.steps?.findIndex(
-                        (step: any) => (step.step_id || step.id) === nextStepId
-                    ) || 0;
-                    
-                    // Only dispatch event to trigger step execution
-                    // Don't call startStep here to avoid double execution
-                    console.log(`[WorkflowStateMachine] Dispatching step trigger for ${nextStepId}`);
-                    window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
-                        detail: { 
-                            stepId: nextStepId,
-                            stageId: stageId,
-                            action: 'execute_after_stage_steps_update',
-                            timestamp: Date.now()
-                        }
-                    }));
-                } else {
-                    // No next step specified, trigger immediate completion flow
-                    get().transition(EVENTS.COMPLETE_STEP, { 
-                        stepId: currentStepId, 
-                        result: { status: 'completed', reason: 'stage_steps_updated' }
-                    });
-                }
-                
-                console.log('[WorkflowStateMachine] Stage steps updated, navigation handled');
-            }
-        };
-        
-        // Execute state-specific effect
-        const effect = effects[state];
-        if (effect) {
-            effect();
-        }
-        
-        // Handle special update events
-        const updateHandler = updateHandlers[payload.event || ''];
-        if (updateHandler) {
-            updateHandler(payload);
-        }
-    },
-    
-    // ==============================================
-    // Public API Methods
-    // ==============================================
-    
-    startStep: (stepId: string, stageId?: string, stepIndex?: number): boolean => {
-        const currentState = get().currentState;
-        const currentStepId = get().currentStepId;
-        const currentStageId = get().currentStageId;
-        
-        // If already executing the same step in the same stage, just return true
-        if (currentState === WORKFLOW_STATES.STEP_EXECUTING && 
-            currentStepId === stepId && 
-            currentStageId === (stageId || currentStageId)) {
-            console.log(`[WorkflowStateMachine] Step ${stepId} in stage ${stageId || currentStageId} is already executing, skipping duplicate start`);
-            return true;
-        }
-        
-        return get().transition(EVENTS.START_STEP, { stepId, stageId, stepIndex });
-    },
-    
-    completeStep: (stepId?: string, result?: StepResult): boolean => {
-        return get().transition(EVENTS.COMPLETE_STEP, { stepId, result });
-    },
-    
-    failStep: (stepId?: string, error?: Error | string): boolean => {
-        return get().transition(EVENTS.FAIL_STEP, { stepId, error });
-    },
-    
-    completeStage: (stageId?: string): boolean => {
-        return get().transition(EVENTS.COMPLETE_STAGE, { stageId });
-    },
-    
-    cancel: (): boolean => {
-        return get().transition(EVENTS.CANCEL);
-    },
-    
-    reset: (): boolean => {
-        set({
-            currentStageId: null,
-            currentStepId: null,
-            currentStepIndex: 0,
-            executionHistory: [],
-            completedSteps: [],
-            completedStages: [],
-            failedSteps: []
-        });
-        return get().transition(EVENTS.RESET);
-    },
-    
-    // ==============================================
-    // Workflow Update Handlers
-    // ==============================================
-    
-    handleWorkflowUpdate: (workflowTemplate: WorkflowTemplate, nextStageId?: string): boolean => {
-        const currentState = get().currentState;
-        console.log(
-            `%c🚀 HANDLE WORKFLOW UPDATE CALLED 🚀\n` +
-            `%c📊 Current State: ${currentState}\n` +
-            `%c📋 Workflow: ${workflowTemplate?.name || 'Unknown'}\n` +
-            `%c🎯 Next Stage: ${nextStageId || 'None'}`,
-            'color: #e67e22; font-weight: bold; font-size: 14px;',
-            'color: #3498db; font-weight: bold;',
-            'color: #2ecc71; font-weight: bold;',
-            'color: #9b59b6; font-weight: bold;'
-        );
-        
-        return get().transition(EVENTS.WORKFLOW_UPDATE, { 
-            workflowTemplate, 
-            nextStageId,
-            event: EVENTS.WORKFLOW_UPDATE
-        });
-    },
-    
-    handleStageStepsUpdate: (stageId: string, updatedSteps: WorkflowStep[], nextStepId?: string): boolean => {
-        return get().transition(EVENTS.STAGE_STEPS_UPDATE, { 
-            stageId, 
-            updatedSteps, 
-            nextStepId,
-            event: EVENTS.STAGE_STEPS_UPDATE
-        });
-    },
-    
-    enableAutoAdvanceAfterConfirmation: (): void => {
-        const state = get();
-        console.log(
-            `%c🔓 RE-ENABLING AUTO-ADVANCE 🔓\n` +
-            `%c🎭 Current State: ${state.currentState}\n` +
-            `%c🔍 Can Advance Step: ${state.canAutoAdvanceToNextStep()}\n` +
-            `%c🔍 Can Advance Stage: ${state.canAutoAdvanceToNextStage()}`,
-            'color: #27ae60; font-weight: bold; font-size: 14px;',
-            'color: #3498db; font-weight: bold;',
-            'color: #e67e22; font-weight: bold;',
-            'color: #9b59b6; font-weight: bold;'
-        );
-        
-        set({ autoAdvanceEnabled: true });
-        
-        // Trigger auto-advance if conditions are met
-        if (state.currentState === WORKFLOW_STATES.STEP_COMPLETED && state.canAutoAdvanceToNextStep()) {
-            console.log('%c🚀 TRIGGERING STEP AUTO-ADVANCE', 'color: #27ae60; font-weight: bold; font-size: 12px;');
-            setTimeout(() => {
-                state.autoAdvanceToNextStep();
-            }, state.autoAdvanceDelay);
-        } else if (state.currentState === WORKFLOW_STATES.STAGE_COMPLETED && state.canAutoAdvanceToNextStage()) {
-            console.log('%c🚀 TRIGGERING STAGE AUTO-ADVANCE', 'color: #8e44ad; font-weight: bold; font-size: 12px;');
-            setTimeout(() => {
-                state.autoAdvanceToNextStage();
-            }, state.autoAdvanceDelay);
-        } else if (state.currentState === WORKFLOW_STATES.STEP_EXECUTING || state.currentState === WORKFLOW_STATES.IDLE) {
-            // Don't auto-start new workflow steps - let user manually trigger them
-            // This prevents the duplicate execution issue when stages switch
-            console.log(
-                '%c⏸️  WORKFLOW UPDATE: Auto-advance re-enabled but NOT auto-starting new workflow steps\n' +
-                '%c📋 Reason: New stages should be started manually to prevent duplicate executions\n' +
-                '%c🎯 Current State: ' + state.currentState + '\n' +
-                '%c📝 Note: Step-driven auto-advance will still work normally',
-                'color: #f39c12; font-weight: bold; font-size: 12px;',
-                'color: #95a5a6; font-weight: bold;',
-                'color: #3498db; font-weight: bold;',
-                'color: #27ae60; font-weight: bold;'
-            );
-        } else {
-            console.log(
-                `%c⏳ NO AUTO-ADVANCE TRIGGERED\n` +
-                `%c📋 Reason: Current state (${state.currentState}) or conditions not met`,
-                'color: #f39c12; font-weight: bold;',
-                'color: #95a5a6; font-weight: bold;'
-            );
-        }
-    },
-    
-    // ==============================================
-    // Auto-advance Logic
-    // ==============================================
-    
-    autoAdvanceToNextStep: (): boolean => {
-        // Check if there's a pending workflow update
-        const pipelineStore = get().pipelineStore;
-        if (pipelineStore) {
-            const pipelineState = pipelineStore.getState();
-            const currentStepId = get().currentStepId;
-            const stepResult = pipelineState.stepResults?.[currentStepId];
-            
-            if (stepResult?.workflowUpdated && stepResult?.newWorkflow) {
-                console.log(
-                    `%c⚠️  BLOCKING AUTO-ADVANCE: Pending workflow update detected\n` +
-                    `%c📋 Step: ${currentStepId}\n` +
-                    `%c🔄 Workflow: ${stepResult.newWorkflow?.name || 'Unknown'}`,
-                    'color: #ff6b6b; font-weight: bold; font-size: 12px;',
-                    'color: #3498db; font-weight: bold;',
-                    'color: #e67e22; font-weight: bold;'
-                );
-                return false; // Block auto-advance until workflow update is handled
-            }
-        }
-        
-        const nextStep = get().getNextStep();
-        if (nextStep) {
-            return get().startStep(nextStep.step_id, get().currentStageId, nextStep.index);
-        }
-        return false;
-    },
-    
-    autoAdvanceToNextStage: (): boolean => {
-        // Check if there's a pending workflow update in any recent step
-        const pipelineStore = get().pipelineStore;
-        if (pipelineStore) {
-            const pipelineState = pipelineStore.getState();
-            const recentSteps = get().completedSteps.slice(-3); // Check last 3 completed steps
-            
-            for (const stepId of recentSteps) {
-                const stepResult = pipelineState.stepResults?.[stepId];
-                if (stepResult?.workflowUpdated && stepResult?.newWorkflow) {
-                    console.log(
-                        `%c⚠️  BLOCKING STAGE AUTO-ADVANCE: Pending workflow update detected\n` +
-                        `%c📋 Step: ${stepId}\n` +
-                        `%c🔄 Workflow: ${stepResult.newWorkflow?.name || 'Unknown'}`,
-                        'color: #ff6b6b; font-weight: bold; font-size: 12px;',
-                        'color: #3498db; font-weight: bold;',
-                        'color: #e67e22; font-weight: bold;'
-                    );
-                    return false; // Block auto-advance until workflow update is handled
-                }
-            }
-        }
-        
-        const nextStage = get().getNextStage();
-        if (nextStage) {
-            const firstStep = nextStage.steps?.[0];
-            if (firstStep) {
-                const started = get().startStep(firstStep.step_id, nextStage.id, 0);
-                
-                if (started) {
-                    // 发送事件触发步骤执行（类似于workflow update的逻辑）
-                    setTimeout(() => {
-                        console.log(`%c🎯 DISPATCHING STEP TRIGGER AFTER STAGE AUTO-ADVANCE`, 'color: #e74c3c; font-weight: bold;');
-                        window.dispatchEvent(new CustomEvent('workflowStepTrigger', {
-                            detail: { 
-                                stepId: firstStep.step_id || firstStep.id,
-                                stageId: nextStage.id,
-                                action: 'auto_execute_after_stage_advance',
-                                timestamp: Date.now()
-                            }
-                        }));
-                    }, 1500); // 等待DynamicStageTemplate重新渲染新的阶段
-                }
-                
-                return started;
-            }
-        }
-        return false;
-    },
-    
-    // ==============================================
-    // State Check Methods
-    // ==============================================
-    
-    canAutoAdvanceToNextStep: (): boolean => {
-        const pipelineStore = get().pipelineStore;
-        const aiPlanningStore = get().aiPlanningStore;
-        
-        if (!pipelineStore || !aiPlanningStore) return false;
-        
-        const currentStepId = get().currentStepId;
-        if (!currentStepId) return false;
-        
-        const currentStepCompleted = get().completedSteps.includes(currentStepId);
-        const nextStep = get().getNextStep();
-        
-        // Check if this step was completed due to stage steps update
-        const pipelineState = pipelineStore.getState();
-        const stepResult = pipelineState.stepResults?.[currentStepId];
-        const isStageStepsUpdate = stepResult?.reason === 'stage_steps_updated';
-        
-        // For stage steps update, we don't need to check todo list
-        if (isStageStepsUpdate) {
-            return currentStepCompleted && !!nextStep;
-        }
-        
-        // For normal step completion, only check if step is completed and has next step
-        // Don't check todoList - it's used for progress tracking, not completion blocking
-        return currentStepCompleted && !!nextStep;
-    },
-    
-    canAutoAdvanceToNextStage: (): boolean => {
-        const pipelineStore = get().pipelineStore;
-        const aiPlanningStore = get().aiPlanningStore;
-        
-        if (!pipelineStore || !aiPlanningStore) return false;
-        
-        const currentStageCompleted = get().isCurrentStageCompleted();
-        const nextStage = get().getNextStage();
-        
-        // Only check if stage is completed and has next stage
-        // Don't check todoList - it's used for progress tracking, not completion blocking
-        return currentStageCompleted && !!nextStage;
-    },
-    
-    isCurrentStageCompleted: (): boolean => {
-        const pipelineStore = get().pipelineStore;
-        if (!pipelineStore) return false;
-        
-        const stageConfig = pipelineStore.getState().getCurrentStageConfig?.();
-        if (!stageConfig) return false;
-        
-        return stageConfig.steps.every((step: WorkflowStep) => 
-            get().completedSteps.includes(step.step_id)
-        );
-    },
-    
-    isWorkflowCompleted: (): boolean => {
-        const pipelineStore = get().pipelineStore;
-        if (!pipelineStore) return false;
-        
-        const workflowTemplate = pipelineStore.getState().workflowTemplate;
-        if (!workflowTemplate) return false;
-        
-        return workflowTemplate.stages.every((stage: WorkflowStage) => 
-            get().completedStages.includes(stage.id)
-        );
-    },
-    
-    // ==============================================
-    // Helper Methods
-    // ==============================================
-    
-    getNextStep: (): (WorkflowStep & { index: number }) | null => {
-        const pipelineStore = get().pipelineStore;
-        if (!pipelineStore) return null;
-        
-        const stageConfig = pipelineStore.getState().getCurrentStageConfig?.();
-        if (!stageConfig) return null;
-        
-        const currentStepIndex = get().currentStepIndex;
-        const nextStepIndex = currentStepIndex + 1;
-        
-        if (nextStepIndex < stageConfig.steps.length) {
-            return {
-                ...stageConfig.steps[nextStepIndex],
-                index: nextStepIndex
-            };
-        }
-        
-        return null;
-    },
-    
-    getNextStage: (): WorkflowStage | null => {
-        const pipelineStore = get().pipelineStore;
-        if (!pipelineStore) return null;
-        
-        const workflowTemplate = pipelineStore.getState().workflowTemplate;
-        const currentStageId = get().currentStageId;
-        
-        if (!workflowTemplate || !currentStageId) return null;
-        
-        const currentStageIndex = workflowTemplate.stages.findIndex(
-            (stage: WorkflowStage) => stage.id === currentStageId
-        );
-        
-        const nextStageIndex = currentStageIndex + 1;
-        
-        if (nextStageIndex < workflowTemplate.stages.length) {
-            return workflowTemplate.stages[nextStageIndex];
-        }
-        
-        return null;
-    },
-    
-    // ==============================================
-    // Integration Methods
-    // ==============================================
-    
-    notifyStepStarted: (stepId: string, stageId?: string): void => {
-        const pipelineStore = get().pipelineStore;
-        if (pipelineStore && pipelineStore.getState().setCurrentStepId) {
-            pipelineStore.getState().setCurrentStepId(stepId);
-        }
-    },
-    
-    notifyStepCompleted: (stepId: string, result?: StepResult): void => {
-        const pipelineStore = get().pipelineStore;
-        const aiPlanningStore = get().aiPlanningStore;
-        
-        if (pipelineStore) {
-            const state = pipelineStore.getState();
-            if (state.markStepCompleted) {
-                state.markStepCompleted(stepId);
-            }
-            if (result && state.updateStepResult) {
-                state.updateStepResult(stepId, result);
-            }
-        }
-        
-        if (aiPlanningStore && aiPlanningStore.getState().setChecklist) {
-            aiPlanningStore.getState().setChecklist([], []);
-        }
-    },
-    
-    notifyStepFailed: (stepId: string, error?: Error | string): void => {
-        const pipelineStore = get().pipelineStore;
-        
-        if (pipelineStore && pipelineStore.getState().updateStepResult) {
-            pipelineStore.getState().updateStepResult(stepId, {
-                status: 'failed',
-                error: typeof error === 'string' ? error : error?.message || 'Step execution failed',
-                timestamp: new Date().toISOString()
-            });
-        }
-    },
-    
-    notifyStageCompleted: (stageId: string): void => {
-        const pipelineStore = get().pipelineStore;
-        const aiPlanningStore = get().aiPlanningStore;
-        
-        if (pipelineStore && pipelineStore.getState().markStageCompleted) {
-            pipelineStore.getState().markStageCompleted(stageId);
-        }
-        
-        if (aiPlanningStore && aiPlanningStore.getState().markStageAsComplete) {
-            aiPlanningStore.getState().markStageAsComplete(stageId);
-        }
-    },
-    
-    notifyWorkflowCompleted: (): void => {
-        console.log('[WorkflowStateMachine] Workflow completed!');
-        window.dispatchEvent(new CustomEvent('workflowCompleted', {
-            detail: {
-                timestamp: Date.now(),
-                completedStages: get().completedStages,
-                completedSteps: get().completedSteps
-            }
-        }));
-    },
-    
-    notifyCancelled: (): void => {
-        console.log('[WorkflowStateMachine] Workflow cancelled');
-        window.dispatchEvent(new CustomEvent('workflowCancelled', {
-            detail: {
-                timestamp: Date.now(),
-                currentState: get().currentState
-            }
-        }));
-    },
-    
-    // ==============================================
-    // Store Integration
-    // ==============================================
-    
-    setStoreReferences: (aiPlanningStore: StoreReference, pipelineStore: StoreReference): void => {
-        set({
-            aiPlanningStore,
-            pipelineStore
-        });
-    },
-    
-    // ==============================================
-    // Configuration Methods
-    // ==============================================
-    
-    setAutoAdvanceEnabled: (enabled: boolean): void => {
-        set({ autoAdvanceEnabled: enabled });
-    },
-    
-    setAutoAdvanceDelay: (delay: number): void => {
-        set({ autoAdvanceDelay: delay });
-    },
-    
-    // ==============================================
-    // Debug and Monitoring
-    // ==============================================
-    
-    getCurrentContext: (): any => {
-        const state = get();
-        return {
-            currentState: state.currentState,
-            currentStageId: state.currentStageId,
-            currentStepId: state.currentStepId,
-            currentStepIndex: state.currentStepIndex,
-            completedSteps: state.completedSteps,
-            completedStages: state.completedStages,
-            failedSteps: state.failedSteps,
-            autoAdvanceEnabled: state.autoAdvanceEnabled,
-            canAutoAdvanceStep: state.canAutoAdvanceToNextStep(),
-            canAutoAdvanceStage: state.canAutoAdvanceToNextStage()
-        };
-    },
-    
-    getExecutionHistory: (): ExecutionHistoryEntry[] => {
-        return get().executionHistory;
-    }
-}));
+    pendingWorkflowData: null,
 
-export default useWorkflowStateMachine;
+    transition: (event, payload = {}) => {
+        const fromState = get().currentState;
+        const toState = STATE_TRANSITIONS[fromState]?.[event];
+        if (!toState) {
+            console.warn(`[FSM] Invalid transition: From ${fromState} via ${event}`);
+            return;
+        }
+        console.log(`[FSM] Transition: ${fromState} -> ${toState} (Event: ${event})`, payload);
+        
+        set(state => ({
+            executionHistory: [...state.executionHistory, { from: fromState, to: toState, event, payload, timestamp: new Date() }],
+            currentState: toState
+        }));
+        
+        setTimeout(() => executeStateEffects(toState, payload), 0);
+    },
+
+    startWorkflow: (initialContext) => {
+        set({
+            context: {
+                currentStageId: initialContext.stageId,
+                currentStepId: null, // Start with stage, step will be determined by effect
+                currentBehaviorId: null,
+                currentBehaviorActions: [],
+                currentActionIndex: 0,
+            }
+        });
+        get().transition(EVENTS.START_WORKFLOW);
+    },
+    
+    fail: (error, message) => get().transition(EVENTS.FAIL, { error, message }),
+    cancel: () => get().transition(EVENTS.CANCEL),
+    reset: () => {
+        set({
+            currentState: WORKFLOW_STATES.IDLE,
+            context: { currentStageId: null, currentStepId: null, currentBehaviorId: null, currentBehaviorActions: [], currentActionIndex: 0 },
+            executionHistory: [],
+            pendingWorkflowData: null,
+        });
+    },
+    
+    requestWorkflowUpdate: (payload) => get().transition(EVENTS.UPDATE_WORKFLOW, payload),
+    confirmWorkflowUpdate: () => get().transition(EVENTS.UPDATE_WORKFLOW_CONFIRMED),
+    rejectWorkflowUpdate: () => get().transition(EVENTS.UPDATE_WORKFLOW_REJECTED),
+}));

@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
+import { useWorkflowStateMachine } from '../../senario/DSLCanalysis/store/workflowStateMachine';
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
 
 /**
@@ -26,54 +27,39 @@ export const useWorkflowManager = (
 
   // Handle workflow update confirmation
   const handleConfirmWorkflowUpdate = useCallback(() => {
-    const { pendingWorkflowUpdate } = useWorkflowPanelStore.getState();
+    const { pendingWorkflowUpdate, pendingStepCompletion } = useWorkflowPanelStore.getState();
+    const { confirmWorkflowUpdate, pendingWorkflowUpdate: fsmPending } = useWorkflowStateMachine.getState();
     
-    if (pendingWorkflowUpdate) {
-      const currentState = usePipelineStore.getState();
-      console.log('Before workflow update - current state:', currentState);
-      
-      // Get first stage from new workflow
-      const firstStage = pendingWorkflowUpdate.stages?.[0];
-      if (!firstStage) {
-        console.error('No stages found in workflow update');
-        return;
-      }
-      
-      console.log('First stage to navigate to:', firstStage);
-      
-      // Preserve current execution state to avoid losing cell content
-      const preserveCurrentState = {
-        currentStepIndex: currentState.currentStepIndex,
-        completedSteps: currentState.completedSteps || [],
-        completedStages: currentState.completedStages || [],
-        stepResults: currentState.stepResults || {},
-        stageResults: currentState.stageResults || {}
-      };
-      
-      usePipelineStore.setState({ 
-        workflowTemplate: pendingWorkflowUpdate,
-        isWorkflowActive: true,
-        // Only update stage if we're moving to a completely new workflow
-        // Otherwise preserve current position to avoid losing cell content
-        ...(currentState.currentStageId ? {} : {
-          currentStageId: firstStage.id,
-          currentStage: firstStage.id,
-        }),
-        // Preserve execution state to avoid losing cells
-        ...preserveCurrentState
-      });
-      
-      const newState = usePipelineStore.getState();
-      console.log('After workflow update - new state:', newState);
-      
-      setWorkflowUpdated(true);
-      incrementWorkflowUpdateCount();
-      setShowWorkflowConfirm(false);
-      setPendingWorkflowUpdate(null);
-      
-      console.log('Workflow update applied and navigated to first stage:', firstStage.id);
+    if (!pendingWorkflowUpdate) {
+      console.warn('[useWorkflowManager] No pending workflow update found when confirming.');
+      return;
     }
-  }, [setWorkflowUpdated, incrementWorkflowUpdateCount, setShowWorkflowConfirm, setPendingWorkflowUpdate]);
+
+    // Prefer letting the FSM handle the update to keep state in sync across stores
+    if (fsmPending || confirmWorkflowUpdate) {
+      console.log('[useWorkflowManager] Delegating workflow update confirmation to FSM');
+      confirmWorkflowUpdate();
+    } else {
+      console.error('[useWorkflowManager] FSM confirmWorkflowUpdate method not found.');
+    }
+
+    // Handle any pending step completion that was queued while awaiting confirmation
+    if (pendingStepCompletion) {
+      try {
+        if (pendingStepCompletion.markStepCompleted) pendingStepCompletion.markStepCompleted();
+        if (pendingStepCompletion.completeStep) pendingStepCompletion.completeStep();
+      } catch (error) {
+        console.error('[useWorkflowManager] Error executing pending step completion:', error);
+      }
+      setPendingStepCompletion(null);
+    }
+
+    setWorkflowUpdated(true);
+    incrementWorkflowUpdateCount();
+    setShowWorkflowConfirm(false);
+    setPendingWorkflowUpdate(null);
+  }
+  }, [setWorkflowUpdated, incrementWorkflowUpdateCount, setShowWorkflowConfirm, setPendingWorkflowUpdate, setPendingStepCompletion]);
 
   const handleRejectWorkflowUpdate = useCallback(() => {
     console.log('Workflow update rejected by user');

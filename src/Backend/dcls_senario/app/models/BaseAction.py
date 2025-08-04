@@ -133,6 +133,38 @@ class BaseAction(StepTemplate):
         """从chapter_id获取章节名称"""
         return self.stage_name  # 对于当前实现，章节名称和阶段名称相同
     
+    def _extract_chapter_id(self) -> str:
+        """从step或状态中提取chapter_id"""
+        # 尝试从step中获取
+        if hasattr(self, 'step') and self.step:
+            chapter_id = self.step.get('chapter_id') or self.step.get('stage_id')
+            if chapter_id:
+                return chapter_id
+        
+        # 尝试从state中获取
+        if self.state:
+            chapter_id = self.state.get('chapter_id') or self.state.get('stage_id')
+            if chapter_id:
+                return chapter_id
+        
+        return ""
+    
+    def _extract_section_id(self) -> str:
+        """从step或状态中提取section_id"""
+        # 尝试从step中获取
+        if hasattr(self, 'step') and self.step:
+            section_id = self.step.get('section_id') or self.step.get('step_id')
+            if section_id:
+                return section_id
+        
+        # 尝试从state中获取
+        if self.state:
+            section_id = self.state.get('section_id') or self.state.get('step_id')
+            if section_id:
+                return section_id
+        
+        return ""
+    
     def _validate_requirements(self) -> bool:
         """验证必需变量是否存在"""
         if not self.require_variables:
@@ -196,8 +228,8 @@ class BaseAction(StepTemplate):
                 "name": stage_info["name"],
                 "description": stage_info["description"],
                 "steps": [{
-                    "id": first_section,
-                    "step_id": first_section,
+                    "id": f"{stage_id}_{first_section}",
+                    "step_id": f"{stage_id}_{first_section}",
                     "name": first_section.replace("_", " ").title(),
                     "description": f"Execute {first_section} workflow step"
                 }]
@@ -236,8 +268,8 @@ class BaseAction(StepTemplate):
         current_workflow = self.state.get("current_workflow", {})
         
         new_steps = [{
-            "id": "section_1_workflow_initialization",
-            "step_id": "section_1_workflow_initialization", 
+            "id": f"{current_stage_id}_section_1_workflow_initialization",
+            "step_id": f"{current_stage_id}_section_1_workflow_initialization", 
             "name": "Workflow Initialization",
             "description": "Initialize workflow for this stage",
             "status": "completed"
@@ -246,8 +278,8 @@ class BaseAction(StepTemplate):
         for section_id in stage_execution_plan:
             if section_id != "section_1_workflow_initialization":
                 new_steps.append({
-                    "id": section_id,
-                    "step_id": section_id,
+                    "id": f"{current_stage_id}_{section_id}",
+                    "step_id": f"{current_stage_id}_{section_id}",
                     "name": section_id.replace("_", " ").title(),
                     "description": f"Execute {section_id} workflow step",
                     "status": "pending"

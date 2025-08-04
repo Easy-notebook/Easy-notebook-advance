@@ -24,12 +24,9 @@ import PreviewApp from './Display/PreviewApp';
 import Header from './MainContainer/Header';
 import MainContent from './MainContainer/MainContent';
 import WorkflowControl from './MainContainer/WorkflowControl';
-import WorkflowPanel from './MainContainer/WorkflowPanel';
 import { useWorkflowControlStore } from './store/workflowControlStore';
-import { useWorkflowPanelStore } from './store/workflowPanelStore';
 import AgentDetail from '../Agents/AgentDetail';
 import { AgentType } from '../../services/agentMemoryService';
-import useAutoTracking from './hooks/useAutoTracking';
 
 
 
@@ -88,8 +85,6 @@ const NotebookApp = () => {
 
   const { setShowCommandInput } = useAIAgentStore();
 
-  // Initialize auto-tracking functionality
-  const { toggleAutoTracking } = useAutoTracking();
 
   const fileInputRef = useRef(null);
   
@@ -512,7 +507,7 @@ const NotebookApp = () => {
     
     if (viewMode === 'demo' || viewMode === 'create') {
       setContinueButtonText('Continue to Next Stage');
-      // Clear handlers to let DynamicStageTemplate set them
+      // Clear handlers to let workflow state machine control them
       setOnTerminate(null);
       setOnContinue(null);
       setOnCancelCountdown(null);
@@ -574,11 +569,6 @@ const NotebookApp = () => {
         handleModeChange(viewMode === 'create' ? 'step' : 'create'); // 切换模式
       }
       
-      // Alt + Shift + T for tracking toggle
-      if (e.altKey && e.shiftKey && e.key === 'T') {
-        e.preventDefault();
-        toggleAutoTracking();
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -592,9 +582,7 @@ const NotebookApp = () => {
     handleNextPhase,
     getTotalSteps,
     handleModeChange,
-    currentPhaseId,
-    toggleAutoTracking,
-    notebookId
+    currentPhaseId
   ]);
 
   return (

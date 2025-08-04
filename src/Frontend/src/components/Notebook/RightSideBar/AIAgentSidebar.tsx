@@ -1,40 +1,23 @@
-import { useState, useCallback, useMemo } from 'react';
-import {
-  Loader2,
-  MessageSquare,
-  UploadCloud,
-  Eye,
-  BookOpen,
-  Code,
-  PlayCircle,
-  BarChart2,
-  Bug,
-  Wrench,
-  AlertTriangle,
-  MessageCircle,
-  ShieldCheck,
-  Server,
-  Command,
-  CircleX,
-  Clock,
-  LucideMessageCircle,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  Edit,
-  List,
-  CheckCircle,
-  Circle,
-  ArrowRight
-} from 'lucide-react';
+// @ts-nocheck
+import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  Loader2, MessageSquare, UploadCloud, Eye, BookOpen, Code, PlayCircle,
+  BarChart2, Bug, Wrench, AlertTriangle, MessageCircle as LucideMessageCircle,
+  ShieldCheck, Server, Command, CircleX, Clock, Layers, ChevronDown,
+  ChevronUp, Edit, List, CheckCircle, Circle, ArrowRight, MessageCircle
+} from 'lucide-react';
 
 import useStore from '../../../store/notebookStore';
 import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
-import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
+// 更新了导入路径以保持一致性
+import { usePipelineStore } from '../../senario/DSLCanalysis/store/usePipelineStore'; 
+// 新增导入，用于获取工作流的实时执行上下文
+import { useWorkflowStateMachine } from '../../senario/DSLCanalysis/store/workflowStateMachine';
+import StateMachineDebugger from './StateMachineDebugger';
+import AIPlanningContextDebugger from './AIPlanningContextDebugger';
 
 /**
  * 过滤文本内容，移除 section*(数字) 和 stage*(数字) 模式的字符串
@@ -142,140 +125,44 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
 // 获取事件类型对应的标签
 const getEventLabel = (type, t) => {
   const labelConfig = {
-    [EVENT_TYPES.USER_ASK_QUESTION]: {
-      text: t('rightSideBar.eventTypes.question'),
-      color: 'bg-theme-100 text-theme-800'
-    },
-    [EVENT_TYPES.USER_NEW_INSTRUCTION]: {
-      text: t('rightSideBar.eventTypes.instruction'),
-      color: 'bg-green-100 text-green-800'
-    },
-    [EVENT_TYPES.USER_FILE_UPLOAD]: {
-      text: t('rightSideBar.eventTypes.upload'),
-      color: 'bg-purple-100 text-purple-800'
-    },
-    [EVENT_TYPES.AI_UNDERSTANDING]: {
-      text: t('rightSideBar.eventTypes.understanding'),
-      color: 'bg-yellow-100 text-yellow-800'
-    },
-    [EVENT_TYPES.AI_EXPLAINING_PROCESS]: {
-      text: t('rightSideBar.eventTypes.explaining'),
-      color: 'bg-indigo-100 text-indigo-800'
-    },
-    [EVENT_TYPES.AI_WRITING_CODE]: {
-      text: t('rightSideBar.eventTypes.coding'),
-      color: 'bg-green-100 text-green-800'
-    },
-    [EVENT_TYPES.AI_RUNNING_CODE]: {
-      text: t('rightSideBar.eventTypes.running'),
-      color: 'bg-pink-100 text-pink-800'
-    },
-    [EVENT_TYPES.AI_ANALYZING_RESULTS]: {
-      text: t('rightSideBar.eventTypes.analysis'),
-      color: 'bg-teal-100 text-teal-800'
-    },
-    [EVENT_TYPES.AI_FIXING_BUGS]: {
-      text: t('rightSideBar.eventTypes.debug'),
-      color: 'bg-red-100 text-red-800'
-    },
-    [EVENT_TYPES.AI_CRITICAL_THINKING]: {
-      text: t('rightSideBar.eventTypes.thinking'),
-      color: 'bg-orange-100 text-orange-800'
-    },
-    [EVENT_TYPES.AI_REPLYING_QUESTION]: {
-      text: t('rightSideBar.eventTypes.reply'),
-      color: 'bg-theme-100 text-theme-800'
-    },
-    [EVENT_TYPES.AI_FIXING_CODE]: {
-      text: t('rightSideBar.eventTypes.debug'),
-      color: 'bg-gray-100 text-gray-800'
-    },
-    [EVENT_TYPES.SYSTEM_EVENT]: {
-      text: t('rightSideBar.eventTypes.system'),
-      color: 'bg-gray-100 text-gray-800'
-    },
-    [EVENT_TYPES.AI_GENERATING_CODE]: {
-      text: t('rightSideBar.eventTypes.editing'),
-      color: 'bg-blue-100 text-blue-800'
-    },
-    [EVENT_TYPES.AI_GENERATING_TEXT]: {
-      text: t('rightSideBar.eventTypes.editing'),
-      color: 'bg-purple-100 text-purple-800'
-    }
+    [EVENT_TYPES.USER_ASK_QUESTION]: { text: t('rightSideBar.eventTypes.question'), color: 'bg-theme-100 text-theme-800' },
+    [EVENT_TYPES.USER_NEW_INSTRUCTION]: { text: t('rightSideBar.eventTypes.instruction'), color: 'bg-green-100 text-green-800' },
+    [EVENT_TYPES.USER_FILE_UPLOAD]: { text: t('rightSideBar.eventTypes.upload'), color: 'bg-purple-100 text-purple-800' },
+    [EVENT_TYPES.AI_UNDERSTANDING]: { text: t('rightSideBar.eventTypes.understanding'), color: 'bg-yellow-100 text-yellow-800' },
+    [EVENT_TYPES.AI_EXPLAINING_PROCESS]: { text: t('rightSideBar.eventTypes.explaining'), color: 'bg-indigo-100 text-indigo-800' },
+    [EVENT_TYPES.AI_WRITING_CODE]: { text: t('rightSideBar.eventTypes.coding'), color: 'bg-green-100 text-green-800' },
+    [EVENT_TYPES.AI_RUNNING_CODE]: { text: t('rightSideBar.eventTypes.running'), color: 'bg-pink-100 text-pink-800' },
+    [EVENT_TYPES.AI_ANALYZING_RESULTS]: { text: t('rightSideBar.eventTypes.analysis'), color: 'bg-teal-100 text-teal-800' },
+    [EVENT_TYPES.AI_FIXING_BUGS]: { text: t('rightSideBar.eventTypes.debug'), color: 'bg-red-100 text-red-800' },
+    [EVENT_TYPES.AI_CRITICAL_THINKING]: { text: t('rightSideBar.eventTypes.thinking'), color: 'bg-orange-100 text-orange-800' },
+    [EVENT_TYPES.AI_REPLYING_QUESTION]: { text: t('rightSideBar.eventTypes.reply'), color: 'bg-theme-100 text-theme-800' },
+    [EVENT_TYPES.AI_FIXING_CODE]: { text: t('rightSideBar.eventTypes.debug'), color: 'bg-gray-100 text-gray-800' },
+    [EVENT_TYPES.SYSTEM_EVENT]: { text: t('rightSideBar.eventTypes.system'), color: 'bg-gray-100 text-gray-800' },
+    [EVENT_TYPES.AI_GENERATING_CODE]: { text: t('rightSideBar.eventTypes.editing'), color: 'bg-blue-100 text-blue-800' },
+    [EVENT_TYPES.AI_GENERATING_TEXT]: { text: t('rightSideBar.eventTypes.editing'), color: 'bg-purple-100 text-purple-800' }
   };
-
-  return labelConfig[type] || {
-    text: t('rightSideBar.eventTypes.event'),
-    color: 'bg-theme-100 text-theme-800'
-  };
+  return labelConfig[type] || { text: t('rightSideBar.eventTypes.event'), color: 'bg-theme-100 text-theme-800' };
 };
 
 const EventIcon = ({ type, className = 'w-5 h-5'}) => {
   const iconConfig = {
-    [EVENT_TYPES.USER_ASK_QUESTION]: {
-      Icon: MessageSquare,
-      color: 'text-theme-600'
-    },
-    [EVENT_TYPES.USER_NEW_INSTRUCTION]: {
-      Icon: Command,
-      color: 'text-green-600'
-    },
-    [EVENT_TYPES.USER_FILE_UPLOAD]: {
-      Icon: UploadCloud,
-      color: 'text-purple-600'
-    },
-    [EVENT_TYPES.AI_UNDERSTANDING]: {
-      Icon: Eye,
-      color: 'text-yellow-600'
-    },
-    [EVENT_TYPES.AI_EXPLAINING_PROCESS]: {
-      Icon: BookOpen,
-      color: 'text-indigo-600'
-    },
-    [EVENT_TYPES.AI_WRITING_CODE]: {
-      Icon: Code,
-      color: 'text-green-800'
-    },
-    [EVENT_TYPES.AI_RUNNING_CODE]: {
-      Icon: PlayCircle,
-      color: 'text-pink-600'
-    },
-    [EVENT_TYPES.AI_ANALYZING_RESULTS]: {
-      Icon: BarChart2,
-      color: 'text-teal-600'
-    },
-    [EVENT_TYPES.AI_FIXING_BUGS]: {
-      Icon: Bug,
-      color: 'text-red-600'
-    },
-    [EVENT_TYPES.AI_CRITICAL_THINKING]: {
-      Icon: AlertTriangle,
-      color: 'text-orange-600'
-    },
-    [EVENT_TYPES.AI_REPLYING_QUESTION]: {
-      Icon: MessageCircle,
-      color: 'text-theme-800'
-    },
-    [EVENT_TYPES.AI_FIXING_CODE]: {
-      Icon: Wrench,
-      color: 'text-gray-800'
-    },
-    [EVENT_TYPES.SYSTEM_EVENT]: {
-      Icon: Server,
-      color: 'text-gray-600'
-    },
-    [EVENT_TYPES.AI_GENERATING_CODE]: {
-      Icon: Edit,
-      color: 'text-green-800'
-    },
-    [EVENT_TYPES.AI_GENERATING_TEXT]: {
-      Icon: Edit,
-      color: 'text-indigo-800'
-    }
+    [EVENT_TYPES.USER_ASK_QUESTION]: { Icon: MessageSquare, color: 'text-theme-600' },
+    [EVENT_TYPES.USER_NEW_INSTRUCTION]: { Icon: Command, color: 'text-green-600' },
+    [EVENT_TYPES.USER_FILE_UPLOAD]: { Icon: UploadCloud, color: 'text-purple-600' },
+    [EVENT_TYPES.AI_UNDERSTANDING]: { Icon: Eye, color: 'text-yellow-600' },
+    [EVENT_TYPES.AI_EXPLAINING_PROCESS]: { Icon: BookOpen, color: 'text-indigo-600' },
+    [EVENT_TYPES.AI_WRITING_CODE]: { Icon: Code, color: 'text-green-800' },
+    [EVENT_TYPES.AI_RUNNING_CODE]: { Icon: PlayCircle, color: 'text-pink-600' },
+    [EVENT_TYPES.AI_ANALYZING_RESULTS]: { Icon: BarChart2, color: 'text-teal-600' },
+    [EVENT_TYPES.AI_FIXING_BUGS]: { Icon: Bug, color: 'text-red-600' },
+    [EVENT_TYPES.AI_CRITICAL_THINKING]: { Icon: AlertTriangle, color: 'text-orange-600' },
+    [EVENT_TYPES.AI_REPLYING_QUESTION]: { Icon: MessageCircle, color: 'text-theme-800' },
+    [EVENT_TYPES.AI_FIXING_CODE]: { Icon: Wrench, color: 'text-gray-800' },
+    [EVENT_TYPES.SYSTEM_EVENT]: { Icon: Server, color: 'text-gray-600' },
+    [EVENT_TYPES.AI_GENERATING_CODE]: { Icon: Edit, color: 'text-green-800' },
+    [EVENT_TYPES.AI_GENERATING_TEXT]: { Icon: Edit, color: 'text-indigo-800' }
   };
-
   const { Icon = ShieldCheck, color = 'text-theme-800' } = iconConfig[type] || {};
-
   return (
     <div className="relative">
       <Icon className={`${className} ${color} transition-colors duration-300`} />
@@ -283,34 +170,42 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
   );
 };
 
+
+// =========================================================
+// ===        核心更新区域: WorkflowTODOPanel 组件        ===
+// =========================================================
 const WorkflowTODOPanel = () => {
   const { t } = useTranslation();
-  const {
-    workflowTemplate,
-    currentStageId,
-    currentStepId,
-    completedSteps,
-    completedStages,
-    stepResults,
-    workflowAnalysis
-  } = usePipelineStore();
+  const { workflowTemplate } = usePipelineStore();
+  const { context: fsmContext } = useWorkflowStateMachine(); // 使用 FSM context 作为状态来源
 
   const [expandedStages, setExpandedStages] = useState({});
 
+  // 使用 useMemo 预计算当前阶段和步骤的索引，以优化和简化渲染逻辑
+  const executionIndices = useMemo(() => {
+    if (!workflowTemplate || !fsmContext.currentStageId) {
+      return { stageIndex: -1, stepIndex: -1 };
+    }
+    const stageIndex = workflowTemplate.stages.findIndex(s => s.id === fsmContext.currentStageId);
+    if (stageIndex === -1) {
+      return { stageIndex: -1, stepIndex: -1 };
+    }
+    const stepIndex = workflowTemplate.stages[stageIndex]?.steps.findIndex(st => st.id === fsmContext.currentStepId) ?? -1;
+    return { stageIndex, stepIndex };
+  }, [workflowTemplate, fsmContext]);
+
   const toggleStage = useCallback((stageId) => {
-    setExpandedStages(prev => ({
-      ...prev,
-      [stageId]: !prev[stageId]
-    }));
+    setExpandedStages(prev => ({ ...prev, [stageId]: !prev[stageId] }));
   }, []);
 
-  const renderStageStep = (step, stageId) => {
-    const isCompleted = completedSteps.includes(step.id);
-    const isCurrent = currentStepId === step.id;
-    const hasResult = stepResults[step.id];
+  const renderStageStep = (step, currentStageIndex, stepIndex) => {
+    const stepId = step.id; // 统一使用 id
+    const isCurrent = executionIndices.stageIndex === currentStageIndex && executionIndices.stepIndex === stepIndex;
+    const isCompleted = executionIndices.stageIndex > currentStageIndex || 
+                       (executionIndices.stageIndex === currentStageIndex && executionIndices.stepIndex > stepIndex);
 
     return (
-      <div key={step.id} className="ml-6 py-1 flex items-start gap-2 text-sm">
+      <div key={stepId} className="ml-6 py-1 flex items-start gap-2 text-sm">
         <div className="flex-shrink-0 mt-1">
           {isCompleted ? (
             <CheckCircle className="w-4 h-4 text-green-600" />
@@ -323,24 +218,19 @@ const WorkflowTODOPanel = () => {
         <div className="flex-1 min-w-0">
           <div className={`font-medium break-words ${
             isCurrent ? 'text-theme-700' : 
-            isCompleted ? 'text-green-700' : 'text-gray-600'
+            isCompleted ? 'text-green-700 line-through' : 'text-gray-600'
           }`}>
-            {filterSectionStageText(step.name || step.id)}
+            {filterSectionStageText(step.title || step.id)}
           </div>
-          {hasResult && (
-            <div className="text-xs text-blue-600 mt-1">
-              ✓ {t('rightSideBar.stepCompleted')}
-            </div>
-          )}
         </div>
       </div>
     );
   };
 
-  const renderStage = (stage) => {
-    const isCompleted = completedStages.includes(stage.id);
-    const isCurrent = currentStageId === stage.id;
-    const isExpanded = expandedStages[stage.id] || isCurrent; // 当前阶段自动展开
+  const renderStage = (stage, index) => {
+    const isCurrent = executionIndices.stageIndex === index;
+    const isCompleted = executionIndices.stageIndex > index;
+    const isExpanded = expandedStages[stage.id] || isCurrent;
     const hasSteps = stage.steps && stage.steps.length > 0;
 
     return (
@@ -359,44 +249,48 @@ const WorkflowTODOPanel = () => {
                 isCurrent ? 'text-theme-800' : 
                 isCompleted ? 'text-green-800' : 'text-gray-700'
               }`}>
-                {filterSectionStageText(stage.name || stage.id)}
+                {filterSectionStageText(stage.title || stage.id)}
               </div>
               {isCurrent && (
                 <span className="text-xs px-2 py-0.5 bg-theme-200 text-theme-800 rounded-full font-medium">
                   {t('rightSideBar.currentStage')}
                 </span>
               )}
+               {isCompleted && (
+                <span className="text-xs px-2 py-0.5 bg-green-200 text-green-800 rounded-full font-medium">
+                  {t('rightSideBar.completed')}
+                </span>
+              )}
             </div>
           </div>
           {hasSteps && (
             <div className="flex-shrink-0">
-              {isExpanded ? (
-                <ChevronUp className="w-4 h-4 text-gray-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              )}
+              {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             </div>
           )}
         </div>
         
         {hasSteps && isExpanded && (
           <div className="mt-2 space-y-1">
-            {stage.steps.map(step => renderStageStep(step, stage.id))}
+            {stage.steps.map((step, stepIndex) => renderStageStep(step, index, stepIndex))}
           </div>
         )}
       </div>
     );
   };
 
+  if (!workflowTemplate?.stages) {
+      return <div className="p-4 text-center text-gray-500">{t('rightSideBar.noWorkflowPlan')}</div>;
+  }
+
   return (
     <div className="space-y-4 py-4">
-      {/* Stages List */}
       <div className="space-y-2">
         <h4 className="font-semibold text-gray-800 flex items-center gap-2">
           <ArrowRight className="w-4 h-4" />
           {t('rightSideBar.workflowStages')}
         </h4>
-        {workflowTemplate.stages?.map(stage => renderStage(stage))}
+        {workflowTemplate.stages.map((stage, index) => renderStage(stage, index))}
       </div>
     </div>
   );
@@ -410,7 +304,7 @@ const ViewSwitcher = () => {
   return (
     <div className="flex gap-2 text-lg items-center w-full justify-between">
       <div className="flex gap-1 flex-1 min-w-0">
-        {['script', 'qa', 'todo'].map((view) => (
+        {['script', 'qa', 'todo', 'debug'].map((view) => (
           <button
             key={view}
             onClick={() => setActiveView(view)}
@@ -427,11 +321,14 @@ const ViewSwitcher = () => {
               <Clock className="w-5 h-5 flex-shrink-0" /> : 
               view === 'qa' ?
               <LucideMessageCircle className="w-5 h-5 flex-shrink-0" /> :
+              view === 'debug' ?
+              <Bug className="w-5 h-5 flex-shrink-0" /> :
               <List className="w-5 h-5 flex-shrink-0" />
             }
             <span className="hidden sm:inline whitespace-nowrap overflow-hidden text-ellipsis">
               {view === 'script' ? t('rightSideBar.history') : 
                view === 'qa' ? t('rightSideBar.chat') : 
+               view === 'debug' ? 'Debug' :
                t('rightSideBar.workflow')}
             </span>
           </button>
@@ -490,7 +387,6 @@ const AIAgentSidebar = () => {
         currentGroup.count += 1;
         currentGroup.originalActions.push(currentAction);
         
-        
         // 如果有任何一个正在处理中，则整组标记为处理中
         if (currentAction.onProcess) {
           currentGroup.onProcess = true;
@@ -548,10 +444,6 @@ const AIAgentSidebar = () => {
       return true;
     });
     
-    console.log('QA filtering - Total QAs:', qaList.length, 'Filtered QAs:', filtered.length, 'Current viewMode:', viewMode);
-    console.log('All QAs:', qaList.map(qa => ({ id: qa.id, viewMode: qa.viewMode, cellId: qa.cellId, content: qa.content.substring(0, 50) })));
-    console.log('Filtered QAs:', filtered.map(qa => ({ id: qa.id, viewMode: qa.viewMode, cellId: qa.cellId, content: qa.content.substring(0, 50) })));
-    
     return filtered;
   }, [qaList, viewMode, getCurrentStepCellsIDs]);
 
@@ -605,11 +497,6 @@ const AIAgentSidebar = () => {
             </button>
           )}
           <span className="text-xs text-gray-500">{action.timestamp}</span>
-          {/* {action.onProcess && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
-              working
-            </span>
-          )} */}
         </div>
 
         <ExpandableText text={action.content} maxLines={3} />
@@ -642,23 +529,11 @@ const AIAgentSidebar = () => {
 
         <div className="flex-1 px-2 sm:px-4 pb-5 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50 min-w-0">
           <style>{`
-            .scrollbar-thin::-webkit-scrollbar {
-              width: 4px;
-            }
-            .scrollbar-thin::-webkit-scrollbar-track {
-              background: transparent;
-            }
-            .scrollbar-thin::-webkit-scrollbar-thumb {
-              background: rgba(255, 255, 255, 0.3);
-              border-radius: 4px;
-            }
-            .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-              background: rgba(255, 255, 255, 0.5);
-            }
-            .scrollbar-thin {
-              scrollbar-width: thin;
-              scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-            }
+            .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+            .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+            .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 4px; }
+            .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.5); }
+            .scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.3) transparent; }
           `}</style>
 
           {activeView === 'script' && (
@@ -667,7 +542,6 @@ const AIAgentSidebar = () => {
                 <div key={action.id} className="space-y-1">
                   {renderActionItem(action, false, index, mergedActionsToShow.length)}
                   
-                  {/* 如果组被展开且有多于1个操作，显示原始操作 */}
                   {expandedGroups[action.id] && action.count > 1 && (
                     <div className="space-y-3 mt-2 pb-2">
                       {action.originalActions.slice(1).map((origAction, origIndex) => (
@@ -692,11 +566,7 @@ const AIAgentSidebar = () => {
                 </div>
               ) : (
                 qasToShow.map((qa, index) => (
-                  <div
-                    key={qa.id}
-                    id={qa.id}
-                    className="w-full mb-3"
-                  >
+                  <div key={qa.id} id={qa.id} className="w-full mb-3">
                     <div
                       className={`
                         relative p-4 rounded-lg shadow-sm w-full transition-all duration-300 min-w-0
@@ -743,6 +613,13 @@ const AIAgentSidebar = () => {
           )}
 
           {activeView === 'todo' && <WorkflowTODOPanel />}
+          
+          {activeView === 'debug' && (
+            <div className="space-y-4">
+              <StateMachineDebugger />
+              <AIPlanningContextDebugger />
+            </div>
+          )}
 
           {isLoading && (
             <div

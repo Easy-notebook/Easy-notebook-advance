@@ -1,8 +1,9 @@
 import ResizablePanel from '../UI/ResizableSplitPanel';
-import {
+import React, {
     useState,
     useEffect,
     useCallback,
+    FC, // 使用 FC (FunctionComponent) 类型
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,14 +11,41 @@ import {
     Sparkles,
     PlusCircle,
 } from 'lucide-react';
-import { useAIPlanningContextStore } from '../store/aiPlanningContext'
+import { useAIPlanningContextStore } from '../store/aiPlanningContext';
 import usePreStageStore from '../store/preStageStore';
-import { generalResponse } from '../stages/StageGeneralFunction';
-import useStore from '../../../../store/notebookStore';
+// @ts-ignore
+import { generalResponse } from '../services/StageGeneralFunction';
 
-// TypingTitle 组件
-const TypingTitle = () => {
-    const { t } = useTranslation();
+// ─────────── 类型定义 (Type Definitions) ───────────
+
+// 为 window 对象扩展自定义方法
+declare global {
+    interface Window {
+        changeTypingText?: (newText: string) => void;
+    }
+}
+
+// AI 建议的问题选项的接口
+interface ProblemChoice {
+    problem_name: string;
+    problem_description: string;
+    target: string;
+}
+
+// ProblemDefineWorkload 和 ProblemDefineState 组件的 Props 接口
+interface ProblemDefineProps {
+    confirmProblem: () => Promise<void> | void;
+}
+
+// 工作负载步骤的类型
+type WorkloadStep = 'select' | 'background' | 'confirm';
+
+// ─────────── 组件 (Components) ───────────
+
+/**
+ * TypingTitle 组件：实现打字动画效果的标题
+ */
+const TypingTitle: FC = () => {
     const [text, setText] = useState('');
     const [isTypingDone, setIsTypingDone] = useState(false);
     const [showCursor, setShowCursor] = useState(true);
@@ -25,7 +53,7 @@ const TypingTitle = () => {
     const typingSpeed = 35;
     const deletingSpeed = 20;
 
-    const startTyping = useCallback((fullText) => {
+    const startTyping = useCallback((fullText: string) => {
         setIsDeleting(false);
         let index = 0;
         const interval = setInterval(() => {
@@ -34,17 +62,14 @@ const TypingTitle = () => {
             if (index === fullText.length) {
                 clearInterval(interval);
                 setIsTypingDone(true);
-                // Hide cursor after 2 seconds of completion
-                setTimeout(() => {
-                    setShowCursor(false);
-                }, 2000);
+                setTimeout(() => setShowCursor(false), 2000);
             }
         }, typingSpeed);
 
         return () => clearInterval(interval);
     }, []);
 
-    const deleteText = useCallback((onComplete) => {
+    const deleteText = useCallback((onComplete: () => void) => {
         setIsDeleting(true);
         setIsTypingDone(false);
         setShowCursor(true);
@@ -62,8 +87,7 @@ const TypingTitle = () => {
         return () => clearInterval(interval);
     }, [text.length]);
 
-    // Function to change text with deletion animation
-    const changeText = useCallback((newText) => {
+    const changeText = useCallback((newText: string) => {
         deleteText(() => {
             startTyping(newText);
         });
@@ -71,76 +95,29 @@ const TypingTitle = () => {
 
     useEffect(() => {
         const cleanup = startTyping('VDSAgent');
-        return () => cleanup();
+        return cleanup;
     }, [startTyping]);
 
-    // Expose changeText method to parent
     useEffect(() => {
-        if (window) {
-            window.changeTypingText = changeText;
-        }
+        window.changeTypingText = changeText;
         return () => {
-            if (window) {
-                delete window.changeTypingText;
-            }
+            delete window.changeTypingText;
         };
     }, [changeText]);
 
     return (
         <div className="relative">
+            {/* 样式与原版保持一致 */}
             <style>
                 {`
-                @keyframes typing-cursor {
-                    0%, 100% { 
-                        transform: scaleY(1) scaleX(1);
-                        opacity: 0.9;
-                    }
-                    50% { 
-                        transform: scaleY(0.7) scaleX(1.2);
-                        opacity: 0.7;
-                    }
-                }
-                @keyframes done-cursor {
-                    0%, 49% { 
-                        opacity: 1;
-                    }
-                    50%, 100% { 
-                        opacity: 0;
-                    }
-                }
-                @keyframes deleting-cursor {
-                    0%, 100% { 
-                        transform: scaleY(1) scaleX(1);
-                        opacity: 1;
-                    }
-                    50% { 
-                        transform: scaleY(0.7) scaleX(1.2);
-                        opacity: 0.7;
-                    }
-                }
-                .cursor-typing {
-                    background: #f3f4f6;
-                    animation: typing-cursor ${typingSpeed * 2}ms ease-in-out infinite;
-                }
-                .cursor-done {
-                    background: #f3f4f6;
-                    animation: done-cursor 1.2s steps(1) infinite;
-                }
-                .cursor-deleting {
-                    background: #f3f4f6;
-                    animation: deleting-cursor ${deletingSpeed * 2}ms ease-in-out infinite;
-                }
-                .title-container {
-                    display: inline;
-                    position: relative;
-                }
-                .cursor {
-                    display: inline-block;
-                    position: relative;
-                    vertical-align: text-top;
-                    margin-left: 3px;
-                    margin-top: 5px;
-                }
+                @keyframes typing-cursor { 0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.9; } 50% { transform: scaleY(0.7) scaleX(1.2); opacity: 0.7; } }
+                @keyframes done-cursor { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+                @keyframes deleting-cursor { 0%, 100% { transform: scaleY(1) scaleX(1); opacity: 1; } 50% { transform: scaleY(0.7) scaleX(1.2); opacity: 0.7; } }
+                .cursor-typing { background: #f3f4f6; animation: typing-cursor ${typingSpeed * 2}ms ease-in-out infinite; }
+                .cursor-done { background: #f3f4f6; animation: done-cursor 1.2s steps(1) infinite; }
+                .cursor-deleting { background: #f3f4f6; animation: deleting-cursor ${deletingSpeed * 2}ms ease-in-out infinite; }
+                .title-container { display: inline; position: relative; }
+                .cursor { display: inline-block; position: relative; vertical-align: text-top; margin-left: 3px; margin-top: 5px; }
                 `}
             </style>
             <div className="title-container">
@@ -163,29 +140,29 @@ const TypingTitle = () => {
 };
 
 /**
- * 问题定义工作负载组件
+ * ProblemDefineWorkload 组件：处理问题定义的完整工作流程
  */
-const ProblemDefineWorkload = ({ confirmProblem }) => {
+const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
     const { t, i18n } = useTranslation();
-    
+
     /* ─────────── State ─────────── */
-    const [step, setStep] = useState('select'); // 'select', 'background', 'confirm'
-    const [selectedProblem, setSelectedProblem] = useState(null);
+    const [step, setStep] = useState<WorkloadStep>('select');
+    const [selectedProblem, setSelectedProblem] = useState<ProblemChoice | null>(null);
     const [customProblem, setCustomProblem] = useState('');
     const [datasetBackground, setDatasetBackground] = useState('');
-    
+
     /* ─────────── Store Access ─────────── */
     const choiceMap = usePreStageStore(state => state.choiceMap);
     const currentFile = usePreStageStore(state => state.currentFile);
     const problem_description = usePreStageStore(state => state.problem_description);
     const problem_name = usePreStageStore(state => state.problem_name);
-    const target = usePreStageStore(state => state.target);
+    const selectedTarget = usePreStageStore(state => state.selectedTarget);
     const setSelectedProblemStore = usePreStageStore(state => state.setSelectedProblem);
     const setDatasetInfoStore = usePreStageStore(state => state.setDatasetInfo);
     const addVariable = useAIPlanningContextStore(state => state.addVariable);
-    
+
     /* ─────────── Handlers ─────────── */
-    const handleProblemSelect = useCallback((problem) => {
+    const handleProblemSelect = useCallback((problem: ProblemChoice) => {
         setSelectedProblem(problem);
         setSelectedProblemStore(
             problem.target,
@@ -194,97 +171,98 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         );
         setStep('background');
     }, [setSelectedProblemStore]);
-    
+
     const handleCustomSubmit = useCallback(() => {
         if (customProblem.trim()) {
+            // 为自定义问题创建一个 ProblemChoice 结构
+            const customProblemChoice: ProblemChoice = {
+                target: 'custom',
+                problem_description: customProblem.trim(),
+                problem_name: 'Custom Analysis'
+            };
+            setSelectedProblem(customProblemChoice);
             setSelectedProblemStore(
-                'custom',
-                customProblem.trim(),
-                'Custom Analysis'
+                customProblemChoice.target,
+                customProblemChoice.problem_description,
+                customProblemChoice.problem_name
             );
             setStep('background');
         }
     }, [customProblem, setSelectedProblemStore]);
-    
+
     const handleBackgroundSubmit = useCallback(() => {
         setStep('confirm');
     }, []);
-    
+
     const handleFinalConfirm = useCallback(async () => {
-        const problem_description = usePreStageStore.getState().problem_description;
-        const problem_name = usePreStageStore.getState().problem_name;
+        const state = usePreStageStore.getState();
         
-        // 添加变量到规划上下文
         const variables = {
             csv_file_path: currentFile?.name || '',
-            problem_description: problem_description || '',
+            problem_description: state.problem_description || '',
             context_description: datasetBackground || 'No additional context provided',
-            problem_name: problem_name || '',
-            user_goal: problem_description || '' // 使用problem_description作为user_goal
+            problem_name: state.problem_name || '',
+            user_goal: state.problem_description || ''
         };
-        
-        // 批量添加变量并记录日志
+
         Object.entries(variables).forEach(([key, value]) => {
             addVariable(key, value);
             console.log(`[ProblemDefineState] Added variable ${key}:`, value);
         });
-        
-        // 设置背景信息到store
+
         if (datasetBackground) {
             setDatasetInfoStore(datasetBackground);
         }
         
-        // 确保背景信息也保存到preStageStore中
-        usePreStageStore.getState().setDataBackground(datasetBackground || '');
-        
-        // 验证变量存储
+        state.setDataBackground(datasetBackground || '');
+
         const aiPlanningStore = useAIPlanningContextStore.getState();
         console.log('[ProblemDefineState] All stored variables:', aiPlanningStore.variables);
-        
-        // 调用确认回调
+
         await confirmProblem();
     }, [datasetBackground, confirmProblem, addVariable, currentFile, setDatasetInfoStore]);
 
-    // 初始化时生成问题选择
     const setPreProblem = useCallback(async () => {
         const fileColumns = usePreStageStore.getState().getFileColumns();
         const datasetInfo = usePreStageStore.getState().getDatasetInfo();
-        const choiceMap = await generalResponse(
-            "generate_question_choice_map",
-            {
-                "column_info": fileColumns,
-                "dataset_info": datasetInfo
-            },
-            i18n.language
-        );
-        usePreStageStore.getState().updateChoiceMap(choiceMap["message"]);
+        try {
+            const choiceMapResponse = await generalResponse(
+                "generate_question_choice_map",
+                {
+                    "column_info": fileColumns,
+                    "dataset_info": datasetInfo
+                },
+                i18n.language
+            );
+            // 假设 choiceMapResponse.message 是 ProblemChoice[] 类型
+            usePreStageStore.getState().updateChoiceMap(choiceMapResponse["message"]);
+        } catch (error) {
+            console.error("Failed to generate question choices:", error);
+        }
     }, [i18n.language]);
 
-    // 检查是否从EmptyState跳转过来（已有问题描述），直接跳到确认步骤
     useEffect(() => {
         if (problem_description && problem_name && currentFile) {
-            // 如果已经有问题描述，说明是从EmptyState跳转过来的，直接跳到确认步骤
             setSelectedProblem({
                 problem_name,
                 problem_description,
-                target: target || 'vds'
+                target: selectedTarget || 'vds'
             });
             setStep('confirm');
         }
-    }, [problem_description, problem_name, target, currentFile]);
+    }, [problem_description, problem_name, selectedTarget, currentFile]);
 
     useEffect(() => {
         if (currentFile && choiceMap.length === 0 && !problem_description) {
             setPreProblem();
         }
     }, [currentFile, choiceMap.length, problem_description, setPreProblem]);
-    
+
     /* ─────────── Render Steps ─────────── */
     if (step === 'select') {
         return (
             <div className="relative flex flex-col items-center justify-center h-full w-full bg-transparent">
                 <div className="w-full max-w-4xl mx-auto px-4 py-16 text-center">
-                    {/* VDSAgent 标题 */}
                     <div className="text-center mb-8 flex flex-col items-center justify-center">
                         <TypingTitle />
                     </div>
@@ -299,9 +277,8 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                             </p>
                         </div>
                         
-                        {/* 建议问题列表 */}
                         <div className="grid gap-4 mb-8">
-                            {choiceMap.map((choice, index) => (
+                            {choiceMap.map((choice: ProblemChoice, index: number) => (
                                 <button
                                     key={index}
                                     onClick={() => handleProblemSelect(choice)}
@@ -312,12 +289,8 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                                             <Sparkles className="w-6 h-6 text-blue-600" />
                                         </div>
                                         <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-800 mb-2">
-                                                {choice.problem_name}
-                                            </h3>
-                                            <p className="text-gray-600 text-sm">
-                                                {choice.problem_description}
-                                            </p>
+                                            <h3 className="font-semibold text-gray-800 mb-2">{choice.problem_name}</h3>
+                                            <p className="text-gray-600 text-sm">{choice.problem_description}</p>
                                         </div>
                                         <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
                                     </div>
@@ -325,7 +298,6 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                             ))}
                         </div>
                         
-                        {/* 自定义问题输入 */}
                         <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-2xl p-6">
                             <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
                                 <PlusCircle className="w-5 h-5" />
@@ -335,10 +307,10 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                                 <input
                                     type="text"
                                     value={customProblem}
-                                    onChange={(e) => setCustomProblem(e.target.value)}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomProblem(e.target.value)}
                                     placeholder={t('emptyState.customProblemPlaceholder') || '描述你想进行的自定义分析...'}
                                     className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 transition-colors"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
+                                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomSubmit()}
                                 />
                                 <button
                                     onClick={handleCustomSubmit}
@@ -363,7 +335,6 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
         return (
             <div className="relative flex flex-col items-center justify-center h-full w-full bg-transparent">
                 <div className="w-full max-w-2xl mx-auto px-4 py-16 text-center">
-                    {/* VDSAgent 标题 */}
                     <div className="text-center mb-8 flex flex-col items-center justify-center">
                         <TypingTitle />
                     </div>
@@ -381,7 +352,7 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                         <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-6">
                             <textarea
                                 value={datasetBackground}
-                                onChange={(e) => setDatasetBackground(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDatasetBackground(e.target.value)}
                                 placeholder={t('emptyState.backgroundPlaceholder') || '请描述数据集的背景信息、数据来源、收集目的等...'}
                                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none h-32 transition-colors"
                             />
@@ -408,14 +379,13 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
     }
     
     if (step === 'confirm') {
-        const problemText = selectedProblem 
+        const problemText = selectedProblem
             ? `${selectedProblem.problem_name}: ${selectedProblem.problem_description}`
             : customProblem;
             
         return (
             <div className="relative flex flex-col items-center justify-center h-full w-full bg-transparent">
                 <div className="w-full max-w-2xl mx-auto px-4 py-16 text-center">
-                    {/* VDSAgent 标题 */}
                     <div className="text-center mb-8 flex flex-col items-center justify-center">
                         <TypingTitle />
                     </div>
@@ -452,7 +422,6 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
                         <div className="flex gap-4 justify-center">
                             <button
                                 onClick={() => {
-                                    // 如果是从EmptyState跳转过来的，清除问题信息并返回到select步骤
                                     if (problem_description) {
                                         usePreStageStore.getState().setSelectedProblem('', '', '');
                                     }
@@ -480,13 +449,14 @@ const ProblemDefineWorkload = ({ confirmProblem }) => {
 };
 
 /**
- * 问题定义状态组件
+ * ProblemDefineState 组件：作为问题定义阶段的容器
  */
-const ProblemDefineState = ({ confirmProblem }) => {
+const ProblemDefineState: FC<ProblemDefineProps> = ({ confirmProblem }) => {
     return (
         <ResizablePanel
             defaultSize={0}
             minSize={0}
+            maxSize={2000}
             resizePanel="right"
             orientation="vertical"
             dragEnabled={true}

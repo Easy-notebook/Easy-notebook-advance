@@ -1,128 +1,88 @@
 import { create } from 'zustand';
 
+/**
+ * @interface WorkflowPanelState
+ * @description Manages state specific to the workflow UI panel, primarily for user interaction dialogs.
+ */
 interface WorkflowPanelState {
-  // Workflow confirmation state
+  // State for the "Workflow Update Confirmation" dialog
   showWorkflowConfirm: boolean;
-  pendingWorkflowUpdate: any | null;
-  workflowUpdated: boolean;
-  workflowUpdateCount: number;
+  pendingWorkflowUpdate: any | null; // Stores the data for the pending update
+  
+  // Handlers to connect the dialog's buttons to the state machine's logic
+  onConfirmWorkflowUpdate: (() => void) | null;
+  onRejectWorkflowUpdate: (() => void) | null;
 
-  // Step navigation state
-  currentSteps: any[];
-  currentStepIndex: number;
-  stepsLoaded: number[];
-  isCompleted: boolean;
-
-  // Tracking state
+  // Local UI settings
   isAutoTracking: boolean;
-  currentStage: string | null;
-  plannedSteps: string[];
 
   // Actions
   setShowWorkflowConfirm: (show: boolean) => void;
   setPendingWorkflowUpdate: (update: any | null) => void;
-  setWorkflowUpdated: (updated: boolean) => void;
-  setWorkflowUpdateCount: (count: number) => void;
-  incrementWorkflowUpdateCount: () => void;
-
-  setCurrentSteps: (steps: any[]) => void;
-  setCurrentStepIndex: (index: number) => void;
-  setStepsLoaded: (loaded: number[]) => void;
-  setIsCompleted: (completed: boolean) => void;
-
-  // Tracking actions
-  setAutoTracking: (tracking: boolean) => void;
-  toggleAutoTracking: () => void;
-  setCurrentStage: (stage: string | null) => void;
-  setPlannedSteps: (steps: string[]) => void;
-
-  // Event handlers
-  onConfirmWorkflowUpdate: (() => void) | null;
-  onRejectWorkflowUpdate: (() => void) | null;
-  onNavigateToStep: ((stepIndex: number) => void) | null;
-
   setOnConfirmWorkflowUpdate: (handler: (() => void) | null) => void;
   setOnRejectWorkflowUpdate: (handler: (() => void) | null) => void;
-  setOnNavigateToStep: (handler: ((stepIndex: number) => void) | null) => void;
-
-  // Utility methods
+  
+  toggleAutoTracking: () => void;
+  
+  // Utility methods for UI components to call
   confirmWorkflowUpdate: () => void;
   rejectWorkflowUpdate: () => void;
-  navigateToStep: (stepIndex: number) => void;
 
   // Reset function
   reset: () => void;
 }
 
+/**
+ * The initial state for the store.
+ */
 const initialState = {
   showWorkflowConfirm: false,
   pendingWorkflowUpdate: null,
-  workflowUpdated: false,
-  workflowUpdateCount: 0,
-
-  currentSteps: [],
-  currentStepIndex: 0,
-  stepsLoaded: [],
-  isCompleted: false,
-
-  // Tracking initial state
-  isAutoTracking: true,
-  currentStage: null,
-  plannedSteps: [],
-
   onConfirmWorkflowUpdate: null,
   onRejectWorkflowUpdate: null,
-  onNavigateToStep: null,
+  isAutoTracking: true, // Default to auto-tracking the current step
 };
 
+/**
+ * @name useWorkflowPanelStore
+ * @description
+ * A Zustand store for managing the state of the UI workflow panel.
+ * Its primary responsibility is to handle user interactions like confirmation dialogs
+ * for major workflow updates, decoupling the UI from the core state machine logic.
+ */
 export const useWorkflowPanelStore = create<WorkflowPanelState>((set, get) => ({
   ...initialState,
 
-  // Basic setters
-  setShowWorkflowConfirm: (showWorkflowConfirm) => set({ showWorkflowConfirm }),
-  setPendingWorkflowUpdate: (pendingWorkflowUpdate) => set({ pendingWorkflowUpdate }),
-  setWorkflowUpdated: (workflowUpdated) => set({ workflowUpdated }),
-  setWorkflowUpdateCount: (workflowUpdateCount) => set({ workflowUpdateCount }),
-  incrementWorkflowUpdateCount: () => set((state) => ({ workflowUpdateCount: state.workflowUpdateCount + 1 })),
+  // --- Actions to control the confirmation dialog ---
 
-  setCurrentSteps: (currentSteps) => set({ currentSteps }),
-  setCurrentStepIndex: (currentStepIndex) => set({ currentStepIndex }),
-  setStepsLoaded: (stepsLoaded) => set({ stepsLoaded }),
-  setIsCompleted: (isCompleted) => set({ isCompleted }),
+  setShowWorkflowConfirm: (show) => set({ showWorkflowConfirm: show }),
+  setPendingWorkflowUpdate: (update) => set({ pendingWorkflowUpdate: update }),
+  setOnConfirmWorkflowUpdate: (handler) => set({ onConfirmWorkflowUpdate: handler }),
+  setOnRejectWorkflowUpdate: (handler) => set({ onRejectWorkflowUpdate: handler }),
 
-  // Tracking setters
-  setAutoTracking: (isAutoTracking) => set({ isAutoTracking }),
+  // --- Actions for local UI settings ---
+
   toggleAutoTracking: () => set((state) => ({ isAutoTracking: !state.isAutoTracking })),
-  setCurrentStage: (currentStage) => set({ currentStage }),
-  setPlannedSteps: (plannedSteps) => set({ plannedSteps }),
 
-  // Event handler setters
-  setOnConfirmWorkflowUpdate: (onConfirmWorkflowUpdate) => set({ onConfirmWorkflowUpdate }),
-  setOnRejectWorkflowUpdate: (onRejectWorkflowUpdate) => set({ onRejectWorkflowUpdate }),
-  setOnNavigateToStep: (onNavigateToStep) => set({ onNavigateToStep }),
+  // --- Utility methods for UI components ---
+  // These methods are called by UI buttons (e.g., onClick) and delegate to the currently set handlers.
 
-  // Utility methods that delegate to the handlers
+  /**
+   * Executes the confirmation callback.
+   */
   confirmWorkflowUpdate: () => {
-    const { onConfirmWorkflowUpdate } = get();
-    if (onConfirmWorkflowUpdate) {
-      onConfirmWorkflowUpdate();
-    }
+    get().onConfirmWorkflowUpdate?.();
   },
 
+  /**
+   * Executes the rejection callback.
+   */
   rejectWorkflowUpdate: () => {
-    const { onRejectWorkflowUpdate } = get();
-    if (onRejectWorkflowUpdate) {
-      onRejectWorkflowUpdate();
-    }
+    get().onRejectWorkflowUpdate?.();
   },
 
-  navigateToStep: (stepIndex: number) => {
-    const { onNavigateToStep } = get();
-    if (onNavigateToStep) {
-      onNavigateToStep(stepIndex);
-    }
-  },
-
-  // Reset function
+  /**
+   * Resets the store to its initial state.
+   */
   reset: () => set(initialState),
 }));

@@ -4,9 +4,8 @@ const constants =
     // API URL常量
     API: {
         FEEDBACK_API_URL: 'http://localhost:28600/v1/reflection',
-        SEQUENCE_API_URL: 'http://localhost:28600/v1/actions',
+        BEHAVIOR_API_URL: 'http://localhost:28600/v1/actions',
         GENERATE_API_URL: 'http://localhost:28600/v1/generate',
-        WORKFLOW_BASE_URL: 'http://localhost:28600/api/workflow'
     },
     // API: {
     //     FEEDBACK_API_URL: 'https://easy-notebook.silan.tech/api/dcls_agents/v1/reflection',

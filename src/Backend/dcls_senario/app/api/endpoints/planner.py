@@ -81,8 +81,14 @@ async def planner_sequence(request: SequenceRequest):
     # 适配前端参数：stage_id -> chapter_id, step_index -> section_id
     chapter_id = request.stage_id
     
-    # step_index现在是string类型的section_id，直接使用
-    section_id = request.step_index
+    # 解析step_index: 可能是完整的唯一ID (stage_id_section_id) 或原始的section_id
+    step_index = request.step_index
+    if isinstance(step_index, str) and step_index.startswith(chapter_id + "_"):
+        # 如果是完整的唯一ID，提取section_id部分
+        section_id = step_index[len(chapter_id) + 1:]  # 去掉 "chapter_id_" 前缀
+    else:
+        # 否则直接使用为section_id
+        section_id = step_index
     
     # 验证section_id是否有效
     from app.core.workflow_manager import WorkflowManager
@@ -115,8 +121,9 @@ async def planner_sequence(request: SequenceRequest):
     next_section = sections[current_section_index + 1] if current_section_index + 1 < len(sections) else None
     
     # 添加元数据到序列中（适配前端术语）
+    unique_step_id = f"{chapter_id}_{section_id}"
     sequence["stage_id"] = chapter_id
-    sequence["step_id"] = section_id  
+    sequence["step_id"] = unique_step_id  
     sequence["step_index"] = section_id  # step_index现在就是section_id
     sequence["next_step"] = next_section
     # 保持向后兼容
@@ -131,7 +138,7 @@ async def planner_sequence(request: SequenceRequest):
         # 返回常规JSON响应
         return {
             "stage_id": chapter_id,
-            "step_id": section_id,
+            "step_id": unique_step_id,
             "step_index": section_id,  # step_index现在就是section_id
             "sequence": sequence,
             "next_step": next_section,

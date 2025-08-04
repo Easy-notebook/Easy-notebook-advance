@@ -1,8 +1,4 @@
-/**
- * EmptyState.jsx
- * 更新：CSV 文件上传后展示、VDS 模式下生成预设问题并自动填充，保持默认导出 EmptyState
- */
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -14,9 +10,26 @@ import {
   ArrowRight,
   PlusCircle,
 } from 'lucide-react';
-import { usePipelineStore, PIPELINE_STAGES } from '../store/pipelineController';
-import usePreStageStore from '../store/preStageStore';
-import { generalResponse } from '../stages/StageGeneralFunction';
+
+// ------- Type Definitions -------
+interface UploadFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  file: File;
+}
+
+interface AICommandInputProps {
+  files: UploadFile[];
+  setFiles: React.Dispatch<React.SetStateAction<UploadFile[]>>;
+}
+// ---------------------------------
+
+import { usePipelineStore, PIPELINE_STAGES } from '../store/usePipelineStore.ts';
+import usePreStageStore from '../store/preStageStore.ts';
+import { generalResponse } from '../services/StageGeneralFunction.ts';
 import { useAIAgentStore, EVENT_TYPES } from '../../../../store/AIAgentStore';
 import { AgentMemoryService, AgentType } from '../../../../services/agentMemoryService';
 import useStore from '../../../../store/notebookStore';
@@ -29,10 +42,10 @@ import { useAIPlanningContextStore } from '../store/aiPlanningContext';
 /**
  * AI 和文件上传交互组件
  */
-const AICommandInput = ({ files, setFiles }) => {
+const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const { t, i18n } = useTranslation();
-  const textareaRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [input, setInput] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -56,7 +69,7 @@ const AICommandInput = ({ files, setFiles }) => {
   
   const [presetQuestions, setPresetQuestions] = useState(defaultPresetQuestions);
 
-  const { setStage } = usePipelineStore();
+  const { setPreStage } = usePipelineStore();
   const sendOperation = useOperatorStore((s) => s.sendOperation);
   const {
     addAction,
@@ -92,9 +105,9 @@ const AICommandInput = ({ files, setFiles }) => {
 
 
   // 处理上传 - 根据历史版本实现
-  const handleFileChange = useCallback(async (e) => {
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log('=== File Upload Started ===');
-    const selectedFiles = Array.from(e.target.files);
+    const selectedFiles = Array.from(e.target.files ?? []);
     console.log('Selected files count:', selectedFiles.length);
     console.log('Selected files:', selectedFiles.map(f => ({ name: f.name, size: f.size, type: f.type })));
     
@@ -150,7 +163,7 @@ const AICommandInput = ({ files, setFiles }) => {
         const updatedNotebookId = useStore.getState().notebookId;
         console.log('Verified notebook ID in store:', updatedNotebookId);
         
-      } catch (initError) {
+      } catch (initError: any) {
         console.error('Failed to create notebook:', initError);
         alert('Failed to create notebook. Please try again.');
         return;
@@ -173,7 +186,7 @@ const AICommandInput = ({ files, setFiles }) => {
       console.log('Upload result:', result);
       
       if (result && result.status === 'ok') {
-        console.log('Upload successful! Files uploaded:', result.files);
+        console.log('Upload successful! Files uploaded:', (result as any).files);
         
         // 确保 notebookId 在上传成功后也是最新的
         if (currentNotebookId !== notebookId) {
@@ -230,7 +243,7 @@ const AICommandInput = ({ files, setFiles }) => {
               }
               console.log('VDS questions set successfully');
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error('Error generating preset questions:', err);
           }
         }, 1000);
@@ -238,7 +251,7 @@ const AICommandInput = ({ files, setFiles }) => {
         console.error('Upload failed with result:', result);
         alert('Upload failed: ' + (result?.message || 'Unknown error'));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Upload error details:', err);
       console.error('Error stack:', err.stack);
       alert(t('emptyState.uploadError') || 'Upload failed: ' + err.message);
@@ -249,7 +262,7 @@ const AICommandInput = ({ files, setFiles }) => {
   }, [notebookId, i18n.language, t, setFiles]);
 
   // 删除文件
-  const removeFile = useCallback((fileId) => {
+  const removeFile = useCallback((fileId: string) => {
     setFiles(files => files.filter(file => file.id !== fileId));
     // 如果没有文件了，关闭VDS模式（useEffect会自动恢复默认预设问题）
     if (files.length <= 1) {
@@ -287,7 +300,7 @@ const AICommandInput = ({ files, setFiles }) => {
               usePreStageStore.getState().updateChoiceMap(map.message);
               setPresetQuestions(map.message);
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error('Error generating preset questions:', err);
             // 如果生成失败，至少设置一个空数组避免显示错误的问题
             setPresetQuestions([]);
@@ -298,7 +311,7 @@ const AICommandInput = ({ files, setFiles }) => {
   }, [isVDSMode, defaultPresetQuestions, files.length, i18n.language]);
 
   // 键盘事件处理
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (input.trim()) {
@@ -309,7 +322,7 @@ const AICommandInput = ({ files, setFiles }) => {
   }, [input]);
 
   // 提交
-  const handleSubmit = useCallback((command) => {
+  const handleSubmit = useCallback((command: string) => {
     if (!command) return;
     setIsLoading(true);
     const timestamp = new Date().toLocaleTimeString();
@@ -345,7 +358,7 @@ const AICommandInput = ({ files, setFiles }) => {
         // 验证变量存储
         console.log('[EmptyState] All stored variables:', aiPlanningStore.variables);
         
-        setStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+        setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
         return;
       }
 
@@ -395,8 +408,8 @@ const AICommandInput = ({ files, setFiles }) => {
           onProcess: true,
           attachedFiles: files,
         };
-        addQA(qaData);
-        const action = createUserAskQuestionAction(command, qaId, currentCellId, files);
+        addQA(qaData as any);
+        const action = createUserAskQuestionAction(command, [qaId], currentCellId);
         useAIAgentStore.getState().addAction(action);
 
         // 准备Agent记忆上下文
@@ -405,7 +418,7 @@ const AICommandInput = ({ files, setFiles }) => {
           notebookId,
           'general' as AgentType,
           {
-            current_cell_id: currentCellId,
+            current_cell_id: currentCellId ?? '',
             related_cells: getCurrentViewCells(),
             related_qa_ids: qaList.map(qa => qa.id),
             current_qa_id: qaId,
@@ -416,7 +429,7 @@ const AICommandInput = ({ files, setFiles }) => {
 
         // 更新用户意图
         AgentMemoryService.updateUserIntent(
-          notebookId,
+          notebookId || '',
           'general' as AgentType,
           [command],
           [], // TODO: 可以添加推断逻辑
@@ -446,12 +459,12 @@ const AICommandInput = ({ files, setFiles }) => {
       
       // 清空文件列表
       setFiles([]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Submit error:', err);
     } finally {
       setTimeout(() => setIsLoading(false), 500);
     }
-  }, [files, isVDSMode, setStage, setIsLoading, setActiveView, addAction, addQA, sendOperation, notebookId, currentCellId, viewMode, currentPhaseId, currentStepIndex, qaList, actions, getCurrentViewCells, setIsRightSidebarCollapsed, setFiles]);
+  }, [files, isVDSMode, setPreStage, setIsLoading, setActiveView, addAction, addQA, sendOperation, notebookId, currentCellId, viewMode, currentPhaseId, currentStepIndex, qaList, actions, getCurrentViewCells, setIsRightSidebarCollapsed, setFiles]);
 
   return (
     <div className="relative mb-6">
@@ -583,7 +596,7 @@ const AICommandInput = ({ files, setFiles }) => {
         {/* 已上传文件列表 */}
         {files.length > 0 && (
           <div className="pl-2 mb-2 flex flex-wrap gap-2">
-            {files.map(file => (
+            {files.map((file: UploadFile) => (
               <div 
                 key={file.id} 
                 className="flex items-center gap-1.5 bg-gray-100 rounded-3xl px-3 py-1.5 text-sm"
@@ -652,7 +665,7 @@ const TypingTitle = () => {
     const typingSpeed = 35;
     const deletingSpeed = 20;
 
-    const startTyping = useCallback((fullText) => {
+    const startTyping = useCallback((fullText: string) => {
         setIsDeleting(false);
         let index = 0;
         const interval = setInterval(() => {
@@ -671,7 +684,7 @@ const TypingTitle = () => {
         return () => clearInterval(interval);
     }, []);
 
-    const deleteText = useCallback((onComplete) => {
+    const deleteText = useCallback((onComplete: () => void) => {
         setIsDeleting(true);
         setIsTypingDone(false);
         setShowCursor(true);
@@ -690,7 +703,7 @@ const TypingTitle = () => {
     }, [text.length]);
 
     // Function to change text with deletion animation
-    const changeText = useCallback((newText) => {
+    const changeText = useCallback((newText: string) => {
         deleteText(() => {
             startTyping(newText);
         });
@@ -805,7 +818,13 @@ const Divider = () => {
     );
 };
 
-const ActionButton = ({ onClick, children, disabled }) => (
+interface ActionButtonProps {
+  onClick: () => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+const ActionButton: React.FC<ActionButtonProps> = ({ onClick, children, disabled = false }) => (
     <button
         onClick={onClick}
         disabled={disabled}
@@ -828,9 +847,14 @@ const Header = () => (
 /**
  * EmptyState 主组件
  */
-const EmptyState = ({ onAddCell, onFileUpload }) => {
+interface EmptyStateProps {
+  onAddCell: (type: 'markdown' | 'code') => void;
+  onFileUpload?: () => void;
+}
+
+const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell, onFileUpload }) => {
     const { t } = useTranslation();
-    const [files, setFiles] = useState([]);
+    const [files, setFiles] = useState<UploadFile[]>([]);
 
     return (
         <div

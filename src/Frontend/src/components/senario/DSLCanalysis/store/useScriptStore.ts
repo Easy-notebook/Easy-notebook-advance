@@ -10,8 +10,18 @@ import { sendCurrentCellExecuteCodeError_should_debug } from '../../../../store/
 import useCodeStore from '../../../../store/codeStore';
 import globalUpdateInterface from '../../../../interfaces/globalUpdateInterface';
 
+// --- NEW/UPDATED IMPORTS ---
+// Import the new FSM and its events for dispatching actions
+import { useWorkflowStateMachine, EVENTS } from './workflowStateMachine';
+// Import the pipeline store to update the workflow structure
+import { usePipelineStore } from './usePipelineStore'; // Assumes usePipelineStore.ts exists in the same directory
+// Import the AI context store
+import { useAIPlanningContextStore } from './aiPlanningContext';
+// Import the UI panel store for confirmation dialogs
+import { useWorkflowPanelStore } from '../../../Notebook/store/workflowPanelStore';
+
 // ==============================================
-// Types and Interfaces
+// Types and Interfaces (Updated)
 // ==============================================
 
 export interface ActionMetadata {
@@ -32,10 +42,12 @@ export interface ScriptAction {
     type: string;
     content: string;
     metadata: ActionMetadata;
-    mode?: string;
+    description?: string;
+    // 'mode' is deprecated, managed by FSM
     isModified?: boolean;
     timestamp?: string;
-    phaseId?: string | null;
+    // Maps to the FSM's currentStepId
+    stepId: string | null;
     couldVisibleInWritingMode?: boolean;
     // Thinking cell specific properties
     agentName?: string;
@@ -46,11 +58,10 @@ export interface ScriptAction {
     language?: string;
 }
 
+// ScriptStep now only tracks action IDs for grouping, completion status is in FSM
 export interface ScriptStep {
     actionIds: string[];
     isModified?: boolean;
-    isCompleted?: boolean;
-    mode?: string;
 }
 
 export interface ExecutionStep {
@@ -65,17 +76,18 @@ export interface ExecutionStep {
     thinkingText?: string;
     text?: string;
     actionIdRef?: string;
-    stepId?: string;
-    phaseId?: string;
+    stepId?: string; // Corresponds to FSM's stepId
+    phaseId?: string; // Legacy support, maps to stepId
     keepDebugButtonVisible?: boolean;
     codecell_id?: string;
     need_output?: boolean;
     auto_debug?: boolean;
     title?: string;
-    updated_workflow?: any;
+    // New payload structures for FSM
+    updated_workflow?: { workflowTemplate: any; nextStageId?: string }; // Matches PendingUpdateData
     updated_steps?: any[];
     stage_id?: string;
-    shotType?: string; // 后端返回的shotType用于区分cell类型：'action'=代码，'dialogue'=文本
+    shotType?: string; // Backend-provided shotType: 'action'=code, 'dialogue'=text
 }
 
 export interface ScriptStoreState {
@@ -84,12 +96,12 @@ export interface ScriptStoreState {
     onSequenceComplete: (() => void) | null;
     onSequenceTerminate: (() => void) | null;
     lastAddedActionId: string | null;
-    
+
     // Script Management
     actions: ScriptAction[];
-    steps: Record<string, ScriptStep>;
-    
-    // Counters
+    steps: Record<string, ScriptStep>; // Keyed by FSM's stepId
+
+    // Counters (optional, might be deprecated)
     chapterCounter: number;
     sectionCounter: number;
 }
@@ -97,29 +109,25 @@ export interface ScriptStoreState {
 export interface ScriptStoreActions {
     // Helper functions
     getDefaultContent: (contentType?: string) => string;
-    getCurrentStep: () => string | null;
-    isStepInDeductionMode: () => boolean;
+    getCurrentStepId: () => string | null;
     getCurrentStepActions: () => ScriptAction[];
-    
+
     // Action Management
     createNewAction: (type?: string, content?: string, metadata?: ActionMetadata) => string | null;
     addMultipleActions: (actions: Partial<ScriptAction>[]) => string[];
     addAction: (action: Partial<ScriptAction>, couldVisibleInWritingMode?: boolean) => string | null;
     updateAction: (actionId: string, updates?: Partial<ScriptAction>) => boolean;
     removeAction: (actionId: string) => boolean;
-    
+
     // Specialized Operations
     updateLastText: (text: string) => void;
     finishThinking: () => void;
     setEffectAsThinking: (thinkingText?: string) => void;
-    
+
     // Code Execution
     execCodeCell: (codecell_id: string, need_output?: boolean, auto_debug?: boolean) => Promise<any>;
     updateTitle: (title: string) => void;
-    
-    // Step Management
-    markStepCompleted: (stepId: string) => void;
-    
+
     // Main Execution Engine
     execAction: (step: ExecutionStep) => Promise<any>;
 }
@@ -130,12 +138,6 @@ export type ScriptStore = ScriptStoreState & ScriptStoreActions;
 // Constants
 // ==============================================
 
-const STEP_MODES = {
-    WRITING: 'writing',
-    DEDUCTION: 'deduction',
-    COMPLETED: 'completed'
-} as const;
-
 const CELL_TYPE_MAPPING: Record<string, string> = {
     text: 'markdown',
     code: 'code',
@@ -145,26 +147,18 @@ const CELL_TYPE_MAPPING: Record<string, string> = {
     thinking: 'thinking'
 };
 
+// Renamed and streamlined action types
 const ACTION_TYPES = {
-    ADD_ACTION: 'add_action',
-    ADD: 'add',
-    NEW_CHAPTER: 'new_chapter',
-    NEW_SECTION: 'new_section',
-    NEXT_EVENT: 'next_event',
+    ADD_ACTION: 'add_action', // Generic add, use shotType to determine cell type
     IS_THINKING: 'is_thinking',
     FINISH_THINKING: 'finish_thinking',
-    SET_EFFECT_AS_THINKING: 'set_effect_as_thinking',
-    UPDATE_LAST_TEXT: 'update_last_text',
-    REMOVE: 'remove',
-    END_STEP: 'end_step',
-    END_PHASE: 'end_phase',
-    SET_COMPLETED_CURRENT_STEP: 'set_completed_current_step',
-    SET_COMPLETED_STEP: 'set_completed_step',
-    EXEC: 'exec',
+    EXEC_CODE: 'exec', // Renamed for clarity
     UPDATE_TITLE: 'update_title',
-    UPDATE_WORKFLOW: 'update_workflow',
-    UPDATE_STAGE_STEPS: 'update_stage_steps'
-} as const;
+    UPDATE_WORKFLOW: 'update_workflow', // Triggers FSM update flow
+    UPDATE_STEP_LIST: 'update_stage_steps', // Renamed for clarity, updates pipeline
+    COMPLETE_STEP: 'end_phase', // Legacy 'end_phase' now maps to COMPLETE_STEP event
+    // Deprecated actions handled by FSM: END_STEP, SET_COMPLETED_CURRENT_STEP
+};
 
 // ==============================================
 // Utility Functions
@@ -189,24 +183,22 @@ const getDefaultContentByType = (contentType = 'text'): string => {
     return defaults[contentType] || '';
 };
 
-const createCellData = (actionId: string, action: Partial<ScriptAction>, cellType: string, content: string, currentStep: string | null) => {
+const createCellData = (actionId: string, action: Partial<ScriptAction>, cellType: string, content: string, currentStepId: string | null) => {
     const baseCell: any = {
         id: actionId,
         type: cellType,
         content: content,
         outputs: [],
         enableEdit: cellType !== 'thinking',
-        phaseId: currentStep,
+        phaseId: currentStepId, // Link cell to the FSM step
         description: action.description || '',
         metadata: action.metadata || {}
     };
 
-    // Add language property for code cells
     if (cellType === 'code' || cellType === 'Hybrid') {
         baseCell.language = action.language || 'python';
     }
 
-    // Add special properties for thinking cells
     if (cellType === 'thinking') {
         baseCell.agentName = action.agentName || 'AI';
         baseCell.customText = action.customText || null;
@@ -229,49 +221,33 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     onSequenceComplete: null,
     onSequenceTerminate: null,
     lastAddedActionId: null,
-    
     actions: [],
     steps: {},
-    
     chapterCounter: 0,
     sectionCounter: 0,
-    
+
     // ==============================================
-    // Helper Functions
+    // Helper Functions (Updated)
     // ==============================================
-    
     getDefaultContent: getDefaultContentByType,
-    
-    getCurrentStep: (): string | null => {
-        try {
-            // Import pipeline store dynamically to avoid circular dependency
-            const { usePipelineStore } = require('./pipelineController.ts');
-            const pipelineState = usePipelineStore.getState();
-            return pipelineState.currentStepId || null;
-        } catch (error) {
-            console.warn('[useScriptStore] Could not get current step from pipeline store:', error);
-            return null;
-        }
+
+    // Gets current step ID from the FSM
+    getCurrentStepId: (): string | null => {
+        return useWorkflowStateMachine.getState().context.currentStepId;
     },
-    
-    isStepInDeductionMode: (): boolean => {
-        const currentStep = get().getCurrentStep();
-        const { steps } = get();
-        return currentStep ? steps[currentStep]?.mode === STEP_MODES.DEDUCTION : false;
-    },
-    
+
+    // Gets actions for the current FSM step
     getCurrentStepActions: (): ScriptAction[] => {
-        const currentStep = get().getCurrentStep();
+        const currentStepId = get().getCurrentStepId();
         const { steps, actions } = get();
-        if (!currentStep) return [];
-        const actionIds = steps[currentStep]?.actionIds || [];
+        if (!currentStepId) return [];
+        const actionIds = steps[currentStepId]?.actionIds || [];
         return actions.filter(action => actionIds.includes(action.id));
     },
-    
+
     // ==============================================
-    // Action Management
+    // Action Management (Updated)
     // ==============================================
-    
     createNewAction: (type = 'text', content = '', metadata = {}): string | null => {
         const actionId = uuidv4();
         const actionContent = content || get().getDefaultContent(type);
@@ -285,64 +261,35 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     },
 
     addMultipleActions: (actions = []): string[] => {
-        if (!Array.isArray(actions) || actions.length === 0) {
-            console.warn('[useScriptStore] No valid actions provided for batch add');
-            return [];
-        }
-        
+        if (!Array.isArray(actions) || actions.length === 0) return [];
         const addedActionIds: string[] = [];
         actions.forEach(action => {
-            try {
-                const actionId = get().addAction(action);
-                if (actionId) {
-                    addedActionIds.push(actionId);
-                }
-            } catch (error) {
-                console.error('[useScriptStore] Failed to add action:', action, error);
-            }
+            const actionId = get().addAction(action);
+            if (actionId) addedActionIds.push(actionId);
         });
-        
-        console.log(`[useScriptStore] Successfully added ${addedActionIds.length}/${actions.length} actions`);
         return addedActionIds;
     },
 
+    // Simplified: No longer checks for 'deduction mode'
     addAction: (action: Partial<ScriptAction>, couldVisibleInWritingMode = true): string | null => {
-        const currentStep = get().getCurrentStep();
-        
-        // Validation checks
-        if (get().isStepInDeductionMode()) {
-            console.warn(`[useScriptStore] Cannot add action: step(${currentStep}) is in deduction mode`);
-            return null;
-        }
-
-        if (!action || typeof action !== 'object') {
-            console.error('[useScriptStore] Invalid action object provided');
-            return null;
-        }
+        const currentStepId = get().getCurrentStepId();
 
         try {
             const actionId = action.id || uuidv4();
             let content = action.content || get().getDefaultContent(action.type);
-            
-            // Format content for text actions
             if (action.type === 'text') {
-                const isStep = action.metadata && action.metadata.isStep;
-                content = formatActionContent(content, isStep);
+                content = formatActionContent(content, action.metadata?.isStep);
             }
 
-            // Map action type to cell type
             const cellType = CELL_TYPE_MAPPING[action.type || 'text'] || 'markdown';
-
-            // Create action object for script store
             const newAction: ScriptAction = {
                 id: actionId,
                 type: action.type || 'text',
                 content,
                 metadata: action.metadata || {},
-                mode: STEP_MODES.WRITING,
                 isModified: false,
                 timestamp: new Date().toISOString(),
-                phaseId: currentStep,
+                stepId: currentStepId, // Link action to FSM step
                 couldVisibleInWritingMode,
                 ...(action.agentName && { agentName: action.agentName }),
                 ...(action.customText !== undefined && { customText: action.customText }),
@@ -351,54 +298,25 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                 ...(action.language && { language: action.language })
             };
 
-            // Create corresponding cell for notebook store
-            const cellData = createCellData(actionId, action, cellType, content, currentStep);
+            const cellData = createCellData(actionId, action, cellType, content, currentStepId);
             cellData.couldVisibleInWritingMode = couldVisibleInWritingMode;
 
-            console.log('[useScriptStore] Adding action and cell:', {
-                actionId,
-                type: action.type,
-                cellType,
-                contentLength: content.length
-            });
-
-            // Add to notebook store first
             useNotebookStore.getState().addCell(cellData);
 
-            // Update script store state
             set(state => {
-                const updatedStepActionIds = [...(state.steps[currentStep || '']?.actionIds || []), actionId];
-                const updatedActions = [...state.actions, newAction];
-
+                const updatedStepActionIds = [...(state.steps[currentStepId || '']?.actionIds || []), actionId];
                 return {
-                    actions: updatedActions,
+                    actions: [...state.actions, newAction],
                     steps: {
                         ...state.steps,
-                        ...(currentStep && {
-                            [currentStep]: {
-                                ...state.steps[currentStep],
-                                actionIds: updatedStepActionIds,
-                                isModified: true
-                            }
+                        ...(currentStepId && {
+                            [currentStepId]: { ...state.steps[currentStepId], actionIds: updatedStepActionIds, isModified: true }
                         })
                     },
                     lastAddedActionId: actionId
                 };
             });
-
-            // Verify cell was added successfully
-            setTimeout(() => {
-                const currentCells = useNotebookStore.getState().cells;
-                const addedCell = currentCells.find(cell => cell.id === actionId);
-                if (addedCell) {
-                    console.log(`[useScriptStore] Successfully added cell. Total cells: ${currentCells.length}`);
-                } else {
-                    console.error('[useScriptStore] Failed to verify cell addition');
-                }
-            }, 100);
-
             return actionId;
-            
         } catch (error) {
             console.error('[useScriptStore] Error adding action:', error);
             return null;
@@ -406,68 +324,25 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     },
 
     updateAction: (actionId: string, updates: Partial<ScriptAction> = {}): boolean => {
-        const currentStep = get().getCurrentStep();
-        
-        if (get().isStepInDeductionMode()) {
-            console.warn(`[useScriptStore] Cannot update action: step(${currentStep}) is in deduction mode`);
-            return false;
-        }
-
-        if (!actionId || !updates) {
-            console.error('[useScriptStore] Invalid parameters for updateAction');
-            return false;
-        }
-
         try {
-            // Update notebook store first
             const notebookCell = useNotebookStore.getState().cells.find(cell => cell.id === actionId);
-            if (!notebookCell) {
-                console.warn(`[useScriptStore] Action ${actionId} not found in notebook store`);
-                return false;
-            }
+            if (!notebookCell) return false;
 
             if (updates.content !== undefined) {
                 useNotebookStore.getState().updateCell(actionId, updates.content);
             }
-
             if (updates.metadata) {
-                useNotebookStore.getState().updateCellMetadata(actionId, {
-                    ...notebookCell.metadata,
-                    ...updates.metadata
-                });
+                useNotebookStore.getState().updateCellMetadata(actionId, { ...notebookCell.metadata, ...updates.metadata });
             }
 
-            // Update script store
             set(state => {
                 const actionIndex = state.actions.findIndex(action => action.id === actionId);
-                if (actionIndex === -1) {
-                    console.warn(`[useScriptStore] Action ${actionId} not found in script store`);
-                    return state;
-                }
+                if (actionIndex === -1) return state;
 
                 const updatedActions = [...state.actions];
-                updatedActions[actionIndex] = {
-                    ...updatedActions[actionIndex],
-                    ...updates,
-                    content: updates.content !== undefined ? updates.content : updatedActions[actionIndex].content,
-                    metadata: updates.metadata ? 
-                        { ...updatedActions[actionIndex].metadata, ...updates.metadata } : 
-                        updatedActions[actionIndex].metadata,
-                    isModified: true
-                };
-
-                return {
-                    actions: updatedActions,
-                    steps: currentStep ? {
-                        ...state.steps,
-                        [currentStep]: {
-                            ...state.steps[currentStep],
-                            isModified: true
-                        }
-                    } : state.steps
-                };
+                updatedActions[actionIndex] = { ...updatedActions[actionIndex], ...updates, isModified: true };
+                return { actions: updatedActions };
             });
-
             return true;
         } catch (error) {
             console.error('[useScriptStore] Error updating action:', error);
@@ -476,44 +351,22 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     },
 
     removeAction: (actionId: string): boolean => {
-        const currentStep = get().getCurrentStep();
+        const currentStepId = get().getCurrentStepId();
+        if (!actionId || !currentStepId) return false;
         
-        if (get().isStepInDeductionMode()) {
-            console.warn(`[useScriptStore] Cannot remove action: step(${currentStep}) is in deduction mode`);
-            return false;
-        }
-
-        if (!actionId || !currentStep) {
-            console.error('[useScriptStore] Invalid actionId or currentStep for removeAction');
-            return false;
-        }
-
         try {
-            const { steps } = get();
-            const currentActionIds = steps[currentStep]?.actionIds || [];
-            
-            if (!currentActionIds.includes(actionId)) {
-                console.warn(`[useScriptStore] Action ${actionId} not found in current step`);
-                return false;
-            }
-
-            // Remove from notebook store
             useNotebookStore.getState().deleteCell(actionId);
-
-            // Update script store
             set(state => ({
                 actions: state.actions.filter(action => action.id !== actionId),
                 steps: {
                     ...state.steps,
-                    [currentStep]: {
-                        ...state.steps[currentStep],
-                        actionIds: state.steps[currentStep].actionIds.filter(id => id !== actionId),
+                    [currentStepId]: {
+                        ...state.steps[currentStepId],
+                        actionIds: state.steps[currentStepId].actionIds.filter(id => id !== actionId),
                         isModified: true
                     }
                 }
             }));
-
-            console.log(`[useScriptStore] Successfully removed action: ${actionId}`);
             return true;
         } catch (error) {
             console.error('[useScriptStore] Error removing action:', error);
@@ -524,171 +377,51 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     // ==============================================
     // Specialized Operations
     // ==============================================
-
     updateLastText: (text: string): void => {
-        try {
-            const cells = useNotebookStore.getState().cells;
-            const lastCell = cells[cells.length - 1];
-            
-            if (!lastCell) {
-                console.warn('[useScriptStore] No cells found for updateLastText');
-                return;
-            }
-            
-            if (lastCell.type !== 'markdown') {
-                console.warn(`[useScriptStore] Last cell is not markdown type, but ${lastCell.type}`);
-                return;
-            }
-            
-            useNotebookStore.getState().updateCell(lastCell.id, text);
-            console.log(`[useScriptStore] Updated last text for cell: ${lastCell.id}`);
-        } catch (error) {
-            console.error('[useScriptStore] Error updating last text:', error);
+        const { cells, updateCell } = useNotebookStore.getState();
+        const lastCell = cells[cells.length - 1];
+        if (lastCell?.type === 'markdown') {
+            updateCell(lastCell.id, text);
         }
     },
 
     finishThinking: (): void => {
-        try {
-            const cells = useNotebookStore.getState().cells;
-            const lastCell = cells[cells.length - 1];
-            
-            if (!lastCell) {
-                console.warn('[useScriptStore] No cells found for finishThinking');
-                return;
-            }
-            
-            if (lastCell.type !== 'thinking') {
-                console.warn(`[useScriptStore] Last cell is not thinking type, but ${lastCell.type}`);
-                return;
-            }
-
-            // Remove from notebook store
-            useNotebookStore.getState().deleteCell(lastCell.id);
-
-            // Remove from script store
-            set(state => {
-                const updatedActions = state.actions.filter(action => action.id !== lastCell.id);
-                const currentStep = get().getCurrentStep();
-                const updatedStepActionIds = currentStep && state.steps[currentStep] ? 
-                    state.steps[currentStep].actionIds.filter(id => id !== lastCell.id) : [];
-
-                return {
-                    actions: updatedActions,
-                    steps: currentStep ? {
-                        ...state.steps,
-                        [currentStep]: {
-                            ...state.steps[currentStep],
-                            actionIds: updatedStepActionIds
-                        }
-                    } : state.steps
-                };
-            });
-
-            console.log(`[useScriptStore] Finished thinking and removed cell: ${lastCell.id}`);
-        } catch (error) {
-            console.error('[useScriptStore] Error finishing thinking:', error);
-        }
+        const { cells, deleteCell } = useNotebookStore.getState();
+        const lastThinkingCell = cells.filter(cell => cell.type === 'thinking').pop();
+        if (!lastThinkingCell) return;
+        deleteCell(lastThinkingCell.id);
+        // Also remove from internal actions state
+        set(state => ({ actions: state.actions.filter(action => action.id !== lastThinkingCell.id) }));
     },
 
     setEffectAsThinking: (thinkingText = "finished thinking"): void => {
-        try {
-            const cells = useNotebookStore.getState().cells;
-            const lastCell = cells[cells.length - 1];
-            
-            if (!lastCell) {
-                console.warn('[useScriptStore] No cells found for setEffectAsThinking');
-                return;
-            }
-            
-            if (lastCell.type !== 'code') {
-                console.warn(`[useScriptStore] Last cell is not code type, but ${lastCell.type}`);
-                return;
-            }
-
-            // Update cell metadata
-            useNotebookStore.getState().updateCellMetadata(lastCell.id, {
-                ...lastCell.metadata,
-                finished_thinking: true,
-                thinkingText: thinkingText
-            });
-
-            // Update script store action metadata
-            set(state => {
-                const updatedActions = state.actions.map(action => {
-                    if (action.id === lastCell.id) {
-                        return {
-                            ...action,
-                            metadata: {
-                                ...action.metadata,
-                                finished_thinking: true,
-                                thinkingText: thinkingText
-                            }
-                        };
-                    }
-                    return action;
-                });
-
-                return { actions: updatedActions };
-            });
-
-            console.log(`[useScriptStore] Set effect as thinking for cell: ${lastCell.id}`);
-        } catch (error) {
-            console.error('[useScriptStore] Error setting effect as thinking:', error);
-        }
+        const { cells, updateCellMetadata } = useNotebookStore.getState();
+        const lastCell = cells.filter(cell => cell.type === 'code').pop();
+        if (!lastCell) return;
+        const newMetadata = { ...lastCell.metadata, finished_thinking: true, thinkingText };
+        updateCellMetadata(lastCell.id, newMetadata);
+        get().updateAction(lastCell.id, { metadata: newMetadata });
     },
 
     // ==============================================
     // Code Execution
     // ==============================================
-
     execCodeCell: async (codecell_id: string, need_output = true, auto_debug = false): Promise<any> => {
-        if (!codecell_id) {
-            console.warn('[useScriptStore] execCodeCell requires codecell_id');
-            return Promise.resolve(false);
-        }
-
+        if (!codecell_id) return Promise.resolve(false);
         try {
-            console.log(`[useScriptStore] Executing cell: ${codecell_id}`, {
-                need_output,
-                auto_debug
-            });
-
-            // Set display mode if needed
-            if (need_output) {
-                useCodeStore.getState().setCellMode(codecell_id, 'output_only');
+            const { setCellMode, executeCell } = useCodeStore.getState();
+            if (need_output) setCellMode(codecell_id, 'output_only');
+            const result = await executeCell(codecell_id);
+            if (result?.success && result.outputs) {
+                useAIPlanningContextStore.getState().addEffect(result.outputs);
             }
-
-            // Execute cell
-            const result = await useCodeStore.getState().executeCell(codecell_id);
-            console.log(`[useScriptStore] Execution result for ${codecell_id}:`, result);
-
-            // Store execution result to AI Planning Context effect
-            if (result && result.success && result.outputs) {
-                try {
-                    const { useAIPlanningContextStore } = await import('./aiPlanningContext');
-                    const aiPlanningStore = useAIPlanningContextStore.getState();
-                    aiPlanningStore.addEffect(result.outputs);
-                    console.log(`[useScriptStore] Added execution result to effect for cell: ${codecell_id}`);
-                } catch (error) {
-                    console.warn('[useScriptStore] Could not update AI Planning Context effect:', error);
-                }
-            }
-
-            // Handle auto-debug
-            if (auto_debug && result && result.success === false) {
-                console.log(`[useScriptStore] Auto-debug triggered for cell: ${codecell_id}`);
+            if (auto_debug && !result?.success) {
                 setTimeout(() => {
                     useNotebookStore.getState().setCurrentCell(codecell_id);
                     sendCurrentCellExecuteCodeError_should_debug();
                 }, 1000);
                 return result.error;
             }
-
-            // Ensure output mode is set
-            if (need_output) {
-                useCodeStore.getState().setCellMode(codecell_id, 'output_only');
-            }
-
             return result.success ? result.outputs : result.error;
         } catch (error) {
             console.error(`[useScriptStore] Error executing cell ${codecell_id}:`, error);
@@ -697,508 +430,112 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     },
 
     updateTitle: (title: string): void => {
-        try {
-            useNotebookStore.getState().updateTitle(title);
-            console.log(`[useScriptStore] Updated title: ${title}`);
-        } catch (error) {
-            console.error('[useScriptStore] Error updating title:', error);
-        }
+        useNotebookStore.getState().updateTitle(title);
     },
 
     // ==============================================
-    // Step Management
+    // Main Execution Engine (INTEGRATED WITH FSM)
     // ==============================================
-
-    markStepCompleted: (stepId: string): void => {
-        if (!stepId) {
-            console.warn('[useScriptStore] markStepCompleted requires stepId');
-            return;
-        }
-
-        set(state => ({
-            steps: {
-                ...state.steps,
-                [stepId]: {
-                    ...state.steps[stepId],
-                    isCompleted: true,
-                    mode: STEP_MODES.COMPLETED
-                }
-            }
-        }));
-
-        console.log(`[useScriptStore] Marked step as completed: ${stepId}`);
-    },
-
-    // ==============================================
-    // Main Execution Engine
-    // ==============================================
-
     execAction: async (step: ExecutionStep): Promise<any> => {
-        if (!step || !step.action) {
+        if (!step?.action) {
             console.error('[useScriptStore] execAction requires step with action property');
             return;
         }
 
+        const { transition } = useWorkflowStateMachine.getState();
         const actionType = step.action;
-        console.log(`[useScriptStore] Executing action: ${actionType}`, step);
 
         try {
             switch (actionType) {
                 case ACTION_TYPES.ADD_ACTION: {
-                    if (!step.action || typeof step.action !== 'object') {
-                        console.error('[useScriptStore] Invalid action data for add_action');
-                        break;
-                    }
-                    const actionId = get().addAction(step.action as any);
-                    if ((step.action as any).type === 'code') {
-                        globalUpdateInterface.createAIWritingCode(
-                            `Added code action: ${actionId}`, 
-                            (step.action as any).content || '', 
-                            [], 
-                            actionId
-                        );
-                    } else {
-                        globalUpdateInterface.createAIReplyingQuestion(
-                            `Added text action: ${actionId}`, 
-                            (step.action as any).content || '', 
-                            [], 
-                            actionId
-                        );
-                    }
-                    break;
-                }
-
-                case ACTION_TYPES.ADD: {
                     const actionId = step.storeId || uuidv4();
-                    // 根据后端shotType确定cell类型
-                    let cellType = 'text'; // 默认为文本
-                    switch (step.shotType) {
-                        case 'action':
-                            cellType = 'code';
-                            break;
-                        case 'dialogue':
-                            cellType = 'text';
-                            break;
-                        case 'hybrid':
-                            cellType = 'Hybrid';
-                            break;
-                        case 'attachment':
-                        case 'outcome':
-                        case 'error':
-                            cellType = 'text'; // 这些都显示为文本
-                            break;
-                        case 'thinking':
-                            cellType = 'thinking';
-                            break;
-                        default:
-                            cellType = 'text';
-                    }
-                    
-                    get().addAction({
-                        id: actionId,
-                        type: cellType,
-                        content: step.content || '',
-                        metadata: step.metadata || {},
-                    });
-
-                    if (cellType === 'code') {
-                        globalUpdateInterface.createAIGeneratingCode("", '', [], actionId);
-                    } else {
-                        globalUpdateInterface.createAIGeneratingText("", '', [], actionId);
-                    }
+                    // Determine cell type from backend's 'shotType'
+                    const cellType = step.shotType === 'action' ? 'code' : 'text';
+                    get().addAction({ id: actionId, type: cellType, content: step.content || '', metadata: step.metadata || {} });
                     break;
                 }
-
-                case ACTION_TYPES.NEW_CHAPTER: {
-                    const actionId = step.storeId || uuidv4();
-                    const { chapterCounter } = get();
-                    const newChapterNumber = chapterCounter + 1;
-                    
-                    set({ chapterCounter: newChapterNumber, sectionCounter: 0 });
-                    
-                    const chapterContent = `## Stage ${newChapterNumber}: ${step.content}`;
-                    get().addAction({
-                        id: actionId,
-                        type: step.contentType || 'text',
-                        content: chapterContent,
-                        metadata: {
-                            ...step.metadata,
-                            isChapter: true,
-                            chapterId: actionId,
-                            chapterNumber: newChapterNumber
-                        },
-                    });
-                    break;
-                }
-
-                case ACTION_TYPES.NEW_SECTION: {
-                    const actionId = step.storeId || uuidv4();
-                    const { sectionCounter } = get();
-                    const newSectionNumber = sectionCounter + 1;
-                    
-                    set({ sectionCounter: newSectionNumber });
-                    
-                    const sectionContent = `### Step ${newSectionNumber}: ${step.content}`;
-                    get().addAction({
-                        id: actionId,
-                        type: step.contentType || 'text',
-                        content: sectionContent,
-                        metadata: {
-                            ...step.metadata,
-                            isSection: true,
-                            sectionId: actionId,
-                            sectionNumber: newSectionNumber
-                        },
-                    });
-                    break;
-                }
-
                 case ACTION_TYPES.IS_THINKING: {
-                    const actionId = step.storeId || uuidv4();
-                    get().addAction({
-                        id: actionId,
-                        type: 'thinking',
-                        textArray: step.textArray || [`${step.agentName || 'AI'} is thinking...`],
-                        agentName: step.agentName || 'AI',
-                        customText: step.customText || null,
-                        useWorkflowThinking: false
-                    });
-                    globalUpdateInterface.createAICriticalThinking(
-                        `${step.agentName || 'AI'} is thinking...`, 
-                        step.customText || '', 
-                        [], 
-                        actionId, 
-                        true
-                    );
+                    get().addAction({ type: 'thinking', textArray: step.textArray, agentName: step.agentName, customText: step.customText });
                     break;
                 }
-
                 case ACTION_TYPES.FINISH_THINKING: {
                     get().finishThinking();
-                    globalUpdateInterface.createAICriticalThinking('Finished thinking', '', [], null, false);
                     break;
                 }
-
-                case ACTION_TYPES.SET_EFFECT_AS_THINKING: {
-                    get().setEffectAsThinking(step.thinkingText);
-                    break;
-                }
-
-                case ACTION_TYPES.UPDATE_LAST_TEXT: {
-                    if (step.text) {
-                        get().updateLastText(step.text);
-                    }
-                    break;
-                }
-
-                case ACTION_TYPES.REMOVE: {
-                    if (step.actionIdRef) {
-                        get().removeAction(step.actionIdRef);
-                        globalUpdateInterface.createSystemEvent(`Removed action: ${step.actionIdRef}`, '', [], null);
-                    }
-                    break;
-                }
-
-                case ACTION_TYPES.END_STEP: {
-                    console.log(`[useScriptStore] Step ended: ${step.stepId || 'unknown'}`);
-                    globalUpdateInterface.createSystemEvent(`Step ended: ${step.stepId || 'unknown'}`, '', [], null);
-                    break;
-                }
-
-                case ACTION_TYPES.END_PHASE: {
-                    console.log(`[useScriptStore] Phase ended: ${step.phaseId || 'unknown'}`);
-                    globalUpdateInterface.createSystemEvent(`Phase ended: ${step.phaseId || 'unknown'}`, '', [], null);
-                    
-                    const currentStep = get().getCurrentStep();
-                    if (currentStep) {
-                        set(state => ({
-                            steps: {
-                                ...state.steps,
-                                [currentStep]: {
-                                    ...state.steps[currentStep],
-                                    isCompleted: true
-                                }
-                            }
-                        }));
-                    }
-
-                    if (step.keepDebugButtonVisible !== false) {
-                        set({ debugButtonVisible: true });
-                    }
-
-                    // 通知状态机阶段完成，触发自动跳转到下一阶段
-                    try {
-                        const { useWorkflowStateMachine } = require('./workflowStateMachine.ts');
-                        const { usePipelineStore } = require('./pipelineController.ts');
-                        
-                        const stateMachine = useWorkflowStateMachine.getState();
-                        const pipelineStore = usePipelineStore.getState();
-                        const currentStageId = pipelineStore.currentStageId;
-                        
-                        if (currentStageId) {
-                            console.log(`[useScriptStore] Triggering stage completion for: ${currentStageId}`);
-                            
-                            // 触发阶段完成事件
-                            window.dispatchEvent(new CustomEvent('workflowStageCompleted', {
-                                detail: { 
-                                    stageId: currentStageId,
-                                    timestamp: Date.now()
-                                }
-                            }));
-                            
-                            // 检查是否可以自动推进到下一阶段
-                            if (stateMachine.autoAdvanceEnabled && stateMachine.canAutoAdvanceToNextStage()) {
-                                console.log('[useScriptStore] Auto-advancing to next stage...');
-                                setTimeout(() => {
-                                    stateMachine.autoAdvanceToNextStage();
-                                }, 1000);
-                            }
-                        }
-                    } catch (error) {
-                        console.error('[useScriptStore] Error triggering stage completion:', error);
-                    }
-                    
-                    break;
-                }
-
-                case ACTION_TYPES.SET_COMPLETED_CURRENT_STEP: {
-                    const currentStep = get().getCurrentStep();
-                    if (currentStep) {
-                        get().markStepCompleted(currentStep);
-                        globalUpdateInterface.createSystemEvent('Marked current step as completed', '', [], null);
-                    }
-                    break;
-                }
-
-                case ACTION_TYPES.SET_COMPLETED_STEP: {
-                    if (step.stepId) {
-                        get().markStepCompleted(step.stepId);
-                        globalUpdateInterface.createSystemEvent(`Marked step as completed: ${step.stepId}`, '', [], null);
-                    }
-                    break;
-                }
-
-                case ACTION_TYPES.EXEC: {
-                    const targetId = step.codecell_id === "lastAddedCellId"
-                        ? get().lastAddedActionId
-                        : step.codecell_id;
-
+                case ACTION_TYPES.EXEC_CODE: {
+                    const targetId = step.codecell_id === "lastAddedCellId" ? get().lastAddedActionId : step.codecell_id;
                     if (targetId) {
-                        console.log(`[useScriptStore] Executing code: ${targetId}`);
-                        globalUpdateInterface.createAIRunningCode('Executing...', '', [], targetId, true);
-                        
-                        const output = await get().execCodeCell(targetId, step.need_output, step.auto_debug);
-                        
-                        console.log(`[useScriptStore] Execution completed: ${targetId}`, output);
-                        globalUpdateInterface.createAIRunningCode('Execution completed', "", [], targetId, false);
-                        
-                        return output;
-                    } else {
-                        console.warn('[useScriptStore] Failed to execute code: Cell ID not found');
-                        globalUpdateInterface.createSystemEvent('Execution failed: Cell ID not found', '', [], null);
+                        return await get().execCodeCell(targetId, step.need_output, step.auto_debug);
                     }
+                    console.warn('[useScriptStore] EXEC_CODE called without a valid target cell ID.');
                     break;
                 }
-
                 case ACTION_TYPES.UPDATE_TITLE: {
-                    if (step.title) {
-                        get().updateTitle(step.title);
-                        globalUpdateInterface.createSystemEvent(`Updated title: ${step.title}`, '', [], null);
-                    }
+                    if (step.title) get().updateTitle(step.title);
                     break;
                 }
-
+                case ACTION_TYPES.COMPLETE_STEP: {
+                    // Dispatch event to the FSM to complete the current step
+                    console.log(`[useScriptStore] Received command to complete step. Transitioning with ${EVENTS.COMPLETE_STEP}.`);
+                    transition(EVENTS.COMPLETE_STEP);
+                    break;
+                }
                 case ACTION_TYPES.UPDATE_WORKFLOW: {
-                    console.log('[useScriptStore] Received workflow update:', step.updated_workflow);
-                    
-                    // Import stores dynamically to avoid circular dependency
-                    const { useWorkflowPanelStore } = await import('../../../Notebook/store/workflowPanelStore');
-                    
-                    const workflowPanelStore = useWorkflowPanelStore.getState();
-                    
-                    // Set up workflow update confirmation
-                    workflowPanelStore.setPendingWorkflowUpdate(step.updated_workflow);
-                    workflowPanelStore.setShowWorkflowConfirm(true);
-                    
-                    // Set up confirmation handlers
-                    workflowPanelStore.setOnConfirmWorkflowUpdate(async () => {
-                        console.log('%c✅ USER CONFIRMED WORKFLOW UPDATE ✅', 'color: #27ae60; font-weight: bold; font-size: 16px;');
-                        
-                        if (step.updated_workflow) {
-                            const { useWorkflowStateMachine } = await import('./workflowStateMachine.ts');
-                            const { usePipelineStore } = await import('./pipelineController.ts');
-                            
-                            const stateMachine = useWorkflowStateMachine.getState();
-                            const currentPipelineState = usePipelineStore.getState();
-                            
-                            // Mark current step as completed
-                            const currentStepId = currentPipelineState.currentStepId;
-                            const currentStageId = currentPipelineState.currentStageId;
-                            
-                            if (currentStepId) {
-                                currentPipelineState.markStepCompleted(currentStepId);
-                                console.log('[useScriptStore] Marked current step as completed after workflow update:', currentStepId);
-                            }
-                            
-                            // Update AI Planning Context if available
-                            try {
-                                const { useAIPlanningContextStore } = await import('./aiPlanningContext');
-                                const aiPlanningStore = useAIPlanningContextStore.getState();
-                                if (aiPlanningStore.clearAllStageStatus) {
-                                    aiPlanningStore.clearAllStageStatus();
-                                }
-                            } catch (error) {
-                                console.warn('[useScriptStore] Could not update AI Planning Context:', error);
-                            }
-                            
-                            // Dispatch workflow completion event
-                            if (currentStepId && currentStageId) {
-                                window.dispatchEvent(new CustomEvent('workflowStepCompleted', {
-                                    detail: { 
-                                        stepId: currentStepId, 
-                                        result: { 
-                                            targetAchieved: true, 
-                                            workflowUpdated: true,
-                                            newWorkflow: step.updated_workflow 
-                                        },
-                                        stageId: currentStageId,
-                                        timestamp: Date.now()
-                                    }
-                                }));
-                            }
-                            
-                            // Determine next stage
-                            const newWorkflowStages = step.updated_workflow.stages || [];
-                            const nextStageId = newWorkflowStages.length > 0 ? newWorkflowStages[0].id : null;
-                            
-                            console.log('[useScriptStore] Processing workflow update:', {
-                                workflow: step.updated_workflow.name,
-                                nextStageId
-                            });
-                            
-                            // Handle workflow update through state machine
-                            stateMachine.handleWorkflowUpdate(step.updated_workflow, nextStageId);
-                            
-                            // Re-enable auto-advance
-                            setTimeout(() => {
-                                console.log('=== [useScriptStore] RE-ENABLING AUTO-ADVANCE AFTER WORKFLOW UPDATE ===');
-                                console.log('[useScriptStore] About to call enableAutoAdvanceAfterConfirmation');
-                                console.log('[useScriptStore] State machine state:', {
-                                    currentState: stateMachine.currentState,
-                                    currentStageId: stateMachine.currentStageId,
-                                    autoAdvanceEnabled: stateMachine.autoAdvanceEnabled
-                                });
-                                stateMachine.enableAutoAdvanceAfterConfirmation();
-                                console.log('[useScriptStore] enableAutoAdvanceAfterConfirmation called successfully');
-                            }, 100);
-                        }
-                        
-                        // Clean up confirmation dialog
-                        workflowPanelStore.setShowWorkflowConfirm(false);
-                        workflowPanelStore.setPendingWorkflowUpdate(null);
-                        workflowPanelStore.setWorkflowUpdated(true);
-                        workflowPanelStore.incrementWorkflowUpdateCount();
-                        
-                        globalUpdateInterface.createSystemEvent('Workflow updated successfully, auto-advance re-enabled', '', [], null);
-                    });
-                    
-                    workflowPanelStore.setOnRejectWorkflowUpdate(async () => {
-                        console.log('[useScriptStore] User rejected workflow update');
-                        
-                        // Re-enable auto-advance
-                        console.log('=== [useScriptStore] RE-ENABLING AUTO-ADVANCE AFTER WORKFLOW REJECTION ===');
-                        const { useWorkflowStateMachine } = await import('./workflowStateMachine.ts');
+                    // This action requires user confirmation via a UI panel
+                    return new Promise((resolve) => {
                         const stateMachine = useWorkflowStateMachine.getState();
-                        console.log('[useScriptStore] About to call enableAutoAdvanceAfterConfirmation (rejection case)');
-                        console.log('[useScriptStore] State machine state:', {
-                            currentState: stateMachine.currentState,
-                            currentStageId: stateMachine.currentStageId,
-                            autoAdvanceEnabled: stateMachine.autoAdvanceEnabled
-                        });
-                        stateMachine.enableAutoAdvanceAfterConfirmation();
-                        console.log('[useScriptStore] enableAutoAdvanceAfterConfirmation called successfully (rejection case)');
+                        const workflowPanelStore = useWorkflowPanelStore.getState();
                         
-                        // Clean up confirmation dialog
-                        workflowPanelStore.setShowWorkflowConfirm(false);
-                        workflowPanelStore.setPendingWorkflowUpdate(null);
-                        
-                        globalUpdateInterface.createSystemEvent('Workflow update rejected by user, auto-advance restored', '', [], null);
-                    });
-                    
-                    globalUpdateInterface.createSystemEvent('Workflow update received, awaiting user confirmation', '', [], null);
-                    break;
-                }
-
-                case ACTION_TYPES.UPDATE_STAGE_STEPS: {
-                    console.log('[useScriptStore] Received stage steps update:', step.updated_steps);
-                    
-                    const { usePipelineStore } = await import('./pipelineController.ts');
-                    const { useWorkflowStateMachine } = await import('./workflowStateMachine.ts');
-                    
-                    const currentPipelineState = usePipelineStore.getState();
-                    const stateMachine = useWorkflowStateMachine.getState();
-                    
-                    if (step.updated_steps && step.stage_id) {
-                        
-                        // Find next uncompleted step
-                        const completedSteps = currentPipelineState.completedSteps || [];
-                        const currentStepId = currentPipelineState.currentStepId;
-                        
-                        // First check if current step should be marked as completed
-                        if (currentStepId) {
-                            const currentStepInfo = step.updated_steps.find((stepInfo: any) => {
-                                const stepId = stepInfo.step_id || stepInfo.id;
-                                return stepId === currentStepId;
-                            });
-                            
-                            // If current step is marked as completed in the update, mark it completed
-                            if (currentStepInfo && currentStepInfo.status === 'completed' && !completedSteps.includes(currentStepId)) {
-                                console.log(`[useScriptStore] Marking current step as completed: ${currentStepId}`);
-                                currentPipelineState.markStepCompleted(currentStepId);
-                            }
+                        if (!step.updated_workflow?.workflowTemplate) {
+                            console.error('[useScriptStore] UPDATE_WORKFLOW action received without workflow data.');
+                            stateMachine.transition(EVENTS.FAIL, { error: 'Invalid workflow update payload' });
+                            resolve();
+                            return;
                         }
+
+                        // 1. Request the update in the FSM, which moves it to a pending state
+                        stateMachine.requestWorkflowUpdate(step.updated_workflow);
                         
-                        // Find next uncompleted step (now including current step if it's still not completed)
-                        const nextUncompletedStep = step.updated_steps.find((stepInfo: any) => {
-                            const stepId = stepInfo.step_id || stepInfo.id;
-                            return !currentPipelineState.completedSteps.includes(stepId) && 
-                                   stepInfo.status !== 'completed' &&
-                                   stepId !== 'section_1_workflow_initialization';
+                        // 2. Configure the UI panel with the pending data and callbacks
+                        workflowPanelStore.setPendingWorkflowUpdate(step.updated_workflow);
+                        workflowPanelStore.setOnConfirmWorkflowUpdate(() => {
+                            stateMachine.confirmWorkflowUpdate(); // Tell FSM to proceed
+                            workflowPanelStore.setShowWorkflowConfirm(false);
+                            resolve(); // Resolve the promise
+                        });
+                        workflowPanelStore.setOnRejectWorkflowUpdate(() => {
+                            stateMachine.rejectWorkflowUpdate(); // Tell FSM to revert
+                            workflowPanelStore.setShowWorkflowConfirm(false);
+                            resolve(); // Resolve the promise
                         });
                         
-                        const nextStepId = nextUncompletedStep ? 
-                            (nextUncompletedStep.step_id || nextUncompletedStep.id) : null;
-                        
-                        console.log(`[useScriptStore] Next step to execute: ${nextStepId || 'None found'}`);
-                        
-                        // Handle stage steps update through state machine
-                        stateMachine.handleStageStepsUpdate(step.stage_id, step.updated_steps, nextStepId);
-                        
-                        globalUpdateInterface.createSystemEvent(
-                            `Stage steps updated for ${step.stage_id}${nextStepId ? `, proceeding to ${nextStepId}` : ''}`, 
-                            '', [], null
-                        );
+                        // 3. Show the confirmation dialog to the user
+                        workflowPanelStore.setShowWorkflowConfirm(true);
+                        globalUpdateInterface.createSystemEvent('Workflow update received, awaiting user confirmation.', '', []);
+                    });
+                }
+                case ACTION_TYPES.UPDATE_STEP_LIST: {
+                    // This is a direct, non-confirmed update to the workflow structure
+                    if (step.updated_steps && step.stage_id) {
+                        console.log(`[useScriptStore] Updating steps for stage: ${step.stage_id}`);
+                        // Directly call the pipeline store to update its data
+                        usePipelineStore.getState().updateStepsForStage(step.stage_id, step.updated_steps);
+                        globalUpdateInterface.createSystemEvent(`Workflow stage '${step.stage_id}' has been updated.`, '', []);
+                    } else {
+                         console.error('[useScriptStore] UPDATE_STEP_LIST action is missing stage_id or updated_steps.');
                     }
                     break;
                 }
-
-                case ACTION_TYPES.NEXT_EVENT: {
-                    break;
-                }
-
                 default:
-                    console.warn(`[useScriptStore] Unknown action type: ${actionType}`);
-                    globalUpdateInterface.createSystemEvent(`Unknown action: ${actionType}`, '', [], null);
+                    console.warn(`[useScriptStore] Unknown or unhandled action type: ${actionType}`);
             }
-
-            console.log(`[useScriptStore] Successfully executed action: ${actionType}`);
         } catch (error) {
             console.error(`[useScriptStore] Error executing action ${actionType}:`, error);
-            globalUpdateInterface.createSystemEvent(`Error executing action ${actionType}: ${error.message}`, '', [], null);
+            // Dispatch a FAIL event to the FSM on error
+            transition(EVENTS.FAIL, { error: error.message, action: actionType });
             throw error;
         }
     }
 }));
 
-// Export the store
 export default useScriptStore;
