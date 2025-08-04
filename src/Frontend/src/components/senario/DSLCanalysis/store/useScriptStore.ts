@@ -17,9 +17,7 @@ import { useWorkflowStateMachine, EVENTS } from './workflowStateMachine';
 import { usePipelineStore } from './usePipelineStore'; // Assumes usePipelineStore.ts exists in the same directory
 // Import the AI context store
 import { useAIPlanningContextStore } from './aiPlanningContext';
-// Import the UI panel store for confirmation dialogs
-import { useWorkflowPanelStore } from '../../../Notebook/store/workflowPanelStore';
-
+import { Newspaper } from 'lucide-react';
 // ==============================================
 // Types and Interfaces (Updated)
 // ==============================================
@@ -158,6 +156,8 @@ const ACTION_TYPES = {
     UPDATE_STEP_LIST: 'update_stage_steps', // Renamed for clarity, updates pipeline
     COMPLETE_STEP: 'end_phase', // Legacy 'end_phase' now maps to COMPLETE_STEP event
     NEXT_EVENT: 'next_event', // Next event
+    NEW_CHAPTER: 'new_chapter', // New chapter
+    NEW_SECTION: 'new_section', // New section
 };
 
 // ==============================================
@@ -464,6 +464,20 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     // Determine cell type from backend's 'shotType'
                     const cellType = step.shotType === 'action' ? 'code' : 'text';
                     get().addAction({ id: actionId, type: cellType, content: step.content || '', metadata: step.metadata || {} });
+                    syncStateIfPresent();
+                    break;
+                }
+                case ACTION_TYPES.NEW_CHAPTER: {
+                    const actionId = step.storeId || uuidv4();
+                    const cellType = 'text';
+                    get().addAction({ id: actionId, type: cellType, content: `## ${step.content}`, metadata: step.metadata || {} });
+                    syncStateIfPresent();
+                    break;
+                }
+                case ACTION_TYPES.NEW_SECTION: {
+                    const actionId = step.storeId || uuidv4();
+                    const cellType = 'text';
+                    get().addAction({ id: actionId, type: cellType, content: `### ${step.content}`, metadata: step.metadata || {} });
                     syncStateIfPresent();
                     break;
                 }

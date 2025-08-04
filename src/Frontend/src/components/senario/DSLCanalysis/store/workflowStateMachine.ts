@@ -560,54 +560,110 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
             }
 
             // BEHAVIOR_COMPLETED: Send feedback and decide next action based on response
-            case WORKFLOW_STATES.BEHAVIOR_COMPLETED: {
-                console.log(`[FSM Effect] Getting feedback for behavior: ${context.currentBehaviorId}`);
-                const feedbackResponse: FeedbackResponse = await workflowAPIClient.sendFeedback({
-                    stage_id: context.currentStageId!,
-                    step_index: context.currentStepId!,
-                    state: getContext() || {},
-                });
+            case WORKFLOW_STATES.BEHAVIOR_COMPLETED: {               
+                try {
+                    const feedbackResponse: FeedbackResponse = await workflowAPIClient.sendFeedback({
+                        stage_id: context.currentStageId!,
+                        step_index: context.currentStepId!,
+                        state: getContext() || {},
+                    });
 
-                if (feedbackResponse.targetAchieved) {
-                    if (feedbackResponse.stepCompleted) {
-                        // Step is done, move to next step
+                    console.log(`[FSM Effect] BEHAVIOR_COMPLETED: Feedback response received:`, feedbackResponse);
+
+                    if (feedbackResponse.targetAchieved) {
+                        console.log(`[FSM Effect] BEHAVIOR_COMPLETED: Target achieved, transitioning to COMPLETE_STEP`);
                         transition(EVENTS.NEXT_STEP);
-                    } else if (feedbackResponse.nextBehaviorId) {
-                        // Set next behavior and continue
-                        useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorId: feedbackResponse.nextBehaviorId! }}));
-                        transition(EVENTS.NEXT_BEHAVIOR);
                     } else {
-                        // Default to completing step
-                        transition(EVENTS.NEXT_STEP);
+                        console.log(`[FSM Effect] BEHAVIOR_COMPLETED: Target not achieved, retrying behavior`);
+                        transition(EVENTS.NEXT_BEHAVIOR);
                     }
-                } else {
-                    // Target not achieved, retry current behavior
-                    transition(EVENTS.NEXT_BEHAVIOR);
+                } catch (error) {
+                    console.error(`[FSM Effect] BEHAVIOR_COMPLETED: Error getting feedback:`, error);
+                    transition(EVENTS.FAIL, { error: `Feedback request failed: ${error.message}` });
                 }
                 break;
             }
 
             // STEP_COMPLETED: Decide next step or complete stage
             case WORKFLOW_STATES.STEP_COMPLETED: {
+                console.log(`[FSM Effect] STEP_COMPLETED: Processing step completion for step: ${context.currentStepId}`);
+                
                 const pipeline = usePipelineStore.getState();
                 const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
-                const currentStepIndex = stage?.steps.findIndex(st => st.id === context.currentStepId) ?? -1;
-                const isLastStep = currentStepIndex === (stage?.steps.length ?? 0) - 1;
+                
+                console.log(`[FSM Effect] STEP_COMPLETED: Found stage: ${stage?.id}, with ${stage?.steps?.length || 0} steps`);
+                
+                if (!stage) {
+                    console.error(`[FSM Effect] STEP_COMPLETED: Stage not found for ID: ${context.currentStageId}`);
+                    transition(EVENTS.FAIL, { error: new Error(`Stage not found: ${context.currentStageId}`) });
+                    break;
+                }
+                
+                // Enhanced step finding logic - check both id and step_id fields
+                let currentStepIndex = -1;
+                let currentStep = null;
+                
+                // First try to find by id
+                currentStepIndex = stage.steps.findIndex(st => st.id === context.currentStepId);
+                if (currentStepIndex >= 0) {
+                    currentStep = stage.steps[currentStepIndex];
+                    console.log(`[FSM Effect] STEP_COMPLETED: Found current step by id at index ${currentStepIndex}:`, currentStep);
+                } else {
+                    // Fallback: try to find by step_id
+                    currentStepIndex = stage.steps.findIndex(st => st.step_id === context.currentStepId);
+                    if (currentStepIndex >= 0) {
+                        currentStep = stage.steps[currentStepIndex];
+                        console.log(`[FSM Effect] STEP_COMPLETED: Found current step by step_id at index ${currentStepIndex}:`, currentStep);
+                    }
+                }
+                
+                if (currentStepIndex === -1) {
+                    console.error(`[FSM Effect] STEP_COMPLETED: Current step not found in stage steps. CurrentStepId: ${context.currentStepId}, Available steps:`, stage.steps.map(s => ({ id: s.id, step_id: s.step_id })));
+                    transition(EVENTS.FAIL, { error: new Error(`Current step not found in stage: ${context.currentStepId}`) });
+                    break;
+                }
+                
+                const totalSteps = stage.steps.length;
+                const isLastStep = currentStepIndex === totalSteps - 1;
+                
+                console.log(`[FSM Effect] STEP_COMPLETED: Step position: ${currentStepIndex + 1}/${totalSteps}, isLastStep: ${isLastStep}`);
 
                 if (isLastStep) {
                     // This was the last step in the stage
+                    console.log(`[FSM Effect] STEP_COMPLETED: Last step completed, transitioning to next stage`);
                     transition(EVENTS.NEXT_STAGE);
                 } else {
                     // Move to next step in same stage
-                    const nextStep = stage?.steps[currentStepIndex + 1];
-                    if (nextStep && nextStep.id) {
-                        useWorkflowStateMachine.setState(state => ({
-                            ...state,
-                            context: { ...state.context, currentStepId: nextStep.id }
-                        }));
-                        transition(EVENTS.NEXT_STEP);
+                    const nextStepIndex = currentStepIndex + 1;
+                    const nextStep = stage.steps[nextStepIndex];
+                    
+                    console.log(`[FSM Effect] STEP_COMPLETED: Next step at index ${nextStepIndex}:`, nextStep);
+                    
+                    if (nextStep) {
+                        // Use the appropriate ID field (prefer id over step_id)
+                        const nextStepId = nextStep.id || nextStep.step_id;
+                        
+                        if (nextStepId) {
+                            console.log(`[FSM Effect] STEP_COMPLETED: Moving to next step: ${nextStepId}`);
+                            
+                            useWorkflowStateMachine.setState(state => ({
+                                ...state,
+                                context: { ...state.context, currentStepId: nextStepId }
+                            }));
+                            
+                            // Small delay to ensure state update is processed
+                            setTimeout(() => {
+                                const updatedContext = useWorkflowStateMachine.getState().context;
+                                console.log(`[FSM Effect] STEP_COMPLETED: State updated, new currentStepId: ${updatedContext.currentStepId}`);
+                                transition(EVENTS.NEXT_STEP);
+                            }, 10);
+                        } else {
+                            console.error(`[FSM Effect] STEP_COMPLETED: Next step has no valid ID:`, nextStep);
+                            transition(EVENTS.FAIL, { error: new Error(`Next step has no valid ID at index ${nextStepIndex}`) });
+                        }
                     } else {
-                        transition(EVENTS.FAIL, { error: new Error(`Could not find next step after ${context.currentStepId}`) });
+                        console.error(`[FSM Effect] STEP_COMPLETED: Next step not found at index ${nextStepIndex}`);
+                        transition(EVENTS.FAIL, { error: new Error(`Could not find next step after ${context.currentStepId} at index ${nextStepIndex}`) });
                     }
                 }
                 break;
