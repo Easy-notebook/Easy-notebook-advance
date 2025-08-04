@@ -34,6 +34,7 @@ import { useScriptStore } from './useScriptStore'; // Executor dependency
 // @ts-ignore
 import { useAIPlanningContextStore } from './aiPlanningContext.js'; // Executor dependency
 import { usePipelineStore } from './usePipelineStore';
+import { useWorkflowPanelStore } from '../../../Notebook/store/workflowPanelStore';
 
 // ==============================================
 // Types and Interfaces
@@ -214,14 +215,14 @@ export const EVENTS = {
     UPDATE_WORKFLOW: 'UPDATE_WORKFLOW',
 
     /**
-     * @description Confirms the workflow update, resetting the flow.
-     * @transition WORKFLOW_UPDATE_PENDING -> IDLE
+     * @description Confirms the workflow update, returning to action completed state.
+     * @transition WORKFLOW_UPDATE_PENDING -> ACTION_COMPLETED
      */
     UPDATE_WORKFLOW_CONFIRMED: 'UPDATE_WORKFLOW_CONFIRMED',
 
     /**
-     * @description Rejects the workflow update, returning to the previous state.
-     * @transition WORKFLOW_UPDATE_PENDING -> (previous_state)
+     * @description Rejects the workflow update, returning to action completed state.
+     * @transition WORKFLOW_UPDATE_PENDING -> ACTION_COMPLETED
      */
     UPDATE_WORKFLOW_REJECTED: 'UPDATE_WORKFLOW_REJECTED',
 
@@ -371,7 +372,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      */
     [WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING]: {
         [EVENTS.UPDATE_WORKFLOW_CONFIRMED]: WORKFLOW_STATES.ACTION_COMPLETED,
-        [EVENTS.UPDATE_WORKFLOW_REJECTED]: WORKFLOW_STATES.ERROR,
+        [EVENTS.UPDATE_WORKFLOW_REJECTED]: WORKFLOW_STATES.ACTION_COMPLETED,
+        [EVENTS.COMPLETE_ACTION]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING, // Ignore action completion while waiting for user
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
 
@@ -389,6 +391,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      */
     [WORKFLOW_STATES.ERROR]: {
         [EVENTS.RESET]: WORKFLOW_STATES.IDLE,
+        [EVENTS.START_WORKFLOW]: WORKFLOW_STATES.STAGE_RUNNING,
+        [EVENTS.START_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
     },
 
     /**
@@ -542,6 +546,17 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
             // ACTION_COMPLETED: Decide whether to execute next action or complete behavior
             case WORKFLOW_STATES.ACTION_COMPLETED: {
+                // Check if there's a pending workflow update that needs user confirmation - read from panel store
+                const panelStore = useWorkflowPanelStore.getState();
+                const pendingWorkflowUpdate = panelStore.pendingWorkflowUpdate;
+                
+                if (pendingWorkflowUpdate?.workflowTemplate && panelStore.showWorkflowConfirm) {
+                    console.log('[FSM Effect] Pending workflow update detected, transitioning to WORKFLOW_UPDATE_PENDING');
+                    transition(EVENTS.UPDATE_WORKFLOW, pendingWorkflowUpdate);
+                    return; // Don't continue with normal action flow
+                }
+                
+                // Normal action completion flow
                 const nextActionIndex = context.currentActionIndex + 1;
                 if (nextActionIndex < context.currentBehaviorActions.length) {
                     // More actions to execute - update index and trigger NEXT_ACTION
@@ -680,10 +695,45 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         }
         console.log(`[FSM] Transition: ${fromState} -> ${toState} (Event: ${event})`, payload);
         
-        set(state => ({
-            executionHistory: [...state.executionHistory, { from: fromState, to: toState, event, payload, timestamp: new Date() }],
-            currentState: toState
-        }));
+        set(state => {
+            const newState = {
+                executionHistory: [...state.executionHistory, { from: fromState, to: toState, event, payload, timestamp: new Date() }],
+                currentState: toState
+            };
+            
+            // Store pending workflow data when transitioning to UPDATE_PENDING
+            if (event === EVENTS.UPDATE_WORKFLOW && payload) {
+                newState.pendingWorkflowData = payload;
+            }
+            
+            // Handle workflow update confirmation/rejection
+            if (event === EVENTS.UPDATE_WORKFLOW_CONFIRMED) {
+                // Apply workflow update immediately when confirmed - read from panel store as single source of truth
+                const panelStore = useWorkflowPanelStore.getState();
+                const currentPendingData = panelStore.pendingWorkflowUpdate;
+                if (currentPendingData?.workflowTemplate) {
+                    console.log('[FSM] Applying confirmed workflow update to pipeline');
+                    const pipeline = usePipelineStore.getState();
+                    pipeline.setWorkflowTemplate(currentPendingData.workflowTemplate);
+                    
+                    // Update current stage/step context if nextStageId is provided
+                    if (currentPendingData.nextStageId) {
+                        newState.context = {
+                            ...state.context,
+                            currentStageId: currentPendingData.nextStageId,
+                            currentStepId: null
+                        };
+                    }
+                    
+                    console.log('[FSM] Workflow update applied successfully');
+                }
+                // Clear pending workflow data after applying - this will be handled by useWorkflowManager
+            } else if (event === EVENTS.UPDATE_WORKFLOW_REJECTED) {
+                // Clear pending workflow data when rejected - this will be handled by useWorkflowManager
+            }
+            
+            return newState;
+        });
         
         setTimeout(() => executeStateEffects(toState, payload), 0);
     },

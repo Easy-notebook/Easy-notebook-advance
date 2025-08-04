@@ -505,37 +505,39 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                 }
                 case ACTION_TYPES.UPDATE_WORKFLOW: {
                     // This action requires user confirmation via a UI panel
-                    return new Promise((resolve) => {
-                        const stateMachine = useWorkflowStateMachine.getState();
-                        const workflowPanelStore = useWorkflowPanelStore.getState();
-                        
-                        if (!step.updated_workflow?.workflowTemplate) {
-                            console.error('[useScriptStore] UPDATE_WORKFLOW action received without workflow data.');
-                            stateMachine.transition(EVENTS.FAIL, { error: 'Invalid workflow update payload' });
-                            resolve();
-                            return;
-                        }
+                    console.log('[useScriptStore] UPDATE_WORKFLOW action received:', step);
+                    
+                    // Check for workflow data in different possible locations
+                    let workflowData = null;
+                    if (step.updated_workflow?.workflowTemplate) {
+                        workflowData = step.updated_workflow;
+                    } else if (step.updated_workflow && typeof step.updated_workflow === 'object') {
+                        // Backend might send workflow data directly in updated_workflow
+                        workflowData = { workflowTemplate: step.updated_workflow };
+                    }
+                    
+                    if (!workflowData || !workflowData.workflowTemplate) {
+                        console.error('[useScriptStore] UPDATE_WORKFLOW action received without valid workflow data:', {
+                            step,
+                            updated_workflow: step.updated_workflow,
+                            workflowData
+                        });
+                        transition(EVENTS.FAIL, { error: 'Invalid workflow update payload' });
+                        syncStateIfPresent();
+                        return;
+                    }
 
-                        // 1. Request the update in the FSM, which moves it to a pending state
-                        stateMachine.requestWorkflowUpdate(step.updated_workflow);
-                        
-                        // 2. Configure the UI panel with the pending data and callbacks
-                        workflowPanelStore.setPendingWorkflowUpdate(step.updated_workflow);
-                        workflowPanelStore.setOnConfirmWorkflowUpdate(() => {
-                            stateMachine.confirmWorkflowUpdate(); // Tell FSM to proceed
-                            workflowPanelStore.setShowWorkflowConfirm(false);
-                            resolve(); // Resolve the promise
-                        });
-                        workflowPanelStore.setOnRejectWorkflowUpdate(() => {
-                            stateMachine.rejectWorkflowUpdate(); // Tell FSM to revert
-                            workflowPanelStore.setShowWorkflowConfirm(false);
-                            resolve(); // Resolve the promise
-                        });
-                        
-                        // 3. Show the confirmation dialog to the user
-                        workflowPanelStore.setShowWorkflowConfirm(true);
-                        globalUpdateInterface.createSystemEvent('Workflow update received, awaiting user confirmation.', '', []);
-                    });
+                    // Store in panel store for UI display and as single source of truth
+                    const workflowPanelStore = useWorkflowPanelStore.getState();
+                    workflowPanelStore.setPendingWorkflowUpdate(workflowData);
+                    workflowPanelStore.setShowWorkflowConfirm(true);
+                    
+                    globalUpdateInterface.createSystemEvent('Workflow update received, awaiting user confirmation.', '', []);
+                    
+                    // Sync state and complete this action normally
+                    // The transition to WORKFLOW_UPDATE_PENDING will happen in ACTION_COMPLETED state
+                    syncStateIfPresent();
+                    break;
                 }
                 case ACTION_TYPES.UPDATE_STEP_LIST: {
                     // This is a direct, non-confirmed update to the workflow structure

@@ -140,32 +140,6 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
               }
             ]
           },
-          {
-            id: "chapter_1_data_existence_establishment",
-            title: "Data Existence Establishment",
-            description: "Establish variable definitions, observation units, and PCS hypothesis",
-            steps: [
-              {
-                id: "chapter_1_data_existence_establishment_section_1_workflow_initialization",
-                step_id: "chapter_1_data_existence_establishment_section_1_workflow_initialization",
-                title: "Workflow Initialization",
-                description: "Initialize data existence establishment workflow"
-              }
-            ]
-          },
-          {
-            id: "chapter_2_data_integrity_assurance",
-            title: "Data Integrity Assurance", 
-            description: "Ensure dataset is clean, complete, and structurally valid",
-            steps: [
-              {
-                id: "chapter_2_data_integrity_assurance_section_1_workflow_initialization",
-                step_id: "chapter_2_data_integrity_assurance_section_1_workflow_initialization",
-                title: "Workflow Initialization",
-                description: "Initialize data integrity assurance workflow"
-              }
-            ]
-          }
         ]
       };
 

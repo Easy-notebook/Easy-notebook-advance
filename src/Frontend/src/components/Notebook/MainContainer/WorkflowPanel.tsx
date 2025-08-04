@@ -25,7 +25,7 @@ const UpdateConfirmationDialog = ({ onConfirm, onReject, pendingUpdate }) => {
           <div className="flex items-center gap-3">
             <AlertCircle className="w-6 h-6 text-blue-500" />
             <h3 className="text-lg font-semibold text-gray-900">
-              Workflow Update Suggested
+            The PCS agent suggests updating the TODO
             </h3>
           </div>
           <button onClick={onReject} className="p-1 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close">
@@ -35,18 +35,20 @@ const UpdateConfirmationDialog = ({ onConfirm, onReject, pendingUpdate }) => {
 
         {/* Content */}
         <div className="p-6">
-          <p className="text-gray-600 mb-4">
+          {/* <p className="text-gray-600 mb-4">
             The AI agent suggests updating the plan to better match your goal.
-          </p>
+          </p> */}
           <div className="bg-gray-50 border rounded-lg p-4 max-h-60 overflow-y-auto">
-            <h4 className="font-semibold text-gray-800 mb-3">{newWorkflowName || 'New Plan'}</h4>
+            {/* <h4 className="font-semibold text-gray-800 mb-3">{newWorkflowName || 'New Plan'}</h4> */}
             <ul className="space-y-2">
               {newStages?.map((stage, index) => (
                 <li key={stage.id || index} className="flex items-center gap-3">
                   <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">
                     {index + 1}
                   </span>
-                  <span className="text-sm text-gray-700">{stage.title || stage.id}</span>
+                  <span className="text-sm text-gray-700">
+                    {stage.title || stage.id.replace(/^chapter_\d+_/, '').replace(/_/g, ' ')}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -142,8 +144,15 @@ const WorkflowPanel: React.FC = () => {
   const { context: fsmContext, transition } = useWorkflowStateMachine();
 
   // Callbacks to dispatch events to the state machine
-  const handleConfirm = () => transition(EVENTS.UPDATE_WORKFLOW_CONFIRMED);
-  const handleReject = () => transition(EVENTS.UPDATE_WORKFLOW_REJECTED);
+  const handleConfirm = () => {
+    useWorkflowPanelStore.getState().setShowWorkflowConfirm(false);
+    usePipelineStore.getState().setWorkflowTemplate(pendingWorkflowUpdate.workflowTemplate);
+    transition(EVENTS.UPDATE_WORKFLOW_CONFIRMED);
+  };
+  const handleReject = () => {
+    transition(EVENTS.UPDATE_WORKFLOW_REJECTED);
+    useWorkflowPanelStore.getState().setShowWorkflowConfirm(false);
+  };
 
   // Memoize derived data to prevent unnecessary re-renders
   const navigatorData = useMemo(() => {
