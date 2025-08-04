@@ -97,7 +97,6 @@ export const WORKFLOW_STATES = {
     STEP_COMPLETED: 'step_completed',
     // Behavior
     BEHAVIOR_RUNNING: 'behavior_running',
-    BEHAVIOR_FEEDBACK: 'behavior_feedback',
     BEHAVIOR_COMPLETED: 'behavior_completed',
     // Action
     ACTION_RUNNING: 'action_running',
@@ -153,14 +152,8 @@ export const EVENTS = {
     COMPLETE_ACTION: 'COMPLETE_ACTION',
 
     /**
-     * @description Declares all actions in the current behavior are done, moving to feedback.
-     * @transition BEHAVIOR_RUNNING -> BEHAVIOR_FEEDBACK
-     */
-    EVALUATE_BEHAVIOR: 'EVALUATE_BEHAVIOR',
-
-    /**
-     * @description Declares the current behavior has passed feedback and is complete.
-     * @transition BEHAVIOR_FEEDBACK -> BEHAVIOR_COMPLETED
+     * @description Declares the current behavior has completed execution and feedback, ready for next step.
+     * @transition BEHAVIOR_RUNNING -> BEHAVIOR_COMPLETED (after feedback evaluation)
      */
     COMPLETE_BEHAVIOR: 'COMPLETE_BEHAVIOR',
 
@@ -186,18 +179,23 @@ export const EVENTS = {
     // ==============================================
     // 3. Feedback & Looping Events
     // ==============================================
-
     /**
-     * @description Feedback requires the current behavior to be re-executed.
-     * @transition BEHAVIOR_FEEDBACK -> BEHAVIOR_RUNNING
+     * @description After a behavior is completed, this starts the next behavior in the same step.
+     * @transition ACTION_COMPLETED -> ACTION_RUNNING
      */
-    RETRY_BEHAVIOR: 'RETRY_BEHAVIOR',
+    NEXT_ACTION: 'NEXT_ACTION',
 
     /**
      * @description After a behavior is completed, this starts the next behavior in the same step.
      * @transition BEHAVIOR_COMPLETED -> BEHAVIOR_RUNNING
      */
     NEXT_BEHAVIOR: 'NEXT_BEHAVIOR',
+
+    /**
+     * @description After a behavior is completed, this starts the next behavior in the same step.
+     * @transition STEP_COMPLETED -> STEP_RUNNING
+     */
+    NEXT_STEP: 'NEXT_STEP',
 
     /**
      * @description After a step is completed, this starts the next stage (auto-advance).
@@ -286,9 +284,7 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
         [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_RUNNING,
         [EVENTS.COMPLETE_STAGE]: WORKFLOW_STATES.STAGE_COMPLETED,
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
-        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
-        [EVENTS.UPDATE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING,
-        [EVENTS.UPDATE_STEP]: WORKFLOW_STATES.STEP_UPDATE_PENDING,
+        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED
     },
 
     /**
@@ -299,8 +295,6 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
         [EVENTS.COMPLETE_STEP]: WORKFLOW_STATES.STEP_COMPLETED,
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
-        [EVENTS.UPDATE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING,
-        [EVENTS.UPDATE_STEP]: WORKFLOW_STATES.STEP_UPDATE_PENDING,
     },
 
     /**
@@ -308,11 +302,9 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      */
     [WORKFLOW_STATES.BEHAVIOR_RUNNING]: {
         [EVENTS.START_ACTION]: WORKFLOW_STATES.ACTION_RUNNING,
-        [EVENTS.EVALUATE_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_FEEDBACK,
+        [EVENTS.COMPLETE_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_COMPLETED,
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
-        [EVENTS.UPDATE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING,
-        [EVENTS.UPDATE_STEP]: WORKFLOW_STATES.STEP_UPDATE_PENDING,
     },
 
     /**
@@ -323,6 +315,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
         [EVENTS.COMPLETE_ACTION]: WORKFLOW_STATES.ACTION_COMPLETED,
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
+        [EVENTS.UPDATE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING,
+        [EVENTS.UPDATE_STEP]: WORKFLOW_STATES.STEP_UPDATE_PENDING,
     },
 
     /**
@@ -330,18 +324,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      * from the parent behavior: either start the next action or finish.
      */
     [WORKFLOW_STATES.ACTION_COMPLETED]: {
-        [EVENTS.START_ACTION]: WORKFLOW_STATES.ACTION_RUNNING,      // Start the next action in the sequence.
-        [EVENTS.EVALUATE_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_FEEDBACK, // All actions for this behavior are done, proceed to feedback.
-        [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
-        [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
-    },
-
-    /**
-     * The behavior's actions are complete, and the machine is awaiting feedback from the backend.
-     */
-    [WORKFLOW_STATES.BEHAVIOR_FEEDBACK]: {
-        [EVENTS.RETRY_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
-        [EVENTS.COMPLETE_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_COMPLETED,
+        [EVENTS.NEXT_ACTION]: WORKFLOW_STATES.ACTION_RUNNING,
+        [EVENTS.NEXT_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
@@ -351,7 +335,7 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      */
     [WORKFLOW_STATES.BEHAVIOR_COMPLETED]: {
         [EVENTS.NEXT_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING, // Start the next behavior in the same step
-        [EVENTS.COMPLETE_STEP]: WORKFLOW_STATES.STEP_COMPLETED,     // All behaviors for this step are done
+        [EVENTS.NEXT_STEP]: WORKFLOW_STATES.STEP_RUNNING,     // All behaviors for this step are done
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
@@ -360,8 +344,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      * A step has successfully completed all its behaviors.
      */
     [WORKFLOW_STATES.STEP_COMPLETED]: {
-        [EVENTS.NEXT_STAGE]: WORKFLOW_STATES.STAGE_RUNNING,       // Auto-advance to the next stage
-        [EVENTS.COMPLETE_STAGE]: WORKFLOW_STATES.STAGE_COMPLETED,   // This was the last step of the stage
+        [EVENTS.NEXT_STEP]: WORKFLOW_STATES.STEP_RUNNING,       // Auto-advance to the next stage
+        [EVENTS.NEXT_STAGE]: WORKFLOW_STATES.STAGE_RUNNING,   // This was the last step of the stage
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
@@ -370,7 +354,7 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      * A stage has successfully completed all its steps.
      */
     [WORKFLOW_STATES.STAGE_COMPLETED]: {
-        [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_RUNNING,             // Start the first step of the next stage
+        [EVENTS.NEXT_STAGE]: WORKFLOW_STATES.STAGE_RUNNING,             // Start the first step of the next stage
         [EVENTS.COMPLETE_WORKFLOW]: WORKFLOW_STATES.WORKFLOW_COMPLETED, // This was the last stage
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
@@ -386,8 +370,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      * Waiting for user confirmation on a major workflow update.
      */
     [WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING]: {
-        [EVENTS.UPDATE_WORKFLOW_CONFIRMED]: WORKFLOW_STATES.IDLE,
-        [EVENTS.UPDATE_WORKFLOW_REJECTED]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
+        [EVENTS.UPDATE_WORKFLOW_CONFIRMED]: WORKFLOW_STATES.ACTION_COMPLETED,
+        [EVENTS.UPDATE_WORKFLOW_REJECTED]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
 
@@ -395,8 +379,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      * Waiting for user confirmation on a minor step update.
      */
     [WORKFLOW_STATES.STEP_UPDATE_PENDING]: {
-        [EVENTS.UPDATE_STEP_CONFIRMED]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
-        [EVENTS.UPDATE_STEP_REJECTED]: WORKFLOW_STATES.BEHAVIOR_RUNNING,
+        [EVENTS.UPDATE_STEP_CONFIRMED]: WORKFLOW_STATES.ACTION_COMPLETED,
+        [EVENTS.UPDATE_STEP_REJECTED]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
 
@@ -472,6 +456,14 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
     try {
         switch (state) {
+            /**
+             * [WORKFLOW_STATES.STAGE_RUNNING]: {
+             *    [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_RUNNING,
+             *    [EVENTS.COMPLETE_STAGE]: WORKFLOW_STATES.STAGE_COMPLETED,
+             *    [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
+             *    [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED
+             * },
+             */
             case WORKFLOW_STATES.STAGE_RUNNING: {
                 const pipeline = usePipelineStore.getState();
                 const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
@@ -487,8 +479,6 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
             }
 
             case WORKFLOW_STATES.STEP_RUNNING: {
-                // TODO: Replace with your logic to get the actual first behavior ID for a step.
-                // This could come from the step's definition in the workflow template.
                 const firstBehaviorId = 'behavior_1'; // Placeholder
                 
                 if (firstBehaviorId) {
@@ -531,15 +521,14 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                             if (message.action) actions.push(message.action);
                         }
                     }
-                }
-                
-                console.log(`[FSM Effect] Fetched ${actions.length} actions.`);
+                }                
                 useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorActions: actions, currentActionIndex: 0 }}));
 
                 if (actions.length > 0) {
                     transition(EVENTS.START_ACTION);
                 } else {
-                    transition(EVENTS.EVALUATE_BEHAVIOR);
+                    // No actions to execute, directly move to feedback
+                    transition(EVENTS.COMPLETE_BEHAVIOR);
                 }
                 break;
             }
@@ -558,13 +547,12 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                     useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentActionIndex: nextActionIndex }}));
                     transition(EVENTS.START_ACTION);
                 } else {
-                    transition(EVENTS.EVALUATE_BEHAVIOR);
+                    transition(EVENTS.COMPLETE_BEHAVIOR);
                 }
                 break;
             }
-
-            case WORKFLOW_STATES.BEHAVIOR_FEEDBACK: {
-                console.log(`[FSM Effect] Getting feedback for behavior: ${context.currentBehaviorId}`);
+            
+            case WORKFLOW_STATES.BEHAVIOR_COMPLETED: {
                 const feedbackResponse: FeedbackResponse = await workflowAPIClient.sendFeedback({
                     stage_id: context.currentStageId!,
                     step_index: context.currentStepId!,
@@ -578,16 +566,11 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                         useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorId: feedbackResponse.nextBehaviorId! }}));
                         transition(EVENTS.NEXT_BEHAVIOR);
                     } else {
-                        transition(EVENTS.COMPLETE_BEHAVIOR);
+                        transition(EVENTS.COMPLETE_STEP);
                     }
                 } else {
-                    transition(EVENTS.RETRY_BEHAVIOR);
+                    transition(EVENTS.NEXT_BEHAVIOR);
                 }
-                break;
-            }
-            
-            case WORKFLOW_STATES.BEHAVIOR_COMPLETED: {
-                transition(EVENTS.COMPLETE_STEP);
                 break;
             }
 

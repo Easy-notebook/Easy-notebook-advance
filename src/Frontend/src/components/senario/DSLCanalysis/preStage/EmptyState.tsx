@@ -51,7 +51,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isVDSMode, setIsVDSMode] = useState(false);
   
-  // 非VDS模式的预设问题 - 缩减到3个 - 使用useMemo避免重新创建
   const defaultPresetQuestions = useMemo(() => [
     {
       problem_name: "代码解释与优化",
@@ -79,7 +78,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     qaList,
     addQA,
   } = useAIAgentStore();
-  const { notebookId, viewMode, currentPhaseId, currentStepIndex, getCurrentViewCells, currentCellId, setIsRightSidebarCollapsed, setViewMode } = useStore();
+  const { notebookId, viewMode, currentPhaseId, currentStepIndex, getCurrentViewCells, currentCellId, setIsRightSidebarCollapsed } = useStore();
 
   // 调整文本域高度 - 所有情况下起始都是2行高度
   const adjustTextareaHeight = useCallback(() => {
@@ -852,7 +851,7 @@ interface EmptyStateProps {
   onFileUpload?: () => void;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell, onFileUpload }) => {
+const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
     const { t } = useTranslation();
     const [files, setFiles] = useState<UploadFile[]>([]);
 

@@ -149,7 +149,7 @@ const CELL_TYPE_MAPPING: Record<string, string> = {
 
 // Renamed and streamlined action types
 const ACTION_TYPES = {
-    ADD_ACTION: 'add_action', // Generic add, use shotType to determine cell type
+    ADD_ACTION: 'add', // Generic add, use shotType to determine cell type
     IS_THINKING: 'is_thinking',
     FINISH_THINKING: 'finish_thinking',
     EXEC_CODE: 'exec', // Renamed for clarity
@@ -157,7 +157,7 @@ const ACTION_TYPES = {
     UPDATE_WORKFLOW: 'update_workflow', // Triggers FSM update flow
     UPDATE_STEP_LIST: 'update_stage_steps', // Renamed for clarity, updates pipeline
     COMPLETE_STEP: 'end_phase', // Legacy 'end_phase' now maps to COMPLETE_STEP event
-    // Deprecated actions handled by FSM: END_STEP, SET_COMPLETED_CURRENT_STEP
+    NEXT_EVENT: 'next_event', // Next event
 };
 
 // ==============================================
@@ -452,6 +452,9 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     // Determine cell type from backend's 'shotType'
                     const cellType = step.shotType === 'action' ? 'code' : 'text';
                     get().addAction({ id: actionId, type: cellType, content: step.content || '', metadata: step.metadata || {} });
+                    break;
+                }
+                case ACTION_TYPES.NEXT_EVENT: {
                     break;
                 }
                 case ACTION_TYPES.IS_THINKING: {

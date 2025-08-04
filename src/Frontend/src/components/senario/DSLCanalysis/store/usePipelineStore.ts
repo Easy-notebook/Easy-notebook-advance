@@ -57,6 +57,9 @@ interface PipelineStoreActions {
   /** Initialize workflow asynchronously */
   initializeWorkflow: (planningRequest: any) => Promise<void>;
 
+  /** Start workflow execution after user confirmation */
+  startWorkflowExecution: () => void;
+
   /** Update steps */
   updateStepsForStage: (stageId: string, newSteps: WorkflowStep[]) => void;
 
@@ -112,13 +115,108 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
   },
 
   /**
-   * A minimal implementation that would normally call the backend to build the template.
+   * Initialize workflow using the predefined template
    */
   initializeWorkflow: async (planningRequest) => {
     console.log('[PipelineStore] initializeWorkflow invoked with:', planningRequest);
-    // TODO: call real backend to fetch template
-    // For now, just mark workflow active and stop animating pre-stage
-    set({ isWorkflowActive: true, currentPreStage: 'EMPTY' });
+    
+    try {
+      // Use the predefined workflow template that matches the backend structure
+      const workflowTemplate = {
+        id: "dcls_workflow",
+        name: "Data Science Lifecycle (DCLS) Analysis",
+        description: "Complete data science workflow based on existence first principles",
+        stages: [
+          {
+            id: "chapter_0_planning",
+            title: "Planning & Analysis",
+            description: "Initial problem analysis and workflow planning",
+            steps: [
+              {
+                id: "chapter_0_planning_section_1_design_workflow",
+                step_id: "chapter_0_planning_section_1_design_workflow",
+                title: "Design Workflow",
+                description: "Design customized workflow based on requirements"
+              }
+            ]
+          },
+          {
+            id: "chapter_1_data_existence_establishment",
+            title: "Data Existence Establishment",
+            description: "Establish variable definitions, observation units, and PCS hypothesis",
+            steps: [
+              {
+                id: "chapter_1_data_existence_establishment_section_1_workflow_initialization",
+                step_id: "chapter_1_data_existence_establishment_section_1_workflow_initialization",
+                title: "Workflow Initialization",
+                description: "Initialize data existence establishment workflow"
+              }
+            ]
+          },
+          {
+            id: "chapter_2_data_integrity_assurance",
+            title: "Data Integrity Assurance", 
+            description: "Ensure dataset is clean, complete, and structurally valid",
+            steps: [
+              {
+                id: "chapter_2_data_integrity_assurance_section_1_workflow_initialization",
+                step_id: "chapter_2_data_integrity_assurance_section_1_workflow_initialization",
+                title: "Workflow Initialization",
+                description: "Initialize data integrity assurance workflow"
+              }
+            ]
+          }
+        ]
+      };
+
+      // Set workflow template in store (but don't start execution yet)
+      set({ 
+        workflowTemplate, 
+        isWorkflowActive: false, // Keep false until user confirms
+        currentPreStage: 'EMPTY' 
+      });
+
+      console.log('[PipelineStore] Predefined workflow template set successfully. Ready for user confirmation.');
+
+    } catch (error) {
+      console.error('[PipelineStore] Failed to initialize workflow:', error);
+      // Reset to safe state on error
+      set({ isWorkflowActive: false, currentPreStage: 'PROBLEM_DEFINE' });
+      throw error;
+    }
+  },
+
+  startWorkflowExecution: () => {
+    const state = usePipelineStore.getState();
+    if (!state.workflowTemplate) {
+      console.error('[PipelineStore] Cannot start workflow: no template available');
+      return;
+    }
+
+    try {
+      // Import dynamically to avoid circular dependencies
+      import('./workflowStateMachine').then(({ useWorkflowStateMachine }) => {
+        const firstStageId = state.workflowTemplate!.stages[0]?.id;
+        const firstStepId = state.workflowTemplate!.stages[0]?.steps[0]?.id;
+        
+        if (firstStageId && firstStepId) {
+          // Mark workflow as active
+          usePipelineStore.setState({ isWorkflowActive: true });
+          
+          // Start the state machine
+          useWorkflowStateMachine.getState().startWorkflow({
+            stageId: firstStageId,
+            stepId: firstStepId
+          });
+          
+          console.log('[PipelineStore] Workflow execution started successfully');
+        } else {
+          throw new Error('Invalid workflow template: missing stage or step IDs');
+        }
+      });
+    } catch (error) {
+      console.error('[PipelineStore] Failed to start workflow execution:', error);
+    }
   },
 
   updateStepsForStage: (stageId, newSteps) => {
