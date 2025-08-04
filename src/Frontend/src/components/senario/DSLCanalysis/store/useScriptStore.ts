@@ -504,15 +504,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     break;
                 }
                 case ACTION_TYPES.UPDATE_WORKFLOW: {
-                    // This action requires user confirmation via a UI panel
-                    console.log('[useScriptStore] UPDATE_WORKFLOW action received:', step);
-                    
                     // Check for workflow data in different possible locations
                     let workflowData = null;
                     if (step.updated_workflow?.workflowTemplate) {
                         workflowData = step.updated_workflow;
                     } else if (step.updated_workflow && typeof step.updated_workflow === 'object') {
-                        // Backend might send workflow data directly in updated_workflow
                         workflowData = { workflowTemplate: step.updated_workflow };
                     }
                     
@@ -527,17 +523,15 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                         return;
                     }
 
-                    // Store in panel store for UI display and as single source of truth
-                    const workflowPanelStore = useWorkflowPanelStore.getState();
-                    workflowPanelStore.setPendingWorkflowUpdate(workflowData);
-                    workflowPanelStore.setShowWorkflowConfirm(true);
-                    
+                    // Trigger state machine to handle workflow update (this will pause execution)
+                    console.log('[useScriptStore] Triggering workflow update via state machine');
+                    transition(EVENTS.UPDATE_WORKFLOW, workflowData);
                     globalUpdateInterface.createSystemEvent('Workflow update received, awaiting user confirmation.', '', []);
-                    
-                    // Sync state and complete this action normally
-                    // The transition to WORKFLOW_UPDATE_PENDING will happen in ACTION_COMPLETED state
                     syncStateIfPresent();
-                    break;
+                    
+                    // Don't break here - let the state machine control the flow
+                    // The execution should pause until user confirms/rejects
+                    return;
                 }
                 case ACTION_TYPES.UPDATE_STEP_LIST: {
                     // This is a direct, non-confirmed update to the workflow structure

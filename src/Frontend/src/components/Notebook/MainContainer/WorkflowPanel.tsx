@@ -145,13 +145,12 @@ const WorkflowPanel: React.FC = () => {
 
   // Callbacks to dispatch events to the state machine
   const handleConfirm = () => {
-    useWorkflowPanelStore.getState().setShowWorkflowConfirm(false);
-    usePipelineStore.getState().setWorkflowTemplate(pendingWorkflowUpdate.workflowTemplate);
+    // Only trigger state machine event - let state machine handle all business logic
     transition(EVENTS.UPDATE_WORKFLOW_CONFIRMED);
   };
   const handleReject = () => {
+    // Only trigger state machine event - let state machine handle all cleanup
     transition(EVENTS.UPDATE_WORKFLOW_REJECTED);
-    useWorkflowPanelStore.getState().setShowWorkflowConfirm(false);
   };
 
   // Memoize derived data to prevent unnecessary re-renders

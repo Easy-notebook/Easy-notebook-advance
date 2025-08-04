@@ -546,16 +546,6 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
             // ACTION_COMPLETED: Decide whether to execute next action or complete behavior
             case WORKFLOW_STATES.ACTION_COMPLETED: {
-                // Check if there's a pending workflow update that needs user confirmation - read from panel store
-                const panelStore = useWorkflowPanelStore.getState();
-                const pendingWorkflowUpdate = panelStore.pendingWorkflowUpdate;
-                
-                if (pendingWorkflowUpdate?.workflowTemplate && panelStore.showWorkflowConfirm) {
-                    console.log('[FSM Effect] Pending workflow update detected, transitioning to WORKFLOW_UPDATE_PENDING');
-                    transition(EVENTS.UPDATE_WORKFLOW, pendingWorkflowUpdate);
-                    return; // Don't continue with normal action flow
-                }
-                
                 // Normal action completion flow
                 const nextActionIndex = context.currentActionIndex + 1;
                 if (nextActionIndex < context.currentBehaviorActions.length) {
@@ -704,15 +694,19 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
             // Store pending workflow data when transitioning to UPDATE_PENDING
             if (event === EVENTS.UPDATE_WORKFLOW && payload) {
                 newState.pendingWorkflowData = payload;
+                
+                // Also set UI state to show confirmation dialog
+                const workflowPanelStore = useWorkflowPanelStore.getState();
+                workflowPanelStore.setPendingWorkflowUpdate(payload);
+                workflowPanelStore.setShowWorkflowConfirm(true);
             }
             
             // Handle workflow update confirmation/rejection
             if (event === EVENTS.UPDATE_WORKFLOW_CONFIRMED) {
-                // Apply workflow update immediately when confirmed - read from panel store as single source of truth
-                const panelStore = useWorkflowPanelStore.getState();
-                const currentPendingData = panelStore.pendingWorkflowUpdate;
+                // Apply workflow update from state machine's own pending data
+                const currentPendingData = state.pendingWorkflowData;
                 if (currentPendingData?.workflowTemplate) {
-                    console.log('[FSM] Applying confirmed workflow update to pipeline');
+                    console.log('[FSM] Applying confirmed workflow update to pipeline:', currentPendingData.workflowTemplate.name);
                     const pipeline = usePipelineStore.getState();
                     pipeline.setWorkflowTemplate(currentPendingData.workflowTemplate);
                     
@@ -723,13 +717,42 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                             currentStageId: currentPendingData.nextStageId,
                             currentStepId: null
                         };
+                    } else {
+                        // Verify if current stage still exists in the new workflow
+                        const newWorkflowStages = currentPendingData.workflowTemplate.stages || [];
+                        const currentStageExists = newWorkflowStages.some(stage => stage.id === state.context.currentStageId);
+                        
+                        if (!currentStageExists && newWorkflowStages.length > 0) {
+                            // Current stage doesn't exist in new workflow, switch to first stage
+                            const firstStage = newWorkflowStages[0];
+                            const firstStepId = firstStage.steps && firstStage.steps.length > 0 ? firstStage.steps[0].id : null;
+                            
+                            console.log(`[FSM] Current stage ${state.context.currentStageId} not found in new workflow, switching to first stage: ${firstStage.id} with first step: ${firstStepId}`);
+                            newState.context = {
+                                ...state.context,
+                                currentStageId: firstStage.id,
+                                currentStepId: firstStepId
+                            };
+                        }
                     }
                     
-                    console.log('[FSM] Workflow update applied successfully');
+                    console.log('[FSM] Workflow update applied successfully to pipeline store');
+                } else {
+                    console.warn('[FSM] No pending workflow data found when confirming update');
                 }
-                // Clear pending workflow data after applying - this will be handled by useWorkflowManager
+                
+                // Clear pending workflow data and UI state after applying
+                newState.pendingWorkflowData = null;
+                const workflowPanelStore = useWorkflowPanelStore.getState();
+                workflowPanelStore.setPendingWorkflowUpdate(null);
+                workflowPanelStore.setShowWorkflowConfirm(false);
             } else if (event === EVENTS.UPDATE_WORKFLOW_REJECTED) {
-                // Clear pending workflow data when rejected - this will be handled by useWorkflowManager
+                // Clear pending workflow data and UI state when rejected
+                console.log('[FSM] Workflow update rejected, clearing pending data');
+                newState.pendingWorkflowData = null;
+                const workflowPanelStore = useWorkflowPanelStore.getState();
+                workflowPanelStore.setPendingWorkflowUpdate(null);
+                workflowPanelStore.setShowWorkflowConfirm(false);
             }
             
             return newState;
