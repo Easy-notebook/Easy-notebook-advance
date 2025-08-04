@@ -216,7 +216,30 @@ class BaseAction(StepTemplate):
             "stages": []
         }
         
+        # Always include chapter_0_planning as the first stage
+        planning_stage_id = "chapter_0_planning"
+        if planning_stage_id in available_chapters:
+            planning_info = available_chapters[planning_stage_id]
+            planning_sections = planning_info.get("sections", [])
+            first_section = planning_sections[0] if planning_sections else "section_1_design_workflow"
+            
+            workflow_config["stages"].append({
+                "id": planning_stage_id,
+                "name": planning_info["name"],
+                "description": planning_info["description"],
+                "steps": [{
+                    "id": f"{planning_stage_id}_{first_section}",
+                    "step_id": f"{planning_stage_id}_{first_section}",
+                    "name": first_section.replace("_", " ").title(),
+                    "description": f"Execute {first_section} workflow step"
+                }]
+            })
+        
+        # Add all selected stages (excluding planning stage if already added)
         for stage_id in selected_stages:
+            if stage_id == planning_stage_id:
+                continue  # Skip if planning stage already added
+                
             stage_info = available_chapters[stage_id]
             
             # Get first section for this stage (only show first step, others added dynamically)
@@ -244,7 +267,7 @@ class BaseAction(StepTemplate):
             "workflow_config": workflow_config,
             "initial_state": initial_state,
             "stage_execution_plan": [],  # Add missing field
-            "message": f"已初始化包含 {len(selected_stages)} 个阶段的workflow，每个阶段包含初始化step"
+            "message": f"已初始化包含 {len(workflow_config['stages'])} 个阶段的workflow，包含默认的planning阶段"
         }
     
     def update_stage_steps(self, stage_execution_plan: List[str]):

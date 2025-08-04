@@ -396,11 +396,29 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
 
     setEffectAsThinking: (thinkingText = "finished thinking"): void => {
         const { cells, updateCellMetadata } = useNotebookStore.getState();
-        const lastCell = cells.filter(cell => cell.type === 'code').pop();
-        if (!lastCell) return;
-        const newMetadata = { ...lastCell.metadata, finished_thinking: true, thinkingText };
-        updateCellMetadata(lastCell.id, newMetadata);
-        get().updateAction(lastCell.id, { metadata: newMetadata });
+        const lastCell = cells[cells.length - 1];
+        if (lastCell.type !== 'code') {
+            console.warn('last cell is not code type, but', lastCell.type);
+            return;
+        }
+        // update last code cell's metadata, add finished_thinking mark
+        updateCellMetadata(lastCell.id, {
+            ...lastCell.metadata,
+            finished_thinking: true,
+            thinkingText: thinkingText
+        });
+        // ensure step's shot's metadata is also updated
+        set(state => {
+            const updatedActions = state.actions.map(shot => {
+                if (shot.id === lastCell.id) {
+                    return { ...shot, metadata: { ...shot.metadata, finished_thinking: true, thinkingText: thinkingText } };
+                }
+                return shot;
+            });
+            return {
+                actions: updatedActions
+            };
+        });
     },
 
     // ==============================================
@@ -413,7 +431,20 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
             if (need_output) setCellMode(codecell_id, 'output_only');
             const result = await executeCell(codecell_id);
             if (result?.success && result.outputs) {
-                useAIPlanningContextStore.getState().addEffect(result.outputs);
+                // Convert outputs to effect format and add to context
+                console.log('[useScriptStore] Raw execution result.outputs:', result.outputs);
+                if (Array.isArray(result.outputs)) {
+                    // For array outputs, each item should be added as a separate effect
+                    result.outputs.forEach((item: any) => {
+                        const effectText = item.content || item.text || item.toString();
+                        console.log('[useScriptStore] Adding effect item:', effectText);
+                        useAIPlanningContextStore.getState().addEffect(effectText);
+                    });
+                } else {
+                    const effectText = result.outputs.content || result.outputs.text || result.outputs.toString();
+                    console.log('[useScriptStore] Adding single effect:', effectText);
+                    useAIPlanningContextStore.getState().addEffect(effectText);
+                }
             }
             if (auto_debug && !result?.success) {
                 setTimeout(() => {
@@ -449,11 +480,33 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         const syncStateIfPresent = () => {
             if (step.state) {
                 console.log(`[useScriptStore] Syncing state from action '${actionType}':`, step.state);
-                const { setContext } = useAIPlanningContextStore.getState();
-                setContext(step.state);
+                const { setContext, getContext } = useAIPlanningContextStore.getState();
+                
+                // Preserve current effect state when syncing
+                const currentContext = getContext();
+                const mergedState = {
+                    ...step.state,
+                    effect: currentContext.effect // Keep current effect state
+                };
+                
+                console.log(`[useScriptStore] Merged state (preserving effect):`, mergedState);
+                setContext(mergedState);
                 console.log(`[useScriptStore] State sync completed for action '${actionType}'`);
             } else {
                 console.log(`[useScriptStore] No state to sync for action '${actionType}'`);
+            }
+        };
+
+        // Helper function to ensure current context is synced back to workflow state machine
+        const syncCurrentStateToWorkflow = () => {
+            const currentContext = useAIPlanningContextStore.getState().getContext();
+            console.log(`[useScriptStore] Current effect state:`, currentContext.effect);
+            console.log(`[useScriptStore] Syncing current context back to workflow:`, currentContext);
+            // Update the workflow state machine's context with current state
+            const { updateRequestContext } = useAIPlanningContextStore.getState();
+            const currentStepId = get().getCurrentStepId();
+            if (currentStepId) {
+                updateRequestContext(currentStepId, currentStepId);
             }
         };
 
@@ -497,11 +550,29 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                 case ACTION_TYPES.EXEC_CODE: {
                     const targetId = step.codecell_id === "lastAddedCellId" ? get().lastAddedActionId : step.codecell_id;
                     if (targetId) {
+                        console.log(`Executing code: ${targetId}`);
+                        globalUpdateInterface.createAIRunningCode(`Executing...`, '', [], targetId, true);
                         const result = await get().execCodeCell(targetId, step.need_output, step.auto_debug);
+                        console.log(`Execution completed: ${targetId}`, result);
+                        globalUpdateInterface.createAIRunningCode(`Execution completed`, "", [], targetId, false);
                         syncStateIfPresent();
+                        // Ensure the effect state is synced back to the workflow
+                        syncCurrentStateToWorkflow();
                         return result;
+                    } else {
+                        console.warn('Failed to execute code: Cell ID not found');
+                        globalUpdateInterface.createSystemEvent('Execution failed: Cell ID not found', '', [], null);
                     }
-                    console.warn('[useScriptStore] EXEC_CODE called without a valid target cell ID.');
+                    syncStateIfPresent();
+                    break;
+                }
+                case 'set_effect_as_thinking': {
+                    get().setEffectAsThinking(step.thinkingText);
+                    syncStateIfPresent();
+                    break;
+                }
+                case 'update_last_text': {
+                    get().updateLastText(step.text);
                     syncStateIfPresent();
                     break;
                 }
@@ -542,9 +613,6 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     transition(EVENTS.UPDATE_WORKFLOW, workflowData);
                     globalUpdateInterface.createSystemEvent('Workflow update received, awaiting user confirmation.', '', []);
                     syncStateIfPresent();
-                    
-                    // Don't break here - let the state machine control the flow
-                    // The execution should pause until user confirms/rejects
                     return;
                 }
                 case ACTION_TYPES.UPDATE_STEP_LIST: {

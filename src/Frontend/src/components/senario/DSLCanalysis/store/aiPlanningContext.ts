@@ -243,12 +243,15 @@ const storeCreator: StateCreator<AIPlanningStore> = (set, get) => ({
   resetEffect: () => set({ effect: { current: [], history: [] } }),
   setEffect: (newEffect) => set({ effect: newEffect }),
   addEffect: (newEffectItem) => {
-    set((state) => ({
-      effect: {
+    console.log(`[aiPlanningContext] Adding effect item:`, newEffectItem);
+    set((state) => {
+      const newEffect = {
         ...state.effect,
         current: [...state.effect.current, newEffectItem],
-      },
-    }));
+      };
+      console.log(`[aiPlanningContext] Updated effect state:`, newEffect);
+      return { effect: newEffect };
+    });
   },
   clearStageStatus: (stageId) =>
     set((state) => ({ stageStatus: { ...state.stageStatus, [stageId]: false } })),

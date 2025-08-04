@@ -74,7 +74,6 @@ async def create_workflow_initialization(
         action_selection = pcs_agent.select_stage_actions_cli(
             stage_name=stage_name,
             stage_goal=stage_goal, 
-            required_states=required_states,
             available_actions=available_actions,
             current_data_state=current_data_state,
             user_goal=user_goal

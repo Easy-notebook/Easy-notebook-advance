@@ -336,7 +336,7 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      */
     [WORKFLOW_STATES.BEHAVIOR_COMPLETED]: {
         [EVENTS.NEXT_BEHAVIOR]: WORKFLOW_STATES.BEHAVIOR_RUNNING, // Start the next behavior in the same step
-        [EVENTS.NEXT_STEP]: WORKFLOW_STATES.STEP_RUNNING,     // All behaviors for this step are done
+        [EVENTS.COMPLETE_STEP]: WORKFLOW_STATES.STEP_COMPLETED,   // Step is considered completed after behavior finished
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
@@ -345,8 +345,8 @@ const STATE_TRANSITIONS: Record<WorkflowState, Partial<Record<WorkflowEvent, Wor
      * A step has successfully completed all its behaviors.
      */
     [WORKFLOW_STATES.STEP_COMPLETED]: {
-        [EVENTS.NEXT_STEP]: WORKFLOW_STATES.STEP_RUNNING,       // Auto-advance to the next stage
-        [EVENTS.NEXT_STAGE]: WORKFLOW_STATES.STAGE_RUNNING,   // This was the last step of the stage
+        [EVENTS.COMPLETE_STAGE]: WORKFLOW_STATES.STAGE_COMPLETED, // Stage is completed when step is done
+        [EVENTS.NEXT_STEP]: WORKFLOW_STATES.STEP_RUNNING,
         [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
         [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED,
     },
@@ -458,96 +458,97 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
     console.log(`[FSM Effect] Executing for state: ${state}`, { context, payload });
 
-    /**
+ /**
      * Updates the context pointers to the next step or stage.
-     * It handles cases where the current context is invalid by defaulting to the first item.
+     * It handles advancing the `currentStageId` or `currentStepId` in the state machine's context,
+     * resetting lower-level context appropriately.
      * @param {'step' | 'stage'} level - The level to advance.
      */
-    const move2Next = (level: 'step' | 'stage') => {
-        // Get current state from the stores
-        const { context } = useWorkflowStateMachine.getState();
-        const { workflowTemplate } = usePipelineStore.getState();
+ const move2Next = (level: 'step' | 'stage') => {
+    const { context, fail } = useWorkflowStateMachine.getState();
+    const { workflowTemplate } = usePipelineStore.getState();
 
-        // Exit if the workflow structure is not available
-        if (!workflowTemplate?.stages?.length) {
-            console.error("move2Next Error: Workflow template is not loaded or has no stages.");
+    // Guard against missing workflow data, which is a critical error.
+    if (!workflowTemplate?.stages?.length) {
+        console.error("[move2Next] Aborted: Workflow template or stages are missing.");
+        fail(new Error("Workflow template not loaded"), "Cannot advance to the next item.");
+        return;
+    }
+
+    if (level === 'stage') {
+        const stages = workflowTemplate.stages;
+        const currentStageIndex = stages.findIndex(s => s.id === context.currentStageId);
+
+        if (currentStageIndex === -1) {
+            console.error(`[move2Next] Failed to find current stage with ID: '${context.currentStageId}'. This indicates a state inconsistency.`);
+            fail(new Error(`Stage not found: ${context.currentStageId}`), "Inconsistent state detected.");
             return;
         }
 
-        if (level === 'stage') {
-            const stages = workflowTemplate.stages;
-            let nextStage = null;
-
-            // Find the index of the current stage
-            const currentStageIndex = stages.findIndex(s => s.id === context.currentStageId);
-
-            if (currentStageIndex === -1) {
-                // If current stage is lost, default to the first stage
-                console.warn(`move2Next: Current stage '${context.currentStageId}' not found. Defaulting to the first stage.`);
-                nextStage = stages[0];
-            } else if (currentStageIndex < stages.length - 1) {
-                // If it's not the last stage, get the next one
-                nextStage = stages[currentStageIndex + 1];
-            } else {
-                // Already at the last stage, do nothing
-                console.log(`move2Next: Already at the last stage ('${context.currentStageId}').`);
-                return;
-            }
-
-            // Update state if a next stage was determined
-            if (nextStage) {
-                const firstStepId = nextStage.steps?.[0]?.id || null;
-                useWorkflowStateMachine.setState(s => ({
-                    context: {
-                        ...s.context,
-                        currentStageId: nextStage.id,
-                        currentStepId: firstStepId // Also update the step pointer
-                    }
-                }));
-            }
-
-        } else if (level === 'step') {
-            // Find the current stage object
-            const currentStage = workflowTemplate.stages.find(s => s.id === context.currentStageId);
-
-            // Exit if the current stage is not valid or has no steps
-            if (!currentStage?.steps?.length) {
-                console.error(`move2Next Error: Current stage ('${context.currentStageId}') not found or has no steps.`);
-                return;
-            }
-
-            const steps = currentStage.steps;
-            let nextStep = null;
-
-            // Find the index of the current step
-            const currentStepIndex = steps.findIndex(s => s.id === context.currentStepId);
-
-            if (currentStepIndex === -1) {
-                // If current step is lost, default to the first step
-                console.warn(`move2Next: Current step '${context.currentStepId}' not found. Defaulting to the first step.`);
-                nextStep = steps[0];
-            } else if (currentStepIndex < steps.length - 1) {
-                // If it's not the last step, get the next one
-                nextStep = steps[currentStepIndex + 1];
-            } else {
-                // Already at the last step of the stage, do nothing
-                console.log(`move2Next: Already at the last step ('${context.currentStepId}') of the stage.`);
-                return;
-            }
-
-            // Update state if a next step was determined
-            if (nextStep) {
-                const nextStepId = nextStep?.id ?? (nextStep as any)?.step_id ?? null;
-                useWorkflowStateMachine.setState(s => ({
-                    context: {
-                        ...s.context,
-                        currentStepId: nextStepId
-                    }
-                }));
-            }
+        // Check if it's already the last stage.
+        if (currentStageIndex >= stages.length - 1) {
+            console.log(`[move2Next] Already at the last stage ('${context.currentStageId}'). The workflow should now complete.`);
+            // The calling logic (e.g., in STAGE_COMPLETED effect) will handle transitioning to COMPLETE_WORKFLOW.
+            return;
         }
-    };
 
+        // Correctly get the next stage.
+        const nextStage = stages[currentStageIndex + 1];
+        const firstStepId = nextStage.steps?.[0]?.id || null;
+        
+        console.log(`[move2Next] Advancing from stage '${context.currentStageId}' to '${nextStage.id}'.`);
+
+        useWorkflowStateMachine.setState(s => ({
+            context: {
+                ...s.context,
+                currentStageId: nextStage.id,
+                currentStepId: firstStepId, // Reset to the first step of the new stage
+                currentBehaviorActions: [],
+                currentActionIndex: 0,
+            }
+        }));
+
+    } else if (level === 'step') {
+        const currentStage = workflowTemplate.stages.find(s => s.id === context.currentStageId);
+
+        if (!currentStage || !currentStage.steps?.length) {
+            console.error(`[move2Next] Failed to find current stage ('${context.currentStageId}') or it contains no steps.`);
+            fail(new Error(`Stage not found or is empty: ${context.currentStageId}`), "Inconsistent state detected.");
+            return;
+        }
+
+        const steps = currentStage.steps;
+        // Use a robust check for the current step index, looking at both id and step_id.
+        const currentStepIndex = steps.findIndex(st => st.id === context.currentStepId || st.step_id === context.currentStepId);
+
+        if (currentStepIndex === -1) {
+            console.error(`[move2Next] Failed to find current step with ID: '${context.currentStepId}' in stage '${currentStage.id}'.`);
+            fail(new Error(`Step not found: ${context.currentStepId}`), "Inconsistent state detected.");
+            return;
+        }
+
+        // Check if it's already the last step of the current stage.
+        if (currentStepIndex >= steps.length - 1) {
+            console.log(`[move2Next] Already at the last step ('${context.currentStepId}') of stage '${currentStage.id}'.`);
+            // The calling logic (e.g., in STEP_COMPLETED effect) will handle transitioning to COMPLETE_STAGE.
+            return;
+        }
+
+        // Correctly get the next step.
+        const nextStep = steps[currentStepIndex + 1];
+        
+        console.log(`[move2Next] Advancing from step '${context.currentStepId}' to '${nextStep.id}'.`);
+
+        useWorkflowStateMachine.setState(s => ({
+            context: {
+                ...s.context,
+                currentStepId: nextStep.id, // Set the new step ID
+                currentBehaviorActions: [], // Reset behavior context
+                currentActionIndex: 0,
+            }
+        }));
+    }
+};
     try {
         switch (state) {
             case WORKFLOW_STATES.STAGE_RUNNING: {
@@ -565,14 +566,7 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
             }
 
             case WORKFLOW_STATES.STEP_RUNNING: {
-                const firstBehaviorId = 'behavior_1'; // TODO: Get actual behavior ID from step definition
-
-                if (firstBehaviorId) {
-                    useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorId: firstBehaviorId } }));
-                    transition(EVENTS.START_BEHAVIOR);
-                } else {
-                    transition(EVENTS.FAIL, { error: new Error(`No behaviors found for step ${context.currentStepId}`) });
-                }
+                transition(EVENTS.START_BEHAVIOR);
                 break;
             }
 
@@ -656,9 +650,7 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                     console.log(`[FSM Effect] BEHAVIOR_COMPLETED: Feedback response received:`, feedbackResponse);
 
                     if (feedbackResponse.targetAchieved) {
-                        console.log(`[FSM Effect] BEHAVIOR_COMPLETED: Target achieved, transitioning to COMPLETE_STEP`);
-                        move2Next('step');
-                        transition(EVENTS.NEXT_STEP);
+                        transition(EVENTS.COMPLETE_STEP);
                     } else {
                         transition(EVENTS.NEXT_BEHAVIOR);
                     }
@@ -671,51 +663,14 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
             // STEP_COMPLETED: Decide next step or complete stage
             case WORKFLOW_STATES.STEP_COMPLETED: {
-                console.log(`[FSM Effect] STEP_COMPLETED: Processing step completion for step: ${context.currentStepId}`);
-
+                // Check if this is the last step in the current stage
                 const pipeline = usePipelineStore.getState();
-                const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
-
-                console.log(`[FSM Effect] STEP_COMPLETED: Found stage: ${stage?.id}, with ${stage?.steps?.length || 0} steps`);
-
-                if (!stage) {
-                    console.error(`[FSM Effect] STEP_COMPLETED: Stage not found for ID: ${context.currentStageId}`);
-                    transition(EVENTS.FAIL, { error: new Error(`Stage not found: ${context.currentStageId}`) });
-                    break;
-                }
-
-                // Enhanced step finding logic - check both id and step_id fields
-                let currentStepIndex = -1;
-                let currentStep = null;
-
-                // First try to find by id
-                currentStepIndex = stage.steps.findIndex(st => st.id === context.currentStepId);
-                if (currentStepIndex >= 0) {
-                    currentStep = stage.steps[currentStepIndex];
-                    console.log(`[FSM Effect] STEP_COMPLETED: Found current step by id at index ${currentStepIndex}:`, currentStep);
-                } else {
-                    // Fallback: try to find by step_id
-                    currentStepIndex = stage.steps.findIndex(st => st.step_id === context.currentStepId);
-                    if (currentStepIndex >= 0) {
-                        currentStep = stage.steps[currentStepIndex];
-                        console.log(`[FSM Effect] STEP_COMPLETED: Found current step by step_id at index ${currentStepIndex}:`, currentStep);
-                    }
-                }
-
-                if (currentStepIndex === -1) {
-                    console.error(`[FSM Effect] STEP_COMPLETED: Current step not found in stage steps. CurrentStepId: ${context.currentStepId}, Available steps:`, stage.steps.map(s => ({ id: s.id, step_id: s.step_id })));
-                    transition(EVENTS.FAIL, { error: new Error(`Current step not found in stage: ${context.currentStepId}`) });
-                    break;
-                }
-
-                const totalSteps = stage.steps.length;
-                const isLastStep = currentStepIndex === totalSteps - 1;
-
-                console.log(`[FSM Effect] STEP_COMPLETED: Step position: ${currentStepIndex + 1}/${totalSteps}, isLastStep: ${isLastStep}`);
+                const currentStage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
+                const currentStepIndex = currentStage?.steps.findIndex(step => step.id === context.currentStepId) ?? -1;
+                const isLastStep = currentStepIndex === (currentStage?.steps.length ?? 0) - 1;
 
                 if (isLastStep) {
-                    move2Next('stage');
-                    transition(EVENTS.NEXT_STAGE);
+                    transition(EVENTS.COMPLETE_STAGE);
                 } else {
                     move2Next('step');
                     transition(EVENTS.NEXT_STEP);
