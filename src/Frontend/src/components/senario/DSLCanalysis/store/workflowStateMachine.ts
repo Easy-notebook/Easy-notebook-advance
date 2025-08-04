@@ -456,14 +456,6 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
     try {
         switch (state) {
-            /**
-             * [WORKFLOW_STATES.STAGE_RUNNING]: {
-             *    [EVENTS.START_STEP]: WORKFLOW_STATES.STEP_RUNNING,
-             *    [EVENTS.COMPLETE_STAGE]: WORKFLOW_STATES.STAGE_COMPLETED,
-             *    [EVENTS.FAIL]: WORKFLOW_STATES.ERROR,
-             *    [EVENTS.CANCEL]: WORKFLOW_STATES.CANCELLED
-             * },
-             */
             case WORKFLOW_STATES.STAGE_RUNNING: {
                 const pipeline = usePipelineStore.getState();
                 const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
@@ -479,7 +471,7 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
             }
 
             case WORKFLOW_STATES.STEP_RUNNING: {
-                const firstBehaviorId = 'behavior_1'; // Placeholder
+                const firstBehaviorId = 'behavior_1'; // TODO: Get actual behavior ID from step definition
                 
                 if (firstBehaviorId) {
                     useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorId: firstBehaviorId } }));
@@ -490,9 +482,9 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                 break;
             }
 
+            // BEHAVIOR_RUNNING: Fetch actions and start first action
             case WORKFLOW_STATES.BEHAVIOR_RUNNING: {
-                console.log(`[FSM Effect] Fetching actions for behavior: ${context.currentBehaviorId}`);
-                const response = await fetch(constants.API.SEQUENCE_API_URL, {
+                const response = await fetch(constants.API.BEHAVIOR_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -518,21 +510,28 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                     for (const line of lines) {
                         if (line.trim()) {
                             const message = JSON.parse(line);
-                            if (message.action) actions.push(message.action);
+                            if (message.action) {
+                                actions.push(message.action);
+                            }
                         }
                     }
-                }                
+                }
+                
+                console.log(`[FSM Effect] Fetched ${actions.length} actions.`);
+                
                 useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorActions: actions, currentActionIndex: 0 }}));
 
                 if (actions.length > 0) {
                     transition(EVENTS.START_ACTION);
                 } else {
-                    // No actions to execute, directly move to feedback
+                    // No actions to execute - complete behavior directly
+                    console.log(`[FSM Effect] No actions returned for behavior: ${context.currentBehaviorId}, completing behavior directly`);
                     transition(EVENTS.COMPLETE_BEHAVIOR);
                 }
                 break;
             }
 
+            // ACTION_RUNNING: Execute the current action
             case WORKFLOW_STATES.ACTION_RUNNING: {
                 const currentAction = context.currentBehaviorActions[context.currentActionIndex];
                 console.log(`[FSM Effect] Executing action #${context.currentActionIndex + 1}:`, currentAction.action);
@@ -541,18 +540,23 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                 break;
             }
 
+            // ACTION_COMPLETED: Decide whether to execute next action or complete behavior
             case WORKFLOW_STATES.ACTION_COMPLETED: {
                 const nextActionIndex = context.currentActionIndex + 1;
                 if (nextActionIndex < context.currentBehaviorActions.length) {
+                    // More actions to execute - update index and trigger NEXT_ACTION
                     useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentActionIndex: nextActionIndex }}));
-                    transition(EVENTS.START_ACTION);
+                    transition(EVENTS.NEXT_ACTION);
                 } else {
-                    transition(EVENTS.COMPLETE_BEHAVIOR);
+                    // All actions completed - trigger NEXT_BEHAVIOR to go to BEHAVIOR_RUNNING
+                    transition(EVENTS.NEXT_BEHAVIOR);
                 }
                 break;
             }
-            
+
+            // BEHAVIOR_COMPLETED: Send feedback and decide next action based on response
             case WORKFLOW_STATES.BEHAVIOR_COMPLETED: {
+                console.log(`[FSM Effect] Getting feedback for behavior: ${context.currentBehaviorId}`);
                 const feedbackResponse: FeedbackResponse = await workflowAPIClient.sendFeedback({
                     stage_id: context.currentStageId!,
                     step_index: context.currentStepId!,
@@ -561,19 +565,24 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
                 if (feedbackResponse.targetAchieved) {
                     if (feedbackResponse.stepCompleted) {
-                        transition(EVENTS.COMPLETE_BEHAVIOR);
+                        // Step is done, move to next step
+                        transition(EVENTS.NEXT_STEP);
                     } else if (feedbackResponse.nextBehaviorId) {
+                        // Set next behavior and continue
                         useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentBehaviorId: feedbackResponse.nextBehaviorId! }}));
                         transition(EVENTS.NEXT_BEHAVIOR);
                     } else {
-                        transition(EVENTS.COMPLETE_STEP);
+                        // Default to completing step
+                        transition(EVENTS.NEXT_STEP);
                     }
                 } else {
+                    // Target not achieved, retry current behavior
                     transition(EVENTS.NEXT_BEHAVIOR);
                 }
                 break;
             }
 
+            // STEP_COMPLETED: Decide next step or complete stage
             case WORKFLOW_STATES.STEP_COMPLETED: {
                 const pipeline = usePipelineStore.getState();
                 const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
@@ -581,17 +590,17 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                 const isLastStep = currentStepIndex === (stage?.steps.length ?? 0) - 1;
 
                 if (isLastStep) {
-                    transition(EVENTS.COMPLETE_STAGE);
+                    // This was the last step in the stage
+                    transition(EVENTS.NEXT_STAGE);
                 } else {
-                    // Auto-advance to the next step in the same stage
+                    // Move to next step in same stage
                     const nextStep = stage?.steps[currentStepIndex + 1];
                     if (nextStep && nextStep.id) {
-                        const nextStepId: string = nextStep.id;
                         useWorkflowStateMachine.setState(state => ({
                             ...state,
-                            context: { ...state.context, currentStepId: nextStepId }
+                            context: { ...state.context, currentStepId: nextStep.id }
                         }));
-                        transition(EVENTS.START_STEP);
+                        transition(EVENTS.NEXT_STEP);
                     } else {
                         transition(EVENTS.FAIL, { error: new Error(`Could not find next step after ${context.currentStepId}`) });
                     }
@@ -599,27 +608,46 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                 break;
             }
 
+            // STAGE_COMPLETED: Decide next stage or complete workflow
             case WORKFLOW_STATES.STAGE_COMPLETED: {
                 const pipeline = usePipelineStore.getState();
                 const currentStageIndex = pipeline.workflowTemplate?.stages.findIndex(s => s.id === context.currentStageId) ?? -1;
                 const isLastStage = currentStageIndex === (pipeline.workflowTemplate?.stages.length ?? 0) - 1;
 
                 if (isLastStage) {
+                    // This was the last stage - complete workflow
                     transition(EVENTS.COMPLETE_WORKFLOW);
                 } else {
+                    // Move to next stage
                     const nextStage = pipeline.workflowTemplate?.stages[currentStageIndex + 1];
                     if (nextStage) {
                         useWorkflowStateMachine.setState(state => ({
                             ...state,
                             context: { ...state.context, currentStageId: nextStage.id, currentStepId: null }
                         }));
-                        transition(EVENTS.START_WORKFLOW); // Re-enter the running state for the new stage
+                        transition(EVENTS.NEXT_STAGE);
                     } else {
                         transition(EVENTS.FAIL, { error: new Error(`Could not find next stage after ${context.currentStageId}`) });
                     }
                 }
                 break;
             }
+
+            // Terminal states don't need side effects
+            case WORKFLOW_STATES.WORKFLOW_COMPLETED:
+            case WORKFLOW_STATES.ERROR:
+            case WORKFLOW_STATES.CANCELLED:
+                // No side effects for terminal states
+                break;
+
+            // Pending states don't need automatic side effects
+            case WORKFLOW_STATES.WORKFLOW_UPDATE_PENDING:
+            case WORKFLOW_STATES.STEP_UPDATE_PENDING:
+                // These states wait for user confirmation
+                break;
+
+            default:
+                console.warn(`[FSM Effect] No side effects defined for state: ${state}`);
         }
     } catch (error) {
         console.error(`[FSM Effect] Unhandled error in state ${state}:`, error);

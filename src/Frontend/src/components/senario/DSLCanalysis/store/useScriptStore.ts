@@ -444,6 +444,18 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
 
         const { transition } = useWorkflowStateMachine.getState();
         const actionType = step.action;
+        
+        // Helper function to sync state if present in action
+        const syncStateIfPresent = () => {
+            if (step.state) {
+                console.log(`[useScriptStore] Syncing state from action '${actionType}':`, step.state);
+                const { setContext } = useAIPlanningContextStore.getState();
+                setContext(step.state);
+                console.log(`[useScriptStore] State sync completed for action '${actionType}'`);
+            } else {
+                console.log(`[useScriptStore] No state to sync for action '${actionType}'`);
+            }
+        };
 
         try {
             switch (actionType) {
@@ -452,6 +464,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     // Determine cell type from backend's 'shotType'
                     const cellType = step.shotType === 'action' ? 'code' : 'text';
                     get().addAction({ id: actionId, type: cellType, content: step.content || '', metadata: step.metadata || {} });
+                    syncStateIfPresent();
                     break;
                 }
                 case ACTION_TYPES.NEXT_EVENT: {
@@ -459,28 +472,35 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                 }
                 case ACTION_TYPES.IS_THINKING: {
                     get().addAction({ type: 'thinking', textArray: step.textArray, agentName: step.agentName, customText: step.customText });
+                    syncStateIfPresent();
                     break;
                 }
                 case ACTION_TYPES.FINISH_THINKING: {
                     get().finishThinking();
+                    syncStateIfPresent();
                     break;
                 }
                 case ACTION_TYPES.EXEC_CODE: {
                     const targetId = step.codecell_id === "lastAddedCellId" ? get().lastAddedActionId : step.codecell_id;
                     if (targetId) {
-                        return await get().execCodeCell(targetId, step.need_output, step.auto_debug);
+                        const result = await get().execCodeCell(targetId, step.need_output, step.auto_debug);
+                        syncStateIfPresent();
+                        return result;
                     }
                     console.warn('[useScriptStore] EXEC_CODE called without a valid target cell ID.');
+                    syncStateIfPresent();
                     break;
                 }
                 case ACTION_TYPES.UPDATE_TITLE: {
                     if (step.title) get().updateTitle(step.title);
+                    syncStateIfPresent();
                     break;
                 }
                 case ACTION_TYPES.COMPLETE_STEP: {
                     // Dispatch event to the FSM to complete the current step
                     console.log(`[useScriptStore] Received command to complete step. Transitioning with ${EVENTS.COMPLETE_STEP}.`);
                     transition(EVENTS.COMPLETE_STEP);
+                    syncStateIfPresent();
                     break;
                 }
                 case ACTION_TYPES.UPDATE_WORKFLOW: {
@@ -527,6 +547,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
                     } else {
                          console.error('[useScriptStore] UPDATE_STEP_LIST action is missing stage_id or updated_steps.');
                     }
+                    syncStateIfPresent();
                     break;
                 }
                 default:
