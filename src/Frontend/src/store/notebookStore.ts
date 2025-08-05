@@ -182,6 +182,8 @@ export interface NotebookStoreActions {
 
     // 单元格创建
     addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => string;
+    addNewCellWithUniqueIdentifier: (type: CellType, description?: string, enableEdit?: boolean, uniqueIdentifier?: string, prompt?: string) => string;
+    updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<Cell>) => boolean;
     addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
     addNewContent2CurrentCell: (content: string) => void;
 
@@ -377,7 +379,20 @@ const useStore = create<NotebookStore>(
         })
       ),
 
-    clearCells: () => set({ cells: [], tasks: [], currentRunningPhaseId: null }),
+    clearCells: () => {
+      const titleCell: Cell = {
+        id: uuidv4(),
+        type: 'markdown',
+        content: '# Untitled',
+        outputs: [],
+        enableEdit: true,
+        phaseId: null,
+        description: null,
+        metadata: { isDefaultTitle: true }
+      };
+      const tasks = parseMarkdownCells([titleCell]);
+      set({ cells: [titleCell], tasks, currentRunningPhaseId: null });
+    },
     clearAllOutputs: () =>
       set(
         produce((state: NotebookStoreState) => {
@@ -397,13 +412,33 @@ const useStore = create<NotebookStore>(
       ),
 
     setCells: (cells: Cell[]) => {
-      const tasks = parseMarkdownCells(cells);
-      const serializedCells = cells.map((cell) => ({
+      let processedCells = cells.map((cell) => ({
         ...cell,
         content: typeof cell.content === 'string' ? cell.content : String(cell.content || ''),
         outputs: serializeOutput(cell.outputs || []),
       }));
-      set({ cells: serializedCells, tasks });
+      
+      // 确保总有一个标题cell在开头
+      const hasTitle = processedCells.some(cell => 
+        cell.type === 'markdown' && cell.content.trim().startsWith('#')
+      );
+      
+      if (!hasTitle) {
+        const titleCell: Cell = {
+          id: uuidv4(),
+          type: 'markdown',
+          content: '# Untitled',
+          outputs: [],
+          enableEdit: true,
+          phaseId: null,
+          description: null,
+          metadata: { isDefaultTitle: true }
+        };
+        processedCells.unshift(titleCell);
+      }
+      
+      const tasks = parseMarkdownCells(processedCells);
+      set({ cells: processedCells, tasks });
     },
 
     updateCurrentCellWithContent: (content: string) => {
@@ -418,6 +453,27 @@ const useStore = create<NotebookStore>(
     addCell: (newCell: Partial<Cell>, index?: number) =>
       set(
         produce((state: NotebookStoreState) => {
+          // 首先检查是否需要添加默认标题（在添加新cell之前）
+          const needsDefaultTitle = state.cells.length === 0 || !state.cells.some(cell => 
+            cell.type === 'markdown' && cell.content.trim().startsWith('#')
+          );
+          
+          // 如果需要默认标题且还没有，先添加标题cell
+          if (needsDefaultTitle) {
+            const titleCell: Cell = {
+              id: uuidv4(),
+              type: 'markdown',
+              content: '# Untitled',
+              outputs: [],
+              enableEdit: true,
+              phaseId: null,
+              description: null,
+              metadata: { isDefaultTitle: true }
+            };
+            state.cells.unshift(titleCell); // 总是添加到开头
+          }
+          
+          // 然后添加实际的新cell
           const targetIndex = index ?? state.cells.length;
           const cell: Cell = {
             id: newCell.id || uuidv4(),
@@ -432,18 +488,9 @@ const useStore = create<NotebookStore>(
             description: newCell.description || null,
           };
           state.cells.splice(targetIndex, 0, cell);
+          
+          // 重新解析tasks
           state.tasks = parseMarkdownCells(state.cells);
-          if (state.tasks.length == 0) {
-            state.cells.splice(targetIndex, 0, {
-              id: uuidv4(),
-              type: 'markdown',
-              content: '# Untitled',
-              outputs: [],
-              enableEdit: true,
-              phaseId: null,
-            });
-            state.tasks = parseMarkdownCells(state.cells);
-          }
           state.currentCellId = cell.id;
 
           if (!state.currentPhaseId) {
@@ -751,6 +798,115 @@ const useStore = create<NotebookStore>(
       });
       
       return newCell.id!;
+    },
+
+    // 新增：基于唯一标识符的cell创建和更新方法
+    addNewCellWithUniqueIdentifier: (
+      type: CellType, 
+      description: string = '', 
+      enableEdit: boolean = true,
+      uniqueIdentifier?: string,
+      prompt?: string
+    ): string => {
+      const timestamp = Date.now();
+      
+      // 生成唯一标识符：时间戳 + 提示词hash（如果有的话）
+      const identifier = uniqueIdentifier || (() => {
+        let id = `gen-${timestamp}`;
+        if (prompt) {
+          // 简单hash提示词的前20个字符
+          const promptHash = prompt.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          id += `-${promptHash}`;
+        }
+        return id;
+      })();
+      
+      const newCell: Partial<Cell> = {
+        id: uuidv4(),
+        type: type,
+        content: '',
+        outputs: [],
+        enableEdit: enableEdit,
+        phaseId: get().currentRunningPhaseId || null,
+        description: description,
+        metadata: {
+          uniqueIdentifier: identifier,
+          generationTimestamp: timestamp,
+          prompt: prompt || undefined,
+          isGenerating: true,
+          generationType: type === 'image' ? 'image' : type === 'video' ? 'video' : undefined
+        }
+      };
+      
+      get().addCell(newCell);
+      set({ lastAddedCellId: newCell.id! });
+      if (enableEdit) {
+        set({ editingCellId: newCell.id! });
+      }
+      set({ currentCellId: newCell.id! });
+
+      const state = get();
+      if (!state.currentPhaseId) {
+        const firstPhase = state.tasks[0]?.phases[0];
+        if (firstPhase) {
+          set({ currentPhaseId: firstPhase.id, currentStepIndex: 0 });
+        }
+      }
+
+      console.log('🎯 创建带唯一标识符的cell:', {
+        cellId: newCell.id,
+        uniqueIdentifier: identifier,
+        type,
+        prompt: prompt?.substring(0, 50)
+      });
+
+      showToast({
+        message: `新建 ${type} 单元格已添加`,
+        type: 'success',
+      });
+      
+      return newCell.id!;
+    },
+
+    // 新增：基于唯一标识符查找并更新cell
+    updateCellByUniqueIdentifier: (
+      uniqueIdentifier: string,
+      updates: Partial<Cell>
+    ): boolean => {
+      const state = get();
+      const targetCell = state.cells.find(cell => 
+        cell.metadata?.uniqueIdentifier === uniqueIdentifier
+      );
+      
+      if (targetCell) {
+        console.log('🎯 通过唯一标识符找到并更新cell:', {
+          uniqueIdentifier,
+          cellId: targetCell.id,
+          updates: Object.keys(updates)
+        });
+        
+        // 合并metadata
+        if (updates.metadata) {
+          updates.metadata = {
+            ...targetCell.metadata,
+            ...updates.metadata
+          };
+        }
+        
+        // 使用现有的updateCell方法
+        if (updates.content !== undefined) {
+          get().updateCell(targetCell.id, updates.content);
+        }
+        
+        if (updates.metadata) {
+          get().updateCellMetadata(targetCell.id, updates.metadata);
+        }
+        
+        return true;
+      } else {
+        console.warn('⚠️ 未找到匹配的cell:', uniqueIdentifier);
+        return false;
+      }
     },
 
     addNewCell2Next: (type: CellType, description: string = '', enableEdit: boolean = true) => {

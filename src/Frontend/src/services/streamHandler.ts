@@ -238,17 +238,51 @@ export const handleStreamResponse = async (
             const content = data.data?.payload?.content;
             const metadata = data.data?.payload?.metadata;
             const commandId = data.data?.payload?.commandId;
+            const prompt = data.data?.payload?.prompt;
             
             let newCellId = null;
             if (cellType && description) {
                 const enableEdit = !metadata?.isGenerating; // 如果正在生成，不启用编辑
-                // 直接从返回值获取 cell ID，不依赖 lastAddedCellId
-                newCellId = await globalUpdateInterface.addNewCell2End(cellType, description, enableEdit);
                 
-                // 如果这是一个生成任务且有 commandId，存储映射关系
-                if (newCellId && commandId && metadata?.isGenerating) {
-                    generationCellTracker.set(commandId, newCellId);
-                    console.log('存储生成cell映射:', commandId, '->', newCellId);
+                // 如果是图片或视频生成任务，使用唯一标识符策略
+                if ((cellType === 'image' || cellType === 'video') && metadata?.isGenerating && prompt) {
+                    console.log('🎯 使用唯一标识符策略创建生成cell:', {
+                        type: cellType,
+                        prompt: prompt.substring(0, 50),
+                        commandId
+                    });
+                    
+                    // 生成基于提示词和时间戳的唯一标识符
+                    const uniqueIdentifier = `gen-${Date.now()}-${prompt.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+                    
+                    newCellId = useStore.getState().addNewCellWithUniqueIdentifier(
+                        cellType, 
+                        description, 
+                        enableEdit, 
+                        uniqueIdentifier,
+                        prompt
+                    );
+                    
+                    // 同时保持commandId映射作为备份
+                    if (commandId) {
+                        generationCellTracker.set(commandId, newCellId);
+                        // 还要存储uniqueIdentifier映射
+                        generationCellTracker.set(`unique-${uniqueIdentifier}`, newCellId);
+                        console.log('存储生成cell映射:', {
+                            commandId: commandId,
+                            uniqueIdentifier: uniqueIdentifier,
+                            cellId: newCellId
+                        });
+                    }
+                } else {
+                    // 普通cell创建
+                    newCellId = await globalUpdateInterface.addNewCell2End(cellType, description, enableEdit);
+                    
+                    // 如果这是一个生成任务且有 commandId，存储映射关系
+                    if (newCellId && commandId && metadata?.isGenerating) {
+                        generationCellTracker.set(commandId, newCellId);
+                        console.log('存储生成cell映射:', commandId, '->', newCellId);
+                    }
                 }
             }
             if (content) {
@@ -504,11 +538,21 @@ export const handleStreamResponse = async (
             const content = data.data?.payload?.content;
             const cellId = data.data?.payload?.cellId;
             const commandId = data.data?.payload?.commandId;
+            const uniqueIdentifier = data.data?.payload?.uniqueIdentifier;
             
-            console.log('updateCurrentCellWithContent - cellId:', cellId, 'commandId:', commandId, 'content length:', content?.length);
+            console.log('updateCurrentCellWithContent - cellId:', cellId, 'commandId:', commandId, 'uniqueIdentifier:', uniqueIdentifier, 'content length:', content?.length);
             
             if (content) {
                 let targetCellId = cellId; // 如果直接提供了cellId，优先使用
+                
+                // 尝试使用uniqueIdentifier直接更新（最高优先级）
+                if (!targetCellId && uniqueIdentifier) {
+                    const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, { content });
+                    if (success) {
+                        console.log('✅ 通过uniqueIdentifier成功更新cell内容:', uniqueIdentifier);
+                        break;
+                    }
+                }
                 
                 if (!targetCellId && commandId && generationCellTracker.has(commandId)) {
                     // 使用commandId从映射表获取cellId
@@ -559,14 +603,32 @@ export const handleStreamResponse = async (
             console.log('更新当前cell metadata:', data);
             const metadata = data.data?.payload?.metadata;
             const commandId = data.data?.payload?.commandId;
-            const cellId = data.data?.payload?.cellId; // 也检查是否直接提供了cellId
+            const cellId = data.data?.payload?.cellId; 
+            const uniqueIdentifier = data.data?.payload?.uniqueIdentifier;
             
             console.log('updateCurrentCellMetadata - metadata:', metadata);
             console.log('updateCurrentCellMetadata - commandId:', commandId);
             console.log('updateCurrentCellMetadata - cellId:', cellId);
+            console.log('updateCurrentCellMetadata - uniqueIdentifier:', uniqueIdentifier);
             
             if (metadata) {
                 let targetCellId = cellId; // 如果直接提供了cellId，优先使用
+                
+                // 尝试使用uniqueIdentifier直接更新（最高优先级）
+                if (!targetCellId && uniqueIdentifier) {
+                    const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, { metadata });
+                    if (success) {
+                        console.log('✅ 通过uniqueIdentifier成功更新cell metadata:', uniqueIdentifier);
+                        
+                        // 如果生成完成，清理相关映射
+                        if (metadata.isGenerating === false || metadata.generationCompleted) {
+                            if (commandId) generationCellTracker.delete(commandId);
+                            generationCellTracker.delete(`unique-${uniqueIdentifier}`);
+                            console.log('清理完成的生成任务映射:', { commandId, uniqueIdentifier });
+                        }
+                        break;
+                    }
+                }
                 
                 // 首先尝试使用 commandId 从映射表中获取 cellId
                 if (!targetCellId && commandId && generationCellTracker.has(commandId)) {

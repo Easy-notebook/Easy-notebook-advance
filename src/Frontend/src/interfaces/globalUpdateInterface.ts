@@ -58,6 +58,8 @@ interface GlobalUpdateInterface {
   setAddedLastCellID: (id: string) => void;
   getAddedLastCellID: () => string;
   addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => string;
+  addNewCellWithUniqueIdentifier: (type: CellType, description?: string, enableEdit?: boolean, uniqueIdentifier?: string, prompt?: string) => string;
+  updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<any>) => boolean;
   addNewContent2CurrentCell: (content: string) => void;
   addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
   runSingleCell: (cellId: string) => void;
@@ -132,6 +134,8 @@ const globalUpdateInterface: GlobalUpdateInterface = {
     getAddedLastCellID: (): string => useStore.getState().lastAddedCellId || '',
 
     addNewCell2End: (type: CellType, description: string = '', enableEdit: boolean = true) => useStore.getState().addNewCell2End(type, description, enableEdit),
+    addNewCellWithUniqueIdentifier: (type: CellType, description: string = '', enableEdit: boolean = true, uniqueIdentifier?: string, prompt?: string) => useStore.getState().addNewCellWithUniqueIdentifier(type, description, enableEdit, uniqueIdentifier, prompt),
+    updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<any>) => useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, updates),
     addNewContent2CurrentCell: (content: string) => useStore.getState().addNewContent2CurrentCell(content),
     addNewCell2Next: (type: CellType, description: string = '', enableEdit: boolean = true) => useStore.getState().addNewCell2Next(type, description, enableEdit),
 

@@ -1472,6 +1472,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           tippyOptions={{ 
             duration: 100,
             placement: 'top',
+            appendTo: document.body,
+            interactive: true,
+            hideOnClick: true,
           }}
           className="bg-gray-900 text-white rounded-lg shadow-lg p-1 flex items-center gap-1 z-50"
         >

@@ -72,18 +72,20 @@ class Text2ImageAgent(BaseAgentTemplate):
         image_prompt = self._extract_image_prompt(content)
         notebook_id = self._get_notebook_id()
             
-        # 创建正在生成的image cell
+        # 创建正在生成的image cell - 使用新的唯一标识符策略
+        generation_timestamp = int(datetime.now().timestamp() * 1000)
         yield self._create_response_json("addCell2EndWithContent", {
             "payload": {
                 "type": "image",
                 "content": "",
                 "commandId": command_id,
+                "prompt": image_prompt,  # 用于生成唯一标识符
                 "description": f"Generating image: {image_prompt}",
                 "metadata": {
                     "isGenerating": True,
-                    "generationStartTime": int(datetime.now().timestamp() * 1000),
+                    "generationStartTime": generation_timestamp,
                     "generationType": "image",
-                    "start_time": int(datetime.now().timestamp() * 1000),
+                    "start_time": generation_timestamp,
                     "prompt": image_prompt
                 }
             },
@@ -105,18 +107,23 @@ class Text2ImageAgent(BaseAgentTemplate):
             image_markdown = f"![{image_prompt}]({image_url})"
             print(f"[DEBUG] 准备发送 updateCurrentCellWithContent 事件")
             
+            # 生成与创建时相同的唯一标识符
+            unique_identifier = f"gen-{generation_timestamp}-{image_prompt[:20].replace(' ', '').lower()}"
+            
             yield self._create_response_json("updateCurrentCellWithContent", {
                 "payload": {
                     "content": image_markdown,
                     "commandId": command_id,
+                    "uniqueIdentifier": unique_identifier,  # 添加唯一标识符
                 },
                 "status": "processing"
             })
-            print(f"[DEBUG] updateCurrentCellWithContent 事件已发送")
+            print(f"[DEBUG] updateCurrentCellWithContent 事件已发送 - uniqueIdentifier: {unique_identifier}")
             
             yield self._create_response_json("updateCurrentCellMetadata", {
                 "payload": {
                     "commandId": command_id,
+                    "uniqueIdentifier": unique_identifier,  # 添加唯一标识符
                     "metadata": {
                         "isGenerating": False,
                         "generationCompleted": True,

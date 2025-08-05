@@ -75,20 +75,22 @@ class Text2VideoAgent(BaseAgentTemplate):
         video_prompt = self._extract_video_prompt(content)
         notebook_id = self._get_notebook_id()
 
-        # 创建正在生成的image cell
+        # 创建正在生成的video cell - 使用新的唯一标识符策略
+        generation_timestamp = int(datetime.now().timestamp() * 1000)
         yield self._create_response_json(
             "addCell2EndWithContent",
             {
                 "payload": {
-                    "type": "image",
+                    "type": "image",  # 使用image类型来显示视频
                     "content": "",
                     "commandId": command_id,
+                    "prompt": video_prompt,  # 用于生成唯一标识符
                     "description": f"Generating video: {video_prompt}",
                     "metadata": {
                         "isGenerating": True,
-                        "generationStartTime": int(datetime.now().timestamp() * 1000),
+                        "generationStartTime": generation_timestamp,
                         "generationType": "video",
-                        "start_time": int(datetime.now().timestamp() * 1000),
+                        "start_time": generation_timestamp,
                         "prompt": video_prompt,
                     },
                 },
@@ -104,6 +106,9 @@ class Text2VideoAgent(BaseAgentTemplate):
                 video_url, notebook_id
             )
             video_markdown = f"![{video_prompt}]({video_url})"
+            
+            # 生成与创建时相同的唯一标识符
+            unique_identifier = f"gen-{generation_timestamp}-{video_prompt[:20].replace(' ', '').lower()}"
 
             yield self._create_response_json(
                 "updateCurrentCellWithContent",
@@ -111,12 +116,7 @@ class Text2VideoAgent(BaseAgentTemplate):
                     "payload": {
                         "content": video_markdown,
                         "commandId": command_id,
-                        "metadata": {
-                            "isGenerating": False,
-                            "generationCompleted": True,
-                            "generationEndTime": int(datetime.now().timestamp() * 1000),
-                            "videoUrl": local_asset_url,
-                        },
+                        "uniqueIdentifier": unique_identifier,  # 添加唯一标识符
                     },
                     "status": "processing",
                 },
@@ -127,6 +127,7 @@ class Text2VideoAgent(BaseAgentTemplate):
                 {
                     "payload": {
                         "commandId": command_id,
+                        "uniqueIdentifier": unique_identifier,  # 添加唯一标识符
                         "metadata": {
                             "isGenerating": False,
                             "generationCompleted": True,
