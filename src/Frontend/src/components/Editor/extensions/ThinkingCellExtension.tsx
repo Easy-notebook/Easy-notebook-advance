@@ -1,7 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { v4 as uuidv4 } from 'uuid'
-import React from 'react'
 import AIThinkingCell from '../Cells/AIThinkingCell'
 
 // ThinkingCell 视图组件

@@ -382,7 +382,13 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
                     boxShadow: 'none',
                     backgroundColor: 'transparent',
                     padding: '0',
-                    '&.cm-editor, & .cm-editor': {
+                    '&.cm-editor': {
+                      border: 'none !important',
+                      boxShadow: 'none !important',
+                      backgroundColor: 'transparent !important',
+                      padding: '0 !important',
+                    },
+                    '& .cm-editor': {
                       border: 'none !important',
                       boxShadow: 'none !important',
                       backgroundColor: 'transparent !important',

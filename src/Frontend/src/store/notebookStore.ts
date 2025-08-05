@@ -181,7 +181,7 @@ export interface NotebookStoreActions {
     runCurrentCodeCell: () => Promise<void>;
 
     // 单元格创建
-    addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => void;
+    addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => string;
     addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
     addNewContent2CurrentCell: (content: string) => void;
 
@@ -720,7 +720,7 @@ const useStore = create<NotebookStore>(
       await get().runSingleCell(currentCellId);
     },
 
-    addNewCell2End: (type: CellType, description: string = '', enableEdit: boolean = true) => {
+    addNewCell2End: (type: CellType, description: string = '', enableEdit: boolean = true): string => {
       const newCell: Partial<Cell> = {
         id: uuidv4(),
         type: type,
@@ -732,7 +732,9 @@ const useStore = create<NotebookStore>(
       };
       get().addCell(newCell);
       set({ lastAddedCellId: newCell.id! });
-      set({ editingCellId: newCell.id! });
+      if (enableEdit) {
+        set({ editingCellId: newCell.id! });
+      }
       set({ currentCellId: newCell.id! });
 
       const state = get();
@@ -747,6 +749,8 @@ const useStore = create<NotebookStore>(
         message: `新建 ${type} 单元格已添加`,
         type: 'success',
       });
+      
+      return newCell.id!;
     },
 
     addNewCell2Next: (type: CellType, description: string = '', enableEdit: boolean = true) => {

@@ -436,8 +436,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       // 使用防抖延迟同步，避免频繁更新
       clearTimeout(window.tiptapSyncTimeout)
       window.tiptapSyncTimeout = setTimeout(() => {
-        const html = editor.getHTML()
-        const newCells = convertHtmlToCells(html)
+        const newCells = convertEditorStateToCells()
         
         // 简化比较：只关心结构和markdown内容变化
         const hasStructuralChange = newCells.length !== cells.length ||
@@ -631,8 +630,29 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           // 类型变化
           if (cell.type !== lastCell.type) return true
           
-          // 只有markdown cell的内容变化才需要更新tiptap
+          // markdown cell的内容变化需要更新tiptap
           if (cell.type === 'markdown' && cell.content !== lastCell.content) return true
+          
+          // image cell的内容或metadata变化也需要更新tiptap
+          if (cell.type === 'image') {
+            if (cell.content !== lastCell.content) {
+              console.log('🖼️ TipTap检测到image cell内容变化:', {
+                cellId: cell.id,
+                oldContent: lastCell.content?.substring(0, 50),
+                newContent: cell.content?.substring(0, 50)
+              })
+              return true
+            }
+            // 检查metadata变化（特别是生成状态）
+            if (JSON.stringify(cell.metadata || {}) !== JSON.stringify(lastCell.metadata || {})) {
+              console.log('🖼️ TipTap检测到image cell metadata变化:', {
+                cellId: cell.id,
+                oldMetadata: lastCell.metadata,
+                newMetadata: cell.metadata
+              })
+              return true
+            }
+          }
           
           // code cell的内容、输出变化都不需要更新tiptap
           return false
@@ -656,7 +676,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         
         isInternalUpdate.current = true
         const expectedHtml = convertCellsToHtml(cells)
-        editor.commands.setContent(expectedHtml, false)
+        
+        // 使用 setTimeout 将 setContent 延迟到下一个事件循环，避免 flushSync 警告
+        setTimeout(() => {
+          editor.commands.setContent(expectedHtml, false)
+        }, 0)
         
         setTimeout(() => {
           isInternalUpdate.current = false
@@ -690,8 +714,23 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         // markdown cell转换为HTML
         return convertMarkdownToHtml(cell.content || '', cell)
       } else if (cell.type === 'image') {
-        // image cell转换为HTML
-        return `<div class="image-cell-container"><img src="${cell.content}" alt="Cell image" class="max-w-full h-auto" /></div>`
+        // image cell转换为HTML - 包含cellId和metadata信息
+        console.log(`转换图片单元格 ${index}: ID=${cell.id}`);
+        const metadata = cell.metadata || {};
+        
+        // 解析 markdown 以提取 src 和 alt
+        const markdownContent = cell.content || '';
+        const markdownMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+        const parsedSrc = markdownMatch ? markdownMatch[2] : '';
+        const parsedAlt = markdownMatch ? markdownMatch[1] : 'Cell image';
+        
+        console.log(`📝 解析图片markdown:`, {
+          original: markdownContent,
+          src: parsedSrc,
+          alt: parsedAlt
+        });
+        
+        return `<div data-type="markdown-image" data-cell-id="${cell.id}" data-src="${parsedSrc}" data-alt="${parsedAlt}" data-markdown="${markdownContent}" data-is-generating="${metadata.isGenerating || false}" data-generation-type="${metadata.generationType || ''}" data-generation-prompt="${metadata.prompt || ''}" data-generation-params="${encodeURIComponent(JSON.stringify(metadata.generationParams || {}))}" data-generation-start-time="${metadata.generationStartTime || ''}" data-generation-error="${metadata.generationError || ''}" data-generation-status="${metadata.generationStatus || ''}"></div>`
       } else if (cell.type === 'thinking') {
         // thinking cell转换为HTML
         console.log(`转换AI思考单元格 ${index}: ID=${cell.id}`);
@@ -724,7 +763,136 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     return rows.join('\n');
   }
 
-  function convertHtmlToCells(html) {
+  // 新方案：使用 ProseMirror JSON 而不是 HTML 解析
+  function convertEditorStateToCells() {
+    if (!editor) {
+      return []
+    }
+
+    try {
+      const docJson = editor.state.doc.toJSON()
+      console.log('📋 Editor JSON:', docJson)
+      
+      if (!docJson.content || docJson.content.length === 0) {
+        return []
+      }
+
+      const newCells = []
+      let currentMarkdownContent = []
+
+      const flushMarkdownContent = () => {
+        if (currentMarkdownContent.length > 0) {
+          const markdownText = currentMarkdownContent.join('\n').trim()
+          if (markdownText) {
+            newCells.push({
+              id: generateCellId(),
+              type: 'markdown',
+              content: markdownText,
+              outputs: [],
+              enableEdit: true,
+            })
+          }
+          currentMarkdownContent = []
+        }
+      }
+
+      docJson.content.forEach((node, idx) => {
+        console.log(`🔍 处理节点 ${idx}:`, { type: node.type, attrs: node.attrs })
+        
+        if (node.type === 'markdownImage') {
+          // 处理图片节点 - 先清空累积的markdown内容
+          flushMarkdownContent()
+          
+          const attrs = node.attrs || {}
+          const cellId = attrs.cellId || generateCellId()
+          const markdown = attrs.markdown || ''
+          
+          console.log(`✅ 发现 markdownImage 节点: ${cellId}, content: ${markdown.substring(0, 50)}`)
+          
+          // 创建独立的image cell
+          newCells.push({
+            id: cellId,
+            type: 'image',
+            content: markdown,
+            outputs: [],
+            enableEdit: true,
+            metadata: {
+              isGenerating: attrs.isGenerating || false,
+              generationType: attrs.generationType || '',
+              prompt: attrs.prompt || '',
+              generationStartTime: attrs.generationStartTime,
+              generationError: attrs.generationError,
+              generationStatus: attrs.generationStatus,
+              generationParams: attrs.generationParams || {}
+            }
+          })
+        } else if (node.type === 'executableCodeBlock') {
+          // 处理代码块
+          flushMarkdownContent()
+          
+          const attrs = node.attrs || {}
+          const cellId = attrs.cellId || generateCellId()
+          
+          newCells.push({
+            id: cellId,
+            type: attrs.originalType || 'code',
+            language: attrs.language || 'python',
+            outputs: [],
+            enableEdit: true,
+          })
+        } else if (node.type === 'thinkingCell') {
+          // 处理AI思考单元格
+          flushMarkdownContent()
+          
+          const attrs = node.attrs || {}
+          const cellId = attrs.cellId || generateCellId()
+          
+          newCells.push({
+            id: cellId,
+            type: 'thinking',
+            content: '',
+            outputs: [],
+            enableEdit: false,
+            agentName: attrs.agentName || 'AI',
+            customText: attrs.customText || null,
+            textArray: attrs.textArray || [],
+            useWorkflowThinking: attrs.useWorkflowThinking || false,
+          })
+        } else {
+          // 其他节点（paragraph, text 等）作为 markdown 处理
+          const textContent = extractTextFromNode(node)
+          if (textContent.trim()) {
+            currentMarkdownContent.push(textContent)
+          }
+        }
+      })
+
+      // 处理剩余的markdown内容
+      flushMarkdownContent()
+
+      console.log('📋 转换结果:', newCells.map(c => ({ id: c.id, type: c.type, contentLength: c.content?.length })))
+      return newCells
+      
+    } catch (error) {
+      console.error('❌ JSON 解析失败，回退到 HTML 解析:', error)
+      return convertHtmlToCells_fallback()
+    }
+  }
+
+  // 提取节点文本内容的辅助函数
+  function extractTextFromNode(node) {
+    if (node.text) {
+      return node.text
+    }
+    if (node.content && Array.isArray(node.content)) {
+      return node.content.map(child => extractTextFromNode(child)).join('')
+    }
+    return ''
+  }
+
+  // 备用的 HTML 解析方案
+  function convertHtmlToCells_fallback() {
+    const html = editor?.getHTML() || ''
     if (!html || html === '<p></p>') {
       return []
     }
@@ -759,6 +927,18 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     // 遍历所有节点
     Array.from(doc.body.childNodes).forEach(node => {
       if (node.nodeType === Node.ELEMENT_NODE) {
+        // 调试：检查每个元素的 data-type 属性
+        const dataType = node.getAttribute('data-type');
+        const datasetType = (node as any).dataset?.type;
+        const datasetMarkdownImage = (node as any).dataset?.markdownImage;
+        console.log('🔍 解析节点:', {
+          tagName: node.tagName,
+          'getAttribute(data-type)': dataType,
+          'dataset.type': datasetType,
+          'dataset.markdownImage': datasetMarkdownImage,
+          outerHTML: node.outerHTML?.substring(0, 100)
+        });
+        
         if (node.getAttribute('data-type') === 'executable-code-block') {
           // 如果有累积的markdown内容，先创建markdown cell
           flushMarkdownContent()
@@ -815,21 +995,56 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             useWorkflowThinking: useWorkflowThinking,
           })
         } else if (node.getAttribute('data-type') === 'markdown-image') {
-          // 处理图片节点
+          // 处理图片节点 - 先清空累积的markdown内容，创建独立的image cell
+          flushMarkdownContent()
+          
           console.log('发现图片节点:', node);
           
-          // 从data属性获取图片信息
+          // 获取cellId和基本属性
+          const cellId = node.getAttribute('data-cell-id') || generateCellId()
           const src = node.getAttribute('data-src') || ''
           const alt = node.getAttribute('data-alt') || ''
-          const title = node.getAttribute('data-title') || ''
           const markdown = node.getAttribute('data-markdown') || ''
           
-          // 如果有markdown属性，直接使用；否则构造markdown格式
-          const imageMarkdown = markdown || `![${alt}](${src}${title ? ` "${title}"` : ''})`
+          // 获取生成相关的metadata
+          const isGenerating = node.getAttribute('data-is-generating') === 'true'
+          const generationType = node.getAttribute('data-generation-type') || ''
+          const generationPrompt = node.getAttribute('data-generation-prompt') || ''
+          const generationStartTime = node.getAttribute('data-generation-start-time') || ''
+          const generationError = node.getAttribute('data-generation-error') || ''
+          const generationStatus = node.getAttribute('data-generation-status') || ''
           
-          if (imageMarkdown.trim()) {
-            currentMarkdownContent.push(imageMarkdown)
+          // 解析生成参数
+          let generationParams = {}
+          try {
+            const paramsStr = node.getAttribute('data-generation-params') || '{}'
+            generationParams = JSON.parse(decodeURIComponent(paramsStr))
+          } catch (e) {
+            console.warn('解析生成参数失败:', e)
           }
+          
+          // 如果有markdown属性，直接使用；否则构造markdown格式
+          const imageMarkdown = markdown || (src ? `![${alt}](${src})` : '')
+          
+          console.log(`✅ 创建独立的image cell: ${cellId}, content: ${imageMarkdown.substring(0, 50)}`)
+          
+          // 创建独立的image cell，保留原有的cellId和metadata
+          newCells.push({
+            id: cellId,
+            type: 'image',
+            content: imageMarkdown,
+            outputs: [],
+            enableEdit: true,
+            metadata: {
+              isGenerating,
+              generationType,
+              prompt: generationPrompt,
+              generationStartTime: generationStartTime ? parseInt(generationStartTime) : undefined,
+              generationError: generationError || undefined,
+              generationStatus: generationStatus || undefined,
+              generationParams
+            }
+          })
         } else if (node.tagName && node.tagName.toLowerCase() === 'table') {
           // 处理表格节点
           console.log('发现表格节点:', node);
@@ -1250,14 +1465,16 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   return (
     <div className="tiptap-notebook-editor-container w-full h-full bg-transparent">
       {/* 浮动工具栏 - 选中文本时显示 */}
-      <BubbleMenu 
-        editor={editor}
-        tippyOptions={{ 
-          duration: 100,
-          placement: 'top',
-        }}
-        className="bg-gray-900 text-white rounded-lg shadow-lg p-1 flex items-center gap-1 z-50"
-      >
+      <div className="bubble-menu-wrapper">
+        <div>
+          <BubbleMenu 
+          editor={editor}
+          tippyOptions={{ 
+            duration: 100,
+            placement: 'top',
+          }}
+          className="bg-gray-900 text-white rounded-lg shadow-lg p-1 flex items-center gap-1 z-50"
+        >
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={`p-2 rounded hover:bg-gray-700 ${editor.isActive('bold') ? 'bg-gray-600' : ''}`}
@@ -1371,7 +1588,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         >
           <Brain size={14} />
         </button>
-      </BubbleMenu>
+          </BubbleMenu>
+        </div>
+      </div>
 
       {/* 主编辑器内容 - 恢复正常显示 */}
       <EditorContent 

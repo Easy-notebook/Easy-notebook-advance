@@ -3,32 +3,36 @@ import { InputRule } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import React, { useState, useRef, useEffect } from 'react'
 import { Upload, X, Edit3 } from 'lucide-react'
+import useStore from '../../../store/notebookStore'
 
 // React组件来渲染图片节点
-const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
+const ImageComponent = ({ node, updateAttributes, deleteNode, editor }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [tempMarkdown, setTempMarkdown] = useState('')
-  const [isUploading, setIsUploading] = useState(false)
-  const [error, setError] = useState('')
   const [imageError, setImageError] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
-  const { src, alt, title, markdown } = node.attrs
-
-  // 初始化编辑状态
-  useEffect(() => {
-    if (markdown) {
-      setTempMarkdown(markdown)
-    } else if (src) {
-      setTempMarkdown(`![${alt || ''}](${src})`)
-    } else {
-      setTempMarkdown('![]()')
-      setIsEditing(true) // 新节点默认进入编辑模式
-    }
-  }, [])
-
-  // 解析markdown语法
+  // 获取store的所有必要数据和方法
+  const { cells, currentCellId, updateCell } = useStore()
+  
+  // 获取cellId - 优先从node.attrs获取，fallback到当前cellId
+  const cellId = node.attrs.cellId || currentCellId
+  
+  // 使用类似ImageCell的模式直接从store获取cell数据
+  const cell = React.useMemo(() => {
+    const foundCell = cells.find(c => c.id === cellId) || null
+    console.log('🖼️ ImageExtension cell lookup:', { 
+      cellId, 
+      foundCell: foundCell ? { id: foundCell.id, content: foundCell.content?.substring(0, 50) } : null,
+      totalCells: cells.length 
+    })
+    return foundCell
+  }, [cells, cellId])
+  
+  // 获取cell的content
+  const cellContent = cell?.content || ''
+  
+  // 解析markdown语法的函数
   const parseMarkdown = (markdownStr: string) => {
     const match = markdownStr.match(/!\[([^\]]*)\]\(([^)]+)\)/)
     if (match) {
@@ -44,44 +48,83 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
       isValid: false
     }
   }
+  
+  // 使用store中的content作为唯一数据源
+  const currentContent = cellContent || ''
+  const previewData = parseMarkdown(currentContent)
+  
+  // 当store中的内容变化时，同步到node属性和临时编辑状态
+  useEffect(() => {
+    console.log('🖼️ ImageExtension store content changed:', { cellId, cellContent: cellContent?.substring(0, 50) })
+    
+    if (cellContent) {
+      const parsed = parseMarkdown(cellContent)
+      if (parsed.isValid) {
+        // 同步到tiptap node属性
+        updateAttributes({
+          markdown: cellContent,
+          src: parsed.src,
+          alt: parsed.alt,
+          title: parsed.alt,
+          cellId: cellId
+        })
+      }
+      // 同步临时编辑内容
+      if (!isEditing) {
+        setTempMarkdown(cellContent)
+      }
+    }
+  }, [cellContent, cellId, updateAttributes, isEditing])
 
-  // 生成markdown字符串
-  const generateMarkdown = (altText: string, srcUrl: string) => {
-    return `![${altText}](${srcUrl})`
-  }
+  // 初始化
+  useEffect(() => {
+    console.log('🖼️ ImageExtension initializing:', { cellId, currentContent: currentContent?.substring(0, 50) })
+    if (currentContent) {
+      setTempMarkdown(currentContent)
+    } else {
+      setTempMarkdown('![]()')
+      setIsEditing(true) // 新节点默认进入编辑模式
+    }
+  }, [cellId, currentContent])
 
   // 开始编辑
   const startEditing = () => {
     setIsEditing(true)
-    const currentMarkdown = markdown || generateMarkdown(alt || '', src || '')
-    setTempMarkdown(currentMarkdown)
+    setTempMarkdown(currentContent || '![]()')
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus()
-        // 将游标设置到文本末尾
-        const length = currentMarkdown.length
+        const length = tempMarkdown.length
         textareaRef.current.setSelectionRange(length, length)
       }
     }, 0)
   }
 
-  // 保存编辑
+  // 保存编辑 - 直接更新store
   const saveEdit = () => {
+    console.log('🖼️ ImageExtension saving:', { cellId, tempMarkdown })
+    if (cellId && updateCell) {
+      // 直接更新store中的cell content
+      updateCell(cellId, tempMarkdown)
+    }
+    
+    // 同步更新tiptap node属性
     const parsed = parseMarkdown(tempMarkdown)
     updateAttributes({
       markdown: tempMarkdown,
       src: parsed.src,
       alt: parsed.alt,
-      title: parsed.alt
+      title: parsed.alt,
+      cellId: cellId
     })
+    
     setIsEditing(false)
     setImageError(false)
   }
 
   // 取消编辑
   const cancelEdit = () => {
-    const currentMarkdown = markdown || generateMarkdown(alt || '', src || '')
-    setTempMarkdown(currentMarkdown)
+    setTempMarkdown(currentContent || '')
     setIsEditing(false)
   }
 
@@ -96,8 +139,8 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
     }
   }
 
-  // 实时解析预览
-  const previewData = parseMarkdown(tempMarkdown)
+  // 实时解析临时编辑内容
+  const tempPreviewData = parseMarkdown(tempMarkdown)
   
   // 处理图片加载错误
   const handleImageError = () => {
@@ -109,11 +152,15 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
   }
 
   return (
-    <NodeViewWrapper className="image-markdown-wrapper color-black">
+    <NodeViewWrapper 
+      className="image-markdown-wrapper color-black"
+      key={`${cellId}-${currentContent?.length || 0}`}
+      data-cell-id={cellId}
+    >
       {isEditing ? (
-        // 简约编辑模式：源码编辑器 + 直接实时预览
+        // 编辑模式：直接编辑markdown语法 + 实时预览
         <div className="image-editor">
-          {/* 简约的Markdown源码编辑器 */}
+          {/* Markdown源码编辑器 */}
           <input
             ref={textareaRef}
             type="text"
@@ -122,15 +169,15 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
             onKeyDown={handleKeyDown}
             onBlur={saveEdit}
             placeholder="![图片描述](图片URL)"
-            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 text-black fit-content"
+            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 text-black"
           />
           
           {/* 实时预览图片 */}
-          {previewData.isValid && previewData.src ? (
+          {tempPreviewData.isValid && tempPreviewData.src ? (
             <div className="mt-3">
               <img
-                src={previewData.src}
-                alt={previewData.alt}
+                src={tempPreviewData.src}
+                alt={tempPreviewData.alt}
                 onError={handleImageError}
                 onLoad={handleImageLoad}
                 className="max-w-full h-auto rounded-lg shadow-sm"
@@ -138,13 +185,13 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
               
               {imageError && (
                 <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
-                  ⚠️ 图片加载失败: {previewData.src}
+                  ⚠️ 图片加载失败: {tempPreviewData.src}
                 </div>
               )}
               
-              {previewData.alt && !imageError && (
+              {tempPreviewData.alt && !imageError && (
                 <div className="mt-2 text-sm text-gray-600 text-center italic">
-                  {previewData.alt}
+                  {tempPreviewData.alt}
                 </div>
               )}
             </div>
@@ -161,12 +208,12 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
       ) : (
         // 显示模式：显示图片 + 工具栏
         <div className="image-display relative group">
-          {src ? (
+          {previewData.isValid && previewData.src ? (
             <div className="relative">
               <img
-                src={src}
-                alt={alt}
-                title={alt}
+                src={previewData.src}
+                alt={previewData.alt}
+                title={previewData.alt}
                 onError={handleImageError}
                 onLoad={handleImageLoad}
                 onClick={startEditing}
@@ -178,7 +225,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
                   <div className="text-center text-gray-500">
                     <X className="h-8 w-8 mx-auto mb-2" />
                     <div className="text-sm">图片加载失败</div>
-                    <div className="text-xs">{src}</div>
+                    <div className="text-xs">{previewData.src}</div>
                   </div>
                 </div>
               )}
@@ -202,9 +249,9 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }) => {
               </div>
               
               {/* 图片信息 */}
-              {alt && (
+              {previewData.alt && (
                 <div className="mt-2 text-sm text-gray-600 text-center italic">
-                  {alt}
+                  {previewData.alt}
                 </div>
               )}
             </div>
@@ -247,6 +294,9 @@ export const ImageExtension = Node.create({
       markdown: {
         default: null,
       },
+      cellId: {
+        default: null,
+      },
     }
   },
 
@@ -263,12 +313,20 @@ export const ImageExtension = Node.create({
       },
       {
         tag: 'div[data-type="markdown-image"]',
-        getAttrs: (element) => ({
-          src: element.getAttribute('data-src'),
-          alt: element.getAttribute('data-alt'),
-          title: element.getAttribute('data-title'),
-          markdown: element.getAttribute('data-markdown'),
-        }),
+        getAttrs: (element) => {
+          const dataSrc = element.getAttribute('data-src') || '';
+          const dataAlt = element.getAttribute('data-alt') || '';
+          const dataMarkdown = element.getAttribute('data-markdown') || '';
+          const dataCellId = element.getAttribute('data-cell-id') || '';
+          
+          return {
+            src: dataSrc,
+            alt: dataAlt,
+            title: dataAlt,
+            markdown: dataMarkdown,
+            cellId: dataCellId,
+          };
+        },
       },
     ]
   },
@@ -281,6 +339,7 @@ export const ImageExtension = Node.create({
         'data-alt': HTMLAttributes.alt,
         'data-title': HTMLAttributes.title,
         'data-markdown': HTMLAttributes.markdown,
+        'data-cell-id': HTMLAttributes.cellId,
       }),
     ]
   },

@@ -257,7 +257,7 @@ const JupyterNotebookEditor = forwardRef(({
       </div>
       
       {/* Jupyter Notebook styles */}
-      <style jsx>{`
+      <style>{`
         .jupyter-notebook-editor {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }

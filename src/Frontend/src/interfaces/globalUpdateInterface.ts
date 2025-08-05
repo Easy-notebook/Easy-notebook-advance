@@ -57,7 +57,7 @@ interface GlobalUpdateInterface {
   setAllowPagination: (allow: boolean) => void;
   setAddedLastCellID: (id: string) => void;
   getAddedLastCellID: () => string;
-  addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => void;
+  addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => string;
   addNewContent2CurrentCell: (content: string) => void;
   addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
   runSingleCell: (cellId: string) => void;
@@ -107,7 +107,12 @@ const globalUpdateInterface: GlobalUpdateInterface = {
     setNotebookId: (id: string) => useStore.getState().setNotebookId(id),
     addCell: (newCell: Cell, index?: number) => useStore.getState().addCell(newCell, index),
     deleteCell: (cellId: string) => useStore.getState().deleteCell(cellId),
-    updateCell: (cellId: string, newContent: string) => useStore.getState().updateCell(cellId, newContent),
+    updateCell: (cellId: string, newContent: string) => {
+        console.log('🔄 globalUpdateInterface.updateCell called:', { cellId, contentLength: newContent?.length, contentPreview: newContent?.substring(0, 50) });
+        const result = useStore.getState().updateCell(cellId, newContent);
+        console.log('✅ globalUpdateInterface.updateCell completed');
+        return result;
+    },
     updateCellOutputs: (cellId: string, outputs: any[]) => useStore.getState().updateCellOutputs(cellId, outputs),
     updateCurrentCellWithContent: (content: string) => useStore.getState().updateCurrentCellWithContent(content),
     setViewMode: (mode: ViewMode) => useStore.getState().setViewMode(mode),

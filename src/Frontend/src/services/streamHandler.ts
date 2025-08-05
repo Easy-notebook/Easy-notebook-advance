@@ -3,6 +3,9 @@ import globalUpdateInterface from '../interfaces/globalUpdateInterface';
 import { AgentMemoryService, AgentType } from './agentMemoryService';
 import useStore from '../store/notebookStore';
 
+// 跟踪正在生成的 cells 的映射表
+const generationCellTracker = new Map<string, string>(); // commandId -> cellId
+
 // Type definitions for stream data structures
 export interface ToastMessage {
     message: string;
@@ -68,6 +71,7 @@ export const handleStreamResponse = async (
     data: StreamData, 
     showToast: ShowToastFunction
 ): Promise<void> => {
+    
     switch (data.type) {
         case 'update_view_mode': {
             const mode = data.payload?.mode;
@@ -229,31 +233,37 @@ export const handleStreamResponse = async (
         }
 
         case 'addCell2EndWithContent': {
-            console.log('添加新的cell:', data);
             const cellType = data.data?.payload?.type;
             const description = data.data?.payload?.description;
             const content = data.data?.payload?.content;
             const metadata = data.data?.payload?.metadata;
+            const commandId = data.data?.payload?.commandId;
             
+            let newCellId = null;
             if (cellType && description) {
-                await globalUpdateInterface.addNewCell2End(cellType, description);
+                const enableEdit = !metadata?.isGenerating; // 如果正在生成，不启用编辑
+                // 直接从返回值获取 cell ID，不依赖 lastAddedCellId
+                newCellId = await globalUpdateInterface.addNewCell2End(cellType, description, enableEdit);
+                
+                // 如果这是一个生成任务且有 commandId，存储映射关系
+                if (newCellId && commandId && metadata?.isGenerating) {
+                    generationCellTracker.set(commandId, newCellId);
+                    console.log('存储生成cell映射:', commandId, '->', newCellId);
+                }
             }
             if (content) {
                 await globalUpdateInterface.addNewContent2CurrentCell(content);
             }
             
             // Handle metadata for the newly created cell
-            if (metadata) {
-                const currentCellId = globalUpdateInterface.getAddedLastCellID();
-                if (currentCellId) {
-                    // Update the cell's metadata in the store
-                    const cells = useStore.getState().cells;
-                    const targetCell = cells.find(cell => cell.id === currentCellId);
-                    if (targetCell) {
-                        targetCell.metadata = metadata;
-                        // Trigger a re-render by updating the cell
-                        useStore.getState().updateCell(currentCellId, targetCell.content);
-                    }
+            if (metadata && newCellId) {
+                // Update the cell's metadata in the store
+                const cells = useStore.getState().cells;
+                const targetCell = cells.find(cell => cell.id === newCellId);
+                
+                if (targetCell) {
+                    // 使用专门的updateCellMetadata方法
+                    useStore.getState().updateCellMetadata(newCellId, metadata);
                 }
             }
             break;
@@ -492,8 +502,55 @@ export const handleStreamResponse = async (
         case 'updateCurrentCellWithContent': {
             console.log('更新当前cell的内容:', data);
             const content = data.data?.payload?.content;
+            const cellId = data.data?.payload?.cellId;
+            const commandId = data.data?.payload?.commandId;
+            
+            console.log('updateCurrentCellWithContent - cellId:', cellId, 'commandId:', commandId, 'content length:', content?.length);
+            
             if (content) {
-                await globalUpdateInterface.updateCurrentCellWithContent(content);
+                let targetCellId = cellId; // 如果直接提供了cellId，优先使用
+                
+                if (!targetCellId && commandId && generationCellTracker.has(commandId)) {
+                    // 使用commandId从映射表获取cellId
+                    targetCellId = generationCellTracker.get(commandId);
+                    console.log('从映射表获取cellId用于内容更新:', commandId, '->', targetCellId);
+                }
+                
+                if (targetCellId) {
+                    // 直接更新指定的cell
+                    console.log('更新指定cell的内容:', targetCellId, 'content preview:', content.substring(0, 100));
+                    await globalUpdateInterface.updateCell(targetCellId, content);
+                    console.log('✅ 指定cell内容更新完成');
+                } else {
+                    // 回退到原有逻辑
+                    const lastAddedCellId = globalUpdateInterface.getAddedLastCellID();
+                    console.log('回退逻辑 - lastAddedCellId:', lastAddedCellId);
+                    
+                    if (lastAddedCellId) {
+                        // Check if the last added cell has generation metadata (likely a generation cell)
+                        const cells = useStore.getState().cells;
+                        const targetCell = cells.find(cell => cell.id === lastAddedCellId);
+                        console.log('找到的targetCell:', targetCell?.id, 'isGenerating:', targetCell?.metadata?.isGenerating);
+                        
+                        if (targetCell && targetCell.metadata?.isGenerating) {
+                            console.log('更新最后添加的生成cell内容:', lastAddedCellId);
+                            await globalUpdateInterface.updateCell(lastAddedCellId, content);
+                            console.log('✅ 生成cell内容更新完成');
+                        } else {
+                            // Fall back to updating the current cell
+                            console.log('回退到更新当前cell');
+                            await globalUpdateInterface.updateCurrentCellWithContent(content);
+                            console.log('✅ 当前cell内容更新完成');
+                        }
+                    } else {
+                        // Fall back to updating the current cell (existing behavior)
+                        console.log('使用原有逻辑更新当前cell');
+                        await globalUpdateInterface.updateCurrentCellWithContent(content);
+                        console.log('✅ 原有逻辑更新完成');
+                    }
+                }
+            } else {
+                console.error('❌ updateCurrentCellWithContent - 没有content数据');
             }
             break;
         }
@@ -501,18 +558,59 @@ export const handleStreamResponse = async (
         case 'updateCurrentCellMetadata': {
             console.log('更新当前cell metadata:', data);
             const metadata = data.data?.payload?.metadata;
+            const commandId = data.data?.payload?.commandId;
+            const cellId = data.data?.payload?.cellId; // 也检查是否直接提供了cellId
+            
+            console.log('updateCurrentCellMetadata - metadata:', metadata);
+            console.log('updateCurrentCellMetadata - commandId:', commandId);
+            console.log('updateCurrentCellMetadata - cellId:', cellId);
+            
             if (metadata) {
-                const currentCellId = globalUpdateInterface.getAddedLastCellID();
-                if (currentCellId) {
-                    // Update the cell's metadata in the store
-                    const cells = useStore.getState().cells;
-                    const targetCell = cells.find(cell => cell.id === currentCellId);
-                    if (targetCell) {
-                        targetCell.metadata = { ...targetCell.metadata, ...metadata };
-                        // Trigger a re-render by updating the cell
-                        useStore.getState().updateCell(currentCellId, targetCell.content);
+                let targetCellId = cellId; // 如果直接提供了cellId，优先使用
+                
+                // 首先尝试使用 commandId 从映射表中获取 cellId
+                if (!targetCellId && commandId && generationCellTracker.has(commandId)) {
+                    targetCellId = generationCellTracker.get(commandId);
+                    console.log('从映射表获取cellId:', commandId, '->', targetCellId);
+                    
+                    // 如果生成完成，清理映射表
+                    if (metadata.isGenerating === false || metadata.generationCompleted) {
+                        generationCellTracker.delete(commandId);
+                        console.log('清理完成的生成任务映射:', commandId);
+                    }
+                } else if (!targetCellId) {
+                    // 回退方案：尝试使用 lastAddedCellId
+                    targetCellId = globalUpdateInterface.getAddedLastCellID();
+                    console.log('使用lastAddedCellId作为fallback:', targetCellId);
+                }
+                
+                if (targetCellId) {
+                    console.log('🔄 正在更新cell metadata, cellId:', targetCellId, 'metadata:', metadata);
+                    // Use the proper updateCellMetadata method
+                    useStore.getState().updateCellMetadata(targetCellId, metadata);
+                    console.log('✅ metadata更新完成');
+                    
+                    // 额外验证：检查更新后的状态
+                    const updatedCells = useStore.getState().cells;
+                    const updatedCell = updatedCells.find(c => c.id === targetCellId);
+                    console.log('📋 验证更新后的cell:', { 
+                        id: updatedCell?.id, 
+                        contentLength: updatedCell?.content?.length,
+                        metadata: updatedCell?.metadata 
+                    });
+                } else {
+                    console.error('❌ 无法确定目标cellId，尝试使用当前选中的cell');
+                    // 最后的回退方案：使用当前选中的cell
+                    const currentSelectedCellId = useStore.getState().currentCellId;
+                    if (currentSelectedCellId) {
+                        console.log('使用当前选中的cell作为最后fallback:', currentSelectedCellId);
+                        useStore.getState().updateCellMetadata(currentSelectedCellId, metadata);
+                    } else {
+                        console.error('❌ 完全无法确定目标cell，metadata更新失败');
                     }
                 }
+            } else {
+                console.error('❌ updateCurrentCellMetadata - 没有metadata数据');
             }
             break;
         }

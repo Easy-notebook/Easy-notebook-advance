@@ -72,12 +72,6 @@ class Text2ImageAgent(BaseAgentTemplate):
         image_prompt = self._extract_image_prompt(content)
         notebook_id = self._get_notebook_id()
             
-        # 开始视频生成流程
-        yield self._create_response_json("initStreamingAnswer", {
-            "payload": {"commandId": command_id},
-            "status": "processing"
-        })
-        
         # 创建正在生成的image cell
         yield self._create_response_json("addCell2EndWithContent", {
             "payload": {
@@ -96,11 +90,20 @@ class Text2ImageAgent(BaseAgentTemplate):
             "status": "processing"
         })
         
-        image_url = self.text2image_client.generate_text2image(prompt=image_prompt)
+        # image_url = self.text2image_client.generate_text2image(prompt=image_prompt)
+        image_url = "https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream-3-0-t2i/0217544010991536d76cd7acfd572da46abbcedd46e0f23e878c6.jpeg?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYWJkZTExNjA1ZDUyNDc3YzhjNTM5OGIyNjBhNDcyOTQ%2F20250805%2Fap-southeast-1%2Ftos%2Frequest&X-Tos-Date=20250805T133820Z&X-Tos-Expires=86400&X-Tos-Signature=a3b71a744e9dcb43ed4cdef2bc49c64b285f40a77c6bc9e9efad74799fc5d593&X-Tos-SignedHeaders=host"
 
-        if image_url and notebook_id: 
-            local_asset_url = await self._download_and_save_image(image_url, notebook_id)
+        if image_url:
+            print(f"[DEBUG] 开始处理图片: {image_url}")
+            try:
+                local_asset_url = await self._download_and_save_image(image_url, notebook_id)
+                print(f"[DEBUG] 图片保存成功: {local_asset_url}")
+            except Exception as e:
+                print(f"[DEBUG] 下载图片失败，使用原始URL: {e}")
+                local_asset_url = image_url
+            
             image_markdown = f"![{image_prompt}]({image_url})"
+            print(f"[DEBUG] 准备发送 updateCurrentCellWithContent 事件")
             
             yield self._create_response_json("updateCurrentCellWithContent", {
                 "payload": {
@@ -109,6 +112,7 @@ class Text2ImageAgent(BaseAgentTemplate):
                 },
                 "status": "processing"
             })
+            print(f"[DEBUG] updateCurrentCellWithContent 事件已发送")
             
             yield self._create_response_json("updateCurrentCellMetadata", {
                 "payload": {
@@ -122,8 +126,13 @@ class Text2ImageAgent(BaseAgentTemplate):
                 },
                 "status": "processing"
             })
+            print(f"[DEBUG] updateCurrentCellMetadata 事件已发送")
             
-        yield self._create_response_json("finishStreamingAnswer", {
-            "payload": {"commandId": command_id},
-            "status": "completed"
-        })
+            # 设置为完成模式 - 类似 command_agent 的结束方式
+            yield self._create_response_json("setCurrentCellMode_complete", {
+                "status": "completed",
+                "payload": {
+                    "commandId": command_id,
+                    "response": f"Image generation completed: {image_prompt}"
+                }
+            })

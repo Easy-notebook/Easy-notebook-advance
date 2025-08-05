@@ -56,14 +56,6 @@ const HybridCell = ({ cell, onDelete }) => {
         // setTimeout(() => setIsProcessing(false), 500);
     }, [cell.id, updateCell]);
 
-    // Extract code from markdown and convert to code cell
-    // const { convertToCodeCell } = useStore();
-    // const handleConvertToCode = useCallback(() => {
-    //     if (contentType.type === 'code') {
-    //         convertToCodeCell(cell.id);
-    //     }
-    // }, [cell.id, contentType.type, convertToCodeCell]);
-
     return (
         <div className="relative p-4 rounded-lg border shadow-md group">
             {/* Loading animation background */}

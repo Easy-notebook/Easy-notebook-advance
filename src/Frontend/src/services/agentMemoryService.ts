@@ -44,6 +44,7 @@ interface AgentMemory {
     };
     successful_interactions: any[];
     failed_attempts: any[];
+    current_context?: any[];
   };
   
   // 触发条件和终止机制
@@ -432,6 +433,39 @@ export class AgentMemoryService {
     }
     
     intent.progress_markers.blocked_on = blockedOn;
+
+    this.updateAgentMemory(notebookId, agentType, memory);
+  }
+
+  // 更新当前上下文状态
+  static updateCurrentContext(
+    notebookId: string,
+    agentType: AgentType,
+    contextData: Record<string, any>
+  ): void {
+    let memory = this.getAgentMemory(notebookId, agentType);
+    if (!memory) {
+      memory = this.initializeAgentMemory(notebookId, agentType);
+    }
+
+    // 将上下文数据添加到最近的交互记录中，或创建新的上下文记录
+    const contextRecord = {
+      context_update: contextData,
+      timestamp: Date.now(),
+      agent_type: agentType
+    };
+
+    // 如果没有专门的上下文存储字段，我们可以将其添加到situation_tracking中
+    if (!memory.situation_tracking.current_context) {
+      memory.situation_tracking.current_context = [];
+    }
+    
+    memory.situation_tracking.current_context.unshift(contextRecord);
+    
+    // 只保留最近10个上下文记录
+    if (memory.situation_tracking.current_context.length > 10) {
+      memory.situation_tracking.current_context = memory.situation_tracking.current_context.slice(0, 10);
+    }
 
     this.updateAgentMemory(notebookId, agentType, memory);
   }
