@@ -88,6 +88,56 @@ class EDAToolkit(Display):
         html_content = generate_feature_importance_analysis(csv_file_path, target_column, method)
         self.show(html_content)
     
+    def basic_data_audit(self, csv_file_path: str):
+        """
+        Generate basic data audit including file info, dimensions, and data types
+        
+        Args:
+            csv_file_path: Path to CSV file
+        """
+        html_content = generate_basic_data_audit(csv_file_path)
+        self.show(html_content)
+    
+    def data_type_analysis(self, csv_file_path: str):
+        """
+        Generate detailed data type analysis with conversion suggestions
+        
+        Args:
+            csv_file_path: Path to CSV file
+        """
+        html_content = generate_data_type_analysis(csv_file_path)
+        self.show(html_content)
+    
+    def temporal_analysis(self, csv_file_path: str):
+        """
+        Generate temporal dimension analysis for time-related columns
+        
+        Args:
+            csv_file_path: Path to CSV file
+        """
+        html_content = generate_temporal_analysis(csv_file_path)
+        self.show(html_content)
+    
+    def spatial_analysis(self, csv_file_path: str):
+        """
+        Generate spatial dimension analysis for location-related columns
+        
+        Args:
+            csv_file_path: Path to CSV file
+        """
+        html_content = generate_spatial_analysis(csv_file_path)
+        self.show(html_content)
+    
+    def multicollinearity_analysis(self, csv_file_path: str):
+        """
+        Generate multicollinearity analysis with VIF calculations and correlation matrix
+        
+        Args:
+            csv_file_path: Path to CSV file
+        """
+        html_content = generate_multicollinearity_analysis(csv_file_path)
+        self.show(html_content)
+    
     def multi_column_distribution(self, csv_file_path: str, columns: List[str]) -> str:
         """
         Analyze distribution patterns across multiple columns
@@ -947,118 +997,264 @@ def generate_advanced_statistics(csv_file_path: str, columns: Optional[List[str]
         HTML report with comprehensive statistics
     """
     try:
+        import pandas as pd
+        import numpy as np
+        from scipy import stats
         data = pd.read_csv(csv_file_path)
         
+        # Select columns to analyze
         if columns is None:
             numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
         else:
-            numeric_cols = [col for col in columns if col in data.columns and pd.api.types.is_numeric_dtype(data[col])]
+            numeric_cols = [col for col in columns if col in data.columns and data[col].dtype in ['int64', 'float64']]
         
-        if not numeric_cols:
+        if len(numeric_cols) == 0:
             return _create_info_report("No numeric columns found for statistical analysis")
         
         # Calculate comprehensive statistics
         stats_data = []
         for col in numeric_cols:
             series = data[col].dropna()
-            if len(series) == 0:
-                continue
-            
-            stats_info = {
-                'column': col,
-                'count': f"{len(series):,}",
-                'missing': f"{data[col].isnull().sum():,}",
-                'mean': f"{series.mean():.3f}",
-                'median': f"{series.median():.3f}",
-                'std': f"{series.std():.3f}",
-                'min': f"{series.min():.3f}",
-                'max': f"{series.max():.3f}",
-                'q25': f"{series.quantile(0.25):.3f}",
-                'q75': f"{series.quantile(0.75):.3f}",
-                'skewness': f"{series.skew():.3f}",
-                'kurtosis': f"{series.kurtosis():.3f}",
-                'cv': f"{(series.std() / series.mean()):.3f}" if series.mean() != 0 else "N/A"
-            }
-            
-            # Normality test
-            if len(series) >= 8:
-                try:
-                    _, p_value = stats.shapiro(series.sample(min(5000, len(series))))
-                    stats_info['normality'] = f"{'Normal' if p_value > 0.05 else 'Non-normal'} (p={p_value:.4f})"
-                except:
-                    stats_info['normality'] = "Could not determine"
-            else:
-                stats_info['normality'] = "Insufficient data"
-            
-            stats_data.append(stats_info)
+            if len(series) > 0:
+                # Basic statistics
+                basic_stats = {
+                    'variable': col,
+                    'count': len(series),
+                    'mean': series.mean(),
+                    'std': series.std(),
+                    'min': series.min(),
+                    'q25': series.quantile(0.25),
+                    'median': series.median(),
+                    'q75': series.quantile(0.75),
+                    'max': series.max(),
+                    'range': series.max() - series.min(),
+                    'variance': series.var(),
+                    'skewness': stats.skew(series),
+                    'kurtosis': stats.kurtosis(series),
+                    'missing_count': data[col].isnull().sum(),
+                    'missing_pct': (data[col].isnull().sum() / len(data)) * 100
+                }
+                stats_data.append(basic_stats)
         
-        # Create HTML report
-        report_html = f"""
+        # Generate HTML report
+        html_content = f"""
         <vds-container>
+            <vds-title>Advanced Statistical Summary</vds-title>
+            
             <vds-info-panel>
-                <vds-title>Advanced Statistical Analysis</vds-title>
                 <table class="vds-info-table">
-                    <tr><td class="vds-label">Total Columns Analyzed</td><td class="vds-value">{len(stats_data)}</td></tr>
-                    <tr><td class="vds-label">Dataset Rows</td><td class="vds-value">{len(data):,}</td></tr>
-                    <tr><td class="vds-label">File Path</td><td class="vds-value">{csv_file_path}</td></tr>
+                    <tr><td class="vds-label">Dataset</td><td class="vds-value">{csv_file_path}</td></tr>
+                    <tr><td class="vds-label">Variables Analyzed</td><td class="vds-value">{len(stats_data)}</td></tr>
+                    <tr><td class="vds-label">Total Observations</td><td class="vds-value">{len(data):,}</td></tr>
                 </table>
             </vds-info-panel>
             
             <vds-section>
-                <vds-title>Detailed Statistics</vds-title>
-                <table class="vds-stats-table">
-                    <thead>
-                        <tr>
-                            <th class="vds-col-header">Column</th>
-                            <th class="vds-col-header">Count</th>
-                            <th class="vds-col-header">Missing</th>
-                            <th class="vds-col-header">Mean</th>
-                            <th class="vds-col-header">Median</th>
-                            <th class="vds-col-header">Std Dev</th>
-                            <th class="vds-col-header">Min</th>
-                            <th class="vds-col-header">Max</th>
-                            <th class="vds-col-header">Q25</th>
-                            <th class="vds-col-header">Q75</th>
-                            <th class="vds-col-header">Skewness</th>
-                            <th class="vds-col-header">Kurtosis</th>
-                            <th class="vds-col-header">CV</th>
-                            <th class="vds-col-header">Normality</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <vds-subtitle>Comprehensive Statistics</vds-subtitle>
+                <vds-table>
+                    <table class="vds-data-table">
+                        <thead>
+                            <tr>
+                                <th class="vds-col-header">Variable</th>
+                                <th class="vds-col-header">Count</th>
+                                <th class="vds-col-header">Mean</th>
+                                <th class="vds-col-header">Std Dev</th>
+                                <th class="vds-col-header">Min</th>
+                                <th class="vds-col-header">Q25</th>
+                                <th class="vds-col-header">Median</th>
+                                <th class="vds-col-header">Q75</th>
+                                <th class="vds-col-header">Max</th>
+                                <th class="vds-col-header">Skewness</th>
+                                <th class="vds-col-header">Kurtosis</th>
+                                <th class="vds-col-header">Missing %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
         """
         
         for stat in stats_data:
-            report_html += f"""
-                        <tr>
-                            <td class="vds-col-name">{stat['column']}</td>
-                            <td class="vds-stat-value">{stat['count']}</td>
-                            <td class="vds-missing-value">{stat['missing']}</td>
-                            <td class="vds-stat-value">{stat['mean']}</td>
-                            <td class="vds-stat-value">{stat['median']}</td>
-                            <td class="vds-stat-value">{stat['std']}</td>
-                            <td class="vds-stat-value">{stat['min']}</td>
-                            <td class="vds-stat-value">{stat['max']}</td>
-                            <td class="vds-stat-value">{stat['q25']}</td>
-                            <td class="vds-stat-value">{stat['q75']}</td>
-                            <td class="vds-stat-value">{stat['skewness']}</td>
-                            <td class="vds-stat-value">{stat['kurtosis']}</td>
-                            <td class="vds-stat-value">{stat['cv']}</td>
-                            <td class="vds-normality-value">{stat['normality']}</td>
-                        </tr>
+            html_content += f"""
+                            <tr>
+                                <td class="vds-cell">{stat['variable']}</td>
+                                <td class="vds-cell">{stat['count']:,}</td>
+                                <td class="vds-cell">{stat['mean']:.4f}</td>
+                                <td class="vds-cell">{stat['std']:.4f}</td>
+                                <td class="vds-cell">{stat['min']:.4f}</td>
+                                <td class="vds-cell">{stat['q25']:.4f}</td>
+                                <td class="vds-cell">{stat['median']:.4f}</td>
+                                <td class="vds-cell">{stat['q75']:.4f}</td>
+                                <td class="vds-cell">{stat['max']:.4f}</td>
+                                <td class="vds-cell">{stat['skewness']:.4f}</td>
+                                <td class="vds-cell">{stat['kurtosis']:.4f}</td>
+                                <td class="vds-cell">{stat['missing_pct']:.2f}%</td>
+                            </tr>
             """
         
-        report_html += """
-                    </tbody>
-                </table>
+        html_content += """
+                        </tbody>
+                    </table>
+                </vds-table>
             </vds-section>
         </vds-container>
         """
         
-        return report_html
+        return html_content
         
     except Exception as e:
         return _create_error_report(f"Error in advanced statistics: {str(e)}")
+
+
+def generate_feature_importance_analysis(csv_file_path: str, target_column: str = None) -> str:
+    """
+    Generate feature importance analysis using multiple methods
+    
+    Args:
+        csv_file_path: Path to CSV file
+        target_column: Target column for supervised analysis (optional)
+        
+    Returns:
+        HTML report with feature importance analysis
+    """
+    try:
+        import pandas as pd
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+        from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+        from sklearn.preprocessing import LabelEncoder
+        import io
+        import base64
+        
+        # Read data
+        data = pd.read_csv(csv_file_path)
+        
+        # Get numeric columns
+        numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(numeric_cols) < 2:
+            return f"""
+            <vds-container>
+                <vds-title>Feature Importance Analysis</vds-title>
+                <vds-warning-panel>
+                    <p>Insufficient numeric columns for feature importance analysis.</p>
+                    <p>Found {len(numeric_cols)} numeric columns, need at least 2.</p>
+                </vds-warning-panel>
+            </vds-container>
+            """
+        
+        # Prepare data
+        clean_data = data[numeric_cols].dropna()
+        
+        # Determine target column
+        if target_column and target_column in clean_data.columns:
+            target = clean_data[target_column]
+            features = clean_data.drop(columns=[target_column])
+        else:
+            # Use correlation with first column as proxy
+            target_column = clean_data.columns[0]
+            target = clean_data[target_column] 
+            features = clean_data.drop(columns=[target_column])
+        
+        if len(features.columns) == 0:
+            return f"""
+            <vds-container>
+                <vds-title>Feature Importance Analysis</vds-title>
+                <vds-warning-panel>
+                    <p>No feature columns available after removing target column.</p>
+                </vds-warning-panel>
+            </vds-container>
+            """
+        
+        # Initialize results storage
+        importance_results = []
+        
+        # Method 1: Correlation-based importance
+        correlations = features.corrwith(target).abs().sort_values(ascending=False)
+        for col in correlations.index:
+            importance_results.append({
+                'feature': col,
+                'correlation_importance': correlations[col],
+                'correlation_rank': list(correlations.index).index(col) + 1
+            })
+        
+        # Calculate composite score and create simple ranking
+        for i, result in enumerate(importance_results):
+            result['composite_score'] = result['correlation_importance']
+        
+        # Sort by composite score
+        importance_results.sort(key=lambda x: x['composite_score'], reverse=True)
+        
+        # Build HTML report
+        html_content = f"""
+        <vds-container>
+            <vds-title>Feature Importance Analysis Report</vds-title>
+            
+            <vds-info-panel>
+                <table class="vds-info-table">
+                    <tr><td class="vds-label">Dataset</td><td class="vds-value">{csv_file_path}</td></tr>
+                    <tr><td class="vds-label">Target Variable</td><td class="vds-value">{target_column}</td></tr>
+                    <tr><td class="vds-label">Features Analyzed</td><td class="vds-value">{len(features.columns)}</td></tr>
+                    <tr><td class="vds-label">Analysis Method</td><td class="vds-value">Correlation Analysis</td></tr>
+                </table>
+            </vds-info-panel>
+            
+            <vds-section>
+                <vds-subtitle>Feature Importance Rankings</vds-subtitle>
+                <vds-table>
+                    <table class="vds-data-table">
+                        <thead>
+                            <tr>
+                                <th class="vds-col-header">Feature</th>
+                                <th class="vds-col-header">Correlation (abs)</th>
+                                <th class="vds-col-header">Rank</th>
+                                <th class="vds-col-header">Importance Level</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        """
+        
+        for i, result in enumerate(importance_results):
+            corr_val = result['correlation_importance']
+            if corr_val > 0.7:
+                importance_level = '<span class="vds-status-good">High</span>'
+            elif corr_val > 0.4:
+                importance_level = '<span class="vds-status-warning">Medium</span>'
+            else:
+                importance_level = '<span class="vds-status-danger">Low</span>'
+                
+            html_content += f"""
+                            <tr>
+                                <td class="vds-cell">{result['feature']}</td>
+                                <td class="vds-cell">{corr_val:.4f}</td>
+                                <td class="vds-cell">{i + 1}</td>
+                                <td class="vds-cell">{importance_level}</td>
+                            </tr>
+            """
+        
+        html_content += """
+                        </tbody>
+                    </table>
+                </vds-table>
+            </vds-section>
+        </vds-container>
+        """
+        
+        return html_content
+        
+    except Exception as e:
+        return f"""
+        <vds-container>
+            <vds-error-panel>
+                <vds-title>Feature Importance Analysis Error</vds-title>
+                <table class="vds-error-table">
+                    <tr><td class="vds-error-label">Error Type</td><td class="vds-error-value">{type(e).__name__}</td></tr>
+                    <tr><td class="vds-error-label">Error Message</td><td class="vds-error-value">{str(e)}</td></tr>
+                    <tr><td class="vds-error-label">File Path</td><td class="vds-error-value">{csv_file_path}</td></tr>
+                </table>
+            </vds-error-panel>
+        </vds-container>
+        """
 
 
 def generate_data_quality_report(csv_file_path: str) -> str:
@@ -1326,3 +1522,589 @@ def generate_feature_importance_analysis(csv_file_path: str, target_column: str,
         
     except Exception as e:
         return _create_error_report(f"Error in feature importance analysis: {str(e)}")
+
+
+def generate_basic_data_audit(csv_file_path: str) -> str:
+    """
+    Generate basic data audit including file info, dimensions, and basic checks
+    
+    Args:
+        csv_file_path: Path to CSV file
+        
+    Returns:
+        HTML report with basic data audit
+    """
+    try:
+        import os
+        
+        # File-level information
+        file_size_mb = os.path.getsize(csv_file_path) / (1024 * 1024)
+        
+        # Load data
+        data = pd.read_csv(csv_file_path)
+        
+        # Basic checks
+        total_cells = len(data) * len(data.columns)
+        missing_cells = data.isnull().sum().sum()
+        duplicate_rows = data.duplicated().sum()
+        
+        return f"""
+        <vds-container>
+            <vds-info-panel>
+                <vds-title>Basic Data Audit</vds-title>
+                <table class="vds-info-table">
+                    <tr><td class="vds-label">Data File Path</td><td class="vds-value">{csv_file_path}</td></tr>
+                    <tr><td class="vds-label">File Size</td><td class="vds-value">{file_size_mb:.2f} MB</td></tr>
+                    <tr><td class="vds-label">Number of Rows</td><td class="vds-value">{len(data):,}</td></tr>
+                    <tr><td class="vds-label">Number of Columns</td><td class="vds-value">{len(data.columns)}</td></tr>
+                    <tr><td class="vds-label">Total Cells</td><td class="vds-value">{total_cells:,}</td></tr>
+                    <tr><td class="vds-label">Missing Cells</td><td class="vds-value">{missing_cells:,} ({(missing_cells/total_cells)*100:.2f}%)</td></tr>
+                    <tr><td class="vds-label">Duplicate Rows</td><td class="vds-value">{duplicate_rows:,}</td></tr>
+                    <tr><td class="vds-label">Data Accessibility</td><td class="vds-value">✓ Normal</td></tr>
+                </table>
+            </vds-info-panel>
+        </vds-container>
+        """
+        
+    except Exception as e:
+        return _create_error_report(f"Error in basic data audit: {str(e)}")
+
+
+def generate_data_type_analysis(csv_file_path: str) -> str:
+    """
+    Generate detailed data type analysis with conversion suggestions
+    
+    Args:
+        csv_file_path: Path to CSV file
+        
+    Returns:
+        HTML report with data type analysis
+    """
+    try:
+        data = pd.read_csv(csv_file_path)
+        
+        type_analysis = {}
+        conversion_suggestions = []
+        
+        for col in data.columns:
+            col_data = data[col]
+            analysis = {
+                'dtype': str(col_data.dtype),
+                'non_null_count': col_data.count(),
+                'null_count': col_data.isnull().sum(),
+                'unique_count': col_data.nunique(),
+                'memory_usage': col_data.memory_usage(deep=True)
+            }
+            
+            # Check for potential type conversions
+            if col_data.dtype == 'object':
+                # Try to convert to numeric
+                try:
+                    numeric_converted = pd.to_numeric(col_data, errors='coerce')
+                    if not numeric_converted.isnull().all():
+                        conversion_rate = (1 - numeric_converted.isnull().sum() / len(col_data))
+                        analysis['potential_numeric'] = True
+                        analysis['numeric_conversion_rate'] = conversion_rate
+                        if conversion_rate > 0.8:
+                            conversion_suggestions.append(f"Suggest converting {col} to numeric type (conversion rate: {conversion_rate:.1%})")
+                except:
+                    pass
+                
+                # Check if should be categorical
+                if analysis['unique_count'] < len(data) * 0.5:
+                    conversion_suggestions.append(f"Suggest converting {col} to categorical type (unique value rate: {analysis['unique_count']/len(data):.1%})")
+            
+            type_analysis[col] = analysis
+        
+        # Create HTML report
+        report_html = f"""
+        <vds-container>
+            <vds-info-panel>
+                <vds-title>Data Type Analysis</vds-title>
+                <table class="vds-info-table">
+                    <tr><td class="vds-label">Analyzed Columns</td><td class="vds-value">{len(type_analysis)}</td></tr>
+                    <tr><td class="vds-label">Conversion Suggestions</td><td class="vds-value">{len(conversion_suggestions)}</td></tr>
+                </table>
+            </vds-info-panel>
+            
+            <vds-section>
+                <vds-title>Detailed Type Analysis</vds-title>
+                <table class="vds-type-table">
+                    <thead>
+                        <tr>
+                            <th class="vds-col-header">Column Name</th>
+                            <th class="vds-col-header">Data Type</th>
+                            <th class="vds-col-header">Non-null Values</th>
+                            <th class="vds-col-header">Unique Values</th>
+                            <th class="vds-col-header">Memory Usage</th>
+                            <th class="vds-col-header">Conversion Suggestions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        """
+        
+        for col, info in type_analysis.items():
+            memory_mb = info['memory_usage'] / 1024 / 1024
+            suggestions = []
+            if info.get('potential_numeric', False) and info['numeric_conversion_rate'] > 0.8:
+                suggestions.append("→Numeric")
+            elif info['dtype'] == 'object' and info['unique_count'] < len(data) * 0.5:
+                suggestions.append("→Categorical")
+            suggestion_text = ", ".join(suggestions) if suggestions else "None"
+            
+            report_html += f"""
+                        <tr>
+                            <td class="vds-col-name">{col}</td>
+                            <td class="vds-dtype">{info['dtype']}</td>
+                            <td class="vds-count">{info['non_null_count']:,}</td>
+                            <td class="vds-count">{info['unique_count']:,}</td>
+                            <td class="vds-memory">{memory_mb:.3f} MB</td>
+                            <td class="vds-suggestion">{suggestion_text}</td>
+                        </tr>
+            """
+        
+        report_html += """
+                    </tbody>
+                </table>
+            </vds-section>
+        """
+        return report_html
+        
+    except Exception as e:
+        return _create_error_report(f"Error in data type analysis: {str(e)}")
+
+
+def generate_temporal_analysis(csv_file_path: str) -> str:
+    """
+    Generate temporal dimension analysis for time-related columns
+    
+    Args:
+        csv_file_path: Path to CSV file
+        
+    Returns:
+        HTML report with temporal analysis
+    """
+    try:
+        import re
+        from datetime import datetime
+        
+        data = pd.read_csv(csv_file_path)
+        
+        temporal_analysis = {
+            'temporal_columns': [],
+            'time_span': None,
+            'frequency': None,
+            'continuity': None,
+            'temporal_patterns': []
+        }
+        
+        # Identify time-related columns
+        time_patterns = [
+            r'.*date.*', r'.*time.*', r'.*year.*', r'.*month.*', r'.*day.*',
+            r'.*year.*', r'.*month.*', r'.*day.*', r'.*created.*', r'.*updated.*'
+        ]
+        
+        found_columns = []
+        for col in data.columns:
+            col_lower = col.lower()
+            is_temporal = any(re.match(pattern, col_lower, re.IGNORECASE) for pattern in time_patterns)
+            
+            if is_temporal:
+                temporal_analysis['temporal_columns'].append(col)
+                
+                col_info = {'column': col, 'type': 'unknown', 'analysis': []}
+                
+                # Try to parse as datetime
+                try:
+                    if data[col].dtype == 'object':
+                        parsed_dates = pd.to_datetime(data[col], errors='coerce')
+                        if not parsed_dates.isnull().all():
+                            col_info['type'] = 'datetime'
+                            col_info['analysis'].append(f"Successfully parsed as date format")
+                            
+                            time_span = (parsed_dates.max() - parsed_dates.min()).days
+                            col_info['analysis'].append(f"Time span: {time_span} days")
+                            
+                            # Analyze frequency
+                            time_diffs = parsed_dates.diff().dropna()
+                            if len(time_diffs) > 0:
+                                median_diff = time_diffs.median()
+                                if median_diff.days >= 30:
+                                    frequency = "Monthly"
+                                elif median_diff.days >= 7:
+                                    frequency = "Weekly"
+                                elif median_diff.days >= 1:
+                                    frequency = "Daily"
+                                else:
+                                    frequency = "High-frequency"
+                                col_info['analysis'].append(f"Collection frequency: {frequency}")
+                except Exception as e:
+                    col_info['analysis'].append(f"Time parsing failed: {str(e)}")
+            
+            elif data[col].dtype in ['int64', 'float64']:
+                if 'timestamp' in col_lower or 'epoch' in col_lower:
+                    temporal_analysis['temporal_columns'].append(col)
+                    col_info = {'column': col, 'type': 'timestamp', 'analysis': ['Found timestamp column']}
+                    found_columns.append(col_info)
+                    continue
+            
+            if is_temporal:
+                found_columns.append(col_info)
+        
+        # Create HTML report
+        if found_columns:
+            report_html = f"""
+            <vds-container>
+                <vds-info-panel>
+                    <vds-title>Temporal Dimension Analysis</vds-title>
+                    <table class="vds-info-table">
+                        <tr><td class="vds-label">Time-related Columns Found</td><td class="vds-value">{len(found_columns)}</td></tr>
+                        <tr><td class="vds-label">Total Dataset Rows</td><td class="vds-value">{len(data):,}</td></tr>
+                    </table>
+                </vds-info-panel>
+                
+                <vds-section>
+                    <vds-title>Detailed Time Column Analysis</vds-title>
+                    <table class="vds-temporal-table">
+                        <thead>
+                            <tr>
+                                <th class="vds-col-header">Column Name</th>
+                                <th class="vds-col-header">Type</th>
+                                <th class="vds-col-header">Analysis Results</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            """
+            
+            for col_info in found_columns:
+                analysis_text = "; ".join(col_info['analysis'])
+                report_html += f"""
+                            <tr>
+                                <td class="vds-col-name">{col_info['column']}</td>
+                                <td class="vds-type">{col_info['type']}</td>
+                                <td class="vds-analysis">{analysis_text}</td>
+                            </tr>
+                """
+            
+            report_html += """
+                        </tbody>
+                    </table>
+                </vds-section>
+            </vds-container>
+            """
+        else:
+            report_html = """
+            <vds-container>
+                <vds-info-panel>
+                    <vds-title>Temporal Dimension Analysis</vds-title>
+                    <table class="vds-info-table">
+                        <tr><td class="vds-label">Time-related Columns</td><td class="vds-value">Not Found</td></tr>
+                        <tr><td class="vds-label">Data Type</td><td class="vds-value">Likely cross-sectional data with no obvious temporal dimension</td></tr>
+                    </table>
+                </vds-info-panel>
+            </vds-container>
+            """
+        
+        return report_html
+        
+    except Exception as e:
+        return _create_error_report(f"Error in temporal analysis: {str(e)}")
+
+
+def generate_spatial_analysis(csv_file_path: str) -> str:
+    """
+    Generate spatial dimension analysis for location-related columns
+    
+    Args:
+        csv_file_path: Path to CSV file
+        
+    Returns:
+        HTML report with spatial analysis
+    """
+    try:
+        import re
+        
+        data = pd.read_csv(csv_file_path)
+        
+        # Identify spatial-related columns
+        spatial_patterns = [
+            r'.*address.*', r'.*location.*', r'.*coordinate.*', r'.*longitude.*', r'.*latitude.*',
+            r'.*address.*', r'.*location.*', r'.*coordinate.*', r'.*longitude.*', r'.*latitude.*',
+            r'.*city.*', r'.*province.*', r'.*country.*', r'.*region.*', r'.*area.*',
+            r'.*city.*', r'.*province.*', r'.*country.*', r'.*region.*', r'.*area.*',
+            r'.*postal.*', r'.*zip.*', r'.*postcode.*'
+        ]
+        
+        found_columns = []
+        for col in data.columns:
+            col_lower = col.lower()
+            is_spatial = any(re.match(pattern, col_lower, re.IGNORECASE) for pattern in spatial_patterns)
+            
+            if is_spatial:
+                col_info = {'column': col, 'analysis': []}
+                
+                if data[col].dtype == 'object':
+                    unique_locations = data[col].nunique()
+                    total_records = len(data)
+                    
+                    col_info['analysis'].append(f"Unique locations: {unique_locations}")
+                    col_info['analysis'].append(f"Spatial coverage rate: {unique_locations/total_records:.3f}")
+                    
+                    # Location distribution
+                    location_counts = data[col].value_counts()
+                    top_location = location_counts.index[0] if len(location_counts) > 0 else "N/A"
+                    col_info['analysis'].append(f"Most frequent location: {top_location} ({location_counts.iloc[0]} times)")
+                    
+                    # Sampling uniformity
+                    count_std = location_counts.std()
+                    count_mean = location_counts.mean()
+                    uniformity_score = 1 - min(count_std / count_mean, 1) if count_mean > 0 else 0
+                    col_info['analysis'].append(f"Sampling uniformity: {uniformity_score:.3f}")
+                    
+                elif data[col].dtype in ['int64', 'float64']:
+                    # Numeric spatial data (like coordinates)
+                    col_info['analysis'].append(f"Value range: {data[col].min()} to {data[col].max()}")
+                    col_info['analysis'].append(f"Standard deviation: {data[col].std():.3f}")
+                
+                found_columns.append(col_info)
+        
+        # Create HTML report
+        if found_columns:
+            report_html = f"""
+            <vds-container>
+                <vds-info-panel>
+                    <vds-title>Spatial Dimension Analysis</vds-title>
+                    <table class="vds-info-table">
+                        <tr><td class="vds-label">Spatial-related Columns Found</td><td class="vds-value">{len(found_columns)}</td></tr>
+                        <tr><td class="vds-label">Total Dataset Rows</td><td class="vds-value">{len(data):,}</td></tr>
+                    </table>
+                </vds-info-panel>
+                
+                <vds-section>
+                    <vds-title>Detailed Spatial Column Analysis</vds-title>
+                    <table class="vds-spatial-table">
+                        <thead>
+                            <tr>
+                                <th class="vds-col-header">Column Name</th>
+                                <th class="vds-col-header">Analysis Results</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            """
+            
+            for col_info in found_columns:
+                analysis_text = "; ".join(col_info['analysis'])
+                report_html += f"""
+                            <tr>
+                                <td class="vds-col-name">{col_info['column']}</td>
+                                <td class="vds-analysis">{analysis_text}</td>
+                            </tr>
+                """
+            
+            report_html += """
+                        </tbody>
+                    </table>
+                </vds-section>
+            </vds-container>
+            """
+        else:
+            report_html = """
+            <vds-container>
+                <vds-info-panel>
+                    <vds-title>Spatial Dimension Analysis</vds-title>
+                    <table class="vds-info-table">
+                        <tr><td class="vds-label">Spatial-related Columns</td><td class="vds-value">Not Found</td></tr>
+                        <tr><td class="vds-label">Data Type</td><td class="vds-value">Data may have no obvious spatial dimension</td></tr>
+                    </table>
+                </vds-info-panel>
+            </vds-container>
+            """
+        
+        return report_html
+        
+    except Exception as e:
+        return _create_error_report(f"Error in spatial analysis: {str(e)}")
+
+
+def generate_multicollinearity_analysis(csv_file_path: str) -> str:
+    """
+    Generate multicollinearity analysis with VIF calculations and correlation matrix
+    
+    Args:
+        csv_file_path: Path to CSV file
+        
+    Returns:
+        HTML report with multicollinearity analysis
+    """
+    try:
+        data = pd.read_csv(csv_file_path)
+        
+        # Get numeric columns only
+        numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(numeric_cols) < 2:
+            return _create_info_report("At least 2 numeric columns are required for multicollinearity analysis")
+        
+        # Fill missing values
+        data_processed = data[numeric_cols].fillna(data[numeric_cols].mean())
+        
+        # Calculate correlation matrix
+        correlation_matrix = data_processed.corr()
+        
+        # Find highly correlated pairs
+        high_correlation_pairs = []
+        correlation_threshold = 0.9
+        
+        for i in range(len(correlation_matrix.columns)):
+            for j in range(i+1, len(correlation_matrix.columns)):
+                var1 = correlation_matrix.columns[i]
+                var2 = correlation_matrix.columns[j]
+                corr_value = correlation_matrix.iloc[i, j]
+                
+                if abs(corr_value) > correlation_threshold:
+                    high_correlation_pairs.append({
+                        'var1': var1,
+                        'var2': var2,
+                        'correlation': corr_value
+                    })
+        
+        # VIF Analysis (for smaller datasets)
+        vif_results = []
+        if len(numeric_cols) <= 20:
+            try:
+                from statsmodels.stats.outliers_influence import variance_inflation_factor
+                from statsmodels.tools.tools import add_constant
+                
+                # Remove columns with zero variance
+                data_for_vif = data_processed.loc[:, data_processed.std() > 0]
+                
+                if len(data_for_vif.columns) > 1:
+                    data_with_const = add_constant(data_for_vif)
+                    
+                    for i, col in enumerate(data_for_vif.columns):
+                        try:
+                            vif = variance_inflation_factor(data_with_const.values, i+1)
+                            vif_level = "Very High" if vif > 10 else "High" if vif > 5 else "Medium" if vif > 2 else "Low"
+                            vif_results.append({
+                                'variable': col,
+                                'vif': vif,
+                                'level': vif_level
+                            })
+                        except:
+                            vif_results.append({
+                                'variable': col,
+                                'vif': 'N/A',
+                                'level': 'Calculation Failed'
+                            })
+            except ImportError:
+                vif_results = [{'note': 'VIF analysis requires statsmodels library'}]
+        
+        # Create HTML report
+        report_html = f"""
+        <vds-container>
+            <vds-info-panel>
+                <vds-title>Multicollinearity Detection</vds-title>
+                <table class="vds-info-table">
+                    <tr><td class="vds-label">Analyzed Variables</td><td class="vds-value">{len(numeric_cols)}</td></tr>
+                    <tr><td class="vds-label">High Correlation Variable Pairs</td><td class="vds-value">{len(high_correlation_pairs)} (|r| > {correlation_threshold})</td></tr>
+                    <tr><td class="vds-label">Correlation Threshold</td><td class="vds-value">{correlation_threshold}</td></tr>
+                </table>
+            </vds-info-panel>
+        """
+        
+        if high_correlation_pairs:
+            report_html += """
+            <vds-section>
+                <vds-title>Highly Correlated Variable Pairs</vds-title>
+                <table class="vds-correlation-table">
+                    <thead>
+                        <tr>
+                            <th class="vds-col-header">Variable 1</th>
+                            <th class="vds-col-header">Variable 2</th>
+                            <th class="vds-col-header">Correlation</th>
+                            <th class="vds-col-header">Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+            
+            for pair in high_correlation_pairs:
+                corr_class = "vds-corr-danger" if abs(pair['correlation']) > 0.95 else "vds-corr-warning"
+                suggestion = "Consider removal" if abs(pair['correlation']) > 0.95 else "Monitor multicollinearity"
+                
+                report_html += f"""
+                            <tr class="{corr_class}">
+                                <td class="vds-var-name">{pair['var1']}</td>
+                                <td class="vds-var-name">{pair['var2']}</td>
+                                <td class="vds-corr-value">{pair['correlation']:.3f}</td>
+                                <td class="vds-suggestion">{suggestion}</td>
+                            </tr>
+                """
+            
+            report_html += """
+                    </tbody>
+                </table>
+            </vds-section>
+            """
+        
+        if vif_results and 'note' not in vif_results[0]:
+            report_html += """
+            <vds-section>
+                <vds-title>Variance Inflation Factor (VIF) Analysis</vds-title>
+                <table class="vds-vif-table">
+                    <thead>
+                        <tr>
+                            <th class="vds-col-header">Variable</th>
+                            <th class="vds-col-header">VIF Value</th>
+                            <th class="vds-col-header">Multicollinearity Level</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+            
+            for result in vif_results:
+                vif_class = "vds-vif-danger" if isinstance(result['vif'], (int, float)) and result['vif'] > 10 else "vds-vif-warning" if isinstance(result['vif'], (int, float)) and result['vif'] > 5 else "vds-vif-good"
+                vif_display = f"{result['vif']:.2f}" if isinstance(result['vif'], (int, float)) else str(result['vif'])
+                
+                report_html += f"""
+                            <tr class="{vif_class}">
+                                <td class="vds-var-name">{result['variable']}</td>
+                                <td class="vds-vif-value">{vif_display}</td>
+                                <td class="vds-vif-level">{result['level']}</td>
+                            </tr>
+                """
+            
+            report_html += """
+                    </tbody>
+                </table>
+            </vds-section>
+            """
+        
+        # Summary and recommendations
+        multicollinear_vars = set()
+        for pair in high_correlation_pairs:
+            multicollinear_vars.add(pair['var2'])  # Mark second variable for potential removal
+        
+        high_vif_vars = [r['variable'] for r in vif_results if isinstance(r.get('vif'), (int, float)) and r['vif'] > 10]
+        all_problematic = list(multicollinear_vars) + high_vif_vars
+        unique_problematic = list(set(all_problematic))
+        
+        if unique_problematic:
+            report_html += f"""
+            <vds-section>
+                <vds-title>Recommended Variables for Removal</vds-title>
+                <p>Found {len(unique_problematic)} variables with multicollinearity issues:</p>
+                <ul class="vds-recommendation-list">
+            """
+            for var in unique_problematic:
+                report_html += f"<li>{var}</li>"
+            report_html += """
+                </ul>
+            </vds-section>
+            """
+        
+        report_html += "</vds-container>"
+        return report_html
+        
+    except Exception as e:
+        return _create_error_report(f"Error in multicollinearity analysis: {str(e)}")

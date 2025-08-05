@@ -2,6 +2,8 @@ from typing import AsyncGenerator, Dict, Any
 
 from dotenv import load_dotenv
 from agents.command_agent import CommandAgent
+from agents.text2video_agent import Text2VideoAgent
+from agents.text2image_agent import Text2ImageAgent
 from .base_scenario import BaseScenarioTemplate
 
 load_dotenv()
@@ -13,9 +15,21 @@ class UserCommandScenario(BaseScenarioTemplate):
     
     def __init__(self, operation: Dict[str, Any]):
         super().__init__(operation)
-        # 创建带记忆上下文的Agent操作
-        agent_operation = self._create_agent_operation(CommandAgent, agent_type="command")
-        self.agent = CommandAgent(operation=agent_operation)
+        
+        # 检查是否为视频生成命令
+        content = self._get_payload_value("content", "")
+        if content.startswith("/video"):
+            # 创建Text2Video Agent
+            agent_operation = self._create_agent_operation(Text2VideoAgent, agent_type="text2video")
+            self.agent = Text2VideoAgent(operation=agent_operation)
+        elif content.startswith("/image"):
+            # 创建Text2Image Agent
+            agent_operation = self._create_agent_operation(Text2ImageAgent, agent_type="text2image")
+            self.agent = Text2ImageAgent(operation=agent_operation)
+        else:
+            # 创建普通Command Agent
+            agent_operation = self._create_agent_operation(CommandAgent, agent_type="command")
+            self.agent = CommandAgent(operation=agent_operation)
         
     def validate_operation(self) -> bool:
         """验证操作参数"""

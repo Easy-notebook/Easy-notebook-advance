@@ -607,6 +607,100 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
             error=error_msg
         )
 
+@app.get("/assets/{notebook_id}/{filename}")
+async def serve_asset(notebook_id: str, filename: str, db: Session = Depends(get_db)):
+    """
+    Serve assets (images, videos, etc.) from notebook's .assets folder
+    """
+    log_request(db, endpoint="/assets", notebook_id=notebook_id)
+    
+    # Validate notebook_id format
+    if not is_valid_notebook_id(notebook_id):
+        raise HTTPException(status_code=400, detail=f"Invalid notebook_id: {notebook_id}")
+    
+    try:
+        # Construct paths
+        work_dir = Path(f"./notebooks/{notebook_id}")
+        assets_dir = work_dir / ".assets"
+        file_path = assets_dir / filename
+        
+        # Security check: ensure file is within assets directory
+        try:
+            file_path.resolve().relative_to(assets_dir.resolve())
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Access denied: path traversal detected")
+        
+        # Check if file exists
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"Asset {filename} not found")
+        
+        # Check if it's actually a file
+        if not file_path.is_file():
+            raise HTTPException(status_code=404, detail=f"{filename} is not a file")
+        
+        # Detect MIME type
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if not mime_type:
+            mime_type = 'application/octet-stream'
+        
+        # Set appropriate cache headers for assets
+        headers = {
+            "Cache-Control": "public, max-age=3600",  # Cache for 1 hour
+            "Last-Modified": datetime.fromtimestamp(file_path.stat().st_mtime).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        }
+        
+        return FileResponse(
+            path=file_path,
+            media_type=mime_type,
+            filename=filename,
+            headers=headers
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving asset {filename} for notebook {notebook_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.delete("/assets/{notebook_id}")
+async def cleanup_assets(notebook_id: str, db: Session = Depends(get_db)):
+    """
+    Clean up old assets for a notebook (optional maintenance endpoint)
+    """
+    log_request(db, endpoint="/cleanup_assets", notebook_id=notebook_id)
+    
+    # Validate notebook_id format
+    if not is_valid_notebook_id(notebook_id):
+        raise HTTPException(status_code=400, detail=f"Invalid notebook_id: {notebook_id}")
+    
+    try:
+        assets_dir = Path(f"./notebooks/{notebook_id}/.assets")
+        
+        if not assets_dir.exists():
+            return {"status": "ok", "message": "No assets directory found", "deleted_files": 0}
+        
+        # Get all files older than 7 days
+        cutoff_time = datetime.now().timestamp() - (7 * 24 * 60 * 60)  # 7 days ago
+        deleted_files = 0
+        
+        for file_path in assets_dir.iterdir():
+            if file_path.is_file() and file_path.stat().st_mtime < cutoff_time:
+                try:
+                    file_path.unlink()
+                    deleted_files += 1
+                except Exception as e:
+                    logger.warning(f"Failed to delete asset {file_path}: {str(e)}")
+        
+        return {
+            "status": "ok", 
+            "message": f"Cleaned up {deleted_files} old assets",
+            "deleted_files": deleted_files
+        }
+        
+    except Exception as e:
+        logger.error(f"Error cleaning assets for notebook {notebook_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Asset cleanup failed")
+
 
 # ========================
 # 应用启动与关闭事件

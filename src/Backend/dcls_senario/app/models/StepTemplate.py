@@ -195,7 +195,7 @@ class StepTemplate:
     def update_variable(self, variable_name: str, variable: str):
         return self.add_variable(variable_name, variable)
     
-    def get_variable(self, variable_name: str):
+    def get_variable(self, variable_name: str, default_value: str = ""):
         # 确保variables键存在
         if "variables" not in self.state:
             self.state["variables"] = {}
@@ -203,7 +203,7 @@ class StepTemplate:
         if variable_name in self.state["variables"]:
             return self.state["variables"][variable_name]
         else:
-            return ""
+            return default_value
     
     def pop_last_sub_variable(self, variable_name: str):
         if variable_name in self.state["variables"]:

@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,9 +11,7 @@ import {
 
 import useStore from '../../../store/notebookStore';
 import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
-// 更新了导入路径以保持一致性
 import { usePipelineStore } from '../../senario/DSLCanalysis/store/usePipelineStore'; 
-// 新增导入，用于获取工作流的实时执行上下文
 import { useWorkflowStateMachine } from '../../senario/DSLCanalysis/store/workflowStateMachine';
 import StateMachineDebugger from './StateMachineDebugger';
 import AIPlanningContextDebugger from './AIPlanningContextDebugger';
@@ -37,11 +34,6 @@ const filterSectionStageText = (text) => {
     .trim(); // 去除首尾空格
 };
 
-/**
- * 可折叠的 Markdown 渲染组件。
- * 1. 默认仅显示一定行数（maxLines），并提供"展开/收起"按钮。
- * 2. 无需再区分是否是代码，任何输入都按 Markdown 进行渲染。
- */
 const ExpandableText = ({ text, maxLines = 3 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const toggleExpand = () => setIsExpanded(!isExpanded);

@@ -308,9 +308,6 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                     }, 0);
                 }
             }
-            // Note: We no longer automatically delete a code cell when its content is empty and the user presses
-            // Backspace / Delete. This prevents accidental cell deletions when users are simply clearing code.
-            // Cell deletion should be performed explicitly via the toolbar button or other dedicated shortcuts.
         },
         [cell.id, cell.content, cells, handleExecute, setCurrentCell, setEditingCellId, onDelete]
     );

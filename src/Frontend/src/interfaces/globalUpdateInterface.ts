@@ -93,6 +93,12 @@ interface GlobalUpdateInterface {
   createSystemEvent: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, viewMode?: ViewMode) => void;
   createAIGeneratingCode: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, onProcess?: boolean) => void;
   createAIGeneratingText: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, onProcess?: boolean) => void;
+  
+  // Video Generation Methods
+  createGeneratingVideoCell: (prompt: string, params?: {quality?: string, ratio?: string, duration?: string}) => string;
+  updateVideoGenerationProgress: (cellId: string, status: string) => void;
+  completeVideoGeneration: (cellId: string, videoUrl: string) => void;
+  failVideoGeneration: (cellId: string, error: string) => void;
 }
 
 // 创建一个全局更新接口
@@ -117,8 +123,8 @@ const globalUpdateInterface: GlobalUpdateInterface = {
     clearCellOutputs: (cellId: string) => useStore.getState().clearCellOutputs(cellId),
     setAllowPagination: (allow: boolean) => useStore.getState().setAllowPagination(allow), // ADDED: 添加翻页权限设置
 
-    setAddedLastCellID: (id: string) => useStore.getState().setAddLastCellID(id),
-    getAddedLastCellID: (): string => useStore.getState().getAddLastCellID(),
+    setAddedLastCellID: (id: string) => useStore.getState().setLastAddedCellId(id),
+    getAddedLastCellID: (): string => useStore.getState().lastAddedCellId || '',
 
     addNewCell2End: (type: CellType, description: string = '', enableEdit: boolean = true) => useStore.getState().addNewCell2End(type, description, enableEdit),
     addNewContent2CurrentCell: (content: string) => useStore.getState().addNewContent2CurrentCell(content),
@@ -342,6 +348,101 @@ const globalUpdateInterface: GlobalUpdateInterface = {
     createAIGeneratingText: (content: string, result: string = '', relatedQAIds: string[] = [], cellId: string | null = useStore.getState().getCurrentCellId(), onProcess: boolean = false) => {
         const action = createAIGeneratingTextAction(content, result, relatedQAIds, cellId, onProcess);
         useAIAgentStore.getState().addAction(action);
+    },
+
+    // Video Generation Methods Implementation
+    createGeneratingVideoCell: (prompt: string, params: {quality?: string, ratio?: string, duration?: string} = {}) => {
+        const cellId = `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create new image cell with generation metadata
+        const newCell: Cell = {
+            id: cellId,
+            type: 'image',
+            content: '', // Empty content while generating
+            metadata: {
+                isGenerating: true,
+                generationStartTime: Date.now(),
+                prompt: prompt,
+                generationType: 'video',
+                generationParams: {
+                    quality: params.quality || 'standard',
+                    ratio: params.ratio || '16:9',
+                    duration: params.duration || '5'
+                }
+            }
+        };
+        
+        // Add cell to notebook
+        useStore.getState().addNewCell2End('image');
+        useStore.getState().updateCell(cellId, '');
+        
+        // Update cell metadata
+        const cells = useStore.getState().cells;
+        const targetCell = cells.find(cell => cell.id === cellId);
+        if (targetCell) {
+            targetCell.metadata = newCell.metadata;
+        }
+        
+        return cellId;
+    },
+
+    updateVideoGenerationProgress: (cellId: string, status: string) => {
+        const cells = useStore.getState().cells;
+        const targetCell = cells.find(cell => cell.id === cellId);
+        
+        if (targetCell && targetCell.metadata) {
+            // Update generation status without changing other metadata
+            targetCell.metadata = {
+                ...targetCell.metadata,
+                generationStatus: status
+            };
+            
+            // Trigger re-render by updating the cell
+            useStore.getState().updateCell(cellId, targetCell.content);
+        }
+    },
+
+    completeVideoGeneration: (cellId: string, videoUrl: string) => {
+        const cells = useStore.getState().cells;
+        const targetCell = cells.find(cell => cell.id === cellId);
+        
+        if (targetCell) {
+            // Create markdown content for the video
+            const prompt = targetCell.metadata?.prompt || 'Generated Video';
+            const videoMarkdown = `![${prompt}](${videoUrl})`;
+            
+            // Update cell content and clear generation metadata
+            useStore.getState().updateCell(cellId, videoMarkdown);
+            
+            // Clear generation metadata
+            if (targetCell.metadata) {
+                targetCell.metadata = {
+                    ...targetCell.metadata,
+                    isGenerating: false,
+                    generationStartTime: undefined,
+                    generationStatus: undefined,
+                    generationError: undefined
+                };
+            }
+        }
+    },
+
+    failVideoGeneration: (cellId: string, error: string) => {
+        const cells = useStore.getState().cells;
+        const targetCell = cells.find(cell => cell.id === cellId);
+        
+        if (targetCell && targetCell.metadata) {
+            // Set error state
+            targetCell.metadata = {
+                ...targetCell.metadata,
+                isGenerating: true, // Keep generating state to show error UI
+                generationError: error,
+                generationStatus: 'failed'
+            };
+            
+            // Trigger re-render
+            useStore.getState().updateCell(cellId, targetCell.content);
+        }
     }
 };
 

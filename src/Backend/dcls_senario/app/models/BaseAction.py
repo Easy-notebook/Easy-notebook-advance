@@ -419,3 +419,13 @@ class BaseAction(StepTemplate):
     
     def get_thinking(self, event_name: str = None) -> Any:
         return self.get_variable(event_name)
+    
+    def get_full_csv_path(self) -> str:
+        """
+        Get the CSV file path from variables
+        
+        Returns:
+            str: CSV file path as stored in variables
+        """
+        # Simply return the CSV path from variables - it should already be complete
+        return self.get_variable("csv_file_path", "")

@@ -579,9 +579,9 @@ p {
     background: #41B883;
     color: #000000 !important;
     font-weight: 500;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     text-align: left;
-    padding: 0.5rem 0.8rem;
+    padding: 0.3rem 0.5rem;
     border: none;
     letter-spacing: 0.01em;
     text-transform: uppercase;
@@ -590,7 +590,7 @@ p {
 
 /* Code Cell 输出表格数据单元格 - 正常模式下黑色文字 */
 .output-html-container td {
-    padding: 0.4rem 0.8rem;
+    padding: 0.2rem 0.5rem;
     text-align: left;
     border: none;
     border-bottom: 1px solid rgba(65, 184, 131, 0.08);
@@ -598,7 +598,6 @@ p {
     white-space: nowrap;
     overflow: visible;
     color: #000000 !important;
-    background-color: #ffffff;
 }
 
 /* Code Cell 输出表格背景 - 确保正常模式下是白色背景 */
@@ -607,15 +606,15 @@ p {
     min-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    border-radius: 12px;
+    border-radius: 8px;
+    margin:1px;
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
     border: 1px solid rgba(65, 184, 131, 0.12);
-    margin: 0 0 1rem 0;
+    margin: 0;
     font-family: system-ui, -apple-system, sans-serif;
     color: #000000;
     table-layout: auto;
-    background-color: #ffffff;
 }
 
 /* Code Cell 输出表格行悬停效果 */
@@ -651,11 +650,11 @@ p {
 /* VDS 容器 - 主要包装器 */
 vds-container {
     display: block;
-    margin: 1.5rem 0;
+    margin: 0.5rem 0;
     padding: 0;
     font-family: system-ui, -apple-system, sans-serif;
-    line-height: 1.6;
-    font-size: 1rem;
+    line-height: 1.4;
+    font-size: 0.9rem;
     color: #000000 !important; /* 强制黑色 */
 }
 
@@ -717,10 +716,10 @@ vds-help-panel {
     display: block;
     background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
     border: 1px solid rgba(65, 184, 131, 0.15);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin: 2rem 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    padding: 0.8rem;
+    margin: 0.5rem 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 /* VDS 信息面板 - 显示基本统计信息 */
@@ -728,16 +727,16 @@ vds-info-panel {
     display: block;
     background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
     border: 1px solid rgba(65, 184, 131, 0.15);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin: 2rem 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    padding: 0.8rem;
+    margin: 0.5rem 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 /* VDS 区域 - 内容分区，支持水平滚动 */
 vds-section {
     display: block;
-    margin: 2rem 0;
+    margin: 0.5rem 0;
     padding: 0;
     /* 为包含表格的section添加水平滚动 */
     overflow-x: auto;
@@ -751,16 +750,16 @@ vds-section {
 /* VDS 标题 - 与markdown h3风格统一 */
 vds-title {
     display: block;
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-weight: 600;
     background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
     color: transparent;
     -webkit-background-clip: text;
     background-clip: text;
-    margin: 1.5rem 0 1rem 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid rgba(65, 184, 131, 0.2);
-    line-height: 1.4;
+    margin: 0.5rem 0 0.3rem 0;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid rgba(65, 184, 131, 0.2);
+    line-height: 1.2;
 }
 
 
@@ -791,11 +790,11 @@ vds-table {
     min-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
     border: 1px solid rgba(65, 184, 131, 0.12);
-    margin: 0 0 1rem 0;
+    margin: 0;
     font-family: system-ui, -apple-system, sans-serif;
     color: #202124;
     table-layout: auto;
@@ -823,9 +822,9 @@ vds-th {
     background: #41B883;
     color: #000000;
     font-weight: 500;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     text-align: left;
-    padding: 0.5rem 0.8rem;
+    padding: 0.3rem 0.5rem;
     border: none;
     letter-spacing: 0.01em;
     text-transform: uppercase;
@@ -835,7 +834,7 @@ vds-th {
 /* VDS 表格数据单元格 */
 vds-td {
     display: table-cell;
-    padding: 0.4rem 0.8rem;
+    padding: 0.2rem 0.5rem;
     text-align: left;
     border: none;
     border-bottom: 1px solid rgba(65, 184, 131, 0.08);
@@ -846,8 +845,8 @@ vds-td {
 
 /* VDS 单元格基础样式 */
 .vds-cell {
-    font-size: 0.875rem;
-    line-height: 1.6;
+    font-size: 0.75rem;
+    line-height: 1.3;
     word-wrap: break-word;
     color: black;
 }
@@ -933,7 +932,7 @@ vds-tbody vds-tr:nth-child(even) {
 }
 
 .vds-info-table td {
-    padding: 0.5rem 0;
+    padding: 0.3rem 0;
     border: none;
     border-bottom: 1px solid rgba(65, 184, 131, 0.05);
 }
@@ -959,16 +958,16 @@ vds-code-block {
     display: block;
     background-color: rgba(65, 184, 131, 0.05);
     border: 1px solid rgba(65, 184, 131, 0.1);
-    border-radius: 6px;
-    padding: 1rem;
-    margin: 0.5rem 0;
+    border-radius: 4px;
+    padding: 0.5rem;
+    margin: 0.2rem 0;
 }
 
 vds-code-block code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 12px;
+    font-size: 11px;
     color: #35495E;
-    line-height: 1.4;
+    line-height: 1.3;
 }
 
 /* 错误面板 */
@@ -976,9 +975,9 @@ vds-error-panel {
     display: block;
     background-color: rgba(239, 68, 68, 0.05);
     border: 1px solid rgba(239, 68, 68, 0.2);
-    border-radius: 6px;
-    padding: 1rem;
-    margin: 1rem 0;
+    border-radius: 4px;
+    padding: 0.5rem;
+    margin: 0.3rem 0;
 }
 
 .vds-error-table {
@@ -1001,26 +1000,26 @@ vds-cleaning-report {
     display: block;
     background: linear-gradient(135deg, rgba(65, 184, 131, 0.03), rgba(52, 144, 220, 0.03));
     border: 1px solid rgba(65, 184, 131, 0.1);
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 1rem 0;
+    border-radius: 6px;
+    padding: 0.6rem;
+    margin: 0.3rem 0;
 }
 
 .vds-report-table {
     width: 100%;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .vds-report-header {
     background: linear-gradient(135deg, #41B883, #3490DC);
     color: #fff;
-    padding: 0.75rem;
+    padding: 0.4rem;
     font-weight: 500;
-    border-radius: 4px 4px 0 0;
+    border-radius: 3px 3px 0 0;
 }
 
 .vds-issue-item {
-    padding: 0.5rem;
+    padding: 0.3rem;
     color: #35495E;
     border-bottom: 1px solid rgba(65, 184, 131, 0.05);
 }

@@ -1,6 +1,7 @@
 // services/streamHandler.ts
 import globalUpdateInterface from '../interfaces/globalUpdateInterface';
 import { AgentMemoryService, AgentType } from './agentMemoryService';
+import useStore from '../store/notebookStore';
 
 // Type definitions for stream data structures
 export interface ToastMessage {
@@ -232,12 +233,28 @@ export const handleStreamResponse = async (
             const cellType = data.data?.payload?.type;
             const description = data.data?.payload?.description;
             const content = data.data?.payload?.content;
+            const metadata = data.data?.payload?.metadata;
             
             if (cellType && description) {
                 await globalUpdateInterface.addNewCell2End(cellType, description);
             }
             if (content) {
                 await globalUpdateInterface.addNewContent2CurrentCell(content);
+            }
+            
+            // Handle metadata for the newly created cell
+            if (metadata) {
+                const currentCellId = globalUpdateInterface.getAddedLastCellID();
+                if (currentCellId) {
+                    // Update the cell's metadata in the store
+                    const cells = useStore.getState().cells;
+                    const targetCell = cells.find(cell => cell.id === currentCellId);
+                    if (targetCell) {
+                        targetCell.metadata = metadata;
+                        // Trigger a re-render by updating the cell
+                        useStore.getState().updateCell(currentCellId, targetCell.content);
+                    }
+                }
             }
             break;
         }
@@ -477,6 +494,25 @@ export const handleStreamResponse = async (
             const content = data.data?.payload?.content;
             if (content) {
                 await globalUpdateInterface.updateCurrentCellWithContent(content);
+            }
+            break;
+        }
+
+        case 'updateCurrentCellMetadata': {
+            console.log('更新当前cell metadata:', data);
+            const metadata = data.data?.payload?.metadata;
+            if (metadata) {
+                const currentCellId = globalUpdateInterface.getAddedLastCellID();
+                if (currentCellId) {
+                    // Update the cell's metadata in the store
+                    const cells = useStore.getState().cells;
+                    const targetCell = cells.find(cell => cell.id === currentCellId);
+                    if (targetCell) {
+                        targetCell.metadata = { ...targetCell.metadata, ...metadata };
+                        // Trigger a re-render by updating the cell
+                        useStore.getState().updateCell(currentCellId, targetCell.content);
+                    }
+                }
             }
             break;
         }
