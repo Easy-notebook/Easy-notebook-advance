@@ -36,7 +36,10 @@ class DesignWorkflow(BaseAction):
         
         pcs_agent = PCSAgent(problem_description=self.input["problem_description"], context_description=self.input["context_description"], llm=llm)
         workflow_analysis = pcs_agent.generate_workflow_cli(self.input["user_goal"], self.input["problem_description"], self.input["context_description"])
-        
+        # workflow_analysis = {
+        #     "minimal_workflow": ["Data Existence Establishment", "Data Integrity Assurance", "Data Insight Acquisition", "Methodology Strategy Formulation", "Model Implementation Execution", "Stability Validation", "Results Evaluation Confirmation"],
+        #     "promise": "Based on the goal of Given the various features of houses in the dataset, we want to build a model to predict the sale price of a house in Ames, Iowa. There are 2930 records with 82 columns in total, including numeric, categorical columns. Some columns have missing values. We need to analyze the relationships between different features and the sale price to make an accurate prediction., I will need to establish variable definitions, observation units, and perform relevance analysis to form the PCS hypothesis in the Data Existence Establishment stage. Then, ensure the dataset is clean, complete, and structurally valid in the Data Integrity Assurance stage. Next, extract EDA summaries and build structured data understanding in the Data Insight Acquisition stage. After that, design feature engineering, modeling methods, and training strategies in the Methodology Strategy Formulation stage. Then execute model training and generate intermediate results for evaluation in the Model Implementation Execution stage. Validate the robustness and generalizability of the model under varied conditions in the Stability Validation stage. And finally, confirm effectiveness through a final DCLS report and provide actionable recommendations in the Results Evaluation Confirmation stage."
+        # }
         # The PCS agent returns "minimal_workflow" not "selected_stages"
         selected_stages_raw = workflow_analysis.get("minimal_workflow", workflow_analysis.get("selected_stages", []))
         
@@ -83,9 +86,8 @@ class DesignWorkflow(BaseAction):
             }
         
         self.finish_thinking()
-        self.add_text(workflow_analysis.get("promise", f"Based on your goal: {self.input['user_goal']}, I will execute the necessary stages to deliver your requirements."))
         self.update_workflow(final_workflow)
-        
+        self.add_text(workflow_analysis.get("promise", f"Based on your goal: {self.input['user_goal']}, I will execute the necessary stages to deliver your requirements."))        
         return self.end_event()
 
 def generate_workflow(step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):

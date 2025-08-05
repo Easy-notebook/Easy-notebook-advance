@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from app.core.config import llm, PCSAgent
-from app.models.BaseAction import BaseAction, event, thinking, finnish
+from app.models.BaseAction import BaseAction, event, thinking, finnish, after_exec
 
 class WorkflowInitialization(BaseAction):
     def __init__(self, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):
@@ -54,7 +54,28 @@ class WorkflowInitialization(BaseAction):
                 current_data_state=current_data_state,
                 user_goal=user_goal
             )
-            
+            # stage_analysis = {                                                                                                       
+            #         "goal_relevance_analysis": "The Data Existence Establishment stage is crucial as it sets the",                                                                 
+            #         "essential_for_user_goal": ["Variable definitions", "Observation units", "PCS hypothesis"],           
+            #         "selected_actions": [                                                                                 
+            #           {                                                                                                   
+            #             "action_id": "section_1_workflow_initialization",                                                 
+            #             "contribution_to_goal": "Helps in setting up the overall workflow which is necessary for a structured data science analysis.",                                                                     
+            #             "necessity": "essential",                                                                         
+            #             "provides_for_goal": "A starting point for the analysis process"                                  
+            #           },                                                                                                  
+            #           {                                                                                                   
+            #             "action_id": "section_2_data_structure_discovery",                                                
+            #             "contribution_to_goal": "Understanding the data structure is fundamental for further analysis, which is part of completing the data science analysis.",                                                
+            #             "necessity": "essential",                                                                         
+            #             "provides_for_goal": "Knowledge about how the data is organized"                                  
+            #           },                                                                                                  
+                                                                                                             
+            #         ],                                                                                                    
+            #         "execution_order": ["section_1_workflow_initialization", "section_2_data_structure_discovery"],                    
+            #         "skip_actions": [],                                                                                   
+            #         "stage_execution_plan": "In this stage I will perform section_1_workflow_initialization "                                                                                              
+            #       }                 
             if stage_analysis and not stage_analysis.get("error"):
                 selected_actions = [action["action_id"] for action in stage_analysis.get("selected_actions", [])]
                 execution_order = stage_analysis.get("execution_order", selected_actions)
@@ -97,35 +118,35 @@ class WorkflowInitialization(BaseAction):
     def action_selection(self):
         action_selection = self.get_thinking("action_selection")
         
-        # if action_selection.get("goal_relevance"):
-        #     self.add_text(f"**Goal Relevance**: {action_selection['goal_relevance']}")
-        # result = result.add_text("### Selected Actions:")
-        # selected_actions = action_selection.get("selected_actions", [])
-        # for action in selected_actions:
-        #     if isinstance(action, dict):
-        #         necessity = action.get("necessity", "unknown")
-        #         action_id = action.get("action_id", "unknown")
-        #         contribution = action.get("contribution_to_goal", "")
-        #         if contribution:
-        #             result = result.add_text(f"- **{action_id}** ({necessity}): {contribution}")
-        #         else:
-        #             result = result.add_text(f"- **{action_id}** ({necessity})")
-        
-        # Show skipped actions if any
-        # skip_actions = action_selection.get("skip_actions", [])
-        # if skip_actions:
-        #     result = result.add_text("### Skipped Actions:")
-        #     for skip_action in skip_actions:
-        #         if isinstance(skip_action, dict):
-        #             action_id = skip_action.get("action_id", "unknown")
-        #             skip_reason = skip_action.get("skip_reason", "No reason provided")
-        #             result = result.add_text(f"- **{action_id}**: {skip_reason}")
-        
-        # result = result.add_text("### Execution Plan:")
         self.add_text(action_selection["stage_execution_plan"])
         
         # Update the workflow with selected steps
         return self.update_stage_steps(action_selection["execution_order"]) \
+            .next_event("data_collection_strategy") \
+            .end_event()
+    
+    @event("data_collection_strategy")
+    def data_collection_strategy(self):
+        csv_file_path = self.get_full_csv_path()
+        return self.new_section("Data Collection Strategy Execution") \
+            .add_text("Execute data collection strategy and verify data source reliability") \
+            .add_code(f'''from vdstools import EDAToolkit
+
+# Use VDS tools for basic data audit
+eda_toolkit = EDAToolkit()
+audit_report = eda_toolkit.basic_data_audit("{csv_file_path}")
+''') \
+            .exe_code_cli(
+                event_tag="initial_data_audit",
+                mark_finnish="Data collection strategy execution completed"
+            ) \
+            .end_event()
+    
+    @after_exec("initial_data_audit")
+    def initial_data_audit(self):
+        audit_result = self.get_current_effect()
+        return self.add_variable("data_collection_report", audit_result) \
+            .add_text("Data collection strategy validation completed, establishing data version control foundation") \
             .end_event()
 
 async def generate_data_loading_and_hypothesis_proposal_step_0(
