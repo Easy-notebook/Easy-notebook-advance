@@ -24,7 +24,7 @@ const WorkflowInProgressView = () => {
     if (!currentStageConfig) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
+                <Loader2 className="w-8 h-8 text-theme-500 animate-spin mb-4" />
                 <p className="text-gray-600">Initializing workflow stage...</p>
                 <p className="text-sm text-gray-400 mt-2">
                     Current FSM State: <span className="font-mono">{currentState}</span>
@@ -44,7 +44,7 @@ const WorkflowInProgressView = () => {
             <div className="mt-4 pt-4 border-t w-full max-w-md">
                 <p className="text-sm text-gray-500">
                     Workflow Status: 
-                    <span className="font-mono ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                    <span className="font-mono ml-2 px-2 py-1 bg-theme-100 text-theme-700 rounded">
                         {currentState}
                     </span>
                 </p>

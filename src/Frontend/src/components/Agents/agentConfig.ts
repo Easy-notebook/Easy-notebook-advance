@@ -37,8 +37,8 @@ export const AGENT_PROFILES: Record<AgentType, AgentProfile> = {
     type: 'general',
     name: 'General Agent',
     icon: 'GEN',
-    color: 'bg-blue-100 text-blue-800',
-    borderColor: 'border-blue-200',
+    color: 'bg-theme-100 text-theme-800',
+    borderColor: 'border-theme-200',
     description: 'Handles general questions and conversations',
     role: 'You are AI Agent behind easyremote notebook.',
     introduction: `Hi! I'm your General Agent, your primary assistant in the Claude Code environment. 

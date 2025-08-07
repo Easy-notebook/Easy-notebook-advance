@@ -2,13 +2,13 @@ import React, { useMemo } from 'react';
 import { BsBoxArrowInRight, BsCheckCircleFill, BsGearFill, BsPlayCircleFill } from 'react-icons/bs';
 import { usePipelineStore } from '../../senario/DSLCanalysis/store/usePipelineStore';
 import { useWorkflowStateMachine, WorkflowStep } from '../../senario/DSLCanalysis/store/workflowStateMachine';
-
+import { extractSectionTitle} from '../utils/String';
 // A mapping for step status icons and colors
 const STEP_STATUS_STYLES = {
   ACTIVE: {
-    icon: <BsGearFill className="animate-spin text-blue-500" />,
-    borderColor: 'border-blue-500',
-    bgColor: 'bg-blue-50',
+    icon: <BsGearFill className="animate-spin text-theme-500" />,
+    borderColor: 'border-theme-500',
+    bgColor: 'bg-theme-50',
   },
   COMPLETED: {
     icon: <BsCheckCircleFill className="text-green-500" />,
@@ -70,16 +70,16 @@ const StageCard: React.FC<{ stage: any; stageIndex: number; fsmContext: any }> =
   return (
     <div
       className={`p-4 rounded-xl border-2 transition-shadow duration-300 ${
-        isActive ? 'border-indigo-500 shadow-lg' : 'border-gray-200 bg-white'
+        isActive ? 'border-theme-500 shadow-lg' : 'border-gray-200 bg-white'
       }`}
     >
       <div className="flex items-center gap-3 mb-3">
         {isActive ? (
-          <BsBoxArrowInRight size={20} className="text-indigo-600" />
+          <BsBoxArrowInRight size={20} className="text-theme-600" />
         ) : (
-          <span className="text-indigo-600 font-bold text-lg">{stageIndex + 1}</span>
+          <span className="text-theme-600 font-bold text-lg">{stageIndex + 1}</span>
         )}
-        <h3 className="text-lg font-bold text-gray-900">{stage.title || 'Untitled Stage'}</h3>
+        <h3 className="text-lg font-bold text-gray-900">{extractSectionTitle(stage.title) || 'Untitled Stage'}</h3>
       </div>
       
       {stage.description && <p className="text-sm text-gray-600 mb-4">{stage.description}</p>}

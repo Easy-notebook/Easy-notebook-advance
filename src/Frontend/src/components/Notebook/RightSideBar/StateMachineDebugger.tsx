@@ -22,6 +22,7 @@ import {
   Eye,
   Repeat
 } from 'lucide-react';
+import { extractSectionTitle,extractChapterTitle} from '../utils/String';
 
 const StateMachineDebugger: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -42,7 +43,7 @@ const StateMachineDebugger: React.FC = () => {
 
   const getStateColor = (state: string) => {
     if (state.includes('COMPLETED')) return 'text-green-600';
-    if (state.includes('RUNNING') || state.includes('EXECUTING')) return 'text-blue-600';
+    if (state.includes('RUNNING') || state.includes('EXECUTING')) return 'text-theme-600';
     if (state.includes('PENDING')) return 'text-orange-500';
     if (state.includes('ERROR') || state.includes('FAIL')) return 'text-red-600';
     if (state.includes('IDLE') || state.includes('CANCELLED')) return 'text-gray-500';
@@ -221,14 +222,14 @@ const StateMachineDebugger: React.FC = () => {
                 <Square size={8} style={{color: '#35495E'}} />
                 <span style={{color: '#35495E'}}>Stage:</span>
                 <span className="ml-1 font-mono font-medium" style={{color: '#6574CD'}}>
-                  {stateMachine.context.currentStageId || 'null'}
+                  {extractSectionTitle(stateMachine.context.currentStageId) || 'null'}
                 </span>
               </div>
               <div className="flex items-center space-x-1">
                 <Play size={8} style={{color: '#35495E'}} />
                 <span style={{color: '#35495E'}}>Step:</span>
                 <span className="ml-1 font-mono font-medium" style={{color: '#6574CD'}}>
-                  {stateMachine.context.currentStepId || 'null'}
+                  {extractSectionTitle(stateMachine.context.currentStepId) || 'null'}
                 </span>
               </div>
                <div className="flex items-center space-x-1">
@@ -261,7 +262,7 @@ const StateMachineDebugger: React.FC = () => {
                       color: '#FFC107'
                     }}>
                       <div className="w-2 h-2 rounded-full animate-pulse" style={{backgroundColor: '#FFC107'}}></div>
-                      <span>执行中</span>
+                      <span>Executing</span>
                     </span>
                   )}
                 </div>
@@ -293,12 +294,7 @@ const StateMachineDebugger: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={exportStateMachine}
-                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded"
-                style={{
-                  background: 'linear-gradient(135deg, #41B883, #3490DC)',
-                  color: 'white',
-                  border: 'none'
-                }}
+                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded-full bg-theme-50"
                 title="Export state machine debug data"
               >
                 <Download size={8} />
@@ -329,7 +325,7 @@ const StateMachineDebugger: React.FC = () => {
                 }}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center space-x-2">
-                      <div className={`flex items-center space-x-1 px-2 py-0.5 text-xs font-medium border rounded-sm`} 
+                      <div className={`flex items-center space-x-1 px-2 py-0.5 text-xs font-medium border rounded-full`} 
                            style={getEventStyle(entry.event)}>
                         {getEventIcon(entry.event)}
                         <span>{entry.event}</span>

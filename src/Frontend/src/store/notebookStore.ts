@@ -418,12 +418,8 @@ const useStore = create<NotebookStore>(
         outputs: serializeOutput(cell.outputs || []),
       }));
       
-      // 确保总有一个标题cell在开头
-      const hasTitle = processedCells.some(cell => 
-        cell.type === 'markdown' && cell.content.trim().startsWith('#')
-      );
-      
-      if (!hasTitle) {
+      // 只有在完全没有cells时才添加默认标题
+      if (processedCells.length === 0) {
         const titleCell: Cell = {
           id: uuidv4(),
           type: 'markdown',
@@ -453,13 +449,25 @@ const useStore = create<NotebookStore>(
     addCell: (newCell: Partial<Cell>, index?: number) =>
       set(
         produce((state: NotebookStoreState) => {
-          // 首先检查是否需要添加默认标题（在添加新cell之前）
-          const needsDefaultTitle = state.cells.length === 0 || !state.cells.some(cell => 
-            cell.type === 'markdown' && cell.content.trim().startsWith('#')
+          // 更精确的标题检查 - 只在完全空白的notebook中添加默认标题
+          const hasAnyTitleCell = state.cells.some(cell => 
+            cell.type === 'markdown' && 
+            cell.content.trim().startsWith('#') &&
+            cell.content.trim().length > 1 // 确保不只是一个#
           );
           
-          // 如果需要默认标题且还没有，先添加标题cell
-          if (needsDefaultTitle) {
+          console.log('🔍 addCell - 标题检查:', {
+            cellsLength: state.cells.length,
+            hasAnyTitleCell,
+            newCellType: newCell.type,
+            newCellContent: newCell.content?.substring(0, 30)
+          });
+          
+          // 只有在完全没有cells时才添加默认标题
+          const shouldAddDefaultTitle = state.cells.length === 0;
+          
+          if (shouldAddDefaultTitle) {
+            console.log('✅ 添加默认标题cell');
             const titleCell: Cell = {
               id: uuidv4(),
               type: 'markdown',
@@ -470,11 +478,17 @@ const useStore = create<NotebookStore>(
               description: null,
               metadata: { isDefaultTitle: true }
             };
-            state.cells.unshift(titleCell); // 总是添加到开头
+            state.cells.unshift(titleCell);
           }
           
-          // 然后添加实际的新cell
-          const targetIndex = index ?? state.cells.length;
+          // 计算插入位置 - 简化逻辑
+          const hasDefaultTitle = state.cells.length > 0 && state.cells[0].metadata?.isDefaultTitle;
+          let targetIndex = index ?? state.cells.length;
+          
+          // 如果有默认标题且没有指定具体位置，插入到标题后
+          if (hasDefaultTitle && index === undefined) {
+            targetIndex = 1;
+          }
           const cell: Cell = {
             id: newCell.id || uuidv4(),
             type: newCell.type || 'markdown',
@@ -486,11 +500,22 @@ const useStore = create<NotebookStore>(
             enableEdit: newCell.enableEdit ?? true,
             phaseId: newCell.phaseId || null,
             description: newCell.description || null,
+            metadata: newCell.metadata || null,
           };
           state.cells.splice(targetIndex, 0, cell);
           
-          // 重新解析tasks
-          state.tasks = parseMarkdownCells(state.cells);
+          // 只有在添加的是markdown类型且包含标题时才重新解析tasks
+          // 这可以避免频繁的重新解析导致现有标题结构被破坏
+          const needsReparse = cell.type === 'markdown' && 
+            (cell.content.includes('#') || state.tasks.length === 0);
+            
+          if (needsReparse) {
+            console.log('📝 重新解析tasks（添加了markdown标题cell）');
+            state.tasks = parseMarkdownCells(state.cells);
+          } else {
+            console.log('⏭️ 跳过tasks重新解析（非标题cell）');
+          }
+          
           state.currentCellId = cell.id;
 
           if (!state.currentPhaseId) {

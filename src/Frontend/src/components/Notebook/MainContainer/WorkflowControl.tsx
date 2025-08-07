@@ -2,21 +2,21 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FaRedo, FaPlay, FaPause } from 'react-icons/fa';
 import { usePipelineStore } from '../../senario/DSLCanalysis/store/usePipelineStore';
 import { useAIPlanningContextStore } from '../../senario/DSLCanalysis/store/aiPlanningContext';
-import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS } from '../../senario/DSLCanalysis/store/workflowStateMachine';
+import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS, WorkflowState } from '../../senario/DSLCanalysis/store/workflowStateMachine';
 import usePreStageStore from '../../senario/DSLCanalysis/store/preStageStore';
 import './WorkflowErrorCollector'; // Initialize error collector
+import { extractSectionTitle} from '../utils/String';
 
 // 定义可运行状态集合，方便判断
-const RUNNING_STATES = [
+const RUNNING_STATES: WorkflowState[] = [
   WORKFLOW_STATES.STAGE_RUNNING,
   WORKFLOW_STATES.STEP_RUNNING,
   WORKFLOW_STATES.BEHAVIOR_RUNNING,
   WORKFLOW_STATES.ACTION_RUNNING,
-  WORKFLOW_STATES.BEHAVIOR_FEEDBACK,
 ];
 
 // 定义终端/可重置状态集合
-const TERMINAL_STATES = [
+const TERMINAL_STATES: WorkflowState[] = [
   WORKFLOW_STATES.WORKFLOW_COMPLETED,
   WORKFLOW_STATES.ERROR,
   WORKFLOW_STATES.CANCELLED,
@@ -65,10 +65,10 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
       {/* 状态显示 */}
       {currentStepInfo && (
         <div className="flex items-center gap-2 px-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-yellow-400' : isExecuting ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`} />
+          <div className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-yellow-400' : isExecuting ? 'bg-theme-500 animate-pulse' : 'bg-green-500'}`} />
           <span className="text-sm font-medium text-gray-800">
-            {currentStepInfo.name}
-            {isPaused ? ' (已暂停)' : isExecuting ? ellipsis : ' ✓'}
+            {extractSectionTitle(currentStepInfo.name)}
+            {isPaused ? ' (Paused)' : isExecuting ? ellipsis : ' ✓'}
             {currentStepInfo.progress && <span className="ml-2 text-xs text-gray-600">({currentStepInfo.progress})</span>}
           </span>
         </div>
@@ -77,26 +77,26 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
       {/* 控制按钮 */}
       <div className="flex items-center gap-2">
         {isExecuting && !isPaused && (
-          <button onClick={onPause} title="暂停工作流" className="p-2 rounded-full hover:bg-black/10 transition-colors">
+          <button onClick={onPause} title="Stop Workflow" className="p-2 rounded-full hover:bg-black/10 transition-colors">
             <FaPause size={16} className="text-yellow-600" />
           </button>
         )}
         
         {isPaused && (
-          <button onClick={onResume} title="恢复执行" className="p-2 rounded-full hover:bg-black/10 transition-colors">
+          <button onClick={onResume} title="Resume Workflow" className="p-2 rounded-full hover:bg-black/10 transition-colors">
             <FaPlay size={16} className="text-green-600" />
           </button>
         )}
 
         {canRetry && (
-           <button onClick={onRetry} title="重试当前行为" className="p-2 rounded-full hover:bg-black/10 transition-colors">
+           <button onClick={onRetry} title="Retry Current Behavior" className="p-2 rounded-full hover:bg-black/10 transition-colors">
             <FaRedo size={16} className="text-orange-600" />
           </button>
         )}
         
         {showStartButton && (
-          <button onClick={onStart} title="开始/重启工作流" className="p-2 rounded-full hover:bg-black/10 transition-colors">
-            <FaPlay size={16} className="text-blue-600" />
+          <button onClick={onStart} title="Start/Restart Workflow" className="p-2 rounded-full hover:bg-black/10 transition-colors">
+            <FaPlay size={16} className="text-theme-600" />
           </button>
         )}
       </div>
@@ -141,7 +141,7 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
       isExecuting: RUNNING_STATES.includes(currentState),
       isPaused: currentState === WORKFLOW_STATES.CANCELLED,
       isTerminal: TERMINAL_STATES.includes(currentState),
-      canRetry: currentState === WORKFLOW_STATES.BEHAVIOR_FEEDBACK, // 只有在反馈阶段才可重试
+      canRetry: currentState === WORKFLOW_STATES.BEHAVIOR_COMPLETED, // 只有在反馈阶段才可重试
       currentStepInfo: step ? {
         name: step.title || `步骤: ${step.id}`,
         progress: `${completedStepsCount + 1}/${totalSteps}`,
@@ -180,7 +180,13 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
       const firstStage = workflowTemplate.stages[0];
       if (firstStage) {
         // 调用FSM的startWorkflow，FSM的副作用将处理后续所有逻辑
-        startWorkflow({ stageId: firstStage.id, stepId: firstStage.steps[0]?.id });
+        const firstStepId = firstStage.steps[0]?.id;
+        if (firstStepId) {
+          startWorkflow({ stageId: firstStage.id, stepId: firstStepId });
+        } else {
+          console.error('No steps found in the first stage.');
+          transition(EVENTS.FAIL, { error: 'No steps in first stage' });
+        }
       } else {
         console.error("工作流模板中没有找到任何阶段。");
         transition(EVENTS.FAIL, { error: "No stages in template" });
@@ -210,21 +216,19 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   const handleRetry = useCallback(() => {
     recordLog('retry_button_clicked');
     // 直接向FSM发送RETRY_BEHAVIOR事件
-    transition(EVENTS.RETRY_BEHAVIOR);
+    transition(EVENTS.NEXT_BEHAVIOR);
   }, [transition, recordLog]);
   
-  // 核心逻辑简化：组件加载时，如果满足条件且FSM空闲，则自动开始工作流
   useEffect(() => {
     if (prerequisitesMet && currentState === WORKFLOW_STATES.IDLE) {
-      console.log('✅ [WorkflowControl] 前提条件满足且状态机空闲，自动开始工作流...');
       handleStart();
     }
   }, [prerequisitesMet, currentState, handleStart]);
 
-  if (!prerequisitesMet) {
+  if (!prerequisitesMet && currentState === WORKFLOW_STATES.IDLE) {
     return (
         <div className="fixed bottom-10 right-10 flex items-center gap-2 p-3 bg-gray-200/50 backdrop-blur-sm rounded-lg shadow">
-            <span className="text-sm text-gray-600">等待工作流配置...</span>
+            <span className="text-sm text-gray-600">Waiting for workflow configuration...</span>
         </div>
     );
   }

@@ -484,7 +484,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           <Sparkles
             className={`
               w-5 h-5 transition-colors duration-200
-              ${input && input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
+              ${input && input.startsWith('/') ? 'text-theme-600' : 'text-theme-600'}
             `}
           />
         </div>
@@ -619,7 +619,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         <div className="mt-2 ml-10">
           <div
             className={`
-              ${isVDSMode ? 'text-theme-600' : input && input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
+              ${isVDSMode ? 'text-theme-600' : input && input.startsWith('/') ? 'text-theme-600' : 'text-theme-600'}
             `}
           >
             {isVDSMode 
@@ -642,9 +642,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
               className="p-3 text-left bg-gray-50 hover:bg-gray-100 border rounded-xl transition-all group"
             >
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <Sparkles className="w-4 h-4 text-theme-500 flex-shrink-0" />
                 <span className="font-medium text-gray-800 text-sm truncate">{q.problem_name}</span>
-                <ArrowRight className="w-3 h-3 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                <ArrowRight className="w-3 h-3 text-gray-400 group-hover:text-theme-500 transition-colors" />
               </div>
             </button>
           ))}

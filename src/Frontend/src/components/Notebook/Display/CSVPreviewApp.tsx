@@ -388,7 +388,7 @@ const CSVPreviewApp: React.FC<CSVPreviewAppProps> = ({
                                                     <tr key={index} className="hover:bg-gray-50">
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-theme-700">{header}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${stats[header]?.dataType === 'numeric' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                                                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${stats[header]?.dataType === 'numeric' ? 'bg-theme-100 text-theme-800' : 'bg-amber-100 text-amber-800'
                                                                 }`}>
                                                                 {stats[header]?.dataType === 'numeric' ? 'Numeric' : 'Categorical'}
                                                             </span>
@@ -517,7 +517,7 @@ const CSVPreviewApp: React.FC<CSVPreviewAppProps> = ({
                                                     <tr key={index} className="hover:bg-gray-50">
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-theme-700">{header}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${stats[header]?.dataType === 'numeric' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                                                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${stats[header]?.dataType === 'numeric' ? 'bg-theme-100 text-theme-800' : 'bg-amber-100 text-amber-800'
                                                                 }`}>
                                                                 {stats[header]?.dataType === 'numeric' ? 'Numeric' : 'Categorical'}
                                                             </span>

@@ -5,17 +5,35 @@ import { CheckCircle, AlertCircle, X } from 'lucide-react';
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
 import { useWorkflowStateMachine, EVENTS } from '../../senario/DSLCanalysis/store/workflowStateMachine';
 import { usePipelineStore } from '../../senario/DSLCanalysis/store/usePipelineStore';
+import { extractSectionTitle} from '../utils/String';
 
+// ----------------------
+// Type Definitions
+// ----------------------
+import { WorkflowStage, WorkflowTemplate } from '../../senario/DSLCanalysis/store/workflowStateMachine';
+
+type Stage = WorkflowStage;
+interface PendingWorkflowUpdate { workflowTemplate?: WorkflowTemplate };
+interface UpdateConfirmationDialogProps {
+  onConfirm: () => void;
+  onReject: () => void;
+  pendingUpdate: PendingWorkflowUpdate | null;
+}
+interface WorkflowNavigatorProps {
+  stages: Stage[];
+  currentStageId: string | null;
+  currentStepId: string | null;
+}
 /**
  * Sub-component: Renders the confirmation dialog for workflow updates.
  * It's a pure component that receives data and callbacks.
  */
-const UpdateConfirmationDialog = ({ onConfirm, onReject, pendingUpdate }) => {
+const UpdateConfirmationDialog: React.FC<UpdateConfirmationDialogProps> = ({ onConfirm, onReject, pendingUpdate }) => {
   if (!pendingUpdate?.workflowTemplate) {
     return null;
   }
 
-  const { name: newWorkflowName, stages: newStages } = pendingUpdate.workflowTemplate;
+  const { stages: newStages } = pendingUpdate.workflowTemplate;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" aria-modal="true">
@@ -23,7 +41,7 @@ const UpdateConfirmationDialog = ({ onConfirm, onReject, pendingUpdate }) => {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-blue-500" />
+            <AlertCircle className="w-6 h-6 text-theme-500" />
             <h3 className="text-lg font-semibold text-gray-900">
             The PCS agent suggests updating the TODO
             </h3>
@@ -43,7 +61,7 @@ const UpdateConfirmationDialog = ({ onConfirm, onReject, pendingUpdate }) => {
             <ul className="space-y-2">
               {newStages?.map((stage, index) => (
                 <li key={stage.id || index} className="flex items-center gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">
+                  <span className="flex-shrink-0 w-6 h-6 bg-theme-100 text-theme-600 rounded-full flex items-center justify-center text-xs font-bold">
                     {index + 1}
                   </span>
                   <span className="text-sm text-gray-700">
@@ -65,7 +83,7 @@ const UpdateConfirmationDialog = ({ onConfirm, onReject, pendingUpdate }) => {
           </button>
           <button
             onClick={onConfirm}
-            className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="px-5 py-2 text-sm font-medium text-white bg-theme-600 rounded-lg hover:bg-theme-700 transition-all focus:outline-none focus:ring-2 focus:ring-theme-500 focus:ring-offset-2"
           >
             Accept Update
           </button>
@@ -79,7 +97,7 @@ const UpdateConfirmationDialog = ({ onConfirm, onReject, pendingUpdate }) => {
  * Sub-component: Renders the step navigation bar.
  * It purely reflects the state from the FSM and pipeline.
  */
-const WorkflowNavigator = ({ stages, currentStageId, currentStepId }) => {
+const WorkflowNavigator: React.FC<WorkflowNavigatorProps> = ({ stages, currentStageId, currentStepId }) => {
   const currentStage = useMemo(() => stages.find(s => s.id === currentStageId), [stages, currentStageId]);
   const currentStageIndex = useMemo(() => stages.findIndex(s => s.id === currentStageId), [stages, currentStageId]);
   const currentStepIndex = useMemo(() => currentStage?.steps.findIndex(st => st.id === currentStepId) ?? -1, [currentStage, currentStepId]);
@@ -109,18 +127,18 @@ const WorkflowNavigator = ({ stages, currentStageId, currentStepId }) => {
               <div
                 key={step.id}
                 className={`flex items-center py-3 px-4 border-b-2 transition-colors ${
-                  isActive ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-600'
+                  isActive ? 'border-theme-500 text-theme-600 bg-theme-50' : 'border-transparent text-gray-600'
                 }`}
-                title={step.description || step.title}
+                title={extractSectionTitle(step.title ?? '')}
               >
                 <div
                   className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full mr-2 text-xs font-semibold ${
-                    isActive ? 'bg-blue-100 text-blue-600' : isCompleted ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-700'
+                    isActive ? 'bg-theme-100 text-theme-600' : isCompleted ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-700'
                   }`}
                 >
                   {isCompleted ? <CheckCircle size={14} /> : <span>{index + 1}</span>}
                 </div>
-                <span className="text-sm font-medium">{step.title || step.id}</span>
+                <span className="text-sm font-medium">{extractSectionTitle(step.title || step.id || '')}</span>
               </div>
             );
           })}

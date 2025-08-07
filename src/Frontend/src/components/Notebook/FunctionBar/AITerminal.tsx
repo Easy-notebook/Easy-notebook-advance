@@ -410,7 +410,7 @@ const CommandInput: React.FC = () => {
                         `}
                         >
                         <Command className={`w-6 h-6 text-gray-500 mt-1               
-                                            ${input.startsWith('/') ? 'text-blue-600' : 'text-theme-600'}
+                                            ${input.startsWith('/') ? 'text-theme-600' : 'text-theme-600'}
                                         `} />
                         <textarea
                             ref={textareaRef}

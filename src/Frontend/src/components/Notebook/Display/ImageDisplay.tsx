@@ -141,7 +141,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(({
             {/* 加载动画 */}
             {status === 'loading' && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 backdrop-blur-sm z-10">
-                    <div className="w-8 h-8 rounded-full border-2 border-gray-300 border-t-blue-500 animate-spin"></div>
+                    <div className="w-8 h-8 rounded-full border-2 border-gray-300 border-t-theme-500 animate-spin"></div>
                 </div>
             )}
 

@@ -365,7 +365,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
             onMouseLeave={() => setShowButtons(cell.id, false)}
           >
             {/* 主体区域：由父容器控制宽度，内容自动换行，划词时高亮 */}
-            <div className="flex-grow prose w-full pb-0 mb-0 selection:bg-blue-200">
+            <div className="flex-grow prose w-full pb-0 mb-0 selection:bg-theme-200">
               {isEditing ? (
                 <CodeMirror
                   onCreateEditor={handleCreateEditor}
@@ -401,7 +401,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
                 />
               ) : (
                 <div
-                  className={`text-lg leading-relaxed markdown-cell min-h-[25px] pb-0 mb-0 selection:bg-blue-200 ${
+                  className={`text-lg leading-relaxed markdown-cell min-h-[25px] pb-0 mb-0 selection:bg-theme-200 ${
                     isDefaultTitle ? 'default-title-markdown' : ''
                   }`}
                   onDoubleClick={toggleEditing}

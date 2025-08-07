@@ -260,7 +260,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
                 <div className="image-display">
                   <div className={`generation-loading border rounded-lg p-6 ${generationError
                       ? 'border-red-200 bg-red-50'
-                      : 'border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 animate-pulse'
+                      : 'border-theme-200 bg-gradient-to-br from-theme-50 to-indigo-50 animate-pulse'
                     }`}>
                     <div className="flex flex-col items-center space-y-4">
                       {generationError ? (
@@ -293,7 +293,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
                         // 正常加载状态 - 类似代码执行的风格
                         <>
                           <div className="flex items-center gap-3 mb-2">
-                            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                            <Loader2 className="w-6 h-6 animate-spin text-theme-500" />
                             <div className="text-lg font-medium text-gray-700">
                               {generationType === 'video' ? '🎬 生成视频中...' : '🖼️ 生成图片中...'}
                             </div>
@@ -306,7 +306,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
 
                           {/* 状态显示 */}
                           {generationStatus && (
-                            <div className="text-sm text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                            <div className="text-sm text-theme-600 bg-theme-100 px-2 py-1 rounded-full">
                               状态: {generationStatus}
                             </div>
                           )}
@@ -315,7 +315,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
 
                       {/* 提示词显示 - 更紧凑的设计 */}
                       {generationPrompt && !generationError && (
-                        <div className="mt-3 p-3 bg-white/70 backdrop-blur-sm rounded-lg shadow-sm max-w-md border border-blue-100">
+                        <div className="mt-3 p-3 bg-white/70 backdrop-blur-sm rounded-lg shadow-sm max-w-md border border-theme-100">
                           <div className="text-xs text-gray-500 font-medium mb-1">生成提示词:</div>
                           <div className="text-sm text-gray-700 font-medium">"{generationPrompt}"</div>
                         </div>
@@ -325,7 +325,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
                       {Object.keys(generationParams).length > 0 && !generationError && (
                         <div className="flex flex-wrap gap-2 justify-center">
                           {generationParams.quality && (
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                            <span className="px-2 py-1 bg-theme-100 text-theme-700 text-xs rounded-full font-medium">
                               质量: {generationParams.quality}
                             </span>
                           )}
@@ -362,7 +362,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
                       onKeyDown={handleKeyDown}
                       onBlur={handleBlur}
                       placeholder="![图片描述](图片URL)"
-                      className="text-black w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400"
+                      className="text-black w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-theme-400"
                     />
 
                     {/* 实时预览媒体 */}
@@ -417,7 +417,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
                   // 生成中的加载状态或错误状态 - 类似代码生成的样式
                   <div className={`generation-loading border rounded-lg p-6 ${generationError
                       ? 'border-red-200 bg-red-50'
-                      : 'border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 animate-pulse'
+                      : 'border-theme-200 bg-gradient-to-br from-theme-50 to-indigo-50 animate-pulse'
                     }`}>
                     <div className="flex flex-col items-center space-y-4">
                       {generationError ? (
@@ -450,7 +450,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
                         // 正常加载状态 - 类似代码执行的风格
                         <>
                           <div className="flex items-center gap-3 mb-2">
-                            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                            <Loader2 className="w-6 h-6 animate-spin text-theme-500" />
                             <div className="text-lg font-medium text-gray-700">
                               {generationType === 'video' ? '🎬 生成视频中...' : '🖼️ 生成图片中...'}
                             </div>
@@ -463,7 +463,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
 
                           {/* 状态显示 */}
                           {generationStatus && (
-                            <div className="text-sm text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                            <div className="text-sm text-theme-600 bg-theme-100 px-2 py-1 rounded-full">
                               状态: {generationStatus}
                             </div>
                           )}
@@ -472,7 +472,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
 
                       {/* 提示词显示 - 更紧凑的设计 */}
                       {generationPrompt && !generationError && (
-                        <div className="mt-3 p-3 bg-white/70 backdrop-blur-sm rounded-lg shadow-sm max-w-md border border-blue-100">
+                        <div className="mt-3 p-3 bg-white/70 backdrop-blur-sm rounded-lg shadow-sm max-w-md border border-theme-100">
                           <div className="text-xs text-gray-500 font-medium mb-1">生成提示词:</div>
                           <div className="text-sm text-gray-700 font-medium">"{generationPrompt}"</div>
                         </div>
@@ -482,7 +482,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
                       {Object.keys(generationParams).length > 0 && !generationError && (
                         <div className="flex flex-wrap gap-2 justify-center">
                           {generationParams.quality && (
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                            <span className="px-2 py-1 bg-theme-100 text-theme-700 text-xs rounded-full font-medium">
                               质量: {generationParams.quality}
                             </span>
                           )}

@@ -23,9 +23,16 @@
     /* Path mapping */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@Editor/*": ["./src/components/Editor/*"],
+      "@Notebook/*": ["./src/components/Notebook/*"],
+      "@Store/*": ["./src/store/*"],
+      "@Services/*": ["./src/services/*"],
+      "@Utils/*": ["./src/utils/*"],
+      "@Config/*": ["./src/config/*"],
+      "@Types/*": ["./src/types/*"]
     }
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["node_modules", "dist"]
 }

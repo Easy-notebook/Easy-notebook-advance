@@ -1,57 +1,79 @@
-import { Node, mergeAttributes } from '@tiptap/core'
+import { Node, mergeAttributes, RawCommands } from '@tiptap/core'
 import { InputRule } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import React, { useState, useRef, useEffect } from 'react'
-import { Upload, X, Edit3 } from 'lucide-react'
+import { Upload, X, Edit3, Loader2, Maximize2 } from 'lucide-react'
 import useStore from '../../../store/notebookStore'
 
-// React组件来渲染图片节点
-const ImageComponent = ({ node, updateAttributes, deleteNode, editor }) => {
+const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
   const [isEditing, setIsEditing] = useState(false)
   const [tempMarkdown, setTempMarkdown] = useState('')
   const [imageError, setImageError] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const textareaRef = useRef<HTMLInputElement>(null)
   
-  // 获取store的所有必要数据和方法
-  const { cells, currentCellId, updateCell } = useStore()
+  const { cells, currentCellId, updateCell, viewMode, editingCellId } = useStore()
   
-  // 获取cellId - 优先从node.attrs获取，fallback到当前cellId
   const cellId = node.attrs.cellId || currentCellId
   
-  // 使用类似ImageCell的模式直接从store获取cell数据
+  const isFocused = cellId === currentCellId || cellId === editingCellId
+  
   const cell = React.useMemo(() => {
     const foundCell = cells.find(c => c.id === cellId) || null
-    console.log('🖼️ ImageExtension cell lookup:', { 
-      cellId, 
-      foundCell: foundCell ? { id: foundCell.id, content: foundCell.content?.substring(0, 50) } : null,
-      totalCells: cells.length 
-    })
     return foundCell
   }, [cells, cellId])
   
-  // 获取cell的content
   const cellContent = cell?.content || ''
+  const hasContent = cellContent.trim().length > 0
   
-  // 解析markdown语法的函数
+  const isGenerating = cell?.metadata?.isGenerating || false
+  const generationType = cell?.metadata?.generationType || 'image'
+  const generationPrompt = cell?.metadata?.prompt || ''
+  const generationParams = cell?.metadata?.generationParams || {}
+  const generationStartTime = cell?.metadata?.generationStartTime
+  const generationError = cell?.metadata?.generationError
+  const generationStatus = cell?.metadata?.generationStatus
+  
+  const shouldShowLoading = isGenerating ||
+    (cell?.metadata?.generationType && !hasContent && !generationError)
+  
+  const isGeneratedContent = cell?.metadata?.generationType && hasContent && !isGenerating && !generationError
+  
   const parseMarkdown = (markdownStr: string) => {
     const match = markdownStr.match(/!\[([^\]]*)\]\(([^)]+)\)/)
     if (match) {
+      const src = match[2] || '';
+      const alt = match[1] || '';
+
+      const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv'];
+      const isVideo = videoExtensions.some(ext => src.toLowerCase().includes(ext));
+      
+      console.log('🎬 Video detection:', { src, isVideo, extensions: videoExtensions });
+
       return {
-        alt: match[1] || '',
-        src: match[2] || '',
-        isValid: true
+        alt,
+        src,
+        isValid: true,
+        isVideo
       }
     }
     return {
       alt: '',
       src: '',
-      isValid: false
+      isValid: false,
+      isVideo: false
     }
   }
-  
-  // 使用store中的content作为唯一数据源
+
   const currentContent = cellContent || ''
   const previewData = parseMarkdown(currentContent)
+
+  useEffect(() => {
+    if (!isFocused && isEditing) {
+      saveEdit()
+    }
+  }, [isFocused, isEditing])
   
   // 当store中的内容变化时，同步到node属性和临时编辑状态
   useEffect(() => {
@@ -74,11 +96,10 @@ const ImageComponent = ({ node, updateAttributes, deleteNode, editor }) => {
         setTempMarkdown(cellContent)
       }
     }
-  }, [cellContent, cellId, updateAttributes, isEditing])
+  }, [cellContent, cellId, isEditing])
 
   // 初始化
   useEffect(() => {
-    console.log('🖼️ ImageExtension initializing:', { cellId, currentContent: currentContent?.substring(0, 50) })
     if (currentContent) {
       setTempMarkdown(currentContent)
     } else {
@@ -87,8 +108,10 @@ const ImageComponent = ({ node, updateAttributes, deleteNode, editor }) => {
     }
   }, [cellId, currentContent])
 
-  // 开始编辑
+  // 开始编辑 - 只在创建模式下允许，且不是生成完成的内容，且必须处于聚焦状态
   const startEditing = () => {
+    if (viewMode !== "create" || isGeneratedContent || !isFocused) return;
+    
     setIsEditing(true)
     setTempMarkdown(currentContent || '![]()')
     setTimeout(() => {
@@ -101,8 +124,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode, editor }) => {
   }
 
   // 保存编辑 - 直接更新store
-  const saveEdit = () => {
-    console.log('🖼️ ImageExtension saving:', { cellId, tempMarkdown })
+   function saveEdit() {
     if (cellId && updateCell) {
       // 直接更新store中的cell content
       updateCell(cellId, tempMarkdown)
@@ -151,124 +173,359 @@ const ImageComponent = ({ node, updateAttributes, deleteNode, editor }) => {
     setImageError(false)
   }
 
+  // 打开模态框
+  const openModal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isEditing) {
+      setIsModalOpen(true);
+    }
+  };
+
+  // 关闭模态框
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
+  // Timer effect for generation progress
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (shouldShowLoading && generationStartTime) {
+      // 立即设置一次，然后每秒更新
+      const updateElapsed = () => {
+        const now = Date.now();
+        const elapsed = Math.floor((now - generationStartTime) / 1000);
+        setElapsedTime(elapsed);
+      };
+      updateElapsed(); // 立即执行一次
+      interval = setInterval(updateElapsed, 1000);
+    } else if (shouldShowLoading && !generationStartTime) {
+      // 如果在loading状态但没有开始时间，使用当前时间作为起点
+      const startTime = Date.now();
+      const updateElapsed = () => {
+        const now = Date.now();
+        const elapsed = Math.floor((now - startTime) / 1000);
+        setElapsedTime(elapsed);
+      };
+      updateElapsed(); // 立即执行一次
+      interval = setInterval(updateElapsed, 1000);
+    } else {
+      setElapsedTime(0);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [shouldShowLoading, generationStartTime, isGenerating]);
+
+  // Format elapsed time
+  const formatElapsedTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
   return (
-    <NodeViewWrapper 
-      className="image-markdown-wrapper color-black"
-      key={`${cellId}-${currentContent?.length || 0}`}
-      data-cell-id={cellId}
-    >
-      {isEditing ? (
-        // 编辑模式：直接编辑markdown语法 + 实时预览
-        <div className="image-editor">
-          {/* Markdown源码编辑器 */}
-          <input
-            ref={textareaRef}
-            type="text"
-            value={tempMarkdown}
-            onChange={(e) => setTempMarkdown(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={saveEdit}
-            placeholder="![图片描述](图片URL)"
-            className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-blue-400 text-black"
-          />
-          
-          {/* 实时预览图片 */}
-          {tempPreviewData.isValid && tempPreviewData.src ? (
-            <div className="mt-3">
-              <img
-                src={tempPreviewData.src}
-                alt={tempPreviewData.alt}
-                onError={handleImageError}
-                onLoad={handleImageLoad}
-                className="max-w-full h-auto rounded-lg shadow-sm"
-              />
-              
-              {imageError && (
-                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
-                  ⚠️ 图片加载失败: {tempPreviewData.src}
-                </div>
-              )}
-              
-              {tempPreviewData.alt && !imageError && (
-                <div className="mt-2 text-sm text-gray-600 text-center italic">
-                  {tempPreviewData.alt}
-                </div>
-              )}
+    <>
+      <NodeViewWrapper 
+        className="image-markdown-wrapper color-black"
+        key={`${cellId}-${currentContent?.length || 0}`}
+        data-cell-id={cellId}
+      >
+        {shouldShowLoading ? (
+          // Generation state - highest priority, overrides all other states
+          <div className="relative p-4 rounded-lg border shadow-md group">
+            {/* Loading animation background */}
+            <div className="absolute inset-0 rounded-lg">
+              <div className="absolute inset-0 bg-gradient-to-r from-theme-100 via-purple-100 to-pink-100 animate-pulse"></div>
+              <div className="absolute inset-0 bg-white/50"></div>
             </div>
-          ) : tempMarkdown ? (
-            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
-              ⚠️ 请检查 Markdown 语法: ![描述](URL)
-            </div>
-          ) : (
-            <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-gray-500 text-sm">
-              输入图片的 Markdown 语法以查看预览
-            </div>
-          )}
-        </div>
-      ) : (
-        // 显示模式：显示图片 + 工具栏
-        <div className="image-display relative group">
-          {previewData.isValid && previewData.src ? (
+
+            {/* Content container */}
             <div className="relative">
-              <img
-                src={previewData.src}
-                alt={previewData.alt}
-                title={previewData.alt}
-                onError={handleImageError}
-                onLoad={handleImageLoad}
-                onClick={startEditing}
-                className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
-              />
-              
-              {imageError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg">
-                  <div className="text-center text-gray-500">
-                    <X className="h-8 w-8 mx-auto mb-2" />
-                    <div className="text-sm">图片加载失败</div>
-                    <div className="text-xs">{previewData.src}</div>
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center space-x-2">
+                  {generationError ? (
+                    <div className="flex items-center space-x-2 text-xs text-red-600">
+                      <X className="w-4 h-4" />
+                      <span>Generation Failed</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2 text-xs text-gray-600">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Generating {generationType === 'video' ? 'Video' : 'Image'}...</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2 text-xs text-gray-500">
+                  <span>Elapsed: {formatElapsedTime(elapsedTime)}</span>
+                </div>
+              </div>
+
+              {generationError ? (
+                // Error state
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm">
+                  <div className="text-red-800 font-medium mb-2">
+                    {generationType === 'video' ? 'Video' : 'Image'} Generation Failed
+                  </div>
+                  <div className="text-red-600 mb-3">
+                    {generationError}
+                  </div>
+                  <button
+                    onClick={() => {
+                      // Clear error and allow retry
+                      if (cell?.metadata) {
+                        cell.metadata.generationError = undefined;
+                        cell.metadata.isGenerating = false;
+                      }
+                      updateCell(cellId, cellContent);
+                    }}
+                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-xs"
+                  >
+                    Clear Error
+                  </button>
+                </div>
+              ) : (
+                // Normal generation content
+                <div className="mt-4">
+                  {/* Generation status */}
+                  {generationStatus && (
+                    <div className="mb-3 text-xs text-theme-600 bg-theme-100 px-2 py-1 rounded inline-block">
+                      Status: {generationStatus}
+                    </div>
+                  )}
+
+                  {/* Prompt display */}
+                  {generationPrompt && (
+                    <div className="mb-3 p-3 bg-white/70 backdrop-blur-sm rounded border border-gray-200">
+                      <div className="text-xs text-gray-500 font-medium mb-1">Prompt:</div>
+                      <div className="text-sm text-gray-700">"{generationPrompt}"</div>
+                    </div>
+                  )}
+
+                  {/* Parameters display */}
+                  {Object.keys(generationParams).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {generationParams.quality && (
+                        <span className="px-2 py-1 bg-theme-100 text-theme-700 text-xs rounded font-medium">
+                          Quality: {generationParams.quality}
+                        </span>
+                      )}
+                      {generationParams.ratio && (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded font-medium">
+                          Ratio: {generationParams.ratio}
+                        </span>
+                      )}
+                      {generationParams.duration && (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded font-medium">
+                          Duration: {generationParams.duration}s
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Progress hint */}
+                  <div className="text-xs text-gray-400 text-center">
+                    Generation typically takes 1-5 minutes. Please wait...
                   </div>
                 </div>
               )}
-              
-              {/* 悬浮工具栏 */}
-              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={startEditing}
-                  className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
-                  title="编辑"
-                >
-                  <Edit3 size={14} />
-                </button>
-                <button
-                  onClick={() => deleteNode()}
-                  className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
-                  title="删除"
-                >
-                  <X size={14} />
-                </button>
+            </div>
+          </div>
+        ) : isEditing ? (
+          // Edit mode: direct markdown editing with live preview
+          <div className="image-editor">
+            {/* Markdown source editor */}
+            <input
+              ref={textareaRef}
+              type="text"
+              value={tempMarkdown}
+              onChange={(e) => setTempMarkdown(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={saveEdit}
+              placeholder="![Image description](Image URL)"
+              className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-theme-400 text-black"
+            />
+            
+            {/* Live media preview */}
+            {tempPreviewData.isValid && tempPreviewData.src ? (
+              <div className="mt-3">
+                {tempPreviewData.isVideo ? (
+                  <video
+                    src={tempPreviewData.src}
+                    controls
+                    className="max-w-full h-auto rounded-lg shadow-sm"
+                    onError={handleImageError}
+                    onLoadedData={handleImageLoad}
+                  >
+                    Your browser does not support video playback
+                  </video>
+                ) : (
+                  <img
+                    src={tempPreviewData.src}
+                    alt={tempPreviewData.alt}
+                    onError={handleImageError}
+                    onLoad={handleImageLoad}
+                    className="max-w-full h-auto rounded-lg shadow-sm"
+                  />
+                )}
+                
+                {imageError && (
+                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+                    Failed to load {tempPreviewData.isVideo ? 'video' : 'image'}: {tempPreviewData.src}
+                  </div>
+                )}
+                
+                {tempPreviewData.alt && !imageError && (
+                  <div className="mt-2 text-sm text-gray-600 text-center italic">
+                    {tempPreviewData.alt}
+                  </div>
+                )}
               </div>
-              
-              {/* 图片信息 */}
-              {previewData.alt && (
-                <div className="mt-2 text-sm text-gray-600 text-center italic">
-                  {previewData.alt}
+            ) : tempMarkdown ? (
+              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
+                Please check Markdown syntax: ![description](URL)
+              </div>
+            ) : (
+              <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-gray-500 text-sm">
+                Enter Markdown syntax to see preview
+              </div>
+            )}
+          </div>
+        ) : (
+          // Display mode: show media with toolbar
+          <div className="image-display relative group">
+            {previewData.isValid && previewData.src ? (
+              <div className="relative">
+                {previewData.isVideo ? (
+                  <video
+                    src={previewData.src}
+                    controls
+                    title={previewData.alt}
+                    onError={handleImageError}
+                    onLoadedData={handleImageLoad}
+                    className="max-w-full h-auto rounded-lg shadow-sm"
+                  >
+                    Your browser does not support video playback
+                  </video>
+                ) : (
+                  <>
+                    <img
+                      src={previewData.src}
+                      alt={previewData.alt}
+                      title={previewData.alt}
+                      onError={handleImageError}
+                      onLoad={handleImageLoad}
+                      onClick={viewMode === "create" ? openModal : undefined}
+                      className={`max-w-full h-auto rounded-lg shadow-sm ${
+                        viewMode === "create" ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
+                      }`}
+                    />
+                    {/* Magnify button - only show in create mode */}
+                    {viewMode === "create" && (
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1">
+                        <Maximize2 size={16} className="text-white" />
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                {imageError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg">
+                    <div className="text-center text-gray-500">
+                      <X className="h-8 w-8 mx-auto mb-2" />
+                      <div className="text-sm">Failed to load {previewData.isVideo ? 'video' : 'image'}</div>
+                      <div className="text-xs">{previewData.src}</div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Floating toolbar - only show in create mode and when focused */}
+                {viewMode === "create" && isFocused && (
+                  <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Edit button - only show for non-generated content */}
+                    {!isGeneratedContent && (
+                      <button
+                        onClick={startEditing}
+                        className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
+                        title="Edit"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteNode()}
+                      className="p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"
+                      title="Delete"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Media caption */}
+                {previewData.alt && !imageError && (
+                  <div className="mt-2 text-sm text-gray-600 text-center italic">
+                    {previewData.alt}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Empty state or invalid syntax
+              <div 
+                className={`image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center ${
+                  viewMode === "create" && isFocused ? "hover:border-gray-400 transition-colors cursor-pointer" : ""
+                }`}
+                onClick={viewMode === "create" && isFocused ? startEditing : undefined}
+              >
+                <Upload className="h-12 w-12 text-gray-400 mb-4 mx-auto" />
+                <div className="text-gray-600 mb-2">
+                  {hasContent ? 'Markdown syntax error' : viewMode === "create" && isFocused ? 'Click to add media' : 'Media content'}
                 </div>
-              )}
-            </div>
-          ) : (
-            // 空状态
-            <div 
-              className="image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
-              onClick={startEditing}
+                <div className="text-sm text-gray-400">
+                  Format: ![description](image/video URL)
+                </div>
+                {hasContent && viewMode === "create" && isFocused && !isGeneratedContent && (
+   <div className="mt-2 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded">
+     {cellContent}
+   </div>
+ )}
+              </div>
+            )}
+          </div>
+        )}
+      </NodeViewWrapper>
+
+      {/* Full-screen modal */}
+      {isModalOpen && previewData.isValid && previewData.src && !previewData.isVideo && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
+          onClick={closeModal}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+            <img
+              src={previewData.src}
+              alt={previewData.alt}
+              className="max-w-full max-h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={closeModal}
+              className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
             >
-              <Upload className="h-12 w-12 text-gray-400 mb-4 mx-auto" />
-              <p className="text-gray-600 mb-2">点击添加图片</p>
-              <p className="text-sm text-gray-400">支持 Markdown 语法: ![描述](URL)</p>
-            </div>
-          )}
+              <X size={24} />
+            </button>
+            {previewData.alt && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-center bg-black bg-opacity-50 px-4 py-2 rounded">
+                {previewData.alt}
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </NodeViewWrapper>
+    </>
   )
 }
 
@@ -350,13 +607,13 @@ export const ImageExtension = Node.create({
 
   addCommands() {
     return {
-      setImage: (options) => ({ commands }) => {
+      setImage: (options: Record<string, any>) => ({ commands }: { commands: any }) => {
         return commands.insertContent({
           type: this.name,
           attrs: options,
         })
       },
-    }
+    } as Partial<RawCommands>
   },
 
   addInputRules() {

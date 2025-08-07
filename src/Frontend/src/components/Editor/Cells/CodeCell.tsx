@@ -577,7 +577,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         return (
             <div className="p-4 border-t rounded-b-lg flex flex-col items-center justify-center min-h-[100px] bg-gray-50 animate-pulse">
                 <div className="flex items-center gap-2 mb-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                    <Loader2 className="w-5 h-5 animate-spin text-thme-500" />
                     <div className="text-sm text-gray-600 font-medium">Executing code...</div>
                 </div>
                 <div className="text-xs text-gray-500">Time elapsed: {formatElapsedTime(elapsedTime)}</div>
@@ -609,19 +609,19 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     const renderCompactMode = () => (
         <div
             data-cell-id={cell.id}
-            className="code-cell-container bg-white/90 shadow-sm rounded-lg backdrop-blur-sm border-2 border-blue-300"
+            className="code-cell-container bg-white/90 shadow-sm rounded-lg backdrop-blur-sm border-2 border-theme-300"
             ref={codeContainerRef}
             onMouseEnter={() => setShowToolbar(true)}
             onMouseLeave={() => setShowToolbar(false)}
         >
-            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50/50">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-theme-50/50">
                 <div className="flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm font-medium text-blue-700">Cell opened in split view</span>
+                    <ExternalLink className="w-4 h-4 text-theme-500" />
+                    <span className="text-sm font-medium text-theme-700">Cell opened in split view</span>
                     {cell.description && (
                         <div className="flex items-center gap-1">
-                            <InfoIcon className="w-3 h-3 text-blue-500" />
-                            <span className="text-xs text-blue-600 truncate max-w-[200px]">
+                            <InfoIcon className="w-3 h-3 text-theme-500" />
+                            <span className="text-xs text-theme-600 truncate max-w-[200px]">
                                 {cell.description.slice(0, 50)}...
                             </span>
                         </div>
@@ -630,7 +630,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                 <div className={`flex items-center gap-2 transition-opacity duration-200 ${showToolbar ? 'opacity-100' : 'opacity-60'}`}>
                     <button
                         onClick={() => setDetachedCellId(null)}
-                        className="p-1.5 hover:bg-blue-200 rounded text-blue-700"
+                        className="p-1.5 hover:bg-theme-200 rounded text-theme-700"
                         title="Return to normal view"
                     >
                         <Minimize2 className="w-4 h-4" />
@@ -711,7 +711,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                     {renderDisplayModeButton()}
                                     <button
                                         onClick={() => setDetachedCellId(isDetached ? null : cell.id)}
-                                        className={`p-2 hover:bg-blue-600 rounded ${isDetached ? 'bg-blue-500 text-white' : ''}`}
+                                        className={`p-2 hover:bg-theme-600 rounded ${isDetached ? 'bg-theme-500 text-white' : ''}`}
                                         title={isDetached ? "Dock to main view" : "Open in detached window"}
                                     >
                                         {isDetached ? <Minimize2 className="w-4 h-4" /> : <ExternalLink className="w-4 h-4" />}

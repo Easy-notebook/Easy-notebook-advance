@@ -1,7 +1,7 @@
 // services/notebookApi.ts
-
-const API_BASE_URL = 'http://localhost:18600';
-// const API_BASE_URL = 'https://easy-notebook.silan.tech/api';
+import { Backend_BASE_URL} from '../config/base_url';
+// const API_BASE_URL = 'http://localhost:18600';
+const API_BASE_URL = Backend_BASE_URL;
 
 // Type definitions for API responses and data structures
 export interface ApiResponse<T = any> {

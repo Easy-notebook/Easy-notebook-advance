@@ -49,7 +49,7 @@ const DemoMode: React.FC<DemoModeProps> = ({
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center space-y-4">
-          <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 to-green-50 rounded-xl border border-blue-200">
+          <div className="mb-6 p-6 bg-gradient-to-r from-theme-50 to-green-50 rounded-xl border border-theme-200">
             <h3 className="text-xl font-bold text-gray-800 mb-2">Demo Mode</h3>
             <p className="text-gray-600">
               Interactive demonstration mode with {editorType === 'tiptap' ? 'Tiptap' : 'Jupyter'} editor support
@@ -100,7 +100,7 @@ const DemoMode: React.FC<DemoModeProps> = ({
                   <div
                     key={cell.id}
                     id={`cell-${cell.id}`}
-                    className="relative w-full transition-all duration-300 hover:shadow-md hover:border-blue-300"
+                    className="relative w-full transition-all duration-300 hover:shadow-md hover:border-theme-300"
                   >
                     {renderCell ? renderCell(cell) : (
                       <div className="p-4 text-gray-500">

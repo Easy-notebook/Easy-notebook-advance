@@ -1,9 +1,7 @@
 import React from 'react';
 import CodeCell from '../../Editor/Cells/CodeCell';
 import MarkdownCell from '../../Editor/Cells/MarkdownCell';
-import HybridCell from '../../Editor/Cells/HybridCell';
 import ImageCell from '../../Editor/Cells/ImageCell';
-import AIThinkingCell from '../../Editor/Cells/AIThinkingCell';
 import useStore from '../../../store/notebookStore';
 
 const DetachedCellView: React.FC = () => {
@@ -23,18 +21,12 @@ const DetachedCellView: React.FC = () => {
         };
 
         switch (detachedCell.type) {
-            case 'code':
-                return <CodeCell {...props} />;
             case 'markdown':
-                return <MarkdownCell {...props} />;
-            case 'Hybrid':
-                return <HybridCell {...props} />;
+                return <MarkdownCell {...(props as any)} />;
             case 'image':
-                return <ImageCell {...props} />;
-            case 'thinking':
-                return <AIThinkingCell {...props} />;
+                return <ImageCell {...(props as any)} />;
             default:
-                return <CodeCell {...props} />;
+                return <CodeCell {...(props as any)} />;
         }
     };
 

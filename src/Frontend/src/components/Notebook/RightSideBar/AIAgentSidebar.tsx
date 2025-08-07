@@ -8,6 +8,7 @@ import {
   ShieldCheck, Server, Command, CircleX, Clock, Layers, ChevronDown,
   ChevronUp, Edit, List, CheckCircle, Circle, ArrowRight, MessageCircle
 } from 'lucide-react';
+import { extractSectionTitle } from '../utils/String';
 
 import useStore from '../../../store/notebookStore';
 import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
@@ -16,10 +17,20 @@ import { useWorkflowStateMachine } from '../../senario/DSLCanalysis/store/workfl
 import StateMachineDebugger from './StateMachineDebugger';
 import AIPlanningContextDebugger from './AIPlanningContextDebugger';
 
+// ----------------------
+// Type Definitions
+// ----------------------
+import type { EventType } from '../../../store/AIAgentStore';
+
+interface ExpandableTextProps { text: string; maxLines?: number; }
+interface EventIconProps { type: EventType; className?: string; onProcess?: boolean; }
+
+type ViewTypeExtended = 'script' | 'qa' | 'todo' | 'debug';
+
 /**
  * 过滤文本内容，移除 section*(数字) 和 stage*(数字) 模式的字符串
  */
-const filterSectionStageText = (text) => {
+const filterSectionStageText = (text: string) => {
   if (!text || typeof text !== 'string') return text;
   
   // 移除各种可能的 section 和 stage 模式（不区分大小写）
@@ -34,7 +45,7 @@ const filterSectionStageText = (text) => {
     .trim(); // 去除首尾空格
 };
 
-const ExpandableText = ({ text, maxLines = 3 }) => {
+const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const toggleExpand = () => setIsExpanded(!isExpanded);
   const { t } = useTranslation();
@@ -59,7 +70,7 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
           prose-headings:font-medium prose-headings:my-1 prose-headings:text-gray-800
           prose-p:my-0.5 prose-p:leading-6 prose-p:text-gray-700 prose-p:break-words
           prose-pre:bg-gray-100 prose-pre:rounded-md prose-pre:p-2 prose-pre:my-1 prose-pre:border prose-pre:overflow-x-auto prose-pre:text-xs
-          prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:break-all
+          prose-code:text-theme-600 prose-code:bg-theme-50 prose-code:px-1 prose-code:rounded prose-code:text-xs prose-code:break-all
           prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0.5 prose-li:text-gray-700 prose-li:break-words
           prose-strong:text-gray-800 prose-em:text-gray-600
           prose-blockquote:border-l-gray-300 prose-blockquote:text-gray-600 prose-blockquote:break-words
@@ -79,7 +90,7 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
             code: ({ children, className }) => {
               const isInline = !className;
               return isInline ? (
-                <code className="bg-blue-50 text-blue-700 px-1 py-0.5 rounded text-xs font-mono">
+                <code className="bg-theme-50 text-theme-700 px-1 py-0.5 rounded text-xs font-mono">
                   {children}
                 </code>
               ) : (
@@ -115,7 +126,7 @@ const ExpandableText = ({ text, maxLines = 3 }) => {
 };
 
 // 获取事件类型对应的标签
-const getEventLabel = (type, t) => {
+const getEventLabel = (type: EventType, t: any) => {
   const labelConfig = {
     [EVENT_TYPES.USER_ASK_QUESTION]: { text: t('rightSideBar.eventTypes.question'), color: 'bg-theme-100 text-theme-800' },
     [EVENT_TYPES.USER_NEW_INSTRUCTION]: { text: t('rightSideBar.eventTypes.instruction'), color: 'bg-green-100 text-green-800' },
@@ -130,13 +141,13 @@ const getEventLabel = (type, t) => {
     [EVENT_TYPES.AI_REPLYING_QUESTION]: { text: t('rightSideBar.eventTypes.reply'), color: 'bg-theme-100 text-theme-800' },
     [EVENT_TYPES.AI_FIXING_CODE]: { text: t('rightSideBar.eventTypes.debug'), color: 'bg-gray-100 text-gray-800' },
     [EVENT_TYPES.SYSTEM_EVENT]: { text: t('rightSideBar.eventTypes.system'), color: 'bg-gray-100 text-gray-800' },
-    [EVENT_TYPES.AI_GENERATING_CODE]: { text: t('rightSideBar.eventTypes.editing'), color: 'bg-blue-100 text-blue-800' },
+    [EVENT_TYPES.AI_GENERATING_CODE]: { text: t('rightSideBar.eventTypes.editing'), color: 'bg-theme-100 text-theme-800' },
     [EVENT_TYPES.AI_GENERATING_TEXT]: { text: t('rightSideBar.eventTypes.editing'), color: 'bg-purple-100 text-purple-800' }
   };
-  return labelConfig[type] || { text: t('rightSideBar.eventTypes.event'), color: 'bg-theme-100 text-theme-800' };
+  return (labelConfig as Record<string, { text: string; color: string }>)[type] || { text: t('rightSideBar.eventTypes.event'), color: 'bg-theme-100 text-theme-800' };
 };
 
-const EventIcon = ({ type, className = 'w-5 h-5'}) => {
+const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) => {
   const iconConfig = {
     [EVENT_TYPES.USER_ASK_QUESTION]: { Icon: MessageSquare, color: 'text-theme-600' },
     [EVENT_TYPES.USER_NEW_INSTRUCTION]: { Icon: Command, color: 'text-green-600' },
@@ -154,7 +165,7 @@ const EventIcon = ({ type, className = 'w-5 h-5'}) => {
     [EVENT_TYPES.AI_GENERATING_CODE]: { Icon: Edit, color: 'text-green-800' },
     [EVENT_TYPES.AI_GENERATING_TEXT]: { Icon: Edit, color: 'text-indigo-800' }
   };
-  const { Icon = ShieldCheck, color = 'text-theme-800' } = iconConfig[type] || {};
+  const { Icon = ShieldCheck, color = 'text-theme-800' } = (iconConfig as Record<string, any>)[type] || {};
   return (
     <div className="relative">
       <Icon className={`${className} ${color} transition-colors duration-300`} />
@@ -171,7 +182,7 @@ const WorkflowTODOPanel = () => {
   const { workflowTemplate } = usePipelineStore();
   const { context: fsmContext } = useWorkflowStateMachine(); // 使用 FSM context 作为状态来源
 
-  const [expandedStages, setExpandedStages] = useState({});
+  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
 
   // 使用 useMemo 预计算当前阶段和步骤的索引，以优化和简化渲染逻辑
   const executionIndices = useMemo(() => {
@@ -186,11 +197,11 @@ const WorkflowTODOPanel = () => {
     return { stageIndex, stepIndex };
   }, [workflowTemplate, fsmContext]);
 
-  const toggleStage = useCallback((stageId) => {
+  const toggleStage = useCallback((stageId: string) => {
     setExpandedStages(prev => ({ ...prev, [stageId]: !prev[stageId] }));
   }, []);
 
-  const renderStageStep = (step, currentStageIndex, stepIndex) => {
+  const renderStageStep = (step: any, currentStageIndex: number, stepIndex: number) => {
     const stepId = step.id; // 统一使用 id
     const isCurrent = executionIndices.stageIndex === currentStageIndex && executionIndices.stepIndex === stepIndex;
     const isCompleted = executionIndices.stageIndex > currentStageIndex || 
@@ -212,14 +223,14 @@ const WorkflowTODOPanel = () => {
             isCurrent ? 'text-theme-700' : 
             isCompleted ? 'text-green-700 line-through' : 'text-gray-600'
           }`}>
-            {filterSectionStageText(step.title || step.id)}
+            {filterSectionStageText(step.title || extractSectionTitle(step.id))}
           </div>
         </div>
       </div>
     );
   };
 
-  const renderStage = (stage, index) => {
+  const renderStage = (stage: any, index: number) => {
     const isCurrent = executionIndices.stageIndex === index;
     const isCompleted = executionIndices.stageIndex > index;
     const isExpanded = expandedStages[stage.id] || isCurrent;
@@ -241,7 +252,7 @@ const WorkflowTODOPanel = () => {
                 isCurrent ? 'text-theme-800' : 
                 isCompleted ? 'text-green-800' : 'text-gray-700'
               }`}>
-                {filterSectionStageText(stage.title || stage.id)}
+                {extractSectionTitle(stage.title || stage.id)}
               </div>
               {isCurrent && (
                 <span className="text-xs px-2 py-0.5 bg-theme-200 text-theme-800 rounded-full font-medium">
@@ -264,7 +275,7 @@ const WorkflowTODOPanel = () => {
         
         {hasSteps && isExpanded && (
           <div className="mt-2 space-y-1">
-            {stage.steps.map((step, stepIndex) => renderStageStep(step, index, stepIndex))}
+            {stage.steps.map((step: any, stepIndex: number) => renderStageStep(step, index, stepIndex))}
           </div>
         )}
       </div>
@@ -296,10 +307,10 @@ const ViewSwitcher = () => {
   return (
     <div className="flex gap-2 text-lg items-center w-full justify-between">
       <div className="flex gap-1 flex-1 min-w-0">
-        {['script', 'qa', 'todo', 'debug'].map((view) => (
+        {(['script', 'qa', 'todo', 'debug'] as ViewTypeExtended[]).map((view: ViewTypeExtended) => (
           <button
             key={view}
-            onClick={() => setActiveView(view)}
+            onClick={() => setActiveView(view as any)}
             className={`
               px-2 py-2 rounded-md transition-all duration-300 flex items-center gap-1.5
               flex-shrink-0 min-w-0
@@ -345,7 +356,7 @@ const AIAgentSidebar = () => {
     setActiveView,
   } = useAIAgentStore();
   // 追踪哪些合并组是展开状态
-  const [expandedGroups, setExpandedGroups] = useState({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const { t } = useTranslation();
 
   const { getCurrentStepCellsIDs, viewMode } = useStore();
@@ -353,9 +364,9 @@ const AIAgentSidebar = () => {
   const actionsToShow = useMemo(() => {
     return actions.filter(action =>
       ((viewMode && action.viewMode === viewMode && viewMode === 'step') &&
-        (getCurrentStepCellsIDs().includes(action.cellId))) ||
-      (viewMode && action.viewMode === viewMode && (viewMode === 'complete' || viewMode === 'create')) ||
-      (viewMode && action.viewMode === viewMode && viewMode === 'dslc')
+        (getCurrentStepCellsIDs().includes(action.cellId ?? ''))) ||
+      (viewMode && action.viewMode === viewMode && ((viewMode as any) === 'complete' || (viewMode as any) === 'create')) ||
+      (viewMode && action.viewMode === viewMode && (viewMode as any) === 'dslc')
     );
   }, [actions, viewMode, getCurrentStepCellsIDs]);
 
@@ -408,7 +419,7 @@ const AIAgentSidebar = () => {
   }, [actionsToShow]);
 
   // 处理展开/折叠逻辑
-  const toggleGroup = useCallback((actionId) => {
+  const toggleGroup = useCallback((actionId: string) => {
     setExpandedGroups(prev => ({
       ...prev,
       [actionId]: !prev[actionId]
@@ -416,7 +427,7 @@ const AIAgentSidebar = () => {
   }, []);
   
   const qasToShow = useMemo(() => {
-    const filtered = qaList.filter(qa => {
+    const filtered = qaList.filter((qa: any) => {
       // 如果QA没有viewMode，说明是旧数据，显示在所有模式下
       if (!qa.viewMode) {
         return true;
@@ -439,7 +450,7 @@ const AIAgentSidebar = () => {
     return filtered;
   }, [qaList, viewMode, getCurrentStepCellsIDs]);
 
-  const handleJumpToQA = useCallback((qaId) => {
+  const handleJumpToQA = useCallback((qaId: string) => {
     setActiveView('qa');
     requestAnimationFrame(() => {
       const qaElement = document.getElementById(qaId);
@@ -450,7 +461,7 @@ const AIAgentSidebar = () => {
   }, [setActiveView]);
 
   // 渲染单个action项
-  const renderActionItem = useCallback((action, isOriginal = false, index = 0, totalCount = 1) => {
+  const renderActionItem = useCallback((action: any, isOriginal = false, index = 0, totalCount = 1) => {
     return (
       <div
         key={isOriginal ? `original-${action.id}-${index}` : action.id}
@@ -478,7 +489,7 @@ const AIAgentSidebar = () => {
           {!isOriginal && action.count > 1 && (
             <button
               onClick={() => toggleGroup(action.id)}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors duration-300"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-theme-100 text-theme-800 hover:bg-theme-200 transition-colors duration-300"
             >
               <Layers size={12} />
               <span className="text-xs font-medium">x{action.count}</span>
@@ -565,7 +576,7 @@ const AIAgentSidebar = () => {
                         ${index === 0
                           ? 'bg-white/20 ring-1 ring-theme-200'
                           : qa.type === 'user'
-                            ? 'bg-blue-50 text-left hover:bg-blue-100'
+                            ? 'bg-theme-50 text-left hover:bg-theme-100'
                             : 'bg-gray-50 text-left hover:bg-gray-100'
                         }
                       `}
@@ -586,7 +597,7 @@ const AIAgentSidebar = () => {
                         />
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
                           qa.type === 'user' 
-                            ? 'bg-blue-100 text-blue-700' 
+                            ? 'bg-theme-100 text-theme-700' 
                             : 'bg-green-100 text-green-700'
                         }`}>
                           {qa.type === 'user' ? t('rightSideBar.you') : t('rightSideBar.ai')}
@@ -604,9 +615,9 @@ const AIAgentSidebar = () => {
             </div>
           )}
 
-          {activeView === 'todo' && <WorkflowTODOPanel />}
+          {(activeView as any) === 'todo' && <WorkflowTODOPanel />}
           
-          {activeView === 'debug' && (
+          {(activeView as any) === 'debug' && (
             <div className="space-y-4">
               <StateMachineDebugger />
               <AIPlanningContextDebugger />

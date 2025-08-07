@@ -98,13 +98,13 @@ class Text2VideoAgent(BaseAgentTemplate):
             },
         )
 
-        # video_url = self.text2video_client.generate_video_and_get_result(prompt=video_prompt)
-        video_url = "https://ark-content-generation-ap-southeast-1.tos-ap-southeast-1.volces.com/seedance-1-0-lite-t2v/02175437639118200000000000000000000ffffc0a8401bdbf53b.mp4?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYWJkZTExNjA1ZDUyNDc3YzhjNTM5OGIyNjBhNDcyOTQ%2F20250805%2Fap-southeast-1%2Ftos%2Frequest&X-Tos-Date=20250805T064712Z&X-Tos-Expires=86400&X-Tos-Signature=017cc9ee211babbd4d87f8312281b3e5e6d5176ca37b017db4f2df7da98cdc68&X-Tos-SignedHeaders=host"
+        video_url = self.text2video_client.generate_video_and_get_result(prompt=video_prompt)
+        # video_url = "https://ark-content-generation-ap-southeast-1.tos-ap-southeast-1.volces.com/seedance-1-0-lite-t2v/02175437639118200000000000000000000ffffc0a8401bdbf53b.mp4?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYWJkZTExNjA1ZDUyNDc3YzhjNTM5OGIyNjBhNDcyOTQ%2F20250805%2Fap-southeast-1%2Ftos%2Frequest&X-Tos-Date=20250805T064712Z&X-Tos-Expires=86400&X-Tos-Signature=017cc9ee211babbd4d87f8312281b3e5e6d5176ca37b017db4f2df7da98cdc68&X-Tos-SignedHeaders=host"
 
         if video_url:
-            local_asset_url = await self._download_and_save_video(
-                video_url, notebook_id
-            )
+            # local_asset_url = await self._download_and_save_video(
+            #     video_url, notebook_id
+            # )
             video_markdown = f"![{video_prompt}]({video_url})"
             
             # 生成与创建时相同的唯一标识符
@@ -132,7 +132,7 @@ class Text2VideoAgent(BaseAgentTemplate):
                             "isGenerating": False,
                             "generationCompleted": True,
                             "generationEndTime": int(datetime.now().timestamp() * 1000),
-                            "videoUrl": local_asset_url,
+                            "videoUrl": video_url,
                         },
                     },
                     "status": "processing",

@@ -92,17 +92,17 @@ class Text2ImageAgent(BaseAgentTemplate):
             "status": "processing"
         })
         
-        # image_url = self.text2image_client.generate_text2image(prompt=image_prompt)
-        image_url = "https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream-3-0-t2i/0217544010991536d76cd7acfd572da46abbcedd46e0f23e878c6.jpeg?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYWJkZTExNjA1ZDUyNDc3YzhjNTM5OGIyNjBhNDcyOTQ%2F20250805%2Fap-southeast-1%2Ftos%2Frequest&X-Tos-Date=20250805T133820Z&X-Tos-Expires=86400&X-Tos-Signature=a3b71a744e9dcb43ed4cdef2bc49c64b285f40a77c6bc9e9efad74799fc5d593&X-Tos-SignedHeaders=host"
+        image_url = self.text2image_client.generate_text2image(prompt=image_prompt)
+        # image_url = "https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.volces.com/seedream-3-0-t2i/0217544010991536d76cd7acfd572da46abbcedd46e0f23e878c6.jpeg?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYWJkZTExNjA1ZDUyNDc3YzhjNTM5OGIyNjBhNDcyOTQ%2F20250805%2Fap-southeast-1%2Ftos%2Frequest&X-Tos-Date=20250805T133820Z&X-Tos-Expires=86400&X-Tos-Signature=a3b71a744e9dcb43ed4cdef2bc49c64b285f40a77c6bc9e9efad74799fc5d593&X-Tos-SignedHeaders=host"
 
         if image_url:
             print(f"[DEBUG] 开始处理图片: {image_url}")
-            try:
-                local_asset_url = await self._download_and_save_image(image_url, notebook_id)
-                print(f"[DEBUG] 图片保存成功: {local_asset_url}")
-            except Exception as e:
-                print(f"[DEBUG] 下载图片失败，使用原始URL: {e}")
-                local_asset_url = image_url
+            # try:
+            #     local_asset_url = await self._download_and_save_image(image_url, notebook_id)
+            #     print(f"[DEBUG] 图片保存成功: {local_asset_url}")
+            # except Exception as e:
+            #     print(f"[DEBUG] 下载图片失败，使用原始URL: {e}")
+            #     local_asset_url = image_url
             
             image_markdown = f"![{image_prompt}]({image_url})"
             print(f"[DEBUG] 准备发送 updateCurrentCellWithContent 事件")

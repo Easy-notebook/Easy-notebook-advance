@@ -282,17 +282,17 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
                                 <button
                                     key={index}
                                     onClick={() => handleProblemSelect(choice)}
-                                    className="group p-6 bg-white border-2 border-gray-200 rounded-2xl text-left hover:border-blue-300 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02]"
+                                    className="group p-6 bg-white border-2 border-gray-200 rounded-2xl text-left hover:border-theme-300 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02]"
                                 >
                                     <div className="flex items-start gap-4">
-                                        <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                                            <Sparkles className="w-6 h-6 text-blue-600" />
+                                        <div className="w-12 h-12 bg-theme-50 rounded-xl flex items-center justify-center group-hover:bg-theme-100 transition-colors">
+                                            <Sparkles className="w-6 h-6 text-theme-600" />
                                         </div>
                                         <div className="flex-1">
                                             <h3 className="font-semibold text-gray-800 mb-2">{choice.problem_name}</h3>
                                             <p className="text-gray-600 text-sm">{choice.problem_description}</p>
                                         </div>
-                                        <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                                        <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-theme-600 transition-colors" />
                                     </div>
                                 </button>
                             ))}
@@ -309,7 +309,7 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
                                     value={customProblem}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomProblem(e.target.value)}
                                     placeholder={t('emptyState.customProblemPlaceholder') || '描述你想进行的自定义分析...'}
-                                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 transition-colors"
+                                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-theme-400 transition-colors"
                                     onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomSubmit()}
                                 />
                                 <button
@@ -317,7 +317,7 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
                                     disabled={!customProblem.trim()}
                                     className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
                                         customProblem.trim()
-                                            ? 'bg-blue-600 text-white hover:bg-blue-700 transform hover:scale-105'
+                                            ? 'bg-theme-600 text-white hover:bg-theme-700 transform hover:scale-105'
                                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                     }`}
                                 >
@@ -354,7 +354,7 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
                                 value={datasetBackground}
                                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDatasetBackground(e.target.value)}
                                 placeholder={t('emptyState.backgroundPlaceholder') || '请描述数据集的背景信息、数据来源、收集目的等...'}
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 resize-none h-32 transition-colors"
+                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-theme-400 resize-none h-32 transition-colors"
                             />
                         </div>
                         
@@ -367,7 +367,7 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
                             </button>
                             <button
                                 onClick={handleBackgroundSubmit}
-                                className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors transform hover:scale-105"
+                                className="px-6 py-3 bg-theme-600 text-white rounded-xl font-medium hover:bg-theme-700 transition-colors transform hover:scale-105"
                             >
                                 {t('emptyState.continue') || '继续'}
                             </button>

@@ -784,13 +784,21 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         if (currentMarkdownContent.length > 0) {
           const markdownText = currentMarkdownContent.join('\n').trim()
           if (markdownText) {
-            newCells.push({
-              id: generateCellId(),
-              type: 'markdown',
-              content: markdownText,
-              outputs: [],
-              enableEdit: true,
-            })
+            // 检查是否是重复的标题内容
+            const isDuplicateTitle = markdownText.startsWith('#') && 
+              newCells.some(cell => cell.type === 'markdown' && cell.content.trim() === markdownText.trim())
+            
+            if (!isDuplicateTitle) {
+              newCells.push({
+                id: generateCellId(),
+                type: 'markdown',
+                content: markdownText,
+                outputs: [],
+                enableEdit: true,
+              })
+            } else {
+              console.log('🚫 跳过重复的标题内容:', markdownText.substring(0, 30))
+            }
           }
           currentMarkdownContent = []
         }
@@ -907,13 +915,23 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       if (currentMarkdownContent.length > 0) {
         const markdownText = currentMarkdownContent.join('\n').trim()
         if (markdownText) {
-          newCells.push({
-            id: generateCellId(),
-            type: 'markdown',
-            content: convertHtmlToMarkdown(markdownText),
-            outputs: [],
-            enableEdit: true,
-          })
+          const convertedMarkdown = convertHtmlToMarkdown(markdownText)
+          
+          // 检查是否是重复的标题内容
+          const isDuplicateTitle = convertedMarkdown.startsWith('#') && 
+            newCells.some(cell => cell.type === 'markdown' && cell.content.trim() === convertedMarkdown.trim())
+          
+          if (!isDuplicateTitle) {
+            newCells.push({
+              id: generateCellId(),
+              type: 'markdown',
+              content: convertedMarkdown,
+              outputs: [],
+              enableEdit: true,
+            })
+          } else {
+            console.log('🚫 跳过重复的标题内容 (HTML):', convertedMarkdown.substring(0, 30))
+          }
         }
         currentMarkdownContent = []
       }

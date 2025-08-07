@@ -219,7 +219,7 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
             onKeyDown={handleKeyDown}
             onBlur={saveEdit}
             placeholder="输入 LaTeX 公式，如: E = mc^2"
-            className="p-1 border border-gray-300 rounded font-mono text-xs focus:outline-none focus:border-blue-400 bg-white text-black"
+            className="p-1 border border-gray-300 rounded font-mono text-xs focus:outline-none focus:border-theme-400 bg-white text-black"
             style={{ 
               width: `${Math.max(120, tempLatex.length * 8 + 20)}px`,
               minWidth: '120px',
@@ -250,7 +250,7 @@ const LaTeXComponent = ({ node, updateAttributes, deleteNode }) => {
             <div className="mt-1 flex items-center justify-between">
               <button
                 onClick={() => updateAttributes({ displayMode: !displayMode })}
-                className="text-xs text-blue-500 hover:text-blue-700"
+                className="text-xs text-theme-500 hover:text-theme-700"
               >
                 切换为行内公式
               </button>

@@ -6,15 +6,19 @@ import MarkdownCell from '../Editor/Cells/MarkdownCell';
 import HybridCell from '../Editor/Cells/HybridCell';
 import ImageCell from '../Editor/Cells/ImageCell';
 import AIThinkingCell from '../Editor/Cells/AIThinkingCell';
-import OutlineSidebar from './LeftSideBar/OutlineSidebar';
+import OutlineSidebarOrig from './LeftSideBar/OutlineSidebar';
+import StepNavigation from './MainContainer/StepNavigation';
+
+
+
 import ErrorAlert from '../UI/ErrorAlert';
 import useStore from '../../store/notebookStore';
 import { findCellsByStep } from '../../utils/markdownParser';
 import { createExportHandlers } from '../../utils/exportToFile/exportUtils';
 import { useToast } from '../UI/Toast';
-import AIAgentSidebar from './RightSideBar/AIAgentSidebar';
+import AIAgentSidebarOrig from './RightSideBar/AIAgentSidebar';
 import useOperatorStore from '../../store/operatorStore';
-import CommandInput from './FunctionBar/AITerminal';
+import CommandInputOrig from './FunctionBar/AITerminal';
 import { useAIAgentStore } from '../../store/AIAgentStore';
 import usePreviewStore from '../../store/previewStore';
 import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
@@ -27,6 +31,11 @@ import WorkflowControl from './MainContainer/WorkflowControl';
 import { useWorkflowControlStore } from './store/workflowControlStore';
 import AgentDetail from '../Agents/AgentDetail';
 import { AgentType } from '../../services/agentMemoryService';
+
+// Cast components to any to relax prop type constraints
+const OutlineSidebar: any = OutlineSidebarOrig;
+const AIAgentSidebar: any = AIAgentSidebarOrig;
+const CommandInput: any = CommandInputOrig;
 
 
 
@@ -86,16 +95,16 @@ const NotebookApp = () => {
   const { setShowCommandInput } = useAIAgentStore();
 
 
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Optimized resize handlers
-  const handleLeftResize = useCallback((e) => {
+  const handleLeftResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = leftSidebarWidth;
-    let animationId;
+    let animationId: number | null = null;
     
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (animationId) cancelAnimationFrame(animationId);
       animationId = requestAnimationFrame(() => {
         const newWidth = Math.max(200, Math.min(800, startWidth + e.clientX - startX));
@@ -119,13 +128,13 @@ const NotebookApp = () => {
     document.addEventListener('mouseup', handleMouseUp);
   }, [leftSidebarWidth]);
   
-  const handleRightResize = useCallback((e) => {
+  const handleRightResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = rightSidebarWidth;
-    let animationId;
+    let animationId: number | null = null;
     
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (animationId) cancelAnimationFrame(animationId);
       animationId = requestAnimationFrame(() => {
         const newWidth = Math.max(200, Math.min(800, startWidth + startX - e.clientX));
@@ -177,7 +186,7 @@ const NotebookApp = () => {
   }, [tasks, currentPhaseId]);
 
   // 修改后的 handleAddCell 函数，使用 hook 的 initializeNotebook
-  const handleAddCell = useCallback(async (type, index = null) => {
+  const handleAddCell = useCallback(async (type: any, index?: number) => {
     try {
       if (!notebookId) {
         await initializeNotebook();
@@ -196,18 +205,16 @@ const NotebookApp = () => {
       setLastAddedCellId(newCell.id);
 
       toast({
-        title: t('toast.success'),
-        description: t('toast.cellAdded', { type: t(`cellTypes.${type}`) }),
-        variant: "success",
-      });
+        message: t('toast.cellAdded', { type: t(`cellTypes.${type}`) }),
+        type: 'success',
+      } as any);
     } catch (err) {
       console.error('Error adding cell:', err);
       setError('Failed to add cell. Please try again.');
       toast({
-        title: t('toast.error'),
-        description: err.message,
-        variant: "destructive",
-      });
+        message: (err as Error).message || t('toast.error'),
+        type: 'error',
+      } as any);
     }
   }, [initializeNotebook, notebookId, currentRunningPhaseId, addCell, setLastAddedCellId, setError, toast, t]);
 
@@ -216,18 +223,16 @@ const NotebookApp = () => {
     try {
       await runAllCells();
       toast({
-        title: t('toast.success'),
-        description: t('toast.allCellsExecuted'),
-        variant: "success",
-      });
+        message: t('toast.allCellsExecuted'),
+        type: 'success',
+      } as any);
     } catch (err) {
       console.error('Error running all cells:', err);
       setError('Failed to run all cells. Please try again.');
       toast({
-        title: t('toast.error'),
-        description: err.message,
-        variant: "destructive",
-      });
+        message: (err as Error).message || t('toast.error'),
+        type: 'error',
+      } as any);
     }
   }, [runAllCells, setError, toast, t]);
 
@@ -274,7 +279,7 @@ const NotebookApp = () => {
    * @param {string} phaseId 阶段 ID。
    * @param {string} stepId 步骤 ID。
    */
-  const handlePhaseSelect = useCallback((phaseId, stepId) => {
+  const handlePhaseSelect = useCallback((phaseId: string, stepId: string) => {
     // 设置当前阶段和步骤
     setCurrentPhase(phaseId); // 直接调用 store 的 setCurrentPhase 动作
 
@@ -288,7 +293,7 @@ const NotebookApp = () => {
         setCurrentStepIndex(stepIndex); // 直接调用 store 的 setCurrentStepIndex 动作
 
         // 查找对应步骤的单元格
-        const stepCells = findCellsByStep(tasks, phaseId, stepId, cells);
+        const stepCells = findCellsByStep(tasks as any, phaseId, stepId, cells as any);
         if (stepCells.length > 0) {
           const firstCellId = stepCells[0].id;
           const cellElement = document.getElementById(`cell-${firstCellId}`);
@@ -304,7 +309,7 @@ const NotebookApp = () => {
    * 处理视图模式切换。
    * @param {string} mode 新的视图模式。
    */
-  const handleModeChange = useCallback((mode) => {
+  const handleModeChange = useCallback((mode: any) => {
     if (mode === 'step' && !currentPhaseId && tasks.length > 0) {
       const firstTask = tasks[0];
       if (firstTask.phases.length > 0) {
@@ -366,21 +371,19 @@ const NotebookApp = () => {
       URL.revokeObjectURL(url);
 
       toast({
-        title: t('toast.success'),
-        description: t('toast.exportSuccess'),
-        variant: "success",
-      });
+        message: t('toast.exportSuccess'),
+        type: 'success',
+      } as any);
     } catch (err) {
       console.error('Error exporting notebook:', err);
       toast({
-        title: t('toast.error'),
-        description: t('toast.exportFailed'),
-        variant: "destructive",
-      });
+        message: t('toast.exportFailed'),
+        type: 'error',
+      } as any);
     }
   }, [notebookId, cells, tasks, toast, t]);
 
-  const { exportDocx, exportPdf, exportMarkdown } = createExportHandlers(cells, tasks);
+  const { exportDocx, exportPdf, exportMarkdown } = createExportHandlers(cells as any, tasks as any);
 
   // 触发文件输入
   const triggerFileInput = useCallback(() => {
@@ -391,13 +394,13 @@ const NotebookApp = () => {
    * 渲染单元格。
    * @param {Object} cell 单元格数据。
    */
-  const renderCell = useCallback((cell) => {
+  const renderCell = useCallback((cell: any) => {
     if (!cell) return null;
 
     const props = {
       cell,
-      onDelete: (viewMode === 'complete' || viewMode === 'create') ? () => deleteCell(cell.id) : null, // 直接调用 store 的 deleteCell 动作
-      onUpdate: (newContent) => updateCell(cell.id, newContent), // 直接调用 store 的 updateCell 动作
+      onDelete: ((viewMode as any) === 'complete' || (viewMode as any) === 'create') ? () => deleteCell(cell.id) : undefined, // 直接调用 store 的 deleteCell 动作
+      onUpdate: (newContent: any) => updateCell(cell.id, newContent), // 直接调用 store 的 updateCell 动作
       className: "w-full",
       viewMode,
       enableEdit: cell.enableEdit,
@@ -480,7 +483,7 @@ const NotebookApp = () => {
 
   // 处理快捷键 (Alt/Ctrl + /)
   useEffect(() => {
-    const handleKeyPress = (e) => {
+    const handleKeyPress = (e: any) => {
       const tag = e.target.tagName.toLowerCase();
       if ((e.altKey || e.metaKey) && e.key === '/' && tag !== 'input' && tag !== 'textarea') {
         e.preventDefault();
@@ -538,7 +541,7 @@ const NotebookApp = () => {
 
   // 键盘快捷键处理
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: any) => {
       // Alt + Left/Right Arrow for navigation
       if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -609,10 +612,10 @@ const NotebookApp = () => {
           </div>
           {!isCollapsed && (
             <div 
-              className="w-px bg-gray-300 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 relative group"
+              className="w-px bg-gray-300 hover:bg-thme-500 cursor-col-resize transition-colors duration-150 relative group"
               onMouseDown={handleLeftResize}
             >
-              <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-blue-100/50" />
+              <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-theme-100/50" />
             </div>
           )}
         </div>
@@ -641,7 +644,7 @@ const NotebookApp = () => {
           onOpenSettings={settingstore.openSettings}
           fileInputRef={fileInputRef}
         />
-        <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-blue-200 bg-white w-full h-full">
+        <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
           {/* PreviewApp - 文件预览 */}
           <div className={`${isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
             <PreviewApp />
@@ -692,10 +695,10 @@ const NotebookApp = () => {
       {isRightSidebarCollapsed && (
         <div className="flex">
           <div 
-            className="w-px bg-gray-300 hover:bg-blue-500 cursor-col-resize transition-colors duration-150 relative group"
+            className="w-px bg-gray-300 hover:bg-theme-500 cursor-col-resize transition-colors duration-150 relative group"
             onMouseDown={handleRightResize}
           >
-            <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-blue-100/50" />
+            <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-theme-100/50" />
           </div>
           <div 
             className="transition-all duration-500 ease-in-out opacity-100 overflow-hidden flex-shrink-0"
@@ -713,12 +716,7 @@ const NotebookApp = () => {
       {/* WorkflowPanel moved to MainContainer */}
       
       {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
-      {<WorkflowControl 
-        fallbackIsExecuting={isExecuting}
-        fallbackViewMode={viewMode}
-        fallbackCurrentPhaseId={currentPhaseId}
-        fallbackHandleNextPhase={handleNextPhase}
-      />}
+      {<WorkflowControl fallbackViewMode={viewMode} /> }
     </div>
   );
 };
