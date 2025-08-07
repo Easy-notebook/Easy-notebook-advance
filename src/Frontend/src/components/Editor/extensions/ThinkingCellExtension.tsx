@@ -1,90 +1,132 @@
+// src/extensions/ThinkingCellExtension.tsx
 import { Node, mergeAttributes } from '@tiptap/core'
-import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
+import {
+  ReactNodeViewRenderer,
+  NodeViewWrapper,
+  NodeViewProps,
+} from '@tiptap/react'
 import { v4 as uuidv4 } from 'uuid'
 import AIThinkingCell from '../Cells/AIThinkingCell'
 
-// ThinkingCell 视图组件
-const ThinkingCellView = ({ node, updateAttributes, deleteNode }) => {
-  const { cellId, agentName, customText, textArray, useWorkflowThinking } = node.attrs
+/** 节点属性类型 */
+export interface ThinkingCellAttributes {
+  cellId: string | null
+  agentName: string
+  customText: string | null
+  textArray: string[]
+  useWorkflowThinking: boolean
+}
 
-  // 构造cell对象
+/** 扩展可选项（这里留空） */
+export interface ThinkingCellOptions {}
+
+// 扩展 editor.commands.*
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    thinkingCell: {
+      /** 设置或替换一个 thinkingCell */
+      setThinkingCell: (
+        attributes: Partial<ThinkingCellAttributes>
+      ) => ReturnType
+      /** 在当前位置插入一个 thinkingCell */
+      insertThinkingCell: (
+        attributes: Partial<ThinkingCellAttributes>
+      ) => ReturnType
+    }
+  }
+}
+
+/** NodeView 组件 */
+type ThinkingCellViewProps = NodeViewProps;
+const ThinkingCellView: React.FC<ThinkingCellViewProps> = ({ node, deleteNode }) => {
+  const attrs = node.attrs as ThinkingCellAttributes;
+  const { cellId, agentName, customText, textArray, useWorkflowThinking } = attrs
+
+  // 构造传给 Cell 组件的对象
   const cell = {
-    id: cellId,
+    id: cellId!,
     content: '',
     agentName,
     customText,
     textArray,
-    useWorkflowThinking
-  }
-
-  const handleDelete = () => {
-    deleteNode()
+    useWorkflowThinking,
   }
 
   return (
-    <NodeViewWrapper className="thinking-cell-wrapper">
-      <AIThinkingCell 
-        cell={cell} 
-        onDelete={handleDelete}
+    <NodeViewWrapper>
+      <AIThinkingCell
+        cell={cell as any}
+        onDelete={() => deleteNode()}
         isInDetachedView={false}
       />
     </NodeViewWrapper>
   )
 }
 
-// ThinkingCell节点定义
-export const ThinkingCellExtension = Node.create({
+/** ThinkingCell 扩展 */
+export const ThinkingCellExtension = Node.create<
+  ThinkingCellOptions,
+  ThinkingCellAttributes
+>({
   name: 'thinkingCell',
-  
   group: 'block',
-  
-  atom: true, // 原子节点，不可分割
-  
+  atom: true,
+
   addAttributes() {
     return {
       cellId: {
         default: null,
-        parseHTML: element => element.getAttribute('data-cell-id'),
-        renderHTML: attributes => ({
-          'data-cell-id': attributes.cellId,
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute('data-cell-id'),
+        renderHTML: attrs => ({
+          'data-cell-id': attrs.cellId,
         }),
       },
       agentName: {
         default: 'AI',
-        parseHTML: element => element.getAttribute('data-agent-name') || 'AI',
-        renderHTML: attributes => ({
-          'data-agent-name': attributes.agentName,
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute('data-agent-name') || 'AI',
+        renderHTML: attrs => ({
+          'data-agent-name': attrs.agentName,
         }),
       },
       customText: {
         default: null,
-        parseHTML: element => {
+        parseHTML: (element: HTMLElement) => {
           const text = element.getAttribute('data-custom-text')
           return text ? decodeURIComponent(text) : null
         },
-        renderHTML: attributes => ({
-          'data-custom-text': attributes.customText ? encodeURIComponent(attributes.customText) : '',
+        renderHTML: attrs => ({
+          'data-custom-text': attrs.customText
+            ? encodeURIComponent(attrs.customText)
+            : '',
         }),
       },
       textArray: {
         default: [],
-        parseHTML: element => {
-          const textArrayAttr = element.getAttribute('data-text-array')
+        parseHTML: (element: HTMLElement) => {
+          const attr = element.getAttribute('data-text-array')
+          if (!attr) return []
           try {
-            return textArrayAttr ? JSON.parse(decodeURIComponent(textArrayAttr)) : []
+            return JSON.parse(decodeURIComponent(attr))
           } catch {
             return []
           }
         },
-        renderHTML: attributes => ({
-          'data-text-array': encodeURIComponent(JSON.stringify(attributes.textArray || [])),
+        renderHTML: attrs => ({
+          'data-text-array': encodeURIComponent(
+            JSON.stringify(attrs.textArray || [])
+          ),
         }),
       },
       useWorkflowThinking: {
         default: false,
-        parseHTML: element => element.getAttribute('data-use-workflow-thinking') === 'true',
-        renderHTML: attributes => ({
-          'data-use-workflow-thinking': String(attributes.useWorkflowThinking),
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute('data-use-workflow-thinking') === 'true',
+        renderHTML: attrs => ({
+          'data-use-workflow-thinking': String(
+            attrs.useWorkflowThinking
+          ),
         }),
       },
     }
@@ -98,16 +140,22 @@ export const ThinkingCellExtension = Node.create({
     ]
   },
 
-  renderHTML({ HTMLAttributes, node }) {
+  renderHTML({ node, HTMLAttributes }) {
     return [
       'div',
-      mergeAttributes(HTMLAttributes, { 
+      mergeAttributes(HTMLAttributes, {
         'data-type': 'thinking-cell',
         'data-cell-id': node.attrs.cellId,
         'data-agent-name': node.attrs.agentName,
-        'data-custom-text': node.attrs.customText ? encodeURIComponent(node.attrs.customText) : '',
-        'data-text-array': encodeURIComponent(JSON.stringify(node.attrs.textArray || [])),
-        'data-use-workflow-thinking': String(node.attrs.useWorkflowThinking),
+        'data-custom-text': node.attrs.customText
+          ? encodeURIComponent(node.attrs.customText)
+          : '',
+        'data-text-array': encodeURIComponent(
+          JSON.stringify(node.attrs.textArray || [])
+        ),
+        'data-use-workflow-thinking': String(
+          node.attrs.useWorkflowThinking
+        ),
       }),
     ]
   },
@@ -118,23 +166,25 @@ export const ThinkingCellExtension = Node.create({
 
   addCommands() {
     return {
-      setThinkingCell: attributes => ({ commands }) => {
-        // 确保有cellId
-        if (!attributes.cellId) {
-          attributes.cellId = uuidv4()
-        }
-        return commands.setNode(this.name, attributes)
-      },
-      insertThinkingCell: attributes => ({ commands }) => {
-        // 确保有cellId
-        if (!attributes.cellId) {
-          attributes.cellId = uuidv4()
-        }
-        return commands.insertContent({
-          type: this.name,
-          attrs: attributes,
-        })
-      },
+      setThinkingCell:
+        attributes =>
+        ({ commands }) => {
+          if (!attributes.cellId) {
+            attributes.cellId = uuidv4()
+          }
+          return commands.setNode(this.name, attributes)
+        },
+      insertThinkingCell:
+        attributes =>
+        ({ commands }) => {
+          if (!attributes.cellId) {
+            attributes.cellId = uuidv4()
+          }
+          return commands.insertContent({
+            type: this.name,
+            attrs: attributes,
+          })
+        },
     }
   },
 })

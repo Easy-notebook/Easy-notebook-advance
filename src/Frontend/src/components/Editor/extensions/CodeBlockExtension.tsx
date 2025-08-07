@@ -165,16 +165,17 @@ export const CodeBlockExtension = Node.create({
           const { tr } = state
           
           // range已经是匹配文本的正确范围，不需要重新计算
-          const start = range.from
-          const end = range.to
+          // 精准删除匹配文本：startIndex = range.from - match[0].length
+          const endExclusive = range.to;
+          const start = range.to - match[0].length; // 精确起点（包含 ```python）
           
-          console.log('Calculated start:', start, 'end:', end);
-          console.log('Will delete length:', end - start);
-          console.log('Document content around range:', state.doc.textBetween(Math.max(0, start - 10), Math.min(state.doc.content.size, end + 10)));
+          console.log('Calculated start:', start, 'endExclusive:', endExclusive);
+          console.log('Will delete length:', endExclusive - start);
+          console.log('Document content around range:', state.doc.textBetween(Math.max(0, start - 10), Math.min(state.doc.content.size, endExclusive + 9)));
           
           // 安全检查
-          if (start < 0 || end > state.doc.content.size || start > end) {
-            console.error('Invalid range calculated:', { start, end, docSize: state.doc.content.size });
+          if (start < 0 || endExclusive > state.doc.content.size || start >= endExclusive) {
+            console.error('Invalid range calculated:', { start, end: endExclusive, docSize: state.doc.content.size });
             return false; // 取消操作
           }
 
@@ -188,7 +189,7 @@ export const CodeBlockExtension = Node.create({
           })
           
           // 删除触发文本并插入代码块
-          tr.replaceWith(start, end, codeBlockNode)
+          tr.replaceWith(start, endExclusive, codeBlockNode)
           
           // 将光标移动到代码块后面（这样代码块组件可以接管焦点）
           const newPos = start + codeBlockNode.nodeSize

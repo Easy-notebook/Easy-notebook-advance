@@ -76,9 +76,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
   }, [isFocused, isEditing])
   
   // 当store中的内容变化时，同步到node属性和临时编辑状态
-  useEffect(() => {
-    console.log('🖼️ ImageExtension store content changed:', { cellId, cellContent: cellContent?.substring(0, 50) })
-    
+  useEffect(() => {    
     if (cellContent) {
       const parsed = parseMarkdown(cellContent)
       if (parsed.isValid) {

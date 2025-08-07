@@ -1,6 +1,5 @@
 // services/notebookApi.ts
 import { Backend_BASE_URL} from '../config/base_url';
-// const API_BASE_URL = 'http://localhost:18600';
 const API_BASE_URL = Backend_BASE_URL;
 
 // Type definitions for API responses and data structures

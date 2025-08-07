@@ -58,17 +58,6 @@ export interface CodeStoreState {
     isKernelReady: boolean;
     error: string | null;
 
-    // ========== 每个 Cell 的执行状态 ==========
-    /**
-     * cellExecStates: {
-     *   [cellId]: {
-     *     isExecuting: boolean;
-     *     isCancelling: boolean;
-     *     elapsedTime: number;
-     *     statusCheckInterval: NodeJS.Timeout | null;
-     *   }
-     * }
-     */
     cellExecStates: Record<string, CellExecutionState>;
 
     // ========== 每个 Cell 的显示模式 ==========

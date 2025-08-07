@@ -337,22 +337,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             language: language,
           };
           
-          // 计算插入位置：通过transaction位置推算，避免HTML解析循环
-          const { selection } = transaction;
-          const currentPos = selection.from;
-          
-          // 根据光标位置推算插入位置，避免依赖HTML解析
-          let insertIndex = cells.length; // 默认添加到末尾
-          
-          // 通过文档位置大致估算插入位置
-          if (currentPos > 0 && cells.length > 0) {
-            // 简单估算：根据位置比例确定插入位置
-            const docSize = editor.state.doc.content.size;
-            const positionRatio = currentPos / docSize;
-            insertIndex = Math.min(Math.floor(positionRatio * cells.length), cells.length);
-          }
-          
-          console.log('推算插入位置:', insertIndex, '当前cells数量:', cells.length);
+          // 通过重新解析 editor state 得到准确的 cells 顺序
+          const parsedCells = convertEditorStateToCells();
+          const insertIndex = parsedCells.findIndex(c => c.id === newCodeCellId);
+          console.log('解析得出的插入位置:', insertIndex, 'parsedCells 长度:', parsedCells.length);
           
           // 创建新的cells数组
           const newCells = [...cells];
@@ -431,7 +419,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       )
       
       // 根据操作类型调整防抖时间，减少不必要的同步
-      const debounceTime = isFormattingOperation ? 150 : 400
+      // 调整为更快的同步节奏，提升编辑实时性（25ms）
+      const debounceTime = 25
       
       // 使用防抖延迟同步，避免频繁更新
       clearTimeout(window.tiptapSyncTimeout)
@@ -439,24 +428,26 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         const newCells = convertEditorStateToCells()
         
         // 简化比较：只关心结构和markdown内容变化
-        const hasStructuralChange = newCells.length !== cells.length ||
+        // 判断是否为结构性改动（增删单元格 / 类型变更）
+        const structuralChange = newCells.length !== cells.length ||
           newCells.some((newCell, index) => {
-            const existingCell = cells[index]
-            if (!existingCell) return true
-            
-            // 类型变化
-            if (newCell.type !== existingCell.type) return true
-            
-            // Markdown内容变化
-            if (newCell.type === 'markdown' && newCell.content !== existingCell.content) return true
-            
-            // 代码块只检查ID是否匹配（占位符模式）
-            if (newCell.type === 'code' && newCell.isPlaceholder && newCell.id !== existingCell.id) return true
-            
-            return false
-          })
+            const existingCell = cells[index];
+            if (!existingCell) return true;
+            return newCell.type !== existingCell.type;
+          });
+
+        // 收集仅 Markdown 内容变化的单元格
+        const markdownDiffs: Array<{ id: string; content: string }> = [];
+        newCells.forEach((newCell, index) => {
+          if (newCell.type === 'markdown') {
+            const existingCell = cells[index];
+            if (existingCell && existingCell.type === 'markdown' && newCell.content !== existingCell.content) {
+              markdownDiffs.push({ id: existingCell.id, content: newCell.content as string });
+            }
+          }
+        });
         
-        if (hasStructuralChange) {
+        if (structuralChange) {
           isInternalUpdate.current = true
           
           console.log('=== TiptapNotebookEditor 结构变化 Debug Info ===');
@@ -464,29 +455,36 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           console.log('新解析cells:', newCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
           
           // 智能合并：保持现有代码块完整性，只更新markdown内容
+          const storeState = useStore.getState();
+          const currentCells = storeState.cells;
           const mergedCells = newCells.map((newCell, index) => {
             if (newCell.type === 'code') {
-              // 对于代码块，总是优先使用store中的现有数据
-              const existingCodeCell = cells.find(cell => 
+              // For code cells always keep existing store data
+              const existingCodeCell = currentCells.find(cell => 
                 cell.type === 'code' && cell.id === newCell.id
-              )
+              );
               if (existingCodeCell) {
-                console.log(`代码块位置 ${index}: 保持现有代码块 ${existingCodeCell.id}`);
-                return existingCodeCell // 完全保持现有代码块，包括content和outputs
+                console.log(`Code cell at ${index}: keep existing ${existingCodeCell.id}`);
+                return existingCodeCell; // Keep code cell intact
               } else {
-                console.log(`代码块位置 ${index}: 发现未知代码块 ${newCell.id}，跳过创建`);
-                // 如果是HTML解析发现的新代码块，但不在store中，可能是异常情况
-                // 不应该通过HTML解析创建新代码块，应该通过InputRule或其他明确的用户操作
-                return null; // 标记为无效，稍后过滤掉
+                console.log(`Code cell at ${index}: unknown ${newCell.id}, skipping`);
+                return null; // Mark as invalid, will be filtered
               }
             } else if (newCell.type === 'markdown') {
-              // Markdown cell 使用新解析的内容
-              return newCell
+              // Reuse existing markdown cell id/metadata when possible to keep store in sync
+              const existingMarkdownCell = currentCells[index];
+              if (existingMarkdownCell && existingMarkdownCell.type === 'markdown') {
+                return {
+                  ...existingMarkdownCell,
+                  content: newCell.content, // update content only
+                };
+              }
+              return newCell;
             } else {
-              // 其他情况保持原样
-              return newCell
+              // Keep other cell types as is
+              return newCell;
             }
-          }).filter(cell => cell !== null) // 过滤掉无效的代码块
+          }).filter(cell => cell !== null); // Filter invalid cells
           
           console.log('合并后cells:', mergedCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
           console.log('===============================================');
@@ -495,6 +493,16 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           setTimeout(() => {
             isInternalUpdate.current = false
           }, 50)
+        } else if (markdownDiffs.length > 0) {
+          // 仅 Markdown 内容变更，无结构变化
+          isInternalUpdate.current = true;
+          const storeStateNow = useStore.getState();
+          markdownDiffs.forEach(({ id, content }) => {
+            storeStateNow.updateCell(id, content);
+          });
+          setTimeout(() => {
+            isInternalUpdate.current = false;
+          }, 10);
         }
       }, debounceTime)
     },
@@ -836,18 +844,38 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           })
         } else if (node.type === 'executableCodeBlock') {
           // 处理代码块
-          flushMarkdownContent()
-          
-          const attrs = node.attrs || {}
-          const cellId = attrs.cellId || generateCellId()
-          
+          flushMarkdownContent();
+          const attrs = node.attrs || {};
+          const cellId = attrs.cellId || generateCellId();
+          // 解码代码内容及输出
+          let codeContent = '';
+          if (attrs.code) {
+            try {
+              codeContent = decodeURIComponent(attrs.code);
+            } catch {
+              codeContent = attrs.code;
+            }
+          }
+          let outputsParsed: any[] = [];
+          if (attrs.outputs) {
+            try {
+              outputsParsed = JSON.parse(decodeURIComponent(attrs.outputs));
+            } catch {
+              try {
+                outputsParsed = JSON.parse(attrs.outputs);
+              } catch {
+                // ignore parse error
+              }
+            }
+          }
           newCells.push({
             id: cellId,
             type: attrs.originalType || 'code',
             language: attrs.language || 'python',
-            outputs: [],
-            enableEdit: true,
-          })
+            content: codeContent,
+            outputs: outputsParsed,
+            enableEdit: attrs.enableEdit !== false,
+          });
         } else if (node.type === 'thinkingCell') {
           // 处理AI思考单元格
           flushMarkdownContent()
@@ -866,6 +894,21 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             textArray: attrs.textArray || [],
             useWorkflowThinking: attrs.useWorkflowThinking || false,
           })
+        } else if (node.type === 'heading') {
+          // Treat headings as independent markdown cells (#, ## ...)
+          flushMarkdownContent();
+          const level = (node.attrs && node.attrs.level) ? node.attrs.level : 1;
+          const headingText = extractTextFromNode(node).trim();
+          if (headingText) {
+            const markdownHeading = `${'#'.repeat(level)} ${headingText}`;
+            newCells.push({
+              id: generateCellId(),
+              type: 'markdown',
+              content: markdownHeading,
+              outputs: [],
+              enableEdit: true,
+            });
+          }
         } else {
           // 其他节点（paragraph, text 等）作为 markdown 处理
           const textContent = extractTextFromNode(node)
@@ -888,14 +931,85 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   }
 
   // 提取节点文本内容的辅助函数
-  function extractTextFromNode(node) {
-    if (node.text) {
-      return node.text
+  // 将 ProseMirror 节点转换为 Markdown 文本（保留常见格式）
+  function extractTextFromNode(node, parentType = null): string {
+    // 处理纯文本并考虑 marks（bold / italic / code）
+    if (node.text !== undefined) {
+      let text = node.text as string;
+      if (Array.isArray(node.marks)) {
+        node.marks.forEach((mark: any) => {
+          switch (mark.type) {
+            case 'bold':
+              text = `**${text}**`;
+              break;
+            case 'italic':
+              text = `*${text}*`;
+              break;
+            case 'code':
+              text = `\`${text}\``;
+              break;
+            default:
+              break;
+          }
+        });
+      }
+      return text;
     }
-    if (node.content && Array.isArray(node.content)) {
-      return node.content.map(child => extractTextFromNode(child)).join('')
+
+    // 处理不同类型节点
+    switch (node.type) {
+      case 'paragraph':
+        if (node.content && Array.isArray(node.content)) {
+          return node.content.map((child: any) => extractTextFromNode(child)).join('');
+        }
+        return '';
+
+      case 'blockquote': {
+        // 每一行前缀 '> '
+        const inner = (node.content || []).map((child: any) => extractTextFromNode(child)).join('');
+        // 确保换行
+        return `> ${inner}\n`;
+      }
+
+      case 'bulletList': {
+        return (node.content || [])
+          .map((li: any) => extractTextFromNode(li, 'bullet'))
+          .join('');
+      }
+
+      case 'orderedList': {
+        let counter = 1;
+        return (node.content || [])
+          .map((li: any) => {
+            const line = extractTextFromNode(li, 'ordered');
+            const prefix = `${counter++}. `;
+            return line.replace(/^-/,'').replace(/^\s*/, prefix);
+          })
+          .join('');
+      }
+
+      case 'listItem': {
+        const inner = (node.content || [])
+          .map((child: any) => extractTextFromNode(child))
+          .join('');
+        const prefix = parentType === 'ordered' ? '- ' : '- ';
+        return `${prefix}${inner}\n`;
+      }
+
+      case 'hardBreak':
+        return '\n';
+
+      case 'text':
+        return node.text || '';
+
+      default: {
+        // 递归子节点
+        if (node.content && Array.isArray(node.content)) {
+          return node.content.map((child: any) => extractTextFromNode(child)).join('');
+        }
+        return '';
+      }
     }
-    return ''
   }
 
   // 备用的 HTML 解析方案

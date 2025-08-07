@@ -361,11 +361,6 @@ const AIPlanningContextDebugger: React.FC = () => {
                 value={maxEntries} 
                 onChange={(e) => setMaxEntries(Number(e.target.value))}
                 className="text-xs px-2 py-1 border-0 focus:outline-none"
-                style={{
-                  backgroundColor: 'rgba(65, 184, 131, 0.05)',
-                  color: '#202124',
-                  borderRadius: '4px'
-                }}
               >
                 <option value={10}>10</option>
                 <option value={15}>15</option>
@@ -376,20 +371,7 @@ const AIPlanningContextDebugger: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={exportHistory}
-                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded"
-                style={{
-                  background: 'linear-gradient(135deg, #41B883, #3490DC)',
-                  color: 'white',
-                  border: 'none'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, #359268, #2c7cd6)';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, #41B883, #3490DC)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
+                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded-full bg-theme-50"
                 title="Export current context and state machine status"
               >
                 <Download size={8} />
@@ -427,7 +409,7 @@ const AIPlanningContextDebugger: React.FC = () => {
                 <div key={`${snapshot.timestamp}-${index}`} className="rounded-md p-3 mb-2 transition-all duration-200 hover:shadow-sm bg-white border border-slate-200 hover:border-slate-300">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
-                      <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium ${getChangeColor(snapshot.changeType)}`}>
+                      <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getChangeColor(snapshot.changeType)}`}>
                         {getChangeIcon(snapshot.changeType)}
                         <span>{snapshot.changeType}</span>
                       </div>

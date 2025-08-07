@@ -225,7 +225,11 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
     }
   }, [prerequisitesMet, currentState, handleStart]);
 
-  if (!prerequisitesMet && currentState === WORKFLOW_STATES.IDLE) {
+  if (currentState === WORKFLOW_STATES.IDLE) {
+    return null;
+  }
+
+  if (!prerequisitesMet) {
     return (
         <div className="fixed bottom-10 right-10 flex items-center gap-2 p-3 bg-gray-200/50 backdrop-blur-sm rounded-lg shadow">
             <span className="text-sm text-gray-600">Waiting for workflow configuration...</span>

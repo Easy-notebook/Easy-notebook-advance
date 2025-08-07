@@ -12,7 +12,7 @@ import useCodeStore from './codeStore';
 /**
  * 单元格类型
  */
-export type CellType = 'code' | 'markdown' | 'Hybrid' | 'image' | 'thinking';
+export type CellType = 'code' | 'markdown' | 'hybrid' | 'image' | 'thinking';
 
 /**
  * 视图模式类型
@@ -40,11 +40,11 @@ export interface Cell {
     id: string;
     type: CellType;
     content: string;
-    outputs: OutputItem[];
-    enableEdit: boolean;
-    phaseId: string | null;
+    outputs?: OutputItem[];
+    enableEdit?: boolean;
+    phaseId?: string | null;
     description?: string | null;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, any> | null;
 }
 
 /**
@@ -53,8 +53,11 @@ export interface Cell {
 export interface Step {
     id: string;
     title: string;
-    content: string;
-    cellIds: string[];
+    status?: 'pending' | 'running' | 'completed' | 'error';
+    startIndex?: number | null;
+    endIndex?: number | null;
+    content?: Cell[];
+    cellIds?: string[];
 }
 
 /**
@@ -64,6 +67,9 @@ export interface Phase {
     id: string;
     title: string;
     steps: Step[];
+    icon?: any;
+    status?: 'pending' | 'running' | 'completed' | 'error';
+    intro?: Cell[];
 }
 
 /**
@@ -302,8 +308,8 @@ const updateCellOutputs = (set: any, cellId: string, outputs: OutputItem[]) => {
   );
 };
 
-const useStore = create<NotebookStore>(
-  subscribeWithSelector((set, get) => ({
+const useStore = create(
+  subscribeWithSelector<NotebookStore>((set, get) => ({
     // ================= 原有状态(不变) =================
     notebookId: null,
     notebookTitle: '', // 默认标题
@@ -390,7 +396,7 @@ const useStore = create<NotebookStore>(
         description: null,
         metadata: { isDefaultTitle: true }
       };
-      const tasks = parseMarkdownCells([titleCell]);
+      const tasks = parseMarkdownCells([titleCell] as any);
       set({ cells: [titleCell], tasks, currentRunningPhaseId: null });
     },
     clearAllOutputs: () =>
@@ -430,10 +436,10 @@ const useStore = create<NotebookStore>(
           description: null,
           metadata: { isDefaultTitle: true }
         };
-        processedCells.unshift(titleCell);
+        processedCells.unshift(titleCell as any);
       }
       
-      const tasks = parseMarkdownCells(processedCells);
+      const tasks = parseMarkdownCells(processedCells as any);
       set({ cells: processedCells, tasks });
     },
 
@@ -463,10 +469,10 @@ const useStore = create<NotebookStore>(
             newCellContent: newCell.content?.substring(0, 30)
           });
           
-          // 只有在完全没有cells时才添加默认标题
-          const shouldAddDefaultTitle = state.cells.length === 0;
-          
-          if (shouldAddDefaultTitle) {
+          // 如果 notebook 为空且即将插入的并非 H1 标题，则先插入默认标题
+          const isNotebookEmpty = state.cells.length === 0;
+          const firstCellIsTitle = newCell.type === 'markdown' && typeof newCell.content === 'string' && newCell.content.trim().startsWith('#');
+          if (isNotebookEmpty && !firstCellIsTitle) {
             console.log('✅ 添加默认标题cell');
             const titleCell: Cell = {
               id: uuidv4(),
@@ -482,13 +488,18 @@ const useStore = create<NotebookStore>(
           }
           
           // 计算插入位置 - 简化逻辑
-          const hasDefaultTitle = state.cells.length > 0 && state.cells[0].metadata?.isDefaultTitle;
-          let targetIndex = index ?? state.cells.length;
+          const hasDefaultTitle = state.cells[0]?.metadata?.isDefaultTitle === true;
+          let targetIndex: number;
           
-          // 如果有默认标题且没有指定具体位置，插入到标题后
-          if (hasDefaultTitle && index === undefined) {
-            targetIndex = 1;
+          if (index === undefined) {
+            // 未指定 index -> 追加到末尾
+            targetIndex = state.cells.length;
+          } else {
+            // 指定了 index -> 若有默认标题，至少从 1 开始，避免插到标题前面
+            targetIndex = hasDefaultTitle ? Math.max(1, index) : index;
           }
+          // 防止越界
+          targetIndex = Math.min(targetIndex, state.cells.length);
           const cell: Cell = {
             id: newCell.id || uuidv4(),
             type: newCell.type || 'markdown',
@@ -502,16 +513,25 @@ const useStore = create<NotebookStore>(
             description: newCell.description || null,
             metadata: newCell.metadata || null,
           };
-          state.cells.splice(targetIndex, 0, cell);
+          const isNewCellTitle = cell.type === 'markdown' && cell.content.trim().startsWith('#');
+          if (hasDefaultTitle && targetIndex <= 1 && isNewCellTitle) {
+            const defaultCell = state.cells[0];
+            state.cells[0] = {
+              ...defaultCell,
+              ...cell,
+              metadata: { ...(cell.metadata || {}), isDefaultTitle: false },
+              id: defaultCell.id, // 保持原 id，便于引用
+            } as Cell;
+          } else {
+            state.cells.splice(targetIndex, 0, cell);
+          }
           
-          // 只有在添加的是markdown类型且包含标题时才重新解析tasks
-          // 这可以避免频繁的重新解析导致现有标题结构被破坏
+
           const needsReparse = cell.type === 'markdown' && 
             (cell.content.includes('#') || state.tasks.length === 0);
             
           if (needsReparse) {
-            console.log('📝 重新解析tasks（添加了markdown标题cell）');
-            state.tasks = parseMarkdownCells(state.cells);
+            state.tasks = parseMarkdownCells(state.cells as any) as any;
           } else {
             console.log('⏭️ 跳过tasks重新解析（非标题cell）');
           }
@@ -614,14 +634,15 @@ const useStore = create<NotebookStore>(
           }
           
           state.cells = state.cells.filter((cell) => cell.id !== cellId);
-          state.tasks = parseMarkdownCells(state.cells);
+          state.tasks = parseMarkdownCells(state.cells as any) as any;
 
           if (cellToDelete && cellToDelete.phaseId === state.currentPhaseId) {
-            const currentPhaseCells = findCellsByPhase(
-              state.tasks,
-              state.currentPhaseId
+            const phaseCellsResult = findCellsByPhase(
+              state.tasks as any,
+              state.currentPhaseId!
             );
-            if (currentPhaseCells.length === 0) {
+            const hasCells = phaseCellsResult.intro.length > 0 || phaseCellsResult.steps.length > 0;
+            if (!hasCells) {
               state.currentPhaseId = null;
               state.currentStepIndex = 0;
 
@@ -666,7 +687,7 @@ const useStore = create<NotebookStore>(
               state.notebookTitle = title || 'Untitled';
             }
           }
-          state.tasks = parseMarkdownCells(state.cells);
+          state.tasks = parseMarkdownCells(state.cells as any) as any;
         })
       ),
 
@@ -740,15 +761,15 @@ const useStore = create<NotebookStore>(
       try {
         get().clearAllOutputs();
 
-        const tasks = parseMarkdownCells(state.cells);
+        const tasks = parseMarkdownCells(state.cells as any) as any;
         set({ tasks });
 
         const codeCells = state.cells.filter((cell) => cell.type === 'code');
 
         for (const cell of codeCells) {
           const phase = tasks
-            .flatMap((task) => task.phases)
-            .find((p) => p.id === cell.phaseId);
+            .flatMap((task: any) => task.phases)
+            .find((p: any) => p.id === cell.phaseId);
           if (phase && phase.id !== state.currentRunningPhaseId) {
             set({ currentRunningPhaseId: phase.id });
           }
@@ -859,7 +880,7 @@ const useStore = create<NotebookStore>(
           generationTimestamp: timestamp,
           prompt: prompt || undefined,
           isGenerating: true,
-          generationType: type === 'image' ? 'image' : type === 'video' ? 'video' : undefined
+          generationType: type === 'image' ? 'image' : undefined
         }
       };
       
@@ -877,13 +898,6 @@ const useStore = create<NotebookStore>(
           set({ currentPhaseId: firstPhase.id, currentStepIndex: 0 });
         }
       }
-
-      console.log('🎯 创建带唯一标识符的cell:', {
-        cellId: newCell.id,
-        uniqueIdentifier: identifier,
-        type,
-        prompt: prompt?.substring(0, 50)
-      });
 
       showToast({
         message: `新建 ${type} 单元格已添加`,
@@ -904,11 +918,7 @@ const useStore = create<NotebookStore>(
       );
       
       if (targetCell) {
-        console.log('🎯 通过唯一标识符找到并更新cell:', {
-          uniqueIdentifier,
-          cellId: targetCell.id,
-          updates: Object.keys(updates)
-        });
+
         
         // 合并metadata
         if (updates.metadata) {
@@ -1016,8 +1026,8 @@ const useStore = create<NotebookStore>(
         console.warn('Current cell is not a code cell, cannot check current code cell outputs.');
         return false;
       }
-      for (let i = 0; i < currentCell.outputs.length; i++) {
-        if (currentCell.outputs[i].type === 'error') {
+      for (let i = 0; i < (currentCell.outputs?.length || 0); i++) {
+        if (currentCell.outputs && currentCell.outputs[i].type === 'error') {
           return true;
         }
       }
@@ -1056,7 +1066,7 @@ const useStore = create<NotebookStore>(
           return;
         }
 
-        currentCell.type = 'Hybrid';
+        currentCell.type = 'hybrid';
       })
     ),
 
@@ -1090,7 +1100,7 @@ const useStore = create<NotebookStore>(
           }
 
           // 重新解析任务
-          state.tasks = parseMarkdownCells(state.cells);
+          state.tasks = parseMarkdownCells(state.cells as any) as any;
         })
       ),
 
@@ -1153,22 +1163,22 @@ const useStore = create<NotebookStore>(
       } else {
         const phase = get().getPhaseById(state.currentPhaseId);
         if (!phase || !phase.steps.length) {
-          const phaseResult = findCellsByPhase(state.tasks, state.currentPhaseId);
+          const phaseResult = findCellsByPhase(state.tasks as any, state.currentPhaseId);
           // findCellsByPhase返回PhaseResult，需要合并intro和steps中的cells
           cells = [...phaseResult.intro];
           phaseResult.steps.forEach(step => {
-            if (step.cells) {
-              cells.push(...step.cells);
+            if (step.content) {
+              cells.push(...step.content);
             }
           });
         } else {
           const currentStep = phase.steps[state.currentStepIndex];
           if (!currentStep) return [];
           cells = findCellsByStep(
-            state.tasks,
+            state.tasks as any,
             state.currentPhaseId,
             currentStep.id,
-            state.cells
+            state.cells as any
           );
         }
       }
@@ -1194,10 +1204,10 @@ const useStore = create<NotebookStore>(
       const currentStep = phase.steps[state.currentStepIndex];
       if (!currentStep) return [];
       return findCellsByStep(
-        state.tasks,
+        state.tasks as any,
         state.currentPhaseId!,
         currentStep.id,
-        state.cells
+        state.cells as any
       ).map((cell) => cell.id);
     },
 
