@@ -46,7 +46,7 @@ interface Cell {
 }
 
 interface Output {
-  type: 'image' | 'text' | 'error';
+  type: 'image' | 'text' | 'error' | 'html';
   content: string;
   key?: string;
 }
@@ -195,7 +195,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         if (cell.outputs && Array.isArray(cell.outputs)) {
             return cell.outputs
                 .map(processOutput)
-                .filter(Boolean)
+                .filter((o): o is Output => o !== null)
                 .map((output) => ({
                     ...output,
                     key: output.key || `output-${Date.now()}-${Math.random()}`,
@@ -236,11 +236,12 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
     // 执行状态变量
     const wasExecuting = useRef(false);
-    const prevMode = useRef(null);
+    type DisplayMode = typeof DISPLAY_MODES[keyof typeof DISPLAY_MODES];
+    const prevMode = useRef<DisplayMode | null>(null);
     const [isTransitioningToOutput, setIsTransitioningToOutput] = useState(false);
 
     // 时间格式化
-    const formatElapsedTime = useCallback((seconds) => {
+    const formatElapsedTime = useCallback((seconds: number) => {
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const remainingSeconds = Math.floor(seconds % 60);
@@ -263,7 +264,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
     // 更新代码内容
     const handleChange = useCallback(
-        (value) => {
+        (value: string) => {
             updateCell(cell.id, value);
         },
         [cell.id, updateCell]
@@ -274,13 +275,13 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         clearCellOutputs(cell.id);
     }, [cell.id, clearCellOutputs]);
 
-    const editorRef = useRef(null);
-    const codeContainerRef = useRef(null);
+    const editorRef = useRef<any>(null);
+    const codeContainerRef = useRef<HTMLDivElement | null>(null);
     const isCurrentCell = currentCellId === cell.id;
 
     // 快捷键：Ctrl+Enter 执行、Alt+↑/↓ 切换上下单元格、Delete/Backspace 删除空单元格
     const handleKeyDown = useCallback(
-        (event) => {
+        (event: React.KeyboardEvent) => {
             if (event.ctrlKey && event.key === 'Enter') {
                 event.preventDefault();
                 handleExecute();
@@ -299,7 +300,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                         if (targetCell.type === 'code') {
                             setCurrentCell(targetCell.id);
                             if (editorRef.current) {
-                                editorRef.current.focus();
+                                (editorRef.current as any)?.focus();
                             }
                         } else if (targetCell.type === 'markdown') {
                             setCurrentCell(targetCell.id);
@@ -313,7 +314,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     );
 
     // 渲染输出
-    const renderOutput = useCallback((output) => {
+    const renderOutput = useCallback((output: Output | null) => {
         if (!output) return null;
         try {
             if (output.type === 'image') {
@@ -332,12 +333,13 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                 alt={`Output ${output.key}`}
                                 className="max-w-full h-auto object-contain"
                                 onError={(e) => {
+                                    const img = e.target as HTMLImageElement;
                                     console.error('Image load error:', e);
-                                    e.target.style.display = 'none';
+                                    img.style.display = 'none';
                                     const errorText = document.createElement('div');
                                     errorText.className = 'text-center text-red-500';
                                     errorText.textContent = 'Image load error';
-                                    e.target.parentNode.appendChild(errorText);
+                                    img.parentNode?.appendChild(errorText);
                                 }}
                             />
                         </div>
@@ -504,7 +506,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     useEffect(() => {
         if (!codeBlockWrapperRef.current) return;
 
-        let timeoutId = null;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
         const ro = new ResizeObserver((entries) => {
             // 清除之前的定时器
             if (timeoutId) {
@@ -558,7 +560,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
         if (codeContainerRef.current) {
             setTimeout(() => {
-                codeContainerRef.current.scrollIntoView({
+                codeContainerRef.current?.scrollIntoView({
                     behavior: 'smooth',
                     block: 'start',
                 });

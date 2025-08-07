@@ -17,6 +17,9 @@ export function extractChapterTitle(identifier: string): string {
     const parts = identifier.split('_');
     // 去掉前两部分："chapter" 和 数字
     const core = parts.slice(2);
+    if (core.length === 0) {
+        return identifier;
+    }
     return core.join(' ');
 }
 
@@ -43,5 +46,8 @@ export function extractSectionTitle(identifier: string): string {
     const parts = tail.split('_');
     // 去掉第一个部分（章节号）
     const core = parts.slice(1);
+    if (core.length === 0) {
+        return identifier;
+    }
     return core.join(' ');
 }
