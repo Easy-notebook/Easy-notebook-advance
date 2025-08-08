@@ -110,6 +110,25 @@ class BaseAction(StepTemplate):
         # 当前状态和可用操作
         self.current_data_state = state.get("current_data_state", {})
         self.available_actions = WorkflowManager().list_chapter_sections(self.chapter_id)
+
+        # Establish lightweight alias bridges for robustness across chapters
+        # 1) Prefer setting generic 'variables' if missing but 'column_names' exists
+        try:
+            if not self.get_variable("variables"):
+                colnames = self.get_variable("column_names")
+                if colnames:
+                    self.add_variable("variables", colnames)
+        except Exception:
+            pass
+
+        # 2) Provide 'data_preview' alias from earlier 'top_5_lines' if missing
+        try:
+            if not self.get_variable("data_preview"):
+                top5 = self.get_variable("top_5_lines")
+                if top5:
+                    self.add_variable("data_preview", top5)
+        except Exception:
+            pass
     
     def _get_stage_name_from_chapter_id(self) -> str:
         """从chapter_id获取阶段名称"""

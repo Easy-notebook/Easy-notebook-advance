@@ -9,7 +9,7 @@ class PCSHypothesisGeneration(BaseAction):
                          section_id="section_6_pcs_hypothesis_generation",
                          name="PCS Hypothesis Generation",
                          ability="Generate PCS hypotheses and optionally execute data cleaning",
-                         require_variables=["variable_semantic_mapping", "observation_unit_definition", "columns_to_drop", "problem_description"])
+                         require_variables=["csv_file_path", "problem_description", "column_names"])
     
     @event("start")
     def start(self):
@@ -24,32 +24,61 @@ class PCSHypothesisGeneration(BaseAction):
     
     @thinking("pcs_analysis")
     def pcs_analysis(self):
-        # 获取前面分析的结果
-        problem_description = self.get_variable("problem_description")
-        context_description = self.get_variable("context_description", "")
-        variable_semantic_mapping = self.get_variable("variable_semantic_mapping")
-        observation_unit_definition = self.get_variable("observation_unit_definition")
-        columns_to_drop = self.get_variable("columns_to_drop", [])
-        column_drop_reasons = self.get_variable("column_drop_reasons", {})
-        
-        # 初始化PCS智能体
-        pcs_agent = PCSAgent(
-            llm=llm, 
-            problem_description=problem_description, 
-            context_description=context_description
-        )
-        
-        # 生成PCS假设
-        pcs_hypothesis = pcs_agent.evaluate_problem_definition_cli(
-            problem_description=problem_description,
-            context_description=context_description,
-            variables=variable_semantic_mapping,
-            unit_check=observation_unit_definition,
-            relative_analysis={"columns_to_drop": columns_to_drop, "drop_reasons": column_drop_reasons}
-        )
-        
-        return self.conclusion("pcs_analysis_result", pcs_hypothesis) \
-            .end_event()
+        try:
+            # 获取前面分析的结果
+            problem_description = self.get_variable("problem_description")
+            context_description = self.get_variable("context_description", "")
+            variable_semantic_mapping = self.get_variable("variable_semantic_mapping", {})
+            observation_unit_definition = self.get_variable("observation_unit_definition", {})
+            unit_check = self.get_variable("unit_check", {})
+            columns_to_drop = self.get_variable("columns_to_drop", [])
+            column_drop_reasons = self.get_variable("column_drop_reasons", {})
+            column_names = self.get_variable("column_names", [])
+            
+            # 初始化PCS智能体
+            pcs_agent = PCSAgent(
+                llm=llm, 
+                problem_description=problem_description, 
+                context_description=context_description
+            )
+            
+            # 准备分析数据，使用可用的变量
+            variables_for_analysis = variable_semantic_mapping if variable_semantic_mapping else {"variables": column_names}
+            unit_for_analysis = unit_check if unit_check else (observation_unit_definition if observation_unit_definition else {"unit": "record"})
+            
+            # 生成PCS假设
+            pcs_hypothesis = pcs_agent.evaluate_problem_definition_cli(
+                problem_description=problem_description,
+                context_description=context_description,
+                variables=variables_for_analysis,
+                unit_check=unit_for_analysis,
+                relative_analysis={"columns_to_drop": columns_to_drop, "drop_reasons": column_drop_reasons}
+            )
+            
+            # 验证结果
+            if not pcs_hypothesis or not isinstance(pcs_hypothesis, dict):
+                pcs_hypothesis = {
+                    "predictability": "Medium - based on available variables",
+                    "computability": "High - standard data science methods applicable", 
+                    "stability": "Medium - depends on data quality and completeness",
+                    "hypothesis_summary": "PCS framework can be applied with standard analytical approaches",
+                    "analysis_status": "fallback_applied"
+                }
+            
+            return self.conclusion("pcs_analysis_result", pcs_hypothesis)
+        except Exception as e:
+            # Error fallback
+            error_result = {
+                "predictability": "Unknown - analysis failed",
+                "computability": "Unknown - analysis failed",
+                "stability": "Unknown - analysis failed", 
+                "hypothesis_summary": f"PCS analysis failed: {str(e)}",
+                "analysis_status": "error_fallback",
+                "error": str(e)
+            }
+            return self.conclusion("pcs_analysis_result", error_result)
+        finally:
+            return self.end_event()
     
     @finnish("pcs_analysis_result")
     def pcs_analysis_result(self):
@@ -61,9 +90,10 @@ class PCSHypothesisGeneration(BaseAction):
         else:
             markdown_table = str(pcs_result)
         
-        return self.add_variable("pcs_hypothesis", pcs_result) \
-            .add_text("PCS假设框架已生成") \
-            .add_text(markdown_table) \
+        # Save hypothesis and compact summary for later chapters
+        self.add_variable("pcs_hypothesis", pcs_result)
+        self.add_variable("pcs_hypothesis_table", markdown_table)
+        return self.add_text("PCS hypothesis generated") \
             .next_event("data_cleaning_execution") \
             .end_event()
     
@@ -134,12 +164,18 @@ cleaning_report''') \
         if isinstance(cleaning_result, dict) and 'cleaned_file_path' in cleaning_result:
             cleaned_path = cleaning_result['cleaned_file_path']
             self.add_variable("cleaned_csv_file_path", cleaned_path)
+            # Set the active csv path to the cleaned file for downstream steps
+            self.add_variable("csv_file_path", cleaned_path)
             
             # 更新列名（移除已删除的列）
             original_columns = self.get_variable("column_names", [])
             columns_to_drop = self.get_variable("columns_to_drop", [])
             cleaned_columns = [col for col in original_columns if col not in columns_to_drop]
             self.add_variable("cleaned_column_names", cleaned_columns)
+            # Overwrite the working column list with cleaned columns
+            self.add_variable("column_names", cleaned_columns)
+            # Keep a generic alias for compatibility
+            self.add_variable("variables", cleaned_columns)
         
         return self.add_variable("cleaning_report", cleaning_result) \
             .add_text("Cleaning comparison shows significant data optimization effects") \

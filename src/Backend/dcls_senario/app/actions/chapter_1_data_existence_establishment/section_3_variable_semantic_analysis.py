@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from app.core.config import llm, ProblemDefinitionAndDataCollectionAgent
-from app.models.BaseAction import BaseAction, event, thinking, after_exec, finnish
+from app.models.BaseAction import BaseAction, event, after_exec
 
 class VariableSemanticAnalysis(BaseAction):
     def __init__(self, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):
@@ -9,7 +9,7 @@ class VariableSemanticAnalysis(BaseAction):
                          section_id="section_3_variable_semantic_analysis",
                          name="Variable Semantic Analysis",
                          ability="Analyze variable semantics using VDS tools and agent insights",
-                         require_variables=["column_names", "top_5_lines", "problem_description"])
+                         require_variables=["csv_file_path", "column_names", "top_5_lines", "problem_description"])
     
     @event("start")
     def start(self):
@@ -49,10 +49,9 @@ quality_report''') \
     @after_exec("vds_analysis_complete")
     def vds_analysis_complete(self):
         vds_result = self.get_current_effect()
-        self.add_variable("variable_semantic_analysis", vds_result)
-        
-        return self.add_text("Variable semantic analysis completed using VDS tools") \
-            .add_text("Results stored for next analysis phase") \
+        # unify variable naming for downstream usage
+        self.add_variable("variable_semantic_mapping", vds_result)
+        return self.add_text("Variable semantic analysis completed") \
             .end_event()
 
 async def generate_data_loading_and_hypothesis_proposal_step_2(

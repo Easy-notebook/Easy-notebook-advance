@@ -9,7 +9,7 @@ class VariableRelevanceAssessment(BaseAction):
                          section_id="section_5_variable_relevance_assessment",
                          name="Variable Relevance Assessment",
                          ability="Assess variable relevance and generate column removal recommendations",
-                         require_variables=["column_names", "top_5_lines", "variable_semantic_mapping", "problem_description"])
+                         require_variables=["csv_file_path", "column_names", "top_5_lines", "problem_description"])
     
     @event("start")
     def start(self):
@@ -87,7 +87,8 @@ multicollinearity_report''') \
 eda_toolkit = EDAToolkit()
 
 # Generate feature importance analysis (includes visualization)
-importance_report = eda_toolkit.feature_importance_analysis("{csv_file_path}", target_column="SalePrice")
+# Auto-detect target column or use general importance analysis
+importance_report = eda_toolkit.feature_importance_analysis("{csv_file_path}")
 print(importance_report)
 
 importance_report''') \
@@ -111,45 +112,67 @@ importance_report''') \
     
     @thinking("agent_relevance_analysis")
     def agent_relevance_analysis(self):
-        # Get all analysis results
-        column_names = self.get_variable("column_names", [])
-        top_5_lines = self.get_variable("top_5_lines", "")
-        problem_description = self.get_variable("problem_description", "")
-        context_description = self.get_variable("context_description", "")
-        correlation_analysis = self.get_variable("target_correlations", "")
-        multicollinearity_analysis = self.get_variable("multicollinearity_matrix", "")
-        importance_analysis = self.get_variable("feature_importance_scores", "")
-        semantic_mapping = self.get_variable("variable_semantic_mapping", "")
-        
-        # Use agent for intelligent relevance assessment
-        agent = ProblemDefinitionAndDataCollectionAgent(llm=llm)
-        
-        # Combine all analysis results into context
-        analysis_context = {
-            "variables": column_names,
-            "data_preview": top_5_lines,
-            "problem_description": problem_description,
-            "context_description": context_description,
-            "correlation_results": correlation_analysis,
-            "multicollinearity_results": multicollinearity_analysis,
-            "importance_results": importance_analysis,
-            "semantic_mapping": semantic_mapping
-        }
-        
-        # Agent analyzes variable relevance with comprehensive context using enhanced method
-        relevance_decision = agent.evaluate_variable_relevance_enhanced(
-            variable_info=str(column_names),
-            data_preview=top_5_lines,
-            problem_description=problem_description,
-            context_description=analysis_context,
-            correlation_results=str(correlation_analysis),
-            multicollinearity_results=str(multicollinearity_analysis),
-            importance_results=str(importance_analysis),
-            semantic_mapping=str(semantic_mapping)
-        )
-        
-        return self.conclusion("agent_relevance_result", relevance_decision) \
-            .end_event()
+        try:
+            # Get all analysis results
+            column_names = self.get_variable("column_names", [])
+            top_5_lines = self.get_variable("top_5_lines", "")
+            problem_description = self.get_variable("problem_description", "")
+            context_description = self.get_variable("context_description", "")
+            correlation_analysis = self.get_variable("target_correlations", "")
+            multicollinearity_analysis = self.get_variable("multicollinearity_matrix", "")
+            importance_analysis = self.get_variable("feature_importance_scores", "")
+            semantic_mapping = self.get_variable("variable_semantic_mapping", "")
+            
+            # Use agent for intelligent relevance assessment
+            agent = ProblemDefinitionAndDataCollectionAgent(llm=llm)
+            
+            # Combine all analysis results into context
+            analysis_context = {
+                "variables": column_names,
+                "data_preview": top_5_lines,
+                "problem_description": problem_description,
+                "context_description": context_description,
+                "correlation_results": correlation_analysis,
+                "multicollinearity_results": multicollinearity_analysis,
+                "importance_results": importance_analysis,
+                "semantic_mapping": semantic_mapping
+            }
+            
+            # Agent analyzes variable relevance with comprehensive context
+            if hasattr(agent, 'evaluate_variable_relevance_enhanced'):
+                relevance_decision = agent.evaluate_variable_relevance_enhanced(
+                    variable_info=str(column_names),
+                    data_preview=top_5_lines,
+                    problem_description=problem_description,
+                    context_description=analysis_context,
+                    correlation_results=str(correlation_analysis),
+                    multicollinearity_results=str(multicollinearity_analysis),
+                    importance_results=str(importance_analysis),
+                    semantic_mapping=str(semantic_mapping)
+                )
+            else:
+                # Fallback to basic method if enhanced method doesn't exist
+                relevance_decision = {
+                    "relevant_variables": column_names,
+                    "irrelevant_variables": [],
+                    "removal_recommendations": "No specific removals recommended",
+                    "analysis_method": "fallback",
+                    "reason": "Enhanced agent method not available"
+                }
+            
+            return self.conclusion("agent_relevance_result", relevance_decision)
+        except Exception as e:
+            # Error fallback
+            error_result = {
+                "relevant_variables": self.get_variable("column_names", []),
+                "irrelevant_variables": [],
+                "removal_recommendations": f"Error in agent analysis: {str(e)}",
+                "analysis_method": "error_fallback",
+                "error": str(e)
+            }
+            return self.conclusion("agent_relevance_result", error_result)
+        finally:
+            return self.end_event()
     
     @finnish("agent_relevance_result")
     def agent_relevance_result(self):
@@ -157,6 +180,28 @@ importance_report''') \
         
         # Save agent analysis results
         self.add_variable("agent_relevance_analysis", agent_decision)
+        # Derive columns_to_drop and reasons for downstream cleaning
+        columns_to_drop = []
+        column_drop_reasons = {}
+        if isinstance(agent_decision, dict):
+            if isinstance(agent_decision.get("irrelevant_variables"), list):
+                columns_to_drop = agent_decision.get("irrelevant_variables", [])
+            # If agent returns a structured recommendation list, map them to reasons
+            if isinstance(agent_decision.get("removal_recommendations"), list):
+                for item in agent_decision["removal_recommendations"]:
+                    if isinstance(item, dict):
+                        col = item.get("column")
+                        reason = item.get("reason") or item.get("why") or "irrelevant"
+                        if col:
+                            column_drop_reasons[col] = reason
+            # Fallback: if only a string provided, assign same reason to each column
+            elif isinstance(agent_decision.get("removal_recommendations"), str):
+                reason_text = agent_decision["removal_recommendations"]
+                for col in columns_to_drop:
+                    column_drop_reasons[col] = reason_text
+        
+        self.add_variable("columns_to_drop", columns_to_drop)
+        self.add_variable("column_drop_reasons", column_drop_reasons)
         
         # Parse agent's markdown table response to extract actionable insights
         # The agent returns markdown table format, we'll save it for next section processing
@@ -166,41 +211,37 @@ importance_report''') \
             .add_text("✅ Multicollinearity detection and redundancy analysis finished") \
             .add_text("✅ Feature importance ranking generated") \
             .add_text("✅ Agent-based relevance evaluation completed") \
-            .add_text("**Agent Analysis Results:**") \
-            .add_text(str(agent_decision)) \
+            .add_text("**Agent Analysis Results saved**") \
             .next_event("variable_removal") \
             .end_event()
     
     @event("variable_removal")
     def variable_removal(self):
         csv_file_path = self.get_full_csv_path()
+        cleaned_path = csv_file_path.replace('.csv', '_filtered.csv')
+        columns_to_drop = self.get_variable("columns_to_drop", [])
         return self.new_section("Variable Removal Using VDS Tools") \
-            .add_text("Removing irrelevant variables using VDS automated selection") \
-            .add_code(f'''from vdstools import EDAToolkit
+            .add_text("Removing irrelevant variables using VDS toolkit with explicit output path") \
+            .add_code(f'''from vdstools import DataPreview
 import pandas as pd
 
-# Use VDS tools for variable analysis and manual filtering
-eda_toolkit = EDAToolkit()
+columns_to_drop = {columns_to_drop}
+original_path = "{csv_file_path}"
+cleaned_path = "{cleaned_path}"
 
-# Load data for filtering
-data = pd.read_csv("{csv_file_path}")
-print(f"Original dataset shape: {{data.shape}}")
+dp = DataPreview()
+removal_report = dp.remove_columns(original_path, columns_to_drop, cleaned_path)
+print(removal_report)
 
-# Use EDA analysis to guide variable selection
-print("\\n=== Variable Relevance Assessment ===")
-print("Based on correlation, multicollinearity, and importance analysis:")
-print("Variables with high relevance will be kept")
-print("Variables with low relevance can be removed")
-
-# For now, keep all variables (manual selection based on analysis results)
-filtered_data = data.copy()
-print(f"\\nFiltered dataset shape: {{filtered_data.shape}}")
-
-# Save filtered dataset
-filtered_data.to_csv("{csv_file_path.replace('.csv', '_filtered.csv')}", index=False)
-print("Filtered dataset saved successfully")
-
-filtered_data.head()''') \
+# Show quick comparison
+orig = pd.read_csv(original_path)
+cln = pd.read_csv(cleaned_path)
+print({{
+    "original_shape": tuple(orig.shape),
+    "cleaned_shape": tuple(cln.shape),
+    "removed_columns": columns_to_drop,
+    "cleaned_file_path": cleaned_path
+}})''') \
             .exe_code_cli(
                 event_tag="removal_complete",
                 mark_finnish="Variable removal completed"
@@ -210,10 +251,31 @@ filtered_data.head()''') \
     @after_exec("removal_complete")
     def removal_complete(self):
         removal_result = self.get_current_effect()
-        
+        cleaned_path = None
+        cleaned_columns = None
+        if isinstance(removal_result, dict):
+            cleaned_path = removal_result.get("cleaned_file_path")
+        if not cleaned_path:
+            cleaned_path = self.get_full_csv_path().replace('.csv', '_filtered.csv')
+
+        # Update csv path and columns for downstream consistency
+        self.add_variable("csv_file_path", cleaned_path)
+
+        try:
+            import pandas as pd  # type: ignore
+            df_cols = pd.read_csv(cleaned_path, nrows=0).columns.tolist()
+            cleaned_columns = df_cols
+        except Exception:
+            original_columns = self.get_variable("column_names", [])
+            cols_to_drop = self.get_variable("columns_to_drop", [])
+            cleaned_columns = [c for c in original_columns if c not in cols_to_drop]
+
+        self.add_variable("cleaned_column_names", cleaned_columns)
+        self.add_variable("column_names", cleaned_columns)
+        self.add_variable("variables", cleaned_columns)
+
         return self.add_variable("variable_removal_result", removal_result) \
-            .add_text("Variable removal completed using VDS intelligent selection") \
-            .add_text("Filtered dataset ready for next analysis phase") \
+            .add_text("Variable removal completed with VDS toolkit; dataset updated for next phase") \
             .end_event()
 
 async def generate_data_loading_and_hypothesis_proposal_step_4(

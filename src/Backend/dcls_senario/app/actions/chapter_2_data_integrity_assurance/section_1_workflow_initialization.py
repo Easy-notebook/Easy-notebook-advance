@@ -43,39 +43,17 @@ class WorkflowInitialization(BaseAction):
             llm=llm
         )
         
-        # Define stage goal for Data Existence Establishment
-        stage_goal = "Establish variable definitions, observation units, and form PCS hypothesis"
+        # Define stage goal for Data Integrity Assurance
+        stage_goal = "Ensure data integrity through dimensional validation, value validation, completeness restoration and comprehensive verification"
         
         try:
-            # stage_analysis = pcs_agent.select_stage_actions_cli(
-            #     stage_name=self.stage_name,
-            #     stage_goal=stage_goal,
-            #     available_actions=available_sections,
-            #     current_data_state=current_data_state,
-            #     user_goal=user_goal
-            # )
-            stage_analysis = {                                                                                                       
-                    "goal_relevance_analysis": "The Data Existence Establishment stage is crucial as it sets the",                                                                 
-                    "essential_for_user_goal": ["Variable definitions", "Observation units", "PCS hypothesis"],           
-                    "selected_actions": [                                                                                 
-                      {                                                                                                   
-                        "action_id": "section_1_workflow_initialization",                                                 
-                        "contribution_to_goal": "Helps in setting up the overall workflow which is necessary for a structured data science analysis.",                                                                     
-                        "necessity": "essential",                                                                         
-                        "provides_for_goal": "A starting point for the analysis process"                                  
-                      },                                                                                                  
-                      {                                                                                                   
-                        "action_id": "section_2_data_structure_discovery",                                                
-                        "contribution_to_goal": "Understanding the data structure is fundamental for further analysis, which is part of completing the data science analysis.",                                                
-                        "necessity": "essential",                                                                         
-                        "provides_for_goal": "Knowledge about how the data is organized"                                  
-                      },                                                                                                  
-                                                                                                             
-                    ],                                                                                                    
-                    "execution_order": ["section_1_workflow_initialization", "section_2_data_structure_discovery"],                    
-                    "skip_actions": [],                                                                                   
-                    "stage_execution_plan": "In this stage I will perform section_1_workflow_initialization "                                                                                              
-                  }                 
+            stage_analysis = pcs_agent.select_stage_actions_cli(
+                stage_name=self.stage_name,
+                stage_goal=stage_goal,
+                available_actions=available_sections,
+                current_data_state=current_data_state,
+                user_goal=user_goal
+            )                 
             if stage_analysis and not stage_analysis.get("error"):
                 selected_actions = [action["action_id"] for action in stage_analysis.get("selected_actions", [])]
                 execution_order = stage_analysis.get("execution_order", selected_actions)
