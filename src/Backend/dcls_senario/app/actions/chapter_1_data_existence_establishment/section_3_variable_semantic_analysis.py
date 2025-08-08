@@ -22,10 +22,27 @@ class VariableSemanticAnalysis(BaseAction):
     def vds_semantic_analysis(self):
         csv_file_path = self.get_full_csv_path()
         return self.add_text("Using VDS tools for comprehensive variable semantic analysis") \
-            .add_code(f'''from vdstools import build_semantic_context
+            .add_code(f'''import sys, os
+try:
+    from vdstools import build_semantic_context
+except Exception:
+    try:
+        from vdstools.src.data_preview import build_semantic_context
+    except Exception:
+        build_semantic_context = None
 
-# Build compact semantic context for agents
-vds_semantic_context = build_semantic_context("{csv_file_path}")
+# Build semantic context (with robust fallback)
+if build_semantic_context is not None:
+    vds_semantic_context = build_semantic_context("{csv_file_path}")
+else:
+    import pandas as pd
+    df = pd.read_csv("{csv_file_path}")
+    vds_semantic_context = {{
+        "columns": list(df.columns),
+        "dtypes": df.dtypes.astype(str).to_dict(),
+        "sample_preview": df.head().to_dict(orient="records"),
+        "missing_per_column": df.isna().sum().to_dict()
+    }}
 print(vds_semantic_context)''') \
             .exe_code_cli(
                 event_tag="vds_analysis_complete",

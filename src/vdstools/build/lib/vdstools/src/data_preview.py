@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import List
 from ..utils.display import Display
+import os
 
 class DataPreview(Display):
     """
@@ -142,6 +143,22 @@ class DataPreview(Display):
         else:
             html_content = smart_data_info(file_path)
         self.show(html_content)
+
+    def remove_columns(self, csv_file_path: str, columns: List[str], save_path: str = None):
+        """
+        Remove columns from dataset and optionally save to a new CSV file.
+
+        Args:
+            csv_file_path: Path to the original CSV file
+            columns: List of column names to remove
+            save_path: Optional path to save the cleaned CSV file
+
+        Returns:
+            HTML report string describing the removal result
+        """
+        html_content = remove_columns(csv_file_path, columns, save_path)
+        self.show(html_content)
+        return html_content
         
     def help(self):
         """
@@ -830,3 +847,98 @@ def get_column_list(csv_file_path: str) -> List[str]:
     except Exception as e:
         print(f"Error reading file: {e}")
         return []
+
+
+# Agent-friendly, structured utilities
+def build_semantic_context(csv_file_path: str) -> dict:
+    """
+    Build a compact, structured semantic context for agents.
+
+    Returns a dict including:
+    - columns: list[str]
+    - dtypes: dict[str, str]
+    - missing_per_column: dict[str, int]
+    - memory_mb: float
+    - sample_preview: list[dict] (first 5 rows)
+    """
+    try:
+        df = pd.read_csv(csv_file_path)
+        columns = list(df.columns)
+        dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
+        missing_per_column = df.isnull().sum().to_dict()
+        memory_mb = float(df.memory_usage(deep=True).sum() / 1024 / 1024)
+        preview_records = df.head(5).to_dict(orient="records")
+
+        return {
+            "columns": columns,
+            "dtypes": dtypes,
+            "missing_per_column": missing_per_column,
+            "memory_mb": round(memory_mb, 3),
+            "sample_preview": preview_records,
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "columns": [],
+            "dtypes": {},
+            "missing_per_column": {},
+            "memory_mb": 0.0,
+            "sample_preview": [],
+        }
+
+
+def create_basic_variations(csv_file_path: str, output_dir: str = "stability_variations") -> dict:
+    """
+    Create a small set of standard dataset variations for stability testing.
+
+    Variations:
+    - StandardScaler on numeric features
+    - MinMaxScaler on numeric features
+    - RobustScaler on numeric features
+
+    Returns a dict with keys:
+    - created: list[dict{name, path, shape}]
+    - output_dir: str
+    """
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+
+    try:
+        df = pd.read_csv(csv_file_path)
+        os.makedirs(output_dir, exist_ok=True)
+        created = []
+
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        def save_variation(name: str, data: pd.DataFrame):
+            path = os.path.join(output_dir, f"{name}.csv")
+            data.to_csv(path, index=False)
+            created.append({
+                "name": name,
+                "path": path,
+                "shape": [int(data.shape[0]), int(data.shape[1])]
+            })
+
+        # StandardScaler
+        if numeric_cols:
+            data_std = df.copy()
+            scaler = StandardScaler()
+            data_std[numeric_cols] = scaler.fit_transform(data_std[numeric_cols])
+            save_variation("StandardScaler_Variation", data_std)
+
+        # MinMaxScaler
+        if numeric_cols:
+            data_minmax = df.copy()
+            scaler = MinMaxScaler()
+            data_minmax[numeric_cols] = scaler.fit_transform(data_minmax[numeric_cols])
+            save_variation("MinMaxScaler_Variation", data_minmax)
+
+        # RobustScaler
+        if numeric_cols:
+            data_robust = df.copy()
+            scaler = RobustScaler()
+            data_robust[numeric_cols] = scaler.fit_transform(data_robust[numeric_cols])
+            save_variation("RobustScaler_Variation", data_robust)
+
+        return {"created": created, "output_dir": output_dir}
+    except Exception as e:
+        return {"created": [], "output_dir": output_dir, "error": str(e)}

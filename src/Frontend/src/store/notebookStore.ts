@@ -699,11 +699,24 @@ const useStore = create(
       set(
         produce((state: NotebookStoreState) => {
           state.viewMode = mode;
-          if (mode === 'step' && !state.currentPhaseId && state.tasks.length > 0) {
-            const firstTask = state.tasks[0];
-            if (firstTask.phases.length > 0) {
-              state.currentPhaseId = firstTask.phases[0].id;
-              state.currentStepIndex = 0;
+          // 当进入分步或演示模式时，如果当前step为空/无效，默认跳到第一个step
+          if ((mode === 'step' || mode === 'demo') && state.tasks.length > 0) {
+            // 若没有选中的phase，默认选择第一个phase
+            if (!state.currentPhaseId) {
+              const firstTask = state.tasks[0];
+              if (firstTask && firstTask.phases.length > 0) {
+                state.currentPhaseId = firstTask.phases[0].id;
+                state.currentStepIndex = 0;
+              }
+            } else {
+              // 如果已有phase但当前step越界或为空，则重置到该phase的第一个step
+              const phase = (state.tasks as any)
+                .flatMap((t: any) => t.phases)
+                .find((p: any) => p.id === state.currentPhaseId);
+              const stepsLen = phase?.steps?.length || 0;
+              if (stepsLen === 0 || state.currentStepIndex >= stepsLen || state.currentStepIndex < 0) {
+                state.currentStepIndex = 0;
+              }
             }
           }
         })

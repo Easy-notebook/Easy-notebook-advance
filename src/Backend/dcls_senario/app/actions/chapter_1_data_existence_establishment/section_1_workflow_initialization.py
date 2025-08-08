@@ -21,6 +21,7 @@ class WorkflowInitialization(BaseAction):
     def start(self):
         return self.new_chapter(self.chapter_name) \
             .add_text("I will now analyze which specific actions are needed for this stage based on your requirements.") \
+            .add_text("Early deliverable of this stage: generate correlation and multicollinearity heatmaps, identify variables irrelevant to the goal, and remove them immediately.") \
             .next_thinking_event(event_tag="select_stage_actions",
                                 textArray=["PCS Agent analyzing stage requirements...", 
                                             "Applying existence first principles...", 
@@ -44,7 +45,10 @@ class WorkflowInitialization(BaseAction):
         )
         
         # Define stage goal for Data Existence Establishment
-        stage_goal = "Establish variable definitions, observation units, and form PCS hypothesis"
+        stage_goal = (
+            "Establish variable definitions and observation units; generate early deliverable: "
+            "correlation/multicollinearity heatmaps and remove goal-irrelevant variables."
+        )
         
         try:
             stage_analysis = pcs_agent.select_stage_actions_cli(

@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="vdstools",
-    version="1.1.1",
+    version="1.1.2",
     author="VDS Team", 
     description="Simple data science toolkit for DCLS workflow",
     long_description=long_description,

@@ -60,7 +60,8 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
   const {
     isGenerating = false,
     generationType = 'image',
-    generationPrompt = '',
+    // 后端与store使用的键为 prompt，这里映射到 generationPrompt 供UI展示
+    prompt: generationPrompt = '',
     generationParams = {},
     generationStartTime,
     generationError,
@@ -277,7 +278,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
     <div className="image-display">
       {imageData.isValid && imageData.src ? (
         <div className="relative">
-          {imageData.isVideo ? (
+          {(imageData.isVideo || (cell.metadata?.generationType === 'video')) ? (
             <video src={imageData.src} controls title={imageData.alt} className="max-w-full h-auto rounded-lg shadow-sm" onError={() => setImageError(true)} onLoadedData={() => setImageError(false)}>您的浏览器不支持视频播放</video>
           ) : (
             <>

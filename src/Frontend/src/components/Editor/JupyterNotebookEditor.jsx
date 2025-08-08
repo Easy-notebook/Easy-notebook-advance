@@ -94,7 +94,7 @@ const JupyterNotebookEditor = forwardRef(({
       case 'Hybrid':
         return <HybridCell key={cell.id} {...cellProps} />;
       case 'markdown':
-        return <MarkdownCell key={cell.id} {...cellProps} />;
+        return <MarkdownCell key={cell.id} {...cellProps} disableDefaultTitleStyle />;
       case 'image':
         return <ImageCell key={cell.id} {...cellProps} />;
       case 'thinking':

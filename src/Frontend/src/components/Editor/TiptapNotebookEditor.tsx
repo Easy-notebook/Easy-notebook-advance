@@ -59,7 +59,7 @@ interface TiptapNotebookEditorRef {
 }
 
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(({ 
-  className = "",
+  className = "text-2xl font-bold leading-relaxed",
   placeholder = "Untitled",
   readOnly = false
 }, ref) => {
@@ -317,87 +317,60 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       // 防止循环更新
       if (isInternalUpdate.current) return
       
-      // 如果是InputRule创建的代码块，立即同步到store但跳过HTML解析
+      // 如果是InputRule创建的代码块：以编辑器解析结果为准，直接覆盖store结构，删除原段落对应的markdown内容
       if (transaction.getMeta('codeBlockInputRule')) {
         console.log('处理InputRule创建的代码块变化');
-        
         const newCodeCellId = transaction.getMeta('newCodeCellId');
-        const language = transaction.getMeta('codeBlockLanguage') || 'python';
         
-        if (newCodeCellId) {
-          console.log('立即创建新代码块:', newCodeCellId, language);
-          
-          // 立即创建新的代码块cell并添加到store
-          const newCell = {
-            id: newCodeCellId,
-            type: 'code',
-            content: '',
-            outputs: [],
-            enableEdit: true,
-            language: language,
-          };
-          
-          // 通过重新解析 editor state 得到准确的 cells 顺序
-          const parsedCells = convertEditorStateToCells();
-          const insertIndex = parsedCells.findIndex(c => c.id === newCodeCellId);
-          console.log('解析得出的插入位置:', insertIndex, 'parsedCells 长度:', parsedCells.length);
-          
-          // 创建新的cells数组
-          const newCells = [...cells];
-          newCells.splice(insertIndex, 0, newCell);
-          
-          // 使用统一的内部更新标记和时序
-          isInternalUpdate.current = true;
-          setCells(newCells);
-          
-          // 设置为当前活跃cell
-          const { setCurrentCell, setEditingCellId } = useStore.getState();
-          if (setCurrentCell) {
-            setCurrentCell(newCodeCellId);
-            setEditingCellId(newCodeCellId);
-          }
-          
-          // 统一的延迟时间和重置逻辑
-          setTimeout(() => {
-            isInternalUpdate.current = false;
-            
-            // 在重置标记后再进行聚焦，避免触发不必要的更新
+        // 通过解析 editor state 得到准确的 cells（包含刚刚插入的代码块，且不含原触发行）
+        const parsedCells = convertEditorStateToCells();
+        
+        // 覆盖 store，确保不残留触发文本所在的旧 markdown 段落
+        isInternalUpdate.current = true;
+        setCells(parsedCells);
+        
+        // 设置当前活跃 cell 为新代码块
+        const { setCurrentCell, setEditingCellId } = useStore.getState();
+        if (newCodeCellId && setCurrentCell) {
+          setCurrentCell(newCodeCellId);
+          setEditingCellId(newCodeCellId);
+        }
+        
+        setTimeout(() => {
+          isInternalUpdate.current = false;
+          // 聚焦到新代码块的编辑器
+          if (newCodeCellId) {
             const codeElement = document.querySelector(`[data-cell-id="${newCodeCellId}"] .cm-editor .cm-content`);
             if (codeElement) {
-              codeElement.focus();
-              console.log('已聚焦到新代码块编辑器');
+              (codeElement as HTMLElement).focus();
             }
-          }, 50); // 统一使用50ms延迟
-        }
-        return
+          }
+        }, 50);
+        return;
       }
       
       // 检查变化是否发生在特殊块内（代码块或表格）
       const isSpecialBlockChange = transaction.steps.some(step => {
         try {
-          if (step.from !== undefined && step.to !== undefined) {
-            // Ensure positions are within document bounds
+          const anyStep: any = step as any
+          const from = anyStep.from ?? (anyStep.pos ?? undefined)
+          const to = anyStep.to ?? (anyStep.pos ?? undefined)
+          if (from !== undefined && to !== undefined) {
             const docSize = editor.state.doc.content.size
-            if (step.from > docSize || step.to > docSize) {
+            const safeFrom = Math.min(from, docSize)
+            const safeTo = Math.min(to, docSize)
+            const $from = editor.state.doc.resolve(safeFrom)
+            const $to = editor.state.doc.resolve(safeTo)
+
+            const isCodeOrTable = (pmPos) => {
+              for (let depth = pmPos.depth; depth >= 0; depth--) {
+                const node = pmPos.node(depth)
+                if (node.type.name === 'executable-code-block' || node.type.name === 'table') return true
+              }
               return false
             }
-            
-            const $from = editor.state.doc.resolve(Math.min(step.from, docSize))
-            const $to = editor.state.doc.resolve(Math.min(step.to, docSize))
-            
-            // 检查变化位置是否在特殊块内（代码块或表格）
-            for (let depth = $from.depth; depth >= 0; depth--) {
-              const node = $from.node(depth)
-              if (node.type.name === 'executable-code-block' || node.type.name === 'table') {
-                return true
-              }
-            }
-            for (let depth = $to.depth; depth >= 0; depth--) {
-              const node = $to.node(depth)
-              if (node.type.name === 'executable-code-block' || node.type.name === 'table') {
-                return true
-              }
-            }
+
+            if (isCodeOrTable($from) || isCodeOrTable($to)) return true
           }
           return false
         } catch (e) {
@@ -661,6 +634,30 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
               return true
             }
           }
+
+          // thinking cell 的字段变化也需要更新（agentName/customText/textArray/useWorkflowThinking）
+          if (cell.type === 'thinking') {
+            const fieldsChanged = (
+              (cell as any).agentName !== (lastCell as any).agentName ||
+              (cell as any).customText !== (lastCell as any).customText ||
+              JSON.stringify((cell as any).textArray || []) !== JSON.stringify((lastCell as any).textArray || []) ||
+              (cell as any).useWorkflowThinking !== (lastCell as any).useWorkflowThinking
+            )
+            if (fieldsChanged) {
+              console.log('🧠 TipTap检测到thinking cell字段变化:', {
+                cellId: cell.id,
+                oldAgent: (lastCell as any).agentName,
+                newAgent: (cell as any).agentName,
+                oldCustom: (lastCell as any).customText,
+                newCustom: (cell as any).customText,
+                oldTextArrayLen: ((lastCell as any).textArray || []).length,
+                newTextArrayLen: ((cell as any).textArray || []).length,
+                oldUseWorkflow: (lastCell as any).useWorkflowThinking,
+                newUseWorkflow: (cell as any).useWorkflowThinking,
+              })
+              return true
+            }
+          }
           
           // code cell的内容、输出变化都不需要更新tiptap
           return false
@@ -701,6 +698,45 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       }
     }
   }, [cells, editor])
+
+  // 强化：针对 thinking cell 的快速同步（即使未触发结构变化判断）
+  const thinkingSignature = useMemo(() => {
+    try {
+      return JSON.stringify(
+        (cells || [])
+          .filter((c: any) => c.type === 'thinking')
+          .map((c: any) => ({
+            id: c.id,
+            agentName: c.agentName || '',
+            customText: c.customText || '',
+            textArray: Array.isArray(c.textArray) ? c.textArray : [],
+            useWorkflowThinking: !!c.useWorkflowThinking,
+          }))
+      )
+    } catch {
+      return 'thinking-signature-error'
+    }
+  }, [cells])
+
+  const lastThinkingSignatureRef = useRef<string>('')
+
+  useEffect(() => {
+    if (!editor) return
+    if (isInternalUpdate.current) return
+
+    if (thinkingSignature && thinkingSignature !== lastThinkingSignatureRef.current) {
+      // 强制仅基于thinking变化进行轻量刷新
+      isInternalUpdate.current = true
+      const expectedHtml = convertCellsToHtml(cells)
+      setTimeout(() => {
+        editor.commands.setContent(expectedHtml, false)
+        lastThinkingSignatureRef.current = thinkingSignature
+        setTimeout(() => {
+          isInternalUpdate.current = false
+        }, 30)
+      }, 0)
+    }
+  }, [thinkingSignature, editor, cells])
 
   /**
    * 将cells数组转换为HTML内容

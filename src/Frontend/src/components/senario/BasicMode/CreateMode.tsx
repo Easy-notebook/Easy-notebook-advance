@@ -1,6 +1,6 @@
 import React from 'react';
 import TiptapNotebookEditor from '../../Editor/TiptapNotebookEditor';
-import JupyterNotebookEditor from '../../Editor/JupyterNotebookEditor';
+import JupyterNotebookEditor from '../../Editor/JupyterNotebookEditor.jsx';
 import { useSettings } from '../../../store/settingsStore';
 
 interface CreateModeProps {
@@ -30,7 +30,7 @@ const CreateMode: React.FC<CreateModeProps> = ({
         <div className="relative">
           <TiptapNotebookEditor
             className="w-full"
-            placeholder="Start writing your notebook... Type ```python to create a code block"
+            placeholder="Untitled"
             readOnly={readOnly}
           />
         </div>
@@ -45,7 +45,7 @@ const CreateMode: React.FC<CreateModeProps> = ({
         <div className="relative">
           <JupyterNotebookEditor
             className="w-full"
-            placeholder="Start your notebook by adding cells..."
+            placeholder="Untitled"
             readOnly={readOnly}
           />
         </div>

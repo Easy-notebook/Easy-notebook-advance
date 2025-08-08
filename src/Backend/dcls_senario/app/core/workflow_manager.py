@@ -15,10 +15,11 @@ class WorkflowManager:
             "description": "Establish variable definitions, observation units, and PCS hypothesis",
             "sections": [
                 "section_1_workflow_initialization",
-                "section_2_data_structure_discovery", 
+                "section_2_data_structure_discovery",
+                # Prioritize early deliverable: heatmap + irrelevant variable removal
+                "section_5_variable_relevance_assessment",
                 "section_3_variable_semantic_analysis",
                 "section_4_observation_unit_identification",
-                "section_5_variable_relevance_assessment",
                 "section_6_pcs_hypothesis_generation"
             ]
         },

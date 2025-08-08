@@ -21,6 +21,13 @@ class ValueValidityAssurance(BaseAction):
     @event("data_info_check")
     def data_info_check(self):
         csv_file_path = self.get_full_csv_path()
+        # If Stage 1 has provided data_info, reuse it to avoid duplicate work
+        existing_info = self.get_variable("data_info", None)
+        if existing_info:
+            return self.add_text("Reusing dataset info collected in Stage 1 for value validation") \
+                .add_variable("data_info", existing_info) \
+                .next_event("value_range_analysis") \
+                .end_event()
         return self.add_text("Analyzing current data information for value validation") \
             .add_code(f'''from vdstools import DataPreview
 data_preview = DataPreview("{csv_file_path}")

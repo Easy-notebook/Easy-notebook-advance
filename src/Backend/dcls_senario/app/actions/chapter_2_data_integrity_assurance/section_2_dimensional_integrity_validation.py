@@ -21,6 +21,17 @@ class DimensionalIntegrityValidation(BaseAction):
     @event("data_info_check")
     def data_info_check(self):
         csv_file_path = self.get_full_csv_path()
+        # If earlier stages already provided data_info (from DataPreview or semantic context), reuse it
+        existing_info = self.get_variable("data_info", None)
+        if existing_info:
+            return self.add_text("Reusing dataset info collected in Stage 1 to avoid redundant computation") \
+                .add_variable("data_info", existing_info) \
+                .next_thinking_event(
+                    event_tag="generate_dimension_check",
+                    textArray=["Data Cleaning and EDA Agent is thinking...", "generating the dimension check code..."],
+                    agentName="Data Cleaning Agent"
+                ) \
+                .end_event()
         return self.add_text("Analyzing current data dimensions and structure") \
             .add_code(f'''from vdstools import DataPreview
 data_preview = DataPreview("{csv_file_path}")

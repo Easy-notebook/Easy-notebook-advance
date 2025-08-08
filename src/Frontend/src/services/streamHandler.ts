@@ -196,6 +196,35 @@ export const handleStreamResponse = async (
             break;
         }
 
+        // 处理通用错误事件（后端有时发送 type: 'error'）
+        case 'error': {
+            const errorMsg = (data.payload as any)?.error || (data as any)?.error || 'Unknown error';
+            const commandId = (data.payload as any)?.commandId || (data as any)?.commandId;
+            const uniqueIdentifier = (data.payload as any)?.uniqueIdentifier || (data as any)?.uniqueIdentifier;
+
+            console.error('Received error event:', { errorMsg, commandId, uniqueIdentifier });
+
+            // Try to attach error to the related generation cell metadata for UI display
+            let updated = false;
+            if (uniqueIdentifier) {
+                updated = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
+                    metadata: { isGenerating: false, generationError: errorMsg, generationStatus: 'failed' }
+                });
+            }
+            if (!updated && commandId && generationCellTracker.has(commandId)) {
+                const targetId = generationCellTracker.get(commandId)!;
+                useStore.getState().updateCellMetadata(targetId, {
+                    isGenerating: false,
+                    generationError: errorMsg,
+                    generationStatus: 'failed'
+                });
+                updated = true;
+            }
+
+            await showToast({ message: `Error: ${errorMsg}`, type: 'error' });
+            break;
+        }
+
         case 'clear_cells': {
             await globalUpdateInterface.clearCells();
             break;
@@ -239,21 +268,22 @@ export const handleStreamResponse = async (
             const metadata = data.data?.payload?.metadata;
             const commandId = data.data?.payload?.commandId;
             const prompt = data.data?.payload?.prompt;
+            const serverUniqueIdentifier = (data.data as any)?.payload?.uniqueIdentifier || metadata?.uniqueIdentifier;
             
             let newCellId = null;
             if (cellType && description) {
                 const enableEdit = !metadata?.isGenerating; // 如果正在生成，不启用编辑
                 
                 // 如果是图片或视频生成任务，使用唯一标识符策略
-                if ((cellType === 'image' || cellType === 'video') && metadata?.isGenerating && prompt) {
+                if ((cellType === 'image' || cellType === 'video') && metadata?.isGenerating && (prompt || serverUniqueIdentifier)) {
                     console.log('🎯 使用唯一标识符策略创建生成cell:', {
                         type: cellType,
-                        prompt: prompt.substring(0, 50),
+                        prompt: (prompt || '').substring(0, 50),
                         commandId
                     });
                     
-                    // 生成基于提示词和时间戳的唯一标识符
-                    const uniqueIdentifier = `gen-${Date.now()}-${prompt.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
+                    // 优先使用服务端提供的唯一标识符，否则回退到本地生成
+                    const uniqueIdentifier = serverUniqueIdentifier || `gen-${Date.now()}-${(prompt || '').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
                     
                     newCellId = useStore.getState().addNewCellWithUniqueIdentifier(
                         cellType, 

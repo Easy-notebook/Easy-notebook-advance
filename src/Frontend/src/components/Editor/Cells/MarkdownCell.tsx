@@ -9,20 +9,13 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useMemo } from 'react';
 import 'katex/dist/katex.min.css';
-import useStore from '../../../store/notebookStore';
+import useStore, { Cell as StoreCell, OutputItem, CellType } from '../../../store/notebookStore';
 import { v4 as uuidv4 } from 'uuid';
 import mermaid from 'mermaid';
 
-interface Cell {
-  id: string;
-  content: string;
-  type: string;
-  outputs: any[];
-  enableEdit: boolean;
-}
-
 interface MarkdownCellProps {
-  cell: Cell;
+  cell: StoreCell;
+  disableDefaultTitleStyle?: boolean;
 }
 
 interface MermaidDiagramProps {
@@ -31,10 +24,10 @@ interface MermaidDiagramProps {
 
 // ─── 自定义 Mermaid 渲染组件 ──────────────────────────────
 const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
-  const containerRef = useRef(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (containerRef.current) {
-      containerRef.current.innerHTML = chart;
+      (containerRef.current as HTMLDivElement).innerHTML = chart;
       mermaid.initialize({ startOnLoad: true });
       mermaid.init(undefined, containerRef.current);
     }
@@ -46,7 +39,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
 interface CodeBlockProps {
   inline?: boolean;
   className?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   [key: string]: any;
 }
 
@@ -156,7 +149,7 @@ const MarkdownTableHead: React.FC<MarkdownTableHeadProps> = ({ children, ...prop
   </th>
 );
 
-const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
+const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleStyle = false }) => {
   const {
     addCell,
     cells,
@@ -174,7 +167,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
   const isEditing = editingCellId === cell.id;
   const hasContent = cell.content.trim().length > 0;
   const cellShowButtons = showButtons[cell.id] || false;
-  const isDefaultTitle = cell.metadata?.isDefaultTitle === true;
+  const isDefaultTitle = cell.metadata?.isDefaultTitle === true && !disableDefaultTitleStyle;
   
   // 优化的 Markdown 组件配置，包含表格支持
   const markdownComponents = useMemo(() => ({
@@ -184,7 +177,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
     tr: MarkdownTableRow,
     td: MarkdownTableCell,
     th: MarkdownTableHead,
-  }), []);
+  }), []) as any;
 
   // 双击切换编辑模式
   const toggleEditing = useCallback(() => {
@@ -195,16 +188,16 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
     }
   }, [isEditing, cell.id, setEditingCellId]);
 
-  const isEmptyMarkdownCell = useCallback((content) => content.trim() === '', []);
+  const isEmptyMarkdownCell = useCallback((content: string) => content.trim() === '', []);
 
   const createNewMarkdownCell = useCallback(
-    (afterIndex) => {
+    (afterIndex: number) => {
       const newCellId = uuidv4();
-      const newCell = {
+      const newCell: Partial<StoreCell> = {
         id: newCellId,
-        type: 'markdown',
+        type: 'markdown' as CellType,
         content: '',
-        outputs: [],
+        outputs: [] as OutputItem[],
         enableEdit: true,
       };
       addCell(newCell, afterIndex + 1);
@@ -218,15 +211,15 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
   );
 
   const createNewCodeCell = useCallback(
-    (content, afterIndex, codeIdentifier) => {
+    (content: string, afterIndex: number, codeIdentifier?: string) => {
       const newCellId = uuidv4();
-      const newCell = {
+      const newCell: Partial<StoreCell> = {
         id: newCellId,
-        type: 'code',
+        type: 'code' as CellType,
         content: content.trim(),
-        outputs: [],
+        outputs: [] as OutputItem[],
         enableEdit: true,
-        language: codeIdentifier || '',
+        metadata: { ...(cell.metadata || {}), language: codeIdentifier || 'python' },
       };
       addCell(newCell, afterIndex + 1);
       setCurrentCell(newCellId);
@@ -244,7 +237,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
   );
 
   const handleChange = useCallback(
-    (value) => {
+    (value: string) => {
       const currentIndex = cells.findIndex((c) => c.id === cell.id);
       const lines = value.split('\n');
       // 检测三反引号代码块（例如 ```mermaid ）
@@ -382,19 +375,19 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
                     boxShadow: 'none',
                     backgroundColor: 'transparent',
                     padding: '0',
-                    '&.cm-editor': {
-                      border: 'none !important',
-                      boxShadow: 'none !important',
-                      backgroundColor: 'transparent !important',
-                      padding: '0 !important',
-                    },
-                    '& .cm-editor': {
-                      border: 'none !important',
-                      boxShadow: 'none !important',
-                      backgroundColor: 'transparent !important',
-                      padding: '0 !important',
-                    },
                   }}
+                  // 通过 className + 全局样式覆盖 CodeMirror 样式，避免 React style 警告
+                  theme={EditorView.theme({
+                    '&': {
+                      border: 'none !important',
+                      boxShadow: 'none !important',
+                      backgroundColor: 'transparent !important',
+                      padding: 0,
+                    },
+                    '.cm-scroller': {
+                      backgroundColor: 'transparent !important',
+                    },
+                  })}
                   onKeyDown={handleKeyDown}
                   onBlur={handleBlur}
                   autoFocus
@@ -427,7 +420,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell }) => {
             </div>
 
             {/* 工具栏 */}
-            {(viewMode=="complete" || viewMode=="create") && ( <div
+            {(viewMode === 'create' || viewMode === 'step') && ( <div
               className={`absolute -right-14 top-1 flex items-center transition-opacity duration-200 ${
                 cellShowButtons || isEditing ? 'opacity-100' : 'opacity-0'
               }`}

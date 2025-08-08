@@ -76,7 +76,7 @@ class EDAToolkit(Display):
         html_content = generate_data_quality_report(csv_file_path)
         self.show(html_content)
     
-    def feature_importance_analysis(self, csv_file_path: str, target_column: str, method: str = 'auto'):
+    def feature_importance_analysis(self, csv_file_path: str, target_column: Optional[str] = None, method: str = 'auto'):
         """
         Generate feature importance analysis using various methods
         
@@ -1384,7 +1384,7 @@ def generate_data_quality_report(csv_file_path: str) -> str:
         return _create_error_report(f"Error in data quality report: {str(e)}")
 
 
-def generate_feature_importance_analysis(csv_file_path: str, target_column: str, method: str = 'auto') -> str:
+def generate_feature_importance_analysis(csv_file_path: str, target_column: Optional[str] = None, method: str = 'auto') -> str:
     """
     Generate feature importance analysis using various methods
     
@@ -1399,8 +1399,23 @@ def generate_feature_importance_analysis(csv_file_path: str, target_column: str,
     try:
         data = pd.read_csv(csv_file_path)
         
-        if target_column not in data.columns:
-            return _create_error_report(f"Target column '{target_column}' not found in dataset")
+        # Auto-select target column if not provided or not found
+        if (target_column is None) or (target_column not in data.columns):
+            # Prefer a commonly used target if present
+            candidate_names = [
+                'target', 'label', 'y', 'price', 'SalePrice', 'Outcome', 'response'
+            ]
+            for name in candidate_names:
+                if name in data.columns:
+                    target_column = name
+                    break
+            # Fallback to first numeric column if still not found
+            if target_column is None:
+                numeric_candidates = [col for col in data.columns if pd.api.types.is_numeric_dtype(data[col])]
+                if len(numeric_candidates) >= 1:
+                    target_column = numeric_candidates[0]
+                else:
+                    return _create_info_report("No suitable target column found for importance analysis")
         
         # Prepare features (exclude target and non-numeric columns)
         feature_cols = [col for col in data.columns if col != target_column and pd.api.types.is_numeric_dtype(data[col])]

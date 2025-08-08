@@ -361,37 +361,24 @@ const globalUpdateInterface: GlobalUpdateInterface = {
 
     // Video Generation Methods Implementation
     createGeneratingVideoCell: (prompt: string, params: {quality?: string, ratio?: string, duration?: string} = {}) => {
-        const cellId = `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Create new image cell with generation metadata
-        const newCell: Cell = {
-            id: cellId,
-            type: 'image',
-            content: '', // Empty content while generating
-            metadata: {
-                isGenerating: true,
-                generationStartTime: Date.now(),
-                prompt: prompt,
-                generationType: 'video',
-                generationParams: {
-                    quality: params.quality || 'standard',
-                    ratio: params.ratio || '16:9',
-                    duration: params.duration || '5'
-                }
+        // 先创建一个新的 image 单元格并拿到真实的 cellId
+        const cellId = useStore.getState().addNewCell2End('image');
+
+        // 设置生成中的元数据
+        useStore.getState().updateCellMetadata(cellId, {
+            isGenerating: true,
+            generationStartTime: Date.now(),
+            prompt: prompt,
+            generationType: 'video',
+            generationParams: {
+                quality: params.quality || 'standard',
+                ratio: params.ratio || '16:9',
+                duration: params.duration || '5'
             }
-        };
-        
-        // Add cell to notebook
-        useStore.getState().addNewCell2End('image');
+        });
+
+        // 清空内容（保持一致）
         useStore.getState().updateCell(cellId, '');
-        
-        // Update cell metadata
-        const cells = useStore.getState().cells;
-        const targetCell = cells.find(cell => cell.id === cellId);
-        if (targetCell) {
-            targetCell.metadata = newCell.metadata;
-        }
-        
         return cellId;
     },
 

@@ -143,6 +143,22 @@ class DataPreview(Display):
         else:
             html_content = smart_data_info(file_path)
         self.show(html_content)
+
+    def remove_columns(self, csv_file_path: str, columns: List[str], save_path: str = None):
+        """
+        Remove columns from dataset and optionally save to a new CSV file.
+
+        Args:
+            csv_file_path: Path to the original CSV file
+            columns: List of column names to remove
+            save_path: Optional path to save the cleaned CSV file
+
+        Returns:
+            HTML report string describing the removal result
+        """
+        html_content = remove_columns(csv_file_path, columns, save_path)
+        self.show(html_content)
+        return html_content
         
     def help(self):
         """
@@ -304,13 +320,36 @@ def remove_columns(csv_file_path: str, columns: List[str], save_path: str = None
     try:
         # Read data
         data = pd.read_csv(csv_file_path)
-        
+
+        # Handle empty requested list as a no-op (copy/save original if needed)
+        if not columns:
+            if save_path:
+                data.to_csv(save_path, index=False)
+            return f"""
+            <vds-container>
+                <vds-title>Column Removal Report</vds-title>
+                <vds-info-panel>
+                    <h3>No Columns Specified</h3>
+                    <p><strong>Original columns:</strong> {len(data.columns)}</p>
+                    <p><strong>Columns removed:</strong> 0</p>
+                    <p><strong>Remaining columns:</strong> {len(data.columns)}</p>
+                    {f"<p><strong>Saved to:</strong> {save_path}</p>" if save_path else ""}
+                </vds-info-panel>
+                <vds-section>
+                    <h3>Available Columns</h3>
+                    <ul>
+                        {''.join([f"<li>{col}</li>" for col in data.columns])}
+                    </ul>
+                </vds-section>
+            </vds-container>
+            """
+
         # Check if columns exist in the dataset
         existing_columns = data.columns.tolist()
         columns_to_remove = [col for col in columns if col in existing_columns]
         missing_columns = [col for col in columns if col not in existing_columns]
-        
-        if not columns_to_remove:
+
+        if not columns_to_remove and columns:
             return f"""
             <vds-container>
                 <vds-error-panel>
@@ -321,14 +360,14 @@ def remove_columns(csv_file_path: str, columns: List[str], save_path: str = None
                 </vds-error-panel>
             </vds-container>
             """
-        
+
         # Remove columns
-        data_cleaned = data.drop(columns=columns_to_remove)
-        
+        data_cleaned = data.drop(columns=columns_to_remove) if columns_to_remove else data
+
         # Save if path provided
         if save_path:
             data_cleaned.to_csv(save_path, index=False)
-        
+
         # Generate report
         html_content = f"""
         <vds-container>
@@ -340,14 +379,12 @@ def remove_columns(csv_file_path: str, columns: List[str], save_path: str = None
                 <p><strong>Remaining columns:</strong> {len(data_cleaned.columns)}</p>
                 {f"<p><strong>Saved to:</strong> {save_path}</p>" if save_path else ""}
             </vds-info-panel>
-            
-            <vds-section>
+            {('''<vds-section>
                 <h3>Removed Columns</h3>
                 <ul>
-                    {''.join([f"<li>{col}</li>" for col in columns_to_remove])}
+                    ''' + ''.join([f"<li>{col}</li>" for col in columns_to_remove]) + '''
                 </ul>
-            </vds-section>
-            
+            </vds-section>''') if columns_to_remove else ''}
             {f'''<vds-section>
                 <h3>Warning: Missing Columns</h3>
                 <p>The following columns were not found in the dataset:</p>
@@ -355,7 +392,6 @@ def remove_columns(csv_file_path: str, columns: List[str], save_path: str = None
                     {''.join([f"<li>{col}</li>" for col in missing_columns])}
                 </ul>
             </vds-section>''' if missing_columns else ""}
-            
             <vds-section>
                 <h3>Remaining Columns</h3>
                 <ul>
@@ -364,9 +400,9 @@ def remove_columns(csv_file_path: str, columns: List[str], save_path: str = None
             </vds-section>
         </vds-container>
         """
-        
+
         return html_content
-        
+
     except Exception as e:
         return f"""
         <vds-container>
