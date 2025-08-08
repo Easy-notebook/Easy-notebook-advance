@@ -129,6 +129,17 @@ class BaseAction(StepTemplate):
                     self.add_variable("data_preview", top5)
         except Exception:
             pass
+
+        # 3) Provide 'comprehensive_eda_summary' alias from 'eda_summary' if missing
+        #    This helps stages that require a comprehensive EDA summary to proceed
+        #    when only a basic or earlier EDA summary is available.
+        try:
+            if not self.get_variable("comprehensive_eda_summary"):
+                eda_summary = self.get_variable("eda_summary")
+                if eda_summary:
+                    self.add_variable("comprehensive_eda_summary", eda_summary)
+        except Exception:
+            pass
     
     def _get_stage_name_from_chapter_id(self) -> str:
         """从chapter_id获取阶段名称"""
