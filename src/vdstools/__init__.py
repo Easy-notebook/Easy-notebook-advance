@@ -12,10 +12,11 @@ Each toolkit includes comprehensive help() functions for agent integration.
 """
 
 # Import class-based toolkits (primary interface)
-from .src.data_preview import DataPreview, datapreview
+from .src.data_preview import DataPreview, datapreview, build_semantic_context, create_basic_variations
 from .src.data_cleaning import DataCleaning
 from .src.eda_tools import EDAToolkit
 from .src.feature_engineering import FeatureEngineering
+from .src.stability import evaluate_variations
 
 # Import HTML output utilities
 from .src.html_output import (
@@ -57,6 +58,10 @@ __all__ = [
     "DataCleaning",
     "EDAToolkit",
     "FeatureEngineering",
+    # Agent-oriented structured utilities
+    "build_semantic_context",
+    "create_basic_variations",
+    "evaluate_variations",
     
     # HTML Output Utilities
     "display_html",

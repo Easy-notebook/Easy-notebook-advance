@@ -474,6 +474,17 @@ Model demonstrates acceptable basic stability for continued use.
             # Calculate report length for summary
             report_sections = final_stability_report.count("##")
             self.add_text(f"📄 **Report Summary**: Comprehensive document with {report_sections} main sections")
+
+            # Persist report to markdown file for delivery
+            return self.add_code(f'''report_content = r"""{final_stability_report}"""
+with open("final_stability_report.md", "w", encoding="utf-8") as f:
+    f.write(report_content)
+print("final_stability_report.md")''') \
+                .exe_code_cli(
+                    event_tag="stability_report_saved",
+                    mark_finnish="Final stability report saved"
+                ) \
+                .end_event()
         else:
             self.add_text("⚠️ No final stability report could be generated")
         
@@ -486,6 +497,16 @@ Model demonstrates acceptable basic stability for continued use.
             .add_text("- Final stability report generated with actionable recommendations") \
             .add_text("🚀 **Project Status**: Complete end-to-end machine learning pipeline with stability validation") \
             .add_text("✨ **Model Ready**: Comprehensive validation completed - model ready for deployment consideration") \
+            .end_event()
+
+    @after_exec("stability_report_saved")
+    def stability_report_saved(self):
+        saved_path = self.get_current_effect()
+        if isinstance(saved_path, str) and saved_path:
+            self.add_variable("final_stability_report_path", saved_path)
+            return self.add_text(f"💾 **Report saved to**: {saved_path}") \
+                .end_event()
+        return self.add_text("⚠️ Failed to determine saved report path") \
             .end_event()
 
 async def stability_analysis_step2(

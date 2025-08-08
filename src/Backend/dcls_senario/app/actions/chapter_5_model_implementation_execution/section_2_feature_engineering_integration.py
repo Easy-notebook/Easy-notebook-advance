@@ -159,8 +159,21 @@ class FeatureEngineeringIntegration(BaseAction):
                 target_variable = sorted_targets[0].get("variable_name", "target")
             
             # Generate comprehensive feature engineering code
+            # Optional presets from earlier semantic context
+            variable_dtypes = self.get_variable("variable_dtypes", {})
+            preset_numeric = []
+            preset_categorical = []
+            if isinstance(variable_dtypes, dict):
+                for col, dt in variable_dtypes.items():
+                    dt_lower = str(dt).lower()
+                    if any(x in dt_lower for x in ["int", "float", "number"]):
+                        preset_numeric.append(col)
+                    elif any(x in dt_lower for x in ["object", "category", "string"]):
+                        preset_categorical.append(col)
+
             feature_code = self._generate_feature_engineering_code(
-                feature_methods, csv_file_path, target_variable, data_info
+                feature_methods, csv_file_path, target_variable, data_info,
+                preset_numeric=preset_numeric, preset_categorical=preset_categorical
             )
             
             return self.conclusion("feature_engineering_implemented", {
@@ -183,7 +196,7 @@ class FeatureEngineeringIntegration(BaseAction):
         finally:
             return self.end_event()
     
-    def _generate_feature_engineering_code(self, methods, csv_path, target_var, data_info):
+    def _generate_feature_engineering_code(self, methods, csv_path, target_var, data_info, preset_numeric=None, preset_categorical=None):
         """Generate comprehensive feature engineering code"""
         code = f'''import pandas as pd
 import numpy as np
@@ -242,6 +255,14 @@ if y is not None:
 # Analyze feature types
 numeric_features = X.select_dtypes(include=[np.number]).columns.tolist()
 categorical_features = X.select_dtypes(include=['object', 'category']).columns.tolist()
+
+# Override with presets if provided
+PRESET_NUMERIC_FEATURES = {preset_numeric if preset_numeric else []}
+PRESET_CATEGORICAL_FEATURES = {preset_categorical if preset_categorical else []}
+if PRESET_NUMERIC_FEATURES:
+    numeric_features = [c for c in PRESET_NUMERIC_FEATURES if c in X.columns]
+if PRESET_CATEGORICAL_FEATURES:
+    categorical_features = [c for c in PRESET_CATEGORICAL_FEATURES if c in X.columns]
 
 print(f"\\n🔢 Numeric features ({len(numeric_features)}): {{numeric_features}}")
 print(f"🏷️ Categorical features ({len(categorical_features)}): {{categorical_features}}")

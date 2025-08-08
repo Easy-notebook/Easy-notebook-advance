@@ -508,17 +508,13 @@ class WorkflowInitialization(BaseAction):
                 llm=llm
             )
             
-            # Generate code for creating dataset variations
-            variations_code = pcs_agent.generate_dataset_variations_code_cli(
-                csv_file_path=csv_file_path,
-                dataset_variations=dataset_variations
-            )
-            
-            # Validate generated code
-            if not variations_code or not isinstance(variations_code, str):
-                # Generate fallback code
-                fallback_code = self._generate_fallback_variations_code(csv_file_path, dataset_variations)
-                variations_code = fallback_code
+            # Prefer stable vdstools utility to create basic variations
+            # This avoids large dynamic code blocks and increases reliability
+            variations_code = f'''from vdstools import create_basic_variations
+import json
+
+result = create_basic_variations("{csv_file_path}")
+print(result)'''
             
             return self.conclusion("variations_code_generated", {
                 "variations_code": variations_code,
@@ -673,7 +669,23 @@ print("✅ Created basic stability variation: basic_stability_variation.csv")
     def variations_created(self):
         variations_results = self.get_current_effect()
         self.add_variable("variations_creation_results", variations_results)
-        
+        # If dataset_variations not set, derive from creation results
+        try:
+            existing = self.get_variable("dataset_variations", [])
+            if (not existing) and isinstance(variations_results, dict) and isinstance(variations_results.get("created"), list):
+                derived = []
+                for item in variations_results.get("created", []):
+                    name = item.get("name") or item.get("variation") or "variation"
+                    path = item.get("path") or ""
+                    derived.append({
+                        "variation_name": name,
+                        "path": path,
+                        "shape": item.get("shape")
+                    })
+                self.add_variable("dataset_variations", derived)
+        except Exception:
+            pass
+
         return self.add_text("✅ **Dataset Variations Creation Completed**") \
             .add_text("**Creation Results:**") \
             .add_text(str(variations_results)) \

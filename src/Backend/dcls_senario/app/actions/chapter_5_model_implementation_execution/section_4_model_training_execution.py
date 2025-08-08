@@ -685,6 +685,22 @@ print(f"✅ Basic model trained. Accuracy: {{accuracy:.4f}}")
                 self.add_text("- Cross-validation performed for robust assessment")
                 self.add_text("- Best performing model identified and selected")
                 self.add_text("- Comprehensive performance metrics calculated")
+                # Persist training results to JSON for delivery
+                try:
+                    import json as _json  # type: ignore
+                    results_json = _json.dumps(training_results)
+                except Exception:
+                    results_json = "{}"
+                return self.add_code(f'''import json
+data = json.loads(r"""{results_json}""")
+with open("model_training_results.json", "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+print("model_training_results.json")''') \
+                    .exe_code_cli(
+                        event_tag="training_results_saved",
+                        mark_finnish="Training results saved"
+                    ) \
+                    .end_event()
             else:
                 self.add_text("⚠️ **Training completed with warnings**")
         else:
@@ -695,6 +711,16 @@ print(f"✅ Basic model trained. Accuracy: {{accuracy:.4f}}")
         return self.add_text("🚀 **Model Implementation Execution Completed Successfully!**") \
             .add_text("🎯 **Final Model Ready**: Comprehensive ML pipeline executed with best model selected") \
             .add_text("📊 **Next Phase**: Ready for stability validation and robustness testing") \
+            .end_event()
+
+    @after_exec("training_results_saved")
+    def training_results_saved(self):
+        saved_path = self.get_current_effect()
+        if isinstance(saved_path, str) and saved_path:
+            self.add_variable("model_training_results_path", saved_path)
+            return self.add_text(f"💾 **Training results saved to**: {saved_path}") \
+                .end_event()
+        return self.add_text("⚠️ Failed to determine training results path") \
             .end_event()
 
 async def model_training_and_evaluation_step3(

@@ -389,20 +389,41 @@ class MultiVariationEvaluationExecution(BaseAction):
                 llm=llm
             )
             
-            # Generate comprehensive batch evaluation code
-            batch_evaluation_code = prediction_agent.generate_batch_evaluation_code_cli(
-                batch_evaluation_strategy=batch_evaluation_strategy,
-                csv_file_path=csv_file_path,
-                model_training_code=model_training_code
-            )
-            
-            # Validate generated code
-            if not batch_evaluation_code or not isinstance(batch_evaluation_code, str):
-                # Generate fallback code
-                fallback_code = self._generate_fallback_batch_code(
-                    csv_file_path, dataset_variations
-                )
-                batch_evaluation_code = fallback_code
+            # Prefer stable vdstools evaluation to avoid large dynamic code blocks
+            # Collect variation file paths from variables (creation results or dataset_variations)
+            var_files = []
+            creation = self.get_variable("variations_creation_results", {})
+            if isinstance(creation, dict) and isinstance(creation.get("created"), list):
+                for item in creation.get("created", []):
+                    if isinstance(item, dict) and item.get("path"):
+                        var_files.append(item.get("path"))
+            if not var_files and isinstance(dataset_variations, list):
+                for it in dataset_variations:
+                    if isinstance(it, dict) and it.get("path"):
+                        var_files.append(it.get("path"))
+            # Always include original dataset as a baseline if present
+            if csv_file_path and csv_file_path not in var_files:
+                var_files.append(csv_file_path)
+
+            # Determine target column and problem type from training results if available
+            mtr = self.get_variable("model_training_results", {})
+            tgt_col = None
+            ptype = None
+            if isinstance(mtr, dict):
+                ds_info = mtr.get("dataset_info", {}) if isinstance(mtr.get("dataset_info", {}), dict) else {}
+                tgt_col = ds_info.get("target_column")
+                ptype = mtr.get("problem_type")
+
+            # Build compact evaluation code using vdstools.evaluate_variations
+            literal_files = ", ".join([f"'{p}'" for p in var_files])
+            tgt_literal = f"'{tgt_col}'" if tgt_col else "None"
+            ptype_literal = f"'{ptype}'" if ptype else "None"
+            batch_evaluation_code = f'''from vdstools import evaluate_variations
+import json
+
+variation_files = [{literal_files}]
+res = evaluate_variations(variation_files, target_column={tgt_literal}, problem_type={ptype_literal}, cv_folds=5)
+print(res)'''
             
             return self.conclusion("batch_evaluation_code_generated", {
                 "batch_evaluation_code": batch_evaluation_code,
@@ -812,6 +833,16 @@ print(f"✅ Basic batch evaluation completed: {{len(results)}} variations tested
                 self.add_text("- Cross-validation stability assessed for robustness")
                 self.add_text("- Most stable preprocessing approach identified")
                 self.add_text("- Overall model stability quantified and analyzed")
+                # Persist evaluation results to JSON for delivery
+                return self.add_code('''import json
+with open("stability_evaluation_results.json", "w", encoding="utf-8") as f:
+    json.dump(%s, f, ensure_ascii=False, indent=2)
+print("stability_evaluation_results.json")''' % ("__EVAL_RESULTS_PLACEHOLDER__")) \
+                    .exe_code_cli(
+                        event_tag="stability_eval_saved",
+                        mark_finnish="Evaluation results saved"
+                    ) \
+                    .end_event()
             else:
                 self.add_text("⚠️ **Evaluation completed with some limitations**")
         else:
@@ -822,6 +853,16 @@ print(f"✅ Basic batch evaluation completed: {{len(results)}} variations tested
         return self.add_text("🏆 **Multi-Variation Evaluation Execution Completed Successfully!**") \
             .add_text("📊 **Stability Assessment Complete**: Model robustness validated across dataset variations") \
             .add_text("🚀 **Next Phase**: Ready for final stability analysis consolidation") \
+            .end_event()
+
+    @after_exec("stability_eval_saved")
+    def stability_eval_saved(self):
+        saved_path = self.get_current_effect()
+        if isinstance(saved_path, str) and saved_path:
+            self.add_variable("stability_evaluation_results_path", saved_path)
+            return self.add_text(f"💾 **Evaluation results saved to**: {saved_path}") \
+                .end_event()
+        return self.add_text("⚠️ Failed to determine evaluation results path") \
             .end_event()
 
 async def stability_analysis_step1(
