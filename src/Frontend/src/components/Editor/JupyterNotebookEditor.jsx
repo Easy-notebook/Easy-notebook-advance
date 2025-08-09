@@ -379,19 +379,7 @@ $$`;
         <div className="h-10 w-full"></div>
 
         {/* 拖拽提示和快捷键帮助 */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 text-xs rounded-full">
-            <span>💡 提示：悬停在cell左侧可以拖拽重新排序</span>
-          </div>
-          <button
-            onClick={() => setShowShortcutsHelp(true)}
-            className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded-full transition-colors"
-            title="查看键盘快捷键"
-          >
-            <span>⌨️</span>
-            <span>快捷键</span>
-          </button>
-        </div>
+
 
         <div className="relative">
           <div className="h-4 w-full"></div>

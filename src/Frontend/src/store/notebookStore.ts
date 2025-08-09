@@ -176,6 +176,7 @@ export interface NotebookStoreActions {
     deleteCell: (cellId: string) => void;
     updateCell: (cellId: string, newContent: string) => void;
     updateCellOutputs: (cellId: string, outputs: OutputItem[]) => void;
+    moveCellToIndex: (fromIndex: number, toIndex: number) => void;
 
     // 视图模式管理
     setViewMode: (mode: ViewMode) => void;
@@ -693,6 +694,31 @@ const useStore = create(
 
     updateCellOutputs: (cellId: string, outputs: OutputItem[]) => {
       updateCellOutputs(set, cellId, outputs);
+    },
+
+    moveCellToIndex: (fromIndex: number, toIndex: number) => {
+      set(
+        produce((state: NotebookStoreState) => {
+          if (fromIndex < 0 || toIndex < 0 || 
+              fromIndex >= state.cells.length || toIndex >= state.cells.length ||
+              fromIndex === toIndex) {
+            return;
+          }
+          
+          // 移动cell
+          const [movedCell] = state.cells.splice(fromIndex, 1);
+          state.cells.splice(toIndex, 0, movedCell);
+          
+          console.log('📱 Store: 移动cell完成', {
+            from: fromIndex,
+            to: toIndex,
+            cellId: movedCell.id,
+            totalCells: state.cells.length
+          });
+        }),
+        false,
+        'moveCellToIndex'
+      );
     },
 
     setViewMode: (mode: ViewMode) =>
