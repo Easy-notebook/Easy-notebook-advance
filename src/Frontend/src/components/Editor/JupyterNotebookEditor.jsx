@@ -5,6 +5,11 @@ import HybridCell from './Cells/HybridCell';
 import MarkdownCell from './Cells/MarkdownCell';
 import ImageCell from './Cells/ImageCell';
 import AIThinkingCell from './Cells/AIThinkingCell';
+import DraggableCellList from './DragAndDrop/DraggableCellList';
+import SlashCommandMenu from './SlashCommands/SlashCommandMenu';
+import { useSlashCommands } from './SlashCommands/useSlashCommands';
+import { useKeyboardShortcuts } from './KeyboardShortcuts/useKeyboardShortcuts';
+import ShortcutsHelp from './KeyboardShortcuts/ShortcutsHelp';
 
 // JupyterNotebookEditor - TiptapNotebookEditor integration
 const JupyterNotebookEditor = forwardRef(({
@@ -16,6 +21,8 @@ const JupyterNotebookEditor = forwardRef(({
   const { cells, setCells } = useStore();
   const containerRef = useRef(null);
   const [focusedCellId, setFocusedCellId] = useState(null);
+  const [isDragEnabled, setIsDragEnabled] = useState(true);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   // Add debug logging for cells changes
   useEffect(() => {
@@ -25,6 +32,143 @@ const JupyterNotebookEditor = forwardRef(({
 
   const generateCellId = () => {
     return `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  // 快捷指令Hook配置
+  const slashCommands = useSlashCommands({
+    onInsertCodeCell: () => handleAddCell('code'),
+    onInsertMarkdownCell: () => handleAddCell('markdown'),
+    onInsertImageCell: () => handleAddCell('image'),
+    onInsertThinkingCell: () => handleAddCell('thinking'),
+    onInsertTable: () => {
+      // 插入表格到markdown cell
+      const tableMarkdown = `| 列1 | 列2 | 列3 |
+|-----|-----|-----|
+| 行1 | 数据 | 数据 |
+| 行2 | 数据 | 数据 |`;
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: tableMarkdown,
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+    },
+    onInsertMath: () => {
+      // 插入数学公式到markdown cell
+      const mathMarkdown = `$$
+E = mc^2
+$$`;
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: mathMarkdown,
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+    },
+    onInsertHeading: (level) => {
+      const headingMarkdown = `${'#'.repeat(level)} 标题`;
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: headingMarkdown,
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+    },
+    onInsertList: (ordered) => {
+      const listMarkdown = ordered
+        ? `1. 第一项\n2. 第二项\n3. 第三项`
+        : `- 第一项\n- 第二项\n- 第三项`;
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: listMarkdown,
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+    },
+    onInsertQuote: () => {
+      const quoteMarkdown = `> 这是一个引用块`;
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: quoteMarkdown,
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+    },
+    onInsertText: () => handleAddCell('markdown'),
+    onAIGenerate: () => {
+      console.log('AI生成功能待实现');
+      // 这里可以集成AI生成功能
+    },
+  });
+
+  // 键盘快捷键配置
+  useKeyboardShortcuts({
+    onInsertCodeCell: () => handleAddCell('code'),
+    onInsertMarkdownCell: () => handleAddCell('markdown'),
+    onInsertImageCell: () => handleAddCell('image'),
+    onInsertThinkingCell: () => handleAddCell('thinking'),
+    onInsertTable: () => {
+      const tableMarkdown = `| 列1 | 列2 | 列3 |
+|-----|-----|-----|
+| 行1 | 数据 | 数据 |
+| 行2 | 数据 | 数据 |`;
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: tableMarkdown,
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+    },
+    onInsertMath: () => {
+      const mathMarkdown = `$$
+E = mc^2
+$$`;
+      const newCell = {
+        id: generateCellId(),
+        type: 'markdown',
+        content: mathMarkdown,
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+    },
+    onOpenCommandPalette: () => {
+      // 打开快捷指令菜单
+      const activeElement = document.activeElement;
+      if (activeElement) {
+        slashCommands.openMenu(activeElement);
+      }
+    },
+    onSaveNotebook: () => {
+      console.log('保存笔记本功能待实现');
+      // 这里可以集成保存功能
+    },
+    onRunCell: () => {
+      console.log('运行当前cell功能待实现');
+      // 这里可以集成运行功能
+    },
+    onRunAllCells: () => {
+      console.log('运行所有cells功能待实现');
+      // 这里可以集成运行所有功能
+    },
+    disabled: readOnly,
+  });
+
+  // 处理cell拖拽排序
+  const handleCellsReorder = (newCells) => {
+    setCells(newCells);
   };
 
   const handleAddCell = (type, index = cells.length) => {
@@ -230,50 +374,116 @@ const JupyterNotebookEditor = forwardRef(({
       ref={containerRef}
       className={`jupyter-notebook-editor ${className} w-full h-full bg-transparent`}
     >
-      {/* Complete mode content */}
+      {/* Complete mode content with drag and drop */}
       <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 my-auto">
         <div className="h-10 w-full"></div>
-        <div className="relative space-y-4">
+
+        {/* 拖拽提示和快捷键帮助 */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 text-xs rounded-full">
+            <span>💡 提示：悬停在cell左侧可以拖拽重新排序</span>
+          </div>
+          <button
+            onClick={() => setShowShortcutsHelp(true)}
+            className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded-full transition-colors"
+            title="查看键盘快捷键"
+          >
+            <span>⌨️</span>
+            <span>快捷键</span>
+          </button>
+        </div>
+
+        <div className="relative">
           <div className="h-4 w-full"></div>
           <CellDivider index={0} onAddCell={handleAddCell} viewMode="complete" />
-          {visibleCells.map((cell, index) => (
-            <React.Fragment key={cell.id}>
+
+          {/* 使用拖拽组件渲染cells */}
+          <DraggableCellList
+            cells={visibleCells}
+            onCellsReorder={handleCellsReorder}
+            disabled={!isDragEnabled || readOnly}
+            className="space-y-4"
+            renderCell={(cell, isDragging) => (
               <div
                 id={`cell-${cell.id}`}
                 data-cell-id={cell.id}
-                className="relative w-full bg-white rounded-lg px-8"
+                className={`relative w-full bg-white rounded-lg px-8 transition-all duration-200 ${
+                  isDragging ? 'shadow-lg scale-105' : 'shadow-sm'
+                }`}
               >
                 {renderCell(cell)}
               </div>
-              <CellDivider
-                index={index + 1}
-                onAddCell={handleAddCell}
-                viewMode="complete"
-              />
-            </React.Fragment>
-          ))}
+            )}
+          />
+
+          <CellDivider
+            index={visibleCells.length}
+            onAddCell={handleAddCell}
+            viewMode="complete"
+          />
         </div>
         <div className="h-20 w-full"></div>
       </div>
+
+      {/* 快捷指令菜单 */}
+      <SlashCommandMenu
+        isOpen={slashCommands.isMenuOpen}
+        onClose={slashCommands.closeMenu}
+        onCommand={slashCommands.handleCommand}
+        position={slashCommands.menuPosition}
+        searchQuery={slashCommands.searchQuery}
+      />
+
+      {/* 快捷键帮助面板 */}
+      <ShortcutsHelp
+        isOpen={showShortcutsHelp}
+        onClose={() => setShowShortcutsHelp(false)}
+      />
       
       {/* Jupyter Notebook styles */}
       <style>{`
         .jupyter-notebook-editor {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-        
+
         .jupyter-notebook-editor .code-cell {
           font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
         }
-        
+
         .jupyter-notebook-editor .markdown-cell {
           line-height: 1.6;
         }
-        
+
         .jupyter-notebook-editor .thinking-cell {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
           border-radius: 8px;
+        }
+
+        /* 拖拽相关样式 */
+        .jupyter-notebook-editor .draggable-cell {
+          transition: all 0.2s ease;
+        }
+
+        .jupyter-notebook-editor .draggable-cell:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .jupyter-notebook-editor .drag-handle {
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+
+        .jupyter-notebook-editor .draggable-cell:hover .drag-handle {
+          opacity: 1;
+        }
+
+        /* 快捷指令高亮 */
+        .slash-command-active {
+          background-color: #e0f2fe !important;
+          border-radius: 3px;
+          padding: 1px 2px;
         }
       `}</style>
     </div>
