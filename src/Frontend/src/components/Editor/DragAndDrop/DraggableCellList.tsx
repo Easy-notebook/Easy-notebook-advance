@@ -37,6 +37,7 @@ interface DraggableCellListProps {
   renderCell: (cell: Cell, isDragging?: boolean) => React.ReactNode;
   className?: string;
   disabled?: boolean;
+  onAddCell?: (type: string, afterIndex: number) => void;
 }
 
 const DraggableCellList: React.FC<DraggableCellListProps> = ({
@@ -44,7 +45,8 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
   onCellsReorder,
   renderCell,
   className = '',
-  disabled = false
+  disabled = false,
+  onAddCell
 }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedCell, setDraggedCell] = useState<Cell | null>(null);
@@ -120,12 +122,14 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
     >
       <SortableContext items={cells.map(cell => cell.id)} strategy={verticalListSortingStrategy}>
         <div className={className}>
-          {cells.map((cell) => (
+          {cells.map((cell, index) => (
             <DraggableCell
               key={cell.id}
               cell={cell}
               isActive={activeId === cell.id}
               className="mb-4"
+              onAddCell={onAddCell}
+              cellIndex={index}
             >
               {renderCell(cell, activeId === cell.id)}
             </DraggableCell>

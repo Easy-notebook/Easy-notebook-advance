@@ -12,6 +12,7 @@ interface KeyboardShortcutsProps {
   onRunAllCells?: () => void;
   onSaveNotebook?: () => void;
   onOpenCommandPalette?: () => void;
+
   onToggleEditMode?: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -38,6 +39,7 @@ export const useKeyboardShortcuts = (props: KeyboardShortcutsProps) => {
     onRunAllCells,
     onSaveNotebook,
     onOpenCommandPalette,
+
     onToggleEditMode,
     onMoveUp,
     onMoveDown,
@@ -176,6 +178,7 @@ export const useKeyboardShortcuts = (props: KeyboardShortcutsProps) => {
             event.preventDefault();
             onOpenCommandPalette?.();
             break;
+
           case 'Enter': // Ctrl/Cmd + Shift + Enter - 运行所有cells
             event.preventDefault();
             onRunAllCells?.();
@@ -255,6 +258,7 @@ export const useKeyboardShortcuts = (props: KeyboardShortcutsProps) => {
     onRunAllCells,
     onSaveNotebook,
     onOpenCommandPalette,
+
     onToggleEditMode,
     onMoveUp,
     onMoveDown,
@@ -304,6 +308,7 @@ export const useKeyboardShortcuts = (props: KeyboardShortcutsProps) => {
     command: [
       { keys: ['Ctrl/Cmd', '/'], description: '打开命令面板' },
       { keys: ['Ctrl/Cmd', 'Shift', 'P'], description: '打开命令面板' },
+
     ]
   };
 

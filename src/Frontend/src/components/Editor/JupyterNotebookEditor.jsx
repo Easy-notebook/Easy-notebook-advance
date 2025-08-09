@@ -151,6 +151,7 @@ $$`;
         slashCommands.openMenu(activeElement);
       }
     },
+
     onSaveNotebook: () => {
       console.log('保存笔记本功能待实现');
       // 这里可以集成保存功能
@@ -255,44 +256,115 @@ $$`;
   // Cell divider component for inserting new cells
   const CellDivider = ({ index, onAddCell, viewMode }) => {
     const [isHovered, setIsHovered] = useState(false);
+    const [showKeyboardHint, setShowKeyboardHint] = useState(false);
     const VUE_SECONDARY = '#35495E';
+
+    // 处理键盘事件
+    const handleKeyDown = (event) => {
+      if (!isHovered) return;
+
+      const { key, ctrlKey, metaKey, shiftKey } = event;
+      const isModifierPressed = ctrlKey || metaKey;
+
+      if (isModifierPressed && shiftKey) {
+        switch (key) {
+          case 'L': // Ctrl/Cmd + Shift + L - 插入代码块
+            event.preventDefault();
+            onAddCell('code', index);
+            break;
+          case 'M': // Ctrl/Cmd + Shift + M - 插入markdown
+            event.preventDefault();
+            onAddCell('markdown', index);
+            break;
+          case 'I': // Ctrl/Cmd + Shift + I - 插入图片
+            event.preventDefault();
+            onAddCell('image', index);
+            break;
+          case 'B': // Ctrl/Cmd + Shift + B - 插入AI思考
+            event.preventDefault();
+            onAddCell('thinking', index);
+            break;
+        }
+      } else if (!isModifierPressed && !shiftKey) {
+        // 简化的快捷键（无修饰键）
+        switch (key) {
+          case 'c': // c - 插入代码块
+            event.preventDefault();
+            onAddCell('code', index);
+            break;
+          case 'm': // m - 插入markdown
+            event.preventDefault();
+            onAddCell('markdown', index);
+            break;
+          case 'i': // i - 插入图片
+            event.preventDefault();
+            onAddCell('image', index);
+            break;
+          case 'a': // a - 插入AI思考
+            event.preventDefault();
+            onAddCell('thinking', index);
+            break;
+        }
+      }
+    };
 
     return (
       <div
         className="h-2 group relative my-2 w-full max-w-screen-xl mx-auto"
+        tabIndex={0}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onFocus={() => {
+          setIsHovered(true);
+          setShowKeyboardHint(true);
+        }}
+        onBlur={() => {
+          setIsHovered(false);
+          setShowKeyboardHint(false);
+        }}
+        onKeyDown={handleKeyDown}
       >
         {isHovered && viewMode === 'complete' && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 backdrop-blur-md shadow-lg rounded-2xl p-2 z-10">
             <button
               onClick={() => onAddCell('code', index)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm hover:bg-gray-100 rounded-lg transition-colors"
               style={{ color: VUE_SECONDARY }}
+              title="快捷键: C 或 Ctrl+Shift+L"
             >
               <span>+</span> Code
             </button>
             <button
               onClick={() => onAddCell('markdown', index)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm hover:bg-gray-100 rounded-lg transition-colors"
               style={{ color: VUE_SECONDARY }}
+              title="快捷键: M 或 Ctrl+Shift+M"
             >
               <span>+</span> Markdown
             </button>
             <button
               onClick={() => onAddCell('image', index)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm hover:bg-gray-100 rounded-lg transition-colors"
               style={{ color: VUE_SECONDARY }}
+              title="快捷键: I 或 Ctrl+Shift+I"
             >
               <span>+</span> Image
             </button>
             <button
               onClick={() => onAddCell('thinking', index)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm hover:bg-gray-100 rounded-lg transition-colors"
               style={{ color: VUE_SECONDARY }}
+              title="快捷键: A 或 Ctrl+Shift+B"
             >
               <span>+</span> AI
             </button>
+
+            {/* 键盘提示 */}
+            {showKeyboardHint && (
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                按 C/M/I/A 快速添加 cell
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -368,9 +440,9 @@ $$`;
 
   // Determine which cells should be visible based on the current view mode
   const visibleCells = getCurrentViewCells();
-  
+
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`jupyter-notebook-editor ${className} w-full h-full bg-transparent`}
     >
@@ -389,6 +461,7 @@ $$`;
           <DraggableCellList
             cells={visibleCells}
             onCellsReorder={handleCellsReorder}
+            onAddCell={handleAddCell}
             disabled={!isDragEnabled || readOnly}
             className="space-y-4"
             renderCell={(cell, isDragging) => (
