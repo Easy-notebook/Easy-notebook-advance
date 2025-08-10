@@ -785,6 +785,47 @@ export const handleStreamResponse = async (
             break;
         }
 
+        case 'trigger_image_generation': {
+            const prompt = data.payload?.prompt;
+            const commandId = data.payload?.commandId;
+            if (prompt && commandId) {
+                console.log('触发图片生成:', prompt);
+                
+                // 获取当前notebook状态和操作器
+                const notebookState = useStore.getState();
+                const notebookId = notebookState.notebookId;
+                const currentCellId = notebookState.currentCellId;
+                const viewMode = notebookState.viewMode;
+                const currentPhaseId = notebookState.currentPhaseId;
+                const currentStepIndex = notebookState.currentStepIndex;
+                
+                // 使用 dynamic import 来获取 operatorStore 以避免循环依赖
+                const { default: useOperatorStore } = await import('../store/operatorStore');
+                
+                // 发送/image命令到后端
+                const imageCommand = {
+                    type: 'user_command',
+                    payload: {
+                        content: `/image ${prompt}`,
+                        commandId: commandId,
+                        current_view_mode: viewMode,
+                        current_phase_id: currentPhaseId,
+                        current_step_index: currentStepIndex,
+                        notebook_id: notebookId
+                    }
+                };
+                
+                console.log('发送图片生成命令到后端:', imageCommand);
+                useOperatorStore.getState().sendOperation(notebookId, imageCommand);
+                
+                await showToast({
+                    message: `开始生成图片: ${prompt.substring(0, 30)}...`,
+                    type: "info"
+                });
+            }
+            break;
+        }
+
         default: {
             console.log(data);
             console.warn('未处理的流式响应类型:', data.type);

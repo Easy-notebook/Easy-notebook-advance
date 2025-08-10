@@ -467,18 +467,13 @@ class StreamingTemplateParser:
             }
             
         elif tag_name == "draw-image":
+            # draw-image标签应该触发图片生成，模拟/image命令
             return {
-                "type": "addCell2EndWithContent",
-                "data": {
-                    "payload": {
-                        "type": "image",
-                        "description": "Generated Image",
-                        "content": content,
-                        "metadata": {
-                            "isGenerating": True,
-                            "generationType": "image"
-                        }
-                    }
+                "type": "trigger_image_generation",
+                "payload": {
+                    "content": f"/image {content}",
+                    "prompt": content,
+                    "commandId": f"img-{hash(content) % 10000}"
                 }
             }
             

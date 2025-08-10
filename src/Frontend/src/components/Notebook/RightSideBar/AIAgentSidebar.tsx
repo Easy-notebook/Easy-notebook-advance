@@ -6,7 +6,8 @@ import {
   Loader2, MessageSquare, UploadCloud, Eye, BookOpen, Code, PlayCircle,
   BarChart2, Bug, Wrench, AlertTriangle, MessageCircle as LucideMessageCircle,
   ShieldCheck, Server, Command, CircleX, Clock, Layers, ChevronDown,
-  ChevronUp, Edit, List, CheckCircle, Circle, ArrowRight, MessageCircle
+  ChevronUp, Edit, List, CheckCircle, Circle, ArrowRight, MessageCircle,
+  Zap, Brain, Image, Video, Bot, Users, Settings
 } from 'lucide-react';
 import { extractSectionTitle } from '../utils/String';
 
@@ -43,6 +44,128 @@ const filterSectionStageText = (text: string) => {
     .replace(/^\s*[-:：]\s*/g, '') // 移除开头的分隔符
     .replace(/\s+/g, ' ') // 将多个空格替换为单个空格
     .trim(); // 去除首尾空格
+};
+
+// 工具调用显示组件
+interface ToolCallProps {
+  type: string;
+  content?: string;
+  agent?: string;
+}
+
+const ToolCallIndicator: React.FC<ToolCallProps> = ({ type, content, agent }) => {
+  const getToolIcon = (toolType: string) => {
+    switch (toolType.toLowerCase()) {
+      case 'draw-image':
+      case 'trigger_image_generation':
+        return <Image className="w-4 h-4 text-purple-600" />;
+      case 'create-video':
+        return <Video className="w-4 h-4 text-indigo-600" />;
+      case 'add-code':
+      case 'exec-code':
+        return <Code className="w-4 h-4 text-green-600" />;
+      case 'thinking':
+        return <Brain className="w-4 h-4 text-orange-600" />;
+      case 'call-execute':
+        return <PlayCircle className="w-4 h-4 text-blue-600" />;
+      case 'communicate':
+        return <Users className="w-4 h-4 text-teal-600" />;
+      case 'remember':
+        return <Settings className="w-4 h-4 text-gray-600" />;
+      default:
+        return <Zap className="w-4 h-4 text-yellow-600" />;
+    }
+  };
+
+  const getToolLabel = (toolType: string) => {
+    const labels: Record<string, string> = {
+      'draw-image': '🎨 图片生成',
+      'trigger_image_generation': '🎨 图片生成', 
+      'create-video': '🎬 视频创建',
+      'add-code': '💻 代码编写',
+      'exec-code': '▶️ 代码执行',
+      'thinking': '🤔 思考过程',
+      'call-execute': '⚡ 立即执行',
+      'communicate': '💬 Agent通信',
+      'remember': '💾 信息记忆',
+      'update-title': '📝 更新标题',
+      'new-chapter': '📚 新建章节',
+      'new-section': '📄 新建小节'
+    };
+    return labels[toolType] || `🔧 ${toolType}`;
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-100">
+      <div className="flex items-center gap-1">
+        {getToolIcon(type)}
+        <span className="text-sm font-medium text-gray-700">
+          {getToolLabel(type)}
+        </span>
+      </div>
+      {agent && (
+        <div className="flex items-center gap-1 px-2 py-1 bg-white/70 rounded-md">
+          <Bot className="w-3 h-3 text-blue-500" />
+          <span className="text-xs text-blue-600 font-medium">{agent}</span>
+        </div>
+      )}
+      {content && content.length > 50 && (
+        <span className="text-xs text-gray-500 truncate max-w-32">
+          {content.substring(0, 50)}...
+        </span>
+      )}
+    </div>
+  );
+};
+
+// Agent信息显示组件
+interface AgentInfoProps {
+  agent?: string;
+  model?: string;
+  type?: string;
+}
+
+const AgentInfo: React.FC<AgentInfoProps> = ({ agent, model, type }) => {
+  const getAgentIcon = (agentType?: string) => {
+    switch (agentType) {
+      case 'general':
+        return <Bot className="w-4 h-4 text-blue-600" />;
+      case 'text2image':
+        return <Image className="w-4 h-4 text-purple-600" />;
+      case 'text2video':
+        return <Video className="w-4 h-4 text-indigo-600" />;
+      case 'command':
+        return <Command className="w-4 h-4 text-green-600" />;
+      default:
+        return <Brain className="w-4 h-4 text-orange-600" />;
+    }
+  };
+
+  const getAgentName = (agentType?: string) => {
+    const names: Record<string, string> = {
+      'general': '通用助手',
+      'text2image': '图像生成器',
+      'text2video': '视频生成器', 
+      'command': '代码助手'
+    };
+    return names[agentType || ''] || (agent || 'AI助手');
+  };
+
+  if (!agent && !type) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 rounded-md">
+      {getAgentIcon(type || agent)}
+      <span className="text-xs text-blue-700 font-medium">
+        {getAgentName(type || agent)}
+      </span>
+      {model && (
+        <span className="text-xs text-gray-500">
+          ({model})
+        </span>
+      )}
+    </div>
+  );
 };
 
 const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) => {
@@ -602,12 +725,68 @@ const AIAgentSidebar = () => {
                         }`}>
                           {qa.type === 'user' ? t('rightSideBar.you') : t('rightSideBar.ai')}
                         </span>
+                        
+                        {/* 显示Agent信息 */}
+                        {qa.type === 'assistant' && (
+                          <AgentInfo 
+                            agent={qa.agent} 
+                            model={qa.model}
+                            type={qa.agentType}
+                          />
+                        )}
+                        
                         <span className="text-xs text-gray-500">{qa.timestamp}</span>
                       </div>
 
                       <div className="text-left break-words overflow-wrap-anywhere min-w-0">
                         <ExpandableText text={qa.content} maxLines={5} />
                       </div>
+
+                      {/* 显示工具调用信息 */}
+                      {qa.type === 'assistant' && qa.toolCalls && qa.toolCalls.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <div className="text-xs text-gray-500 mb-2">🛠️ 工具调用:</div>
+                          {qa.toolCalls.map((tool: any, toolIndex: number) => (
+                            <ToolCallIndicator 
+                              key={`${qa.id}-tool-${toolIndex}`}
+                              type={tool.type || tool.name}
+                              content={tool.content || tool.arguments}
+                              agent={tool.agent}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* 解析内容中的XML标签作为工具调用显示 */}
+                      {qa.type === 'assistant' && qa.content && (
+                        (() => {
+                          // 简单的XML标签检测
+                          const xmlTagRegex = /<([a-z-]+)(?:\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
+                          const matches = [...qa.content.matchAll(xmlTagRegex)];
+                          
+                          if (matches.length > 0) {
+                            return (
+                              <div className="mt-3 space-y-2">
+                                <div className="text-xs text-gray-500 mb-2">⚡ 执行的操作:</div>
+                                {matches.slice(0, 3).map((match, matchIndex) => (
+                                  <ToolCallIndicator
+                                    key={`${qa.id}-xml-${matchIndex}`}
+                                    type={match[1]}
+                                    content={match[0].length > 100 ? match[0].substring(0, 100) + '...' : match[0]}
+                                    agent={qa.agentType || qa.agent}
+                                  />
+                                ))}
+                                {matches.length > 3 && (
+                                  <div className="text-xs text-gray-400">
+                                    还有 {matches.length - 3} 个操作...
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()
+                      )}
                     </div>
                   </div>
                 ))
