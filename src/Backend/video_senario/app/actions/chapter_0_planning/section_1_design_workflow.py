@@ -1,9 +1,9 @@
 from typing import Dict, Any, Optional
-from app.models.BaseAction import BaseAction, event, thinking
+from app.models.Behavior import Behavior, event, thinking
 from app.core.config import llm, PCSAgent
 
 
-class DesignWorkflow(BaseAction):
+class DesignWorkflow(Behavior):
     def __init__(self, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):
         super().__init__(step, state, stream,
             chapter_id="chapter_0_planning",

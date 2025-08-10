@@ -1,8 +1,8 @@
 from typing import Dict, Any, Optional
 from app.core.config import llm, PCSAgent
-from app.models.BaseAction import BaseAction, event, thinking, finnish
+from app.models.Behavior import Behavior, event, thinking, finnish
 
-class WorkflowInitialization(BaseAction):
+class WorkflowInitialization(Behavior):
     def __init__(self, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):
         super().__init__(
             step, 

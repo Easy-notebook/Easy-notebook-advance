@@ -13,8 +13,23 @@ class GeneralAgent(BaseAgentTemplate):
                 operation: Dict[str, Any] = None,
                 api_key: str = None, 
                 base_url: str = None, 
-                engine: str = "o4-mini", 
-                role: str = "You are AI Agent behind easyremote notebook.") -> None:
+                engine: str = "gpt-4o-mini", 
+                role: str = """You are a helpful AI assistant for Easy-Notebook.
+
+Your job is to assist users with their tasks using structured XML tags in your responses.
+
+Available XML tags:
+- <update-title>Set notebook title</update-title>  
+- <new-chapter>Chapter name</new-chapter>
+- <new-section>Section name</new-section>
+- <add-text>Text content for user</add-text>
+- <add-code language="python">Code content</add-code>
+- <thinking>Your reasoning process</thinking>
+- <call-execute event="name">Execute code immediately</call-execute>
+- <answer>Final response</answer>
+
+Please use these tags appropriately in your responses."""
+                ) -> None:
         """
         初始化通用代理
         """
@@ -32,9 +47,115 @@ class GeneralAgent(BaseAgentTemplate):
             })
             return
             
-        async for response in self.handle_user_questions():
+        # 优先使用新的流式解析方法
+        async for response in self.handle_user_questions_stream():
             yield response
     
+    async def handle_user_questions_stream(
+        self, 
+        content: str = None, 
+        q_id: str = None, 
+        related_qa_ids: List[str] = None,
+        related_cells = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        使用新的流式解析方法处理用户问题
+        """
+        # 使用传入参数或从operation中获取
+        content = content or self._get_payload_value("content", "")
+        q_id = q_id or self._get_payload_value("QId")
+        related_qa_ids = related_qa_ids or self._get_payload_value("relatedQAIds", [])
+        related_cells = related_cells or self._get_payload_value("related_cells", [])
+        
+        if not q_id:
+            yield self._create_response_json("error", {
+                "payload": {"QId": q_id},
+                "error": "Missing QId in payload"
+            })
+            return
+        
+        # 检查终止条件
+        should_terminate, terminate_reason = self._should_terminate()
+        if should_terminate:
+            yield self._create_response_json("initStreamingAnswer", {
+                "payload": {"QId": q_id},
+                "status": "processing"
+            })
+            yield self._create_response_json("addContentToAnswer", {
+                "payload": {
+                    "QId": q_id,
+                    "content": f"🛑 问答终止: {terminate_reason}\n\n建议总结当前进展，整理思路后再继续。"
+                },
+                "status": "completed"
+            })
+            yield self._create_response_json("finishStreamingAnswer", {
+                "payload": {"QId": q_id},
+                "status": "completed"
+            })
+            return
+
+        # 发送初始流式回答通知
+        yield self._create_response_json("initStreamingAnswer", {
+            "payload": {"QId": q_id},
+            "status": "processing"
+        })
+
+        # 构建完整的查询内容（包含上下文）
+        query_parts = [content]
+        
+        if related_qa_ids:
+            query_parts.append(f"相关QA历史: {str(related_qa_ids)}")
+            
+        if related_cells:
+            query_parts.append(f"相关notebook cells: {str(related_cells)}")
+
+        full_query = "\n".join(query_parts)
+        
+        try:
+            # 使用基类的stream_response方法进行流式解析
+            async for parsed_action in self.stream_response(full_query):
+                # 检查是否是纯文本内容，如果是则包装为QA格式
+                try:
+                    action_data = json.loads(parsed_action)
+                    if action_data.get("type") == "addNewContent2CurrentCell":
+                        # 将纯文本内容转换为QA答案格式
+                        content_text = action_data["data"]["payload"]["content"]
+                        yield self._create_response_json("addContentToAnswer", {
+                            "payload": {
+                                "QId": q_id,
+                                "content": content_text
+                            },
+                            "status": "processing"
+                        })
+                        # 确保流式输出
+                        await asyncio.sleep(0.01)
+                    else:
+                        # 直接输出其他类型的action
+                        yield parsed_action
+                except json.JSONDecodeError:
+                    # 如果解析失败，作为纯文本处理
+                    yield self._create_response_json("addContentToAnswer", {
+                        "payload": {
+                            "QId": q_id,
+                            "content": parsed_action.strip()
+                        },
+                        "status": "processing"
+                    })
+                    await asyncio.sleep(0.01)
+
+            # 完成流式回答
+            yield self._create_response_json("finishStreamingAnswer", {
+                "payload": {"QId": q_id},
+                "status": "completed"
+            })
+
+        except Exception as e:
+            error_msg = f"Error in handle_user_questions_stream: {str(e)}"
+            yield self._create_response_json("error", {
+                "payload": {"QId": q_id},
+                "error": error_msg
+            })
+
     async def handle_user_questions(
         self, 
         content: str = None, 

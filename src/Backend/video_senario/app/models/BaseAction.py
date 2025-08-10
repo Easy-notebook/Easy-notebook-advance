@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 from app.core.workflow_manager import WorkflowManager
 
 def event(event_name: str, require_variables: List[str] = None):
@@ -41,7 +41,7 @@ def finnish(event_name: str, require_variables: List[str] = None):
         return func
     return decorator
 
-class BaseAction(StepTemplate):
+class Behavior(Action):
     """
     基于StepTemplate的增强Action基类
     通过装饰器简化事件处理逻辑

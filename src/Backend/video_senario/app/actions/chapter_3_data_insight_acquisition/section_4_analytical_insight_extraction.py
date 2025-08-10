@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from app.core.config import llm, DataCleaningAndEDA_Agent
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 
 async def generate_exploratory_data_sequence_step3(
     step: Dict[str, Any], 
@@ -9,7 +9,7 @@ async def generate_exploratory_data_sequence_step3(
 ) -> Dict[str, Any]:
     state = state or {}
     
-    step_template = StepTemplate(step, state)
+    step_template = Action(step, state)
         
     if step_template.event("start"):
         step_template.new_section("EDA Questions Solving") \

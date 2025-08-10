@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional
-from app.models.BaseAction import BaseAction, event, after_exec, finnish
+from app.models.Behavior import Behavior, event, after_exec, finnish
 
-class DataStructureDiscovery(BaseAction):
+class DataStructureDiscovery(Behavior):
     def __init__(self, step: Dict[str, Any], state: Optional[Dict[str, Any]] = None, stream: bool = False):
         super().__init__(step, state, stream,
                          chapter_id="chapter_1_data_existence_establishment",

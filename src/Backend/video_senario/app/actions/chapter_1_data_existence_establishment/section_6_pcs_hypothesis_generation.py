@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from app.core.config import llm, PCSAgent
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 
 async def generate_data_loading_and_hypothesis_proposal_step_5(
     step: Dict[str, Any], 
@@ -10,7 +10,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_5(
     state = state or {}
     
     # 初始化场景内agent（如果需要）
-    step_template = StepTemplate(step, state)
+    step_template = Action(step, state)
     problem_description = step_template.get_variable("problem_description")
     context_description = step_template.get_variable("context_description")
     

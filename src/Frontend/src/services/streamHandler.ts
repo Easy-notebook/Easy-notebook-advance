@@ -721,6 +721,70 @@ export const handleStreamResponse = async (
             break;
         }
 
+        case 'update_notebook_title': {
+            const title = data.payload?.title;
+            if (title) {
+                // 更新notebook标题
+                console.log('更新notebook标题:', title);
+                useStore.getState().updateTitle(title);
+                await showToast({
+                    message: `标题已更新: ${title}`,
+                    type: "success"
+                });
+            }
+            break;
+        }
+
+        case 'get_variable': {
+            const variableName = data.payload?.variable_name;
+            const defaultValue = data.payload?.default_value;
+            console.log('获取变量:', variableName, '默认值:', defaultValue);
+            // 这里可以添加获取变量的逻辑
+            break;
+        }
+
+        case 'set_variable': {
+            const variableName = data.payload?.variable_name;
+            const variableValue = data.payload?.variable_value;
+            const variableType = data.payload?.variable_type;
+            console.log('设置变量:', variableName, '=', variableValue, '类型:', variableType);
+            // 这里可以添加设置变量的逻辑
+            break;
+        }
+
+        case 'remember_information': {
+            const rememberType = data.payload?.type;
+            const content = data.payload?.content;
+            console.log('记忆信息:', rememberType, content);
+            // 这里可以添加记忆信息的逻辑
+            break;
+        }
+
+        case 'update_todo': {
+            const action = data.payload?.action;
+            const event = data.payload?.event;
+            const content = data.payload?.content;
+            console.log('更新TODO:', action, event, content);
+            // 这里可以添加TODO管理的逻辑
+            break;
+        }
+
+        case 'communicate_with_agent': {
+            const targetAgent = data.payload?.target_agent;
+            const message = data.payload?.message;
+            console.log('与Agent通信:', targetAgent, message);
+            // 这里可以添加Agent间通信的逻辑
+            break;
+        }
+
+        case 'ask_agent_for_help': {
+            const targetAgent = data.payload?.target_agent;
+            const helpRequest = data.payload?.help_request;
+            console.log('请求Agent帮助:', targetAgent, helpRequest);
+            // 这里可以添加Agent帮助请求的逻辑
+            break;
+        }
+
         default: {
             console.log(data);
             console.warn('未处理的流式响应类型:', data.type);

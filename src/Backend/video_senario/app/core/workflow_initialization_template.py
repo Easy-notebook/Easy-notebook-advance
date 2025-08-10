@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 from app.core.config import llm, PCSAgent
 from app.core.workflow_manager import WorkflowManager
 
@@ -15,7 +15,7 @@ async def create_workflow_initialization(
     """
     state = state or {}
         
-    step_template = StepTemplate(step, state)
+    step_template = Action(step, state)
     
     if step_template.event("start"):     
         # Get workflow analysis and user goal

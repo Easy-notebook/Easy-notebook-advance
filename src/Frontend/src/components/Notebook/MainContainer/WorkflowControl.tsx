@@ -114,6 +114,8 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   const { addThinkingLog } = useAIPlanningContextStore();
   const { currentState, context: fsmContext, transition, startWorkflow, reset, cancel } = useWorkflowStateMachine();
 
+  // 移除自动初始化，保持原有的用户驱动流程
+
   // 检查工作流执行的前提条件是否满足
   const prerequisitesMet = useMemo(() => {
     const { problem_description, currentFile } = usePreStageStore.getState();
@@ -132,10 +134,22 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
       };
     }
 
-    const stage = workflowTemplate?.stages.find(s => s.id === fsmContext.currentStageId);
-    const step = stage?.steps.find(st => st.id === fsmContext.currentStepId);
-    const completedStepsCount = stage?.steps.findIndex(st => st.id === fsmContext.currentStepId) ?? 0;
-    const totalSteps = stage?.steps.length ?? 0;
+    // 如果workflowTemplate不存在，返回默认状态（不显示控制组件）
+    if (!workflowTemplate?.stages || !Array.isArray(workflowTemplate.stages)) {
+      return {
+        isExecuting: false,
+        isPaused: false,
+        isTerminal: false,
+        canRetry: false,
+        currentStepInfo: null,
+        shouldRender: false, // 添加标志表示不应该渲染
+      };
+    }
+
+    const stage = workflowTemplate.stages.find(s => s.id === fsmContext.currentStageId);
+    const step = stage?.steps?.find(st => st.id === fsmContext.currentStepId);
+    const completedStepsCount = stage?.steps?.findIndex(st => st.id === fsmContext.currentStepId) ?? 0;
+    const totalSteps = stage?.steps?.length ?? 0;
 
     return {
       isExecuting: RUNNING_STATES.includes(currentState),
@@ -235,6 +249,11 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
             <span className="text-sm text-gray-600">Waiting for workflow configuration...</span>
         </div>
     );
+  }
+
+  // 如果workflow模板不存在，不渲染控制组件
+  if (derivedState.shouldRender === false) {
+    return null;
   }
 
   return (

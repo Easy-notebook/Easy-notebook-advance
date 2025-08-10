@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from app.core.config import llm, ProblemDefinitionAndDataCollectionAgent
 
 # 假设StepTemplate在对应的模块中已定义并导入
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 
 async def generate_data_loading_and_hypothesis_proposal_step_2(
     step: Dict[str, Any], 
@@ -11,7 +11,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_2(
 ) -> Dict[str, Any]:
     state = state or {}
     
-    step_template = StepTemplate(step, state)
+    step_template = Action(step, state)
     # 初始化场景内agent（如果需要）
     problem_definition_agent = ProblemDefinitionAndDataCollectionAgent(llm=llm)    
     

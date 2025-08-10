@@ -1,5 +1,4 @@
 from fastapi import HTTPException
-import logging
 import asyncio
 import json
 import os
@@ -31,19 +30,51 @@ def validate_section_id(chapter: dict, section_id: str) -> str:
     return section_id
 
 async def generate_streaming_response(sequence: dict):
-    """生成流式响应"""    
+    """生成流式响应"""
     header = {"header": {
-        "stage_id": sequence.get("stage_id"), 
+        "stage_id": sequence.get("stage_id"),
         "step": sequence.get("step"),
         "next_step": sequence.get("next_step")
     }}
-    
+
     header_json = json.dumps(header)
     yield header_json + "\n"
-    
+
     # 处理步骤列表或异步迭代器
     steps = sequence.get("steps", [])
-    if isinstance(steps, AsyncIterable):
+
+    # 检查是否是Action对象（有run方法的对象）
+    if hasattr(steps, 'run') and callable(getattr(steps, 'run')):
+        # 如果是Action对象，执行它并获取异步迭代器
+        try:
+            action_iterator = steps.run()
+            if hasattr(action_iterator, '__aiter__'):  # 检查是否是异步迭代器
+                count = 0
+                async for action in action_iterator:
+                    count += 1
+                    # 确保action是可序列化的
+                    if hasattr(action, 'to_dict'):
+                        action_data = action.to_dict()
+                    elif isinstance(action, dict):
+                        action_data = action
+                    else:
+                        action_data = {"content": str(action), "action": "text"}
+
+                    action_json = json.dumps({"action": action_data})
+                    yield action_json + "\n"
+                    # 确保每个操作都被立即刷新到客户端
+                    await asyncio.sleep(0.01)  # 微小延迟确保数据被发送
+            else:
+                # 如果不是异步迭代器，包装成单个action
+                action_data = {"content": "Action completed", "action": "text"}
+                action_json = json.dumps({"action": action_data})
+                yield action_json + "\n"
+        except Exception as e:
+            # 如果执行失败，返回错误信息
+            error_action = {"content": f"Error executing action: {str(e)}", "action": "error"}
+            action_json = json.dumps({"action": error_action})
+            yield action_json + "\n"
+    elif hasattr(steps, '__aiter__'):  # 检查是否是异步迭代器
         # 如果是异步迭代器，直接迭代
         count = 0
         async for action in steps:

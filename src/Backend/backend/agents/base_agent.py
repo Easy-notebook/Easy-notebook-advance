@@ -1,39 +1,46 @@
 import os
 import json
+import asyncio
 from typing import AsyncGenerator, List, Dict, Any, Tuple
 from abc import ABC, abstractmethod
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from utils.oracle import Oracle
+from utils.parser import StreamingTemplateParser
 
 load_dotenv()
 
-class BaseAgentTemplate(ABC):
+class BaseAgentTemplate(ABC,Oracle,StreamingTemplateParser):
     """
     基础Agent模板类，定义Agent的通用结构和接口，支持记忆功能
     """
     
-    def __init__(self, 
+    def __init__(self,
                  operation: Dict[str, Any] = None,
                  api_key: str = None,
                  base_url: str = None,
-                 engine: str = "gpt-4o",
+                 engine: str = "gpt-4o-mini",
                  role: str = "You are AI Agent behind easyremote notebook.") -> None:
         """
         初始化Agent模板
         """
+        Oracle.__init__(self, model=engine, apikey=api_key, base_url=base_url)
+        StreamingTemplateParser.__init__(self)
         self.operation = operation or {}
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
         self.base_url = base_url or os.getenv('BASE_URL')
-        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
         self.engine = engine
         self.role = role
         self.messages: List[Dict[str, str]] = []
         self.payload = self.operation.get("payload", {})
         self.status = "pending"
-        
+
         # 解析记忆和上下文
         self.agent_memory = self._parse_agent_memory()
         self.current_context = self._parse_current_context()
+
+        # 流式输出相关
+        self._accumulated_content = ""
+        self._current_qid = None
         
     def _get_payload_value(self, key: str, default=None):
         """获取payload中的值"""
@@ -201,6 +208,59 @@ class BaseAgentTemplate(ABC):
             "type": response_type,
             "data": data
         }) + "\n"
+    
+    async def stream_response(self, query: str) -> AsyncGenerator[str, None]:
+        """
+        流式响应方法 - 将LLM的XML输出解析为前端JSON格式
+        Args:
+            query (str): 用户查询内容
+        Yields:
+            str: 前端可识别的JSON格式数据
+        """
+        try:
+            # 构建系统消息
+            messages = self._build_system_messages()
+            
+            print(f"[DEBUG] Starting stream response for query: {query[:50]}...")
+            
+            # 使用Oracle的异步流式方法获取LLM输出
+            chunk_count = 0
+            async for chunk in self.query_stream_async(
+                prompt_sys=messages[0]["content"], 
+                prompt_user=query
+            ):
+                chunk_count += 1
+                print(f"[DEBUG] Received chunk {chunk_count}: '{chunk[:30]}...'")
+                
+                # 检查错误
+                if chunk.startswith("ASYNC_STREAM_ERROR:"):
+                    yield json.dumps({
+                        "type": "error",
+                        "payload": {"error": chunk}
+                    }) + "\n"
+                    continue
+                
+                # 使用StreamingTemplateParser解析XML标签
+                actions = self.parse_chunk(chunk)
+                
+                # 输出解析后的actions
+                for action in actions:
+                    print(f"[DEBUG] Parser output: {action}")
+                    yield json.dumps(action) + "\n"
+            
+            print(f"[DEBUG] Stream completed, processed {chunk_count} chunks")
+            
+            # 处理剩余的缓存内容
+            final_actions = self.finalize()
+            for action in final_actions:
+                yield json.dumps(action) + "\n"
+                
+        except Exception as e:
+            print(f"[DEBUG] Stream error: {str(e)}")
+            yield json.dumps({
+                "type": "error", 
+                "payload": {"error": f"Stream response error: {str(e)}"}
+            }) + "\n"
         
     @abstractmethod
     async def process(self) -> AsyncGenerator[str, None]:

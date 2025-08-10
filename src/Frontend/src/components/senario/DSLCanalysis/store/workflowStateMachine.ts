@@ -665,9 +665,22 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
             case WORKFLOW_STATES.STEP_COMPLETED: {
                 // Check if this is the last step in the current stage
                 const pipeline = usePipelineStore.getState();
-                const currentStage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
-                const currentStepIndex = currentStage?.steps.findIndex(step => step.id === context.currentStepId) ?? -1;
-                const isLastStep = currentStepIndex === (currentStage?.steps.length ?? 0) - 1;
+                const stages = pipeline.workflowTemplate?.stages;
+
+                // 添加防护检查
+                if (!stages || !Array.isArray(stages) || !context.currentStageId) {
+                    console.error('[FSM Effect] Invalid stages or currentStageId in STEP_COMPLETED state');
+                    break;
+                }
+
+                const currentStage = stages.find(s => s.id === context.currentStageId);
+                if (!currentStage?.steps || !Array.isArray(currentStage.steps)) {
+                    console.error('[FSM Effect] Invalid currentStage or steps in STEP_COMPLETED state');
+                    break;
+                }
+
+                const currentStepIndex = currentStage.steps.findIndex(step => step.id === context.currentStepId) ?? -1;
+                const isLastStep = currentStepIndex === (currentStage.steps.length - 1);
 
                 if (isLastStep) {
                     transition(EVENTS.COMPLETE_STAGE);

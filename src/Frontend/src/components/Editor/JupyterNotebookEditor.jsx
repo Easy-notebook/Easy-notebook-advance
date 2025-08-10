@@ -451,11 +451,9 @@ $$`;
         <div className="h-10 w-full"></div>
 
         {/* 拖拽提示和快捷键帮助 */}
-
-
         <div className="relative">
-          <div className="h-4 w-full"></div>
-          <CellDivider index={0} onAddCell={handleAddCell} viewMode="complete" />
+          <div className="h-4 w-full "></div>
+          {/* <CellDivider index={0} onAddCell={handleAddCell} viewMode="complete" /> */}
 
           {/* 使用拖拽组件渲染cells */}
           <DraggableCellList
