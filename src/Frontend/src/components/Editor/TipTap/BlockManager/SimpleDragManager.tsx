@@ -1,23 +1,21 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { GripVertical, ArrowUp, ArrowDown, Copy, Trash2, Plus } from 'lucide-react';
+import { Editor } from '@tiptap/react';
+import { Node as ProseMirrorNode } from 'prosemirror-model';
 import useStore from '../../../../store/notebookStore';
 
 interface SimpleDragManagerProps {
-  editor: any;
+  editor: Editor | null;
   children: React.ReactNode;
 }
 
 const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children }) => {
   const [currentCellId, setCurrentCellId] = useState<string | null>(null);
-  const [showToolbar, setShowToolbar] = useState(false);
-  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDragging] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const toolbarRef = useRef<HTMLDivElement>(null);
 
-  const { cells, setCells, moveCellToIndex } = useStore();
+  const { cells } = useStore();
 
   // 清除隐藏定时器
   const clearHideTimeout = useCallback(() => {
@@ -32,7 +30,6 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
     clearHideTimeout();
     hideTimeoutRef.current = setTimeout(() => {
       if (!isDragging) {
-        setShowToolbar(false);
         setCurrentCellId(null);
       }
     }, 300);
@@ -62,7 +59,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
             let blockIndex = 0;
             let found = false;
             
-            editor.state.doc.descendants((node, pos) => {
+            editor.state.doc.descendants((node: ProseMirrorNode, pos: number) => {
               if (found) return false;
               
               if (node.isBlock) {
@@ -103,101 +100,8 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
     
     if (cellId !== currentCellId) {
       setCurrentCellId(cellId);
-      
-      const rect = element.getBoundingClientRect();
-      setToolbarPosition({
-        x: rect.left - 60,
-        y: rect.top + window.scrollY
-      });
     }
-    
-    setShowToolbar(true);
   }, [currentCellId, findCellByElement, clearHideTimeout]);
-
-  // 获取cell在数组中的索引
-  const getCellIndex = useCallback((cellId: string): number => {
-    return cells.findIndex(cell => cell.id === cellId);
-  }, [cells]);
-
-  // 移动cell到指定位置
-  const moveCellToPosition = useCallback((fromIndex: number, toIndex: number) => {
-    console.log('🎯 SimpleDrag: 请求移动cell', { from: fromIndex, to: toIndex });
-    moveCellToIndex(fromIndex, toIndex);
-  }, [moveCellToIndex]);
-
-  // 向上移动
-  const moveBlockUp = useCallback(() => {
-    if (!currentCellId) return;
-    
-    const currentIndex = getCellIndex(currentCellId);
-    if (currentIndex > 0) {
-      moveCellToPosition(currentIndex, currentIndex - 1);
-    }
-    
-    setShowToolbar(false);
-  }, [currentCellId, getCellIndex, moveCellToPosition]);
-
-  // 向下移动
-  const moveBlockDown = useCallback(() => {
-    if (!currentCellId) return;
-    
-    const currentIndex = getCellIndex(currentCellId);
-    if (currentIndex < cells.length - 1 && currentIndex !== -1) {
-      moveCellToPosition(currentIndex, currentIndex + 1);
-    }
-    
-    setShowToolbar(false);
-  }, [currentCellId, getCellIndex, moveCellToPosition, cells.length]);
-
-  // 删除cell
-  const deleteBlock = useCallback(() => {
-    if (!currentCellId) return;
-    
-    const newCells = cells.filter(cell => cell.id !== currentCellId);
-    setCells(newCells);
-    setShowToolbar(false);
-  }, [currentCellId, cells, setCells]);
-
-  // 复制cell
-  const duplicateBlock = useCallback(() => {
-    if (!currentCellId) return;
-    
-    const currentIndex = getCellIndex(currentCellId);
-    if (currentIndex === -1) return;
-    
-    const cellToDuplicate = cells[currentIndex];
-    const newCell = {
-      ...cellToDuplicate,
-      id: `cell-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-      outputs: []
-    };
-    
-    const newCells = [...cells];
-    newCells.splice(currentIndex + 1, 0, newCell);
-    setCells(newCells);
-    setShowToolbar(false);
-  }, [currentCellId, getCellIndex, cells, setCells]);
-
-  // 插入新cell
-  const insertNewCell = useCallback(() => {
-    if (!currentCellId) return;
-    
-    const currentIndex = getCellIndex(currentCellId);
-    if (currentIndex === -1) return;
-    
-    const newCell = {
-      id: `cell-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-      type: 'markdown' as const,
-      content: '',
-      outputs: [],
-      enableEdit: true,
-    };
-    
-    const newCells = [...cells];
-    newCells.splice(currentIndex + 1, 0, newCell);
-    setCells(newCells);
-    setShowToolbar(false);
-  }, [currentCellId, getCellIndex, cells, setCells]);
 
   // 鼠标移动处理
   useEffect(() => {
@@ -209,12 +113,6 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
       if (isDragging) return;
       
       const target = event.target as HTMLElement;
-      
-      // 检查是否在工具栏上
-      if (toolbarRef.current && toolbarRef.current.contains(target)) {
-        clearHideTimeout();
-        return;
-      }
       
       // 查找块级元素
       const blockElement = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre, [data-cell-id], [data-type="executable-code-block"], [data-type="thinking-cell"], [data-type="markdown-image"]');
@@ -246,8 +144,8 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
     <div ref={containerRef} className="relative">
       {children}
 
-      {/* 简化的工具栏 */}
-      {showToolbar && currentCellId && (
+      {/* 简化的工具栏 - 已注释 */}
+      {/* {showToolbar && currentCellId && (
         <div
           ref={toolbarRef}
           className="fixed z-50 flex flex-col gap-1 bg-white rounded-lg shadow-lg border border-gray-200 p-1"
@@ -302,7 +200,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
             <Trash2 size={16} />
           </button>
         </div>
-      )}
+      )} */}
 
       {/* CSS样式 */}
       <style>{`

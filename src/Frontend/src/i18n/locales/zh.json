@@ -174,9 +174,10 @@
     "youSelectedDefault": "您选择了您的分析"
   },
   "rightSideBar": {
+    "thinking": "正在思考...",
     "noWorkflowPlan": "暂无工作流计划",
     "history": "历史记录",
-    "chat": "聊天",
+    "chat": "需求",
     "workflow": "任务",
     "noContent": "暂无内容",
     "collapseDetails": "收起详情",

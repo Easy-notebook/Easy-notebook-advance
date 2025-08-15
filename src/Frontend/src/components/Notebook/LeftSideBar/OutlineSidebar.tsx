@@ -13,48 +13,34 @@ import useSettingsStore from '../../../store/settingsStore';
 import FileTree from './FileExplorer';
 import AgentList from '../../Agents/AgentList';
 import { AgentType } from '../../../services/agentMemoryService';
+import { SHARED_STYLES, LAYOUT_CONSTANTS } from './shared/constants';
 
-const StatusStyles = {
-  colors: {
-    completed: 'text-theme-600 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
-    'in-progress': 'text-theme-800 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
-    pending: 'text-black bg-white/10 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)]'
-  },
-  steps: {
-    completed: 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
-    'in-progress': 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
-    pending: 'bg-gray-300/50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]'
-  }
-};
+// 导入共享组件
+import {
+  StatusIcon,
+  StatusDot,
+  SidebarButton,
+  TabSwitcher,
+  SidebarContainer,
+  SidebarHeader,
+  SidebarContent
+} from './shared/components';
 
-const StatusIcon = memo(({ status }) => {
-  if (status === 'completed') {
-    return <CheckCircle2 size={16} className="text-theme-500" />;
-  }
-  return null;
-});
+// 使用共享的样式常量
+const StatusStyles = SHARED_STYLES.status;
 
 const StepButton = memo(({ step, isActive, onClick }) => (
-  <button
+  <SidebarButton
+    isActive={isActive}
     onClick={onClick}
-    className={`
-      w-full flex items-center gap-2.5 px-3 py-2 rounded-lg
-      transition-all duration-300 text-base tracking-wide relative
-      backdrop-blur-sm
-      ${isActive
-        ? 'bg-white/10 text-theme-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
-        : 'hover:bg-white/5 text-gray-700'}
-    `}
+    className="text-base tracking-wide"
   >
-    <div className={`
-      w-4 h-4 rounded-full flex-shrink-0
-      ${isActive ? StatusStyles.steps['in-progress'] : StatusStyles.steps['pending']}
-    `} />
+    <StatusDot
+      status={isActive ? 'in-progress' : 'pending'}
+      size="sm"
+    />
     <span className="font-normal">{step.title}</span>
-    {isActive && (
-      <ArrowRight size={16} className="ml-auto text-theme-600" />
-    )}
-  </button>
+  </SidebarButton>
 ));
 
 const PhaseSection = memo(({
@@ -74,41 +60,39 @@ const PhaseSection = memo(({
   const introStep = phase.steps[0];
   const regularSteps = phase.steps.slice(1);
 
+  const scrollToElement = useCallback((elementId: string) => {
+    const targetElement = document.getElementById(elementId);
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return true;
+    }
+
+    // 如果直接查找失败，尝试在 TiptapNotebookEditor 容器内查找
+    const tiptapContainer = document.querySelector('.tiptap-notebook-editor');
+    if (tiptapContainer) {
+      const headings = tiptapContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      for (const heading of headings) {
+        if (heading.id === elementId) {
+          heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return true;
+        }
+      }
+    }
+    return false;
+  }, []);
+
   const handleTitleClick = useCallback(() => {
-    console.log('=== 大纲跳转调试 ===');
-    console.log('点击的Phase ID:', phase.id);
-    console.log('查找元素ID:', phase.id);
-    
     onStepSelect(phase.id, introStep.id);
     if (regularSteps.length > 0) {
       onToggle();
     }
-    
-    // 检查TiptapNotebookEditor中是否有对应的标题元素
-    const targetElement = document.getElementById(phase.id);
-    console.log('找到的目标元素:', targetElement);
-    
-    if (targetElement) {
-      console.log('元素标签名:', targetElement.tagName);
-      console.log('元素文本内容:', targetElement.textContent);
-      console.log('元素所在容器:', targetElement.closest('.tiptap-notebook-editor'));
-      targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      console.log('已执行滚动');
-    } else {
-      console.log('未找到目标元素，检查所有标题:');
-      // 特别检查TiptapNotebookEditor容器内的标题
-      const tiptapContainer = document.querySelector('.tiptap-notebook-editor');
-      if (tiptapContainer) {
-        const headings = tiptapContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
-        console.log('TiptapEditor中的标题元素:');
-        headings.forEach(h => {
-          console.log(`- ${h.tagName}: id="${h.id}", text="${h.textContent?.substring(0, 50)}"`);
-        });
-      } else {
-        console.log('未找到TiptapNotebookEditor容器');
-      }
-    }
-  }, [phase.id, introStep.id, onStepSelect, onToggle, regularSteps.length]);
+
+    // 尝试滚动到对应元素
+    scrollToElement(phase.id);
+  }, [phase.id, introStep.id, onStepSelect, onToggle, regularSteps.length, scrollToElement]);
+
+  const isCurrentStep = currentStepId === introStep.id;
+  const hasSubSteps = regularSteps.length > 0;
 
   return (
     <div className="px-2.5">
@@ -116,24 +100,31 @@ const PhaseSection = memo(({
         <button
           onClick={handleTitleClick}
           className={`
-            w-full flex items-center p-2.5 hover:bg-white/10 rounded-lg 
-            transition-all duration-300 relative group backdrop-blur-sm
-            ${isActive ? 'bg-white/10' : ''}
-            ${currentStepId === introStep.id ? 'border-2 border-theme-500 shadow-[0_2px_8px_rgba(0,0,0,0.1)]' : ''}
+            w-full flex items-center p-2.5 rounded-lg
+            ${SHARED_STYLES.button.base} ${SHARED_STYLES.button.hover}
+            ${isActive ? SHARED_STYLES.button.active : ''}
+            ${isCurrentStep ? 'border-2 border-theme-500 shadow-[0_2px_8px_rgba(0,0,0,0.1)]' : ''}
           `}
         >
-          {!isTitle && (<>
-            <div className={`
-            w-10 rounded-xl flex items-center justify-center
-            ${StatusStyles.colors[isActive ? 'in-progress' : 'pending']}
-            transition-all duration-300
-            before:absolute before:inset-0 before:rounded-xl before:bg-gradient-to-b before:from-white/5 before:to-transparent
-          `}>
-              <IconComponent size={16} />
-            </div>
-            <div className="flex-1 min-w-0 flex items-center ml-2">
-              <h3 className="font-bold tracking-wide text-base text-black">{phase.title}</h3>
-            </div></>)}
+          {!isTitle && (
+            <>
+              <div className={`
+                w-10 rounded-xl flex items-center justify-center
+                ${StatusStyles.colors[isActive ? 'in-progress' : 'pending']}
+                transition-all duration-300
+                relative
+                before:absolute before:inset-0 before:rounded-xl
+                before:bg-gradient-to-b before:from-white/5 before:to-transparent
+              `}>
+                <IconComponent size={16} />
+              </div>
+              <div className="flex-1 min-w-0 flex items-center ml-2">
+                <h3 className="font-bold tracking-wide text-base text-black">
+                  {phase.title}
+                </h3>
+              </div>
+            </>
+          )}
 
           {isTitle && (
             <h2 className="pl-2 text-lg font-semibold text-theme-800">
@@ -141,7 +132,7 @@ const PhaseSection = memo(({
             </h2>
           )}
 
-          {regularSteps.length > 0 && (
+          {hasSubSteps && (
             <div className="relative px-1.5">
               {isExpanded ? (
                 <ChevronDown size={16} className="text-gray-600" />
@@ -150,12 +141,13 @@ const PhaseSection = memo(({
               )}
             </div>
           )}
+
           {isActive && <StatusIcon status="in-progress" />}
         </button>
 
-        {regularSteps.length > 0 && (
+        {hasSubSteps && (
           <div className={`
-            pl-8 mt-1.5 overflow-hidden transition-all duration-300
+            pl-8 mt-1.5 overflow-hidden transition-all duration-${LAYOUT_CONSTANTS.animation.normal}
             ${isExpanded ? 'max-h-screen' : 'max-h-0'}
           `}>
             {regularSteps.map((step) => (
@@ -288,6 +280,33 @@ const OutlineSidebar = ({
 
   const allPhases = useMemo(() => tasks.flatMap(task => task.phases), [tasks]);
 
+  const renderBottomSection = useCallback(() => {
+    if (viewMode === 'step' && currentPhaseId) {
+      const currentPhase = allPhases.find(p => p.id === currentPhaseId);
+      return (
+        <div className="w-full h-20 pl-7 flex items-center border-t border-gray-200 relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
+          <StatusDot status="in-progress" />
+          <span className="font-medium tracking-wide text-theme-800 relative text-base ml-4">
+            {currentPhase?.title || ''}
+          </span>
+        </div>
+      );
+    }
+
+    if (activeTab === 'file' && isHovered) {
+      return (
+        <div className="w-full h-10 pl-7 flex items-center justify-start border-t border-gray-200 relative">
+          <span className="font-medium tracking-wide text-theme-800 relative text-base truncate overflow-hidden whitespace-nowrap">
+            Drop files to upload
+          </span>
+        </div>
+      );
+    }
+
+    return <div className="w-full h-10" />;
+  }, [viewMode, currentPhaseId, allPhases, activeTab, isHovered]);
+
   useEffect(() => {
     if (currentStepId) {
       const allPhasesFlat = tasks.flatMap(task => task.phases);
@@ -314,93 +333,48 @@ const OutlineSidebar = ({
   }
 
   return (
-    <div
-      className="relative h-full flex flex-col isolate overflow-hidden bg-gray-50"
+    <SidebarContainer
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 顶部区域：左侧折叠按钮 + 文件/大纲 Tab + 设置按钮 */}
-      <div className="h-16 flex items-center justify-between px-5 border-b border-white/10 bg-white/5 backdrop-blur-sm relative">
+      {/* 顶部区域：左侧折叠按钮 + Tab 切换 + 设置按钮 */}
+      <SidebarHeader>
         <div className="flex items-center">
           <button
             onClick={toggleCollapse}
-            className="p-2 hover:bg-white/10 rounded-lg transition-transform duration-300 relative"
+            className={`p-2 rounded-lg ${SHARED_STYLES.button.base} ${SHARED_STYLES.button.hover}`}
             aria-label="Collapse sidebar"
           >
             <MenuIcon size={16} className="text-gray-700" />
           </button>
 
-          {/* 大纲/文件/Agent Tab 切换 */}
-          <div className="ml-4 flex space-x-1">
-            <button
-              onClick={() => setActiveTab('outline')}
-              className={`
-                px-2 py-1 rounded text-xs
-                ${activeTab === 'outline' ? 'bg-white text-theme-800 font-semibold'
-                  : 'text-gray-600 hover:bg-white/10'}
-              `}
-            >
-              Outline
-            </button>
-            <button
-              onClick={() => setActiveTab('file')}
-              className={`
-                px-2 py-1 rounded text-xs
-                ${activeTab === 'file' ? 'bg-white text-theme-800 font-semibold'
-                  : 'text-gray-600 hover:bg-white/10'}
-              `}
-            >
-              Files
-            </button>
-            <button
-              onClick={() => setActiveTab('agents')}
-              className={`
-                px-2 py-1 rounded text-xs
-                ${activeTab === 'agents' ? 'bg-white text-theme-800 font-semibold'
-                  : 'text-gray-600 hover:bg-white/10'}
-              `}
-            >
-              Agents
-            </button>
-          </div>
+          {/* Tab 切换器 */}
+          <TabSwitcher
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            className="ml-4"
+          />
         </div>
 
-        <button className="p-2 hover:bg-white/10 rounded-lg">
-          <Settings2 size={16} className="text-gray-700" onClick={settingstore.openSettings} />
+        <button
+          className={`p-2 rounded-lg ${SHARED_STYLES.button.base} ${SHARED_STYLES.button.hover}`}
+          onClick={settingstore.openSettings}
+        >
+          <Settings2 size={16} className="text-gray-700" />
         </button>
-      </div>
+      </SidebarHeader>
 
       {/* 中间内容：根据 activeTab 切换显示 */}
-      <div className="flex-1 h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50">
-        <style>{`
-          .scrollbar-thin::-webkit-scrollbar {
-            width: 4px;
-          }
-          .scrollbar-thin::-webkit-scrollbar-track {
-            background: transparent;
-          }
-          .scrollbar-thin::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 4px;
-          }
-          .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
-          }
-          .scrollbar-thin {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-          }
-        `}</style>
-
+      <SidebarContent>
         {activeTab === 'file' ? (
-          // 文件视图：使用新的 FileTree 组件
+          // 文件视图：使用 FileTree 组件
           <div className="flex-1 h-full w-full relative">
             <FileTree notebookId={notebookId} projectName={projectName} />
           </div>
         ) : activeTab === 'agents' ? (
           // Agent视图：显示AI代理列表
           <div className="flex-1 h-full w-full relative">
-            <AgentList 
+            <AgentList
               isCollapsed={false}
               onAgentSelect={handleAgentSelect}
               selectedAgentType={selectedAgentType}
@@ -427,31 +401,11 @@ const OutlineSidebar = ({
             ))}
           </div>
         )}
-      </div>
+      </SidebarContent>
 
-      {/* 底部区域：
-           - 若 viewMode === 'step' 且存在 currentPhaseId，则显示大底部栏；
-           - 否则仅当 activeTab === 'file' 且鼠标悬停时显示窄底部栏，
-             否则不显示底部区域。 */}
-      {viewMode === 'step' && currentPhaseId ? (
-        <div className="w-full h-20 pl-7 flex items-center border-t border-gray-200 relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
-          <div className="w-4 h-4 rounded-full bg-theme-800 mr-4 animate-pulse shadow-lg" />
-          <span className="font-medium tracking-wide text-theme-800 relative text-base">
-            {tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.title || ''}
-          </span>
-        </div>
-      ) : (
-        activeTab === 'file' && isHovered ? (
-          <div className="w-full h-10 pl-7 flex items-center justify-start border-t border-gray-200 relative">
-            <span className="font-medium tracking-wide text-theme-800 relative text-base truncate overflow-hidden whitespace-nowrap">
-              {'drop files to upload'}
-            </span>
-          </div>
-        ) :
-          <div className="w-full h-10"></div>
-      )}
-    </div>
+      {/* 底部区域 */}
+      {renderBottomSection()}
+    </SidebarContainer>
   );
 };
 

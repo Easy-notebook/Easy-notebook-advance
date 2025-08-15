@@ -3,14 +3,14 @@ from pydantic import BaseModel, Field
 
 class SequenceRequest(BaseModel):
     stage_id: str
-    step_index: Union[int, str]  # 支持数字索引和字符串section_id
+    step_index: Union[int, str]
     state: Dict[str, Any] = Field(default_factory=dict, description="全局上下文，可包含checklist、plan、thinking等信息")
     stream: bool = Field(default=True, description="是否启用流式输出")
     notebook_id: Optional[str] = None
 
 class FeedbackRequest(BaseModel):
     stage_id: str
-    step_index: Union[int, str]  # 支持数字索引和字符串section_id
+    step_index: Union[int, str]
     state: Dict[str, Any] = Field(default_factory=dict, description="全局上下文，包含checklist、plan、thinking等信息")
     notebook_id: Optional[str] = None
 

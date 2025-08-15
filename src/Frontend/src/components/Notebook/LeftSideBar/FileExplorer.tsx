@@ -22,13 +22,15 @@ import {
 } from '../../../utils/fileUtils';
 import usePreviewStore from '../../../store/previewStore';
 import useStore from '../../../store/notebookStore';
+import { SHARED_STYLES, LAYOUT_CONSTANTS, FILE_PREVIEW_CONFIG } from './shared/constants';
+import { LoadingIndicator } from './shared/components';
 
 // Initialize file type icons
 initializeFileTypeIcons();
 
-// Constants for preview
-const PREVIEWABLE_IMAGE_TYPES = ['.png', '.jpg', '.jpeg', '.gif', '.svg'];
-const PREVIEWABLE_TEXT_TYPES = ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.csv'];
+// 使用共享的文件预览配置
+const PREVIEWABLE_IMAGE_TYPES = FILE_PREVIEW_CONFIG.image;
+const PREVIEWABLE_TEXT_TYPES = FILE_PREVIEW_CONFIG.text;
 
 /** Get file icon based on extension */
 const getFileIcon = (filename) => {
@@ -164,17 +166,18 @@ const FileTreeItem = memo(({
         }
     }, [item, onDrop]);
 
-    // Adjust indentation to match image
-    const indent = 16;
-    const paddingLeft = `${(level * indent) + 8}px`;
+    // 使用共享的布局常量
+    const indent = LAYOUT_CONSTANTS.fileTree.indent;
+    const paddingLeft = `${(level * indent) + LAYOUT_CONSTANTS.fileTree.padding}px`;
 
     return (
         <>
             <div
-                className="
-                flex items-center py-1 cursor-pointer
-                text-gray-700 hover:bg-theme-50 transition-colors duration-200
-                "
+                className={`
+                    flex items-center py-1 cursor-pointer
+                    text-gray-700 transition-colors duration-${LAYOUT_CONSTANTS.animation.fast}
+                    ${SHARED_STYLES.button.hover}
+                `}
                 style={{ paddingLeft }}
                 onClick={handleClick}
                 onContextMenu={handleContextMenu}
@@ -189,7 +192,7 @@ const FileTreeItem = memo(({
             >
                 {/* Directory expand/collapse arrow */}
                 {item.type === 'directory' && (
-                    <div className="mr-1 transition-transform duration-200">
+                    <div className={`mr-1 transition-transform duration-${LAYOUT_CONSTANTS.animation.fast}`}>
                         {isExpanded
                             ? <ChevronDown size={16} className="text-theme-600" />
                             : <ChevronRight size={16} className="text-theme-600" />
@@ -197,12 +200,17 @@ const FileTreeItem = memo(({
                     </div>
                 )}
 
-                {/* File icon alignment */}
-                <div className={`mr-2 ${item.type !== 'directory' ? 'ml-4' : ''} transition-colors duration-200`}>
+                {/* File icon with consistent alignment */}
+                <div className={`
+                    mr-2 transition-colors duration-${LAYOUT_CONSTANTS.animation.fast}
+                    ${item.type !== 'directory' ? 'ml-4' : ''}
+                    flex items-center justify-center
+                    w-${LAYOUT_CONSTANTS.fileTree.iconSize} h-${LAYOUT_CONSTANTS.fileTree.iconSize}
+                `}>
                     {item.type === 'directory'
                         ? (isExpanded
-                            ? <FolderOpen size={18} className="text-theme-700" />
-                            : <Folder size={18} className="text-theme-700" />
+                            ? <FolderOpen size={LAYOUT_CONSTANTS.fileTree.iconSize} className="text-theme-700" />
+                            : <Folder size={LAYOUT_CONSTANTS.fileTree.iconSize} className="text-theme-700" />
                         )
                         : getFileIcon(item.name)
                     }
@@ -210,11 +218,14 @@ const FileTreeItem = memo(({
 
                 {/* File or folder name */}
                 <span
-                    className={`truncate text-sm font-medium transition-colors duration-200 ${
-                        item.type === 'directory' 
-                            ? 'text-theme-800 hover:text-theme-900' 
+                    className={`
+                        truncate text-sm font-medium
+                        transition-colors duration-${LAYOUT_CONSTANTS.animation.fast}
+                        ${item.type === 'directory'
+                            ? 'text-theme-800 hover:text-theme-900'
                             : 'text-gray-700 hover:text-theme-700'
-                    }`}
+                        }
+                    `}
                     title={item.name}
                 >
                     {item.name}
@@ -608,11 +619,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
     }, []);
 
     if (isLoading && !files) {
-        return (
-            <div className="py-4 px-3 flex justify-center items-center h-full">
-                <div className="animate-pulse text-theme-600">Loading files...</div>
-            </div>
-        );
+        return <LoadingIndicator text="Loading files..." />;
     }
 
     return (

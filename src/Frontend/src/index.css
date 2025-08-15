@@ -15,22 +15,6 @@
     margin-bottom: 0;
 }
 
-p {
-    color: black;
-}
-
-.markdown-cell {
-    font-family: system-ui, -apple-system, sans-serif;
-    color: #202124;
-    line-height: 1.4;
-}
-
-/* 悬停状态 */
-.markdown-cell #untitled-cell:hover {
-    color: #35495E !important;
-    /* 悬停时变为 Vue 深蓝 */
-}
-
 /* 确保内部元素也遵循这些样式 */
 .markdown-cell #untitled-cell * {
     color: inherit !important;
@@ -523,6 +507,432 @@ p {
 @keyframes cursorBlink {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.3; }
+}
+
+/* ====================================================================
+   CodeMirror 编辑器样式优化 - 用于 MarkdownCell 编辑模式
+   强制覆盖 CodeMirror 默认样式，使其与当前设计风格一致
+   ==================================================================== */
+
+/* CodeMirror 主容器 - 移除边框和背景 */
+.markdown-editor-codemirror .cm-editor {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+    color: #202124 !important;
+}
+
+/* CodeMirror 编辑区域 */
+.markdown-editor-codemirror .cm-content {
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+    color: #202124 !important;
+    min-height: auto !important;
+}
+
+/* CodeMirror 焦点状态 - 移除默认焦点样式 */
+.markdown-editor-codemirror .cm-focused {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* CodeMirror 滚动区域 */
+.markdown-editor-codemirror .cm-scroller {
+    background: transparent !important;
+    padding: 0 !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+/* CodeMirror 光标样式 - 使用主题色 */
+.markdown-editor-codemirror .cm-cursor {
+    border-left: 2px solid #41B883 !important;
+    margin-left: -1px !important;
+}
+
+/* CodeMirror 选择区域 - 使用主题色 */
+.markdown-editor-codemirror .cm-selectionBackground {
+    background: rgba(65, 184, 131, 0.2) !important;
+}
+
+/* Markdown 语法高亮样式 - 与当前设计风格一致 */
+.markdown-editor-codemirror .cm-line {
+    font-family: system-ui, -apple-system, sans-serif !important;
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+    color: #202124 !important;
+}
+
+/* Markdown 标题样式 - 匹配现有标题样式 */
+.markdown-editor-codemirror .tok-heading1 {
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
+    color: transparent !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    line-height: 1.6 !important;
+}
+
+.markdown-editor-codemirror .tok-heading2 {
+    font-size: 1.3rem !important;
+    font-weight: 600 !important;
+    color: #fff !important;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
+    border-radius: 5px !important;
+    padding: 0.2rem 0.5rem !important;
+    margin-top: 1.5rem !important;
+    line-height: 1.5 !important;
+}
+
+.markdown-editor-codemirror .tok-heading3 {
+    font-size: 1.2rem !important;
+    font-weight: 600 !important;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
+    color: transparent !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    margin-top: 1rem !important;
+    line-height: 1.2 !important;
+}
+
+.markdown-editor-codemirror .tok-heading4 {
+    font-size: 1.1rem !important;
+    font-weight: 500 !important;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
+    color: transparent !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    margin-top: 1rem !important;
+    line-height: 1.2rem !important;
+    padding-left: 0.5rem !important;
+    border-left: 3px solid #3490DC !important;
+}
+
+.markdown-editor-codemirror .tok-heading5 {
+    font-size: 1rem !important;
+    font-weight: 400 !important;
+    color: #35495E !important;
+    margin-top: 0.8rem !important;
+    line-height: 1.2 !important;
+}
+
+.markdown-editor-codemirror .tok-heading6 {
+    font-size: 0.9rem !important;
+    font-weight: 400 !important;
+    color: #35495E !important;
+    margin-top: 0.8rem !important;
+    line-height: 1.2 !important;
+    font-style: italic !important;
+}
+
+/* Markdown 粗体和斜体 */
+.markdown-editor-codemirror .tok-strong {
+    font-weight: 700 !important;
+    color: #41B883 !important;
+}
+
+.markdown-editor-codemirror .tok-emphasis {
+    font-style: italic !important;
+    color: #41B883 !important;
+}
+
+/* Markdown 链接 */
+.markdown-editor-codemirror .tok-link {
+    color: #41B883 !important;
+    text-decoration: none !important;
+    border-bottom: 1.5px solid #41B883 !important;
+}
+
+/* Markdown 代码 */
+.markdown-editor-codemirror .tok-monospace {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.875rem !important;
+    background-color: rgba(65, 184, 131, 0.05) !important;
+    padding: 0.25rem 0.5rem !important;
+    border-radius: 0.375rem !important;
+    font-weight: 500 !important;
+    color: #41B883 !important;
+}
+
+/* Markdown 代码块 */
+.markdown-editor-codemirror .tok-processingInstruction {
+    background-color: rgba(65, 184, 131, 0.05) !important;
+    padding: 1.25rem !important;
+    border-radius: 0.5rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.875rem !important;
+    line-height: 1.6 !important;
+    border: 1px solid rgba(65, 184, 131, 0.1) !important;
+}
+
+/* Markdown 列表标记 */
+.markdown-editor-codemirror .tok-list {
+    color: #41B883 !important;
+    font-weight: bold !important;
+}
+
+/* Markdown 引用 */
+.markdown-editor-codemirror .tok-quote {
+    border-left: 4px solid #41B883 !important;
+    background-color: rgba(65, 184, 131, 0.05) !important;
+    padding: 0.5rem 1rem !important;
+    margin: 1.5rem 0 !important;
+    color: #35495E !important;
+    font-style: italic !important;
+}
+
+/* 修正编辑时的字体大小与非编辑状态一致 */
+.markdown-editor-codemirror .cm-line {
+    min-height: 1.6em !important;
+}
+
+/* 移除任何可能的外边距和内边距 */
+.markdown-editor-codemirror {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+}
+
+/* 确保编辑器高度自适应 */
+.markdown-editor-codemirror .cm-editor.cm-focused {
+    outline: none !important;
+}
+
+/* 移除默认的包装器样式 */
+.markdown-editor-codemirror .cm-wrap {
+    border: none !important;
+    background: transparent !important;
+}
+
+/* ====================================================================
+   TipTap 编辑器优化 - 提升编辑体验和性能
+   ==================================================================== */
+
+/* TipTap 主编辑器容器优化 */
+.tiptap-notebook-editor-container {
+    transition: all 0.2s ease-in-out;
+}
+
+/* ProseMirror 编辑器核心样式优化 */
+.tiptap-notebook-editor .ProseMirror {
+    outline: none !important;
+    border: none !important;
+    background: transparent !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+    line-height: 1.6 !important;
+    color: #202124 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    
+    /* 优化光标显示 */
+    caret-color: #41B883 !important;
+}
+
+/* TipTap 选择区域优化 */
+.tiptap-notebook-editor .ProseMirror ::selection {
+    background: rgba(65, 184, 131, 0.2) !important;
+}
+
+/* TipTap 焦点状态优化 */
+.tiptap-notebook-editor .ProseMirror:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* TipTap 段落样式优化 */
+.tiptap-notebook-editor .ProseMirror p {
+    margin: 0.5em 0 !important;
+    padding: 0 !important;
+    line-height: 1.6 !important;
+    font-size: 1rem !important;
+}
+
+/* TipTap 标题样式优化 - 与 MarkdownCell 保持一致 */
+.tiptap-notebook-editor .ProseMirror h1 {
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
+    color: transparent !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    line-height: 1.6 !important;
+    margin: 1rem 0 !important;
+}
+
+.tiptap-notebook-editor .ProseMirror h2 {
+    font-size: 1.3rem !important;
+    font-weight: 600 !important;
+    color: #fff !important;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
+    border-radius: 5px !important;
+    padding: 0.2rem 0.5rem !important;
+    margin: 1.5rem 0 1rem 0 !important;
+    line-height: 1.5 !important;
+    caret-color: #059669 !important;
+}
+
+.tiptap-notebook-editor .ProseMirror h3 {
+    font-size: 1.2rem !important;
+    font-weight: 600 !important;
+    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
+    color: transparent !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    margin: 1rem 0 !important;
+    line-height: 1.2 !important;
+    caret-color: #dc2626 !important;
+}
+
+/* TipTap 列表样式优化 */
+.tiptap-notebook-editor .ProseMirror ul {
+    list-style: none !important;
+    padding-left: 0.5rem !important;
+    margin: 1rem 0 !important;
+}
+
+.tiptap-notebook-editor .ProseMirror ul li {
+    position: relative !important;
+    padding-left: 1rem !important;
+    margin-bottom: 0.2rem !important;
+    line-height: 1.6 !important;
+}
+
+.tiptap-notebook-editor .ProseMirror ul li::before {
+    content: "•" !important;
+    color: #41B883 !important;
+    font-weight: bold !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    font-size: 1.2em !important;
+}
+
+/* TipTap 代码样式优化 */
+.tiptap-notebook-editor .ProseMirror code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.875rem !important;
+    background-color: rgba(65, 184, 131, 0.05) !important;
+    padding: 0.25rem 0.5rem !important;
+    border-radius: 0.375rem !important;
+    font-weight: 500 !important;
+    color: #41B883 !important;
+}
+
+/* TipTap 引用样式优化 */
+.tiptap-notebook-editor .ProseMirror blockquote {
+    border-left: 4px solid #41B883 !important;
+    background-color: rgba(65, 184, 131, 0.05) !important;
+    padding: 0.5rem 1rem !important;
+    margin: 1.5rem 0 !important;
+    color: #35495E !important;
+    font-style: italic !important;
+}
+
+/* TipTap 链接样式优化 */
+.tiptap-notebook-editor .ProseMirror a {
+    color: #41B883 !important;
+    text-decoration: none !important;
+    border-bottom: 1.5px solid #41B883 !important;
+    transition: all 0.2s !important;
+    font-weight: 500 !important;
+}
+
+.tiptap-notebook-editor .ProseMirror a:hover {
+    color: #3490DC !important;
+    border-bottom-color: #3490DC !important;
+}
+
+/* TipTap 表格样式优化 */
+.tiptap-notebook-editor .ProseMirror table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.1) !important;
+    border: 1px solid rgba(65, 184, 131, 0.08) !important;
+    margin: 1rem 0 !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+.tiptap-notebook-editor .ProseMirror th,
+.tiptap-notebook-editor .ProseMirror td {
+    padding: 0.5rem !important;
+    text-align: left !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(65, 184, 131, 0.06) !important;
+}
+
+.tiptap-notebook-editor .ProseMirror th {
+    background-color: #41B883 !important;
+    color: #000000 !important;
+    font-weight: 500 !important;
+    font-size: 0.875rem !important;
+}
+
+/* TipTap 空编辑器占位符优化 */
+.tiptap-notebook-editor .ProseMirror p.is-editor-empty:first-child::before {
+    color: #9CA3AF !important;
+    content: attr(data-placeholder) !important;
+    float: left !important;
+    height: 0 !important;
+    pointer-events: none !important;
+    font-style: italic !important;
+}
+
+/* ====================================================================
+   Slash Commands 主题色定义 - 统一设计风格
+   ==================================================================== */
+
+/* 主题色变量 - 基于现有的 Vue 绿色主题 */
+.border-theme-100 {
+    border-color: rgba(65, 184, 131, 0.1) !important;
+}
+
+.border-theme-200 {
+    border-color: rgba(65, 184, 131, 0.2) !important;
+}
+
+.border-theme-500 {
+    border-color: #41B883 !important;
+}
+
+.bg-theme-25 {
+    background-color: rgba(65, 184, 131, 0.025) !important;
+}
+
+.bg-theme-50 {
+    background-color: rgba(65, 184, 131, 0.05) !important;
+}
+
+.bg-theme-100 {
+    background-color: rgba(65, 184, 131, 0.1) !important;
+}
+
+.text-theme-600 {
+    color: #41B883 !important;
+}
+
+.text-theme-800 {
+    color: #35495E !important;
+}
+
+.text-theme-900 {
+    color: #2c3e50 !important;
+}
+
+/* 边框宽度 */
+.border-r-3 {
+    border-right-width: 3px !important;
 }
 
 .codeCell {
@@ -1107,3 +1517,25 @@ vds-cleaning-report {
     }
 }
 */
+
+/* 统一主题色定义 */
+.theme-50 { background-color: #f0fdf4; }
+.theme-100 { background-color: #dcfce7; }
+.theme-200 { background-color: #bbf7d0; }
+.theme-400 { background-color: #4ade80; }
+.theme-500 { background-color: #22c55e; }
+.theme-600 { color: #16a34a; }
+.theme-700 { color: #15803d; }
+.theme-800 { color: #166534; }
+.theme-900 { color: #14532d; }
+.theme-25 { background-color: #f7fee7; }
+
+.border-theme-100 { border-color: #dcfce7; }
+.border-theme-200 { border-color: #bbf7d0; }
+.border-theme-400 { border-color: #4ade80; }
+.border-theme-500 { border-color: #22c55e; }
+
+.text-theme-600 { color: #16a34a; }
+.text-theme-700 { color: #15803d; }
+.text-theme-800 { color: #166534; }
+.text-theme-900 { color: #14532d; }

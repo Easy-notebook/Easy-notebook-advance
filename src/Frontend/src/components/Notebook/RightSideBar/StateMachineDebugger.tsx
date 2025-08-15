@@ -315,9 +315,7 @@ const StateMachineDebugger: React.FC = () => {
           {/* Transitions List (Rewritten logic, UI Unchanged) */}
           <div className="space-y-0 max-h-96 overflow-y-auto" style={{scrollbarWidth: 'thin'}}>
             {displayedHistory.length === 0 ? (
-              <div className="text-xs text-center py-4" style={{color: '#35495E'}}>
-                No state transitions recorded yet.
-              </div>
+              null
             ) : (
               displayedHistory.map((entry, index) => (
                 <div key={`${entry.timestamp}-${index}`} className="py-2 px-0 border-b transition-colors duration-200" style={{

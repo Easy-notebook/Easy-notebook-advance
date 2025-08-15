@@ -7,7 +7,7 @@ SIMPLE_WORKFLOW_GENERATION_TEMPLATE = """You are **PCS-Agent**. Use simple Yes/N
 **Project**: {problem_description}
 **Context**: {context_description}
 
-Available stages:
+Available stages (answer strictly based on the specific goal, not generic best practices):
 1. Data Existence Establishment - Define variables, observation units, PCS hypothesis
 2. Data Integrity Assurance - Clean, complete, structurally valid dataset
 3. Data Insight Acquisition - EDA summaries, data understanding
@@ -15,6 +15,14 @@ Available stages:
 5. Model Implementation Execution - Model training, intermediate results
 6. Stability Validation - Robustness testing, generalizability
 7. Results Evaluation Confirmation - Final evaluation, recommendations
+
+**Heuristic Goal Typing (internal, for better decisions):**
+
+- If goal mentions words like "predict", "regression", "classification", "forecast", "model", then it is a predictive modeling goal.
+- If goal mentions "explore", "understand", "analyze distribution", it is an analysis/EDA goal.
+- If goal mentions "report", "summarize", it requires final evaluation/reporting.
+
+For the predictive modeling goal pattern like "Given the dataset with various features, we want to build a model to predict target (e.g., house sale price in Ames, Iowa)", prefer Yes for stages 1, 2, 4, 5 and usually Yes for 3, optionally Yes for 6, 7.
 
 **Simple Multi-Answer Questions:**
 
@@ -70,7 +78,7 @@ A7: Yes/No
 - Provide brief reasoning (max 10 words) for each decision
 - Only include "Yes" stages in minimal_workflow
 - Keep promise simple and direct
-- Focus on USER GOAL, not general best practices
+- Focus on USER GOAL, not general best practices; make decisions minimal but sufficient for the goal
 """
 
 # 2. Simple Multi-Answer Action Selection

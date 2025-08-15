@@ -202,10 +202,6 @@ export const useKeyboardShortcuts = (props: KeyboardShortcutsProps) => {
             event.preventDefault();
             onCutCell?.();
             break;
-          case '/': // Ctrl/Cmd + / - 打开命令面板
-            event.preventDefault();
-            onOpenCommandPalette?.();
-            break;
         }
       }
     } else if (altKey) {

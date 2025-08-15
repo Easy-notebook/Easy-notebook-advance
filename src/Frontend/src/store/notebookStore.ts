@@ -957,8 +957,6 @@ const useStore = create(
       );
       
       if (targetCell) {
-
-        
         // 合并metadata
         if (updates.metadata) {
           updates.metadata = {

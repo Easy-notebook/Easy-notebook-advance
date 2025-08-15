@@ -77,6 +77,9 @@ class Text2VideoAgent(BaseAgentTemplate):
 
         # 创建正在生成的video cell - 使用新的唯一标识符策略
         generation_timestamp = int(datetime.now().timestamp() * 1000)
+        # 生成与 image agent 一致的唯一标识符策略
+        prompt_hash = video_prompt[:20].replace(' ', '').lower()
+        unique_identifier = f"gen-{generation_timestamp}-{prompt_hash}"
         yield self._create_response_json(
             "addCell2EndWithContent",
             {
@@ -85,6 +88,7 @@ class Text2VideoAgent(BaseAgentTemplate):
                     "content": "",
                     "commandId": command_id,
                     "prompt": video_prompt,  # 用于生成唯一标识符
+                    "uniqueIdentifier": unique_identifier,
                     "description": f"Generating video: {video_prompt}",
                     "metadata": {
                         "isGenerating": True,
@@ -92,61 +96,104 @@ class Text2VideoAgent(BaseAgentTemplate):
                         "generationType": "video",
                         "start_time": generation_timestamp,
                         "prompt": video_prompt,
+                        "uniqueIdentifier": unique_identifier,
                     },
                 },
                 "status": "processing",
             },
         )
 
-        video_url = self.text2video_client.generate_video_and_get_result(prompt=video_prompt)
-        # video_url = "https://ark-content-generation-ap-southeast-1.tos-ap-southeast-1.volces.com/seedance-1-0-lite-t2v/02175437639118200000000000000000000ffffc0a8401bdbf53b.mp4?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYWJkZTExNjA1ZDUyNDc3YzhjNTM5OGIyNjBhNDcyOTQ%2F20250805%2Fap-southeast-1%2Ftos%2Frequest&X-Tos-Date=20250805T064712Z&X-Tos-Expires=86400&X-Tos-Signature=017cc9ee211babbd4d87f8312281b3e5e6d5176ca37b017db4f2df7da98cdc68&X-Tos-SignedHeaders=host"
-
-        if video_url:
-            # local_asset_url = await self._download_and_save_video(
-            #     video_url, notebook_id
-            # )
-            video_markdown = f"![{video_prompt}]({video_url})"
+        # 使用异步非阻塞方式启动视频生成
+        try:
+            task_id = await self.text2video_client.generate_video_async(video_prompt)
+            if not task_id:
+                raise ValueError("Failed to start video generation task")
             
-            # 生成与创建时相同的唯一标识符
-            unique_identifier = f"gen-{generation_timestamp}-{video_prompt[:20].replace(' ', '').lower()}"
-
+            # 立即返回任务状态，不阻塞主流
             yield self._create_response_json(
-                "updateCurrentCellWithContent",
+                "video_generation_task_started",
                 {
                     "payload": {
-                        "content": video_markdown,
+                        "taskId": task_id,
                         "commandId": command_id,
-                        "uniqueIdentifier": unique_identifier,  # 添加唯一标识符
+                        "uniqueIdentifier": unique_identifier,
+                        "prompt": video_prompt,
                     },
                     "status": "processing",
                 },
             )
 
+            # 启动异步状态检查任务，不阻塞当前流
+            asyncio.create_task(self._monitor_video_generation(
+                task_id, command_id, unique_identifier, video_prompt, generation_timestamp
+            ))
+
+        except Exception as e:
+            # 生成失败时更新状态
             yield self._create_response_json(
                 "updateCurrentCellMetadata",
                 {
                     "payload": {
                         "commandId": command_id,
-                        "uniqueIdentifier": unique_identifier,  # 添加唯一标识符
+                        "uniqueIdentifier": unique_identifier,
                         "metadata": {
                             "isGenerating": False,
-                            "generationCompleted": True,
-                            "generationEndTime": int(datetime.now().timestamp() * 1000),
-                            "videoUrl": video_url,
+                            "generationError": str(e),
+                            "generationStatus": "failed",
                         },
                     },
-                    "status": "processing",
+                    "status": "error",
                 },
             )
 
-            # 设置为完成模式 - 类似 command_agent 的结束方式
-            yield self._create_response_json(
-                "setCurrentCellMode_complete",
-                {
-                    "status": "completed",
-                    "payload": {
-                        "commandId": command_id,
-                        "response": f"Video generation completed: {video_prompt}",
-                    },
-                },
+    async def _monitor_video_generation(self, task_id: str, command_id: str, unique_identifier: str, 
+                                       video_prompt: str, generation_timestamp: int):
+        """异步监控视频生成状态，独立于主流"""
+        max_attempts = 60  # 最多检查60次，每次间隔10秒 = 10分钟
+        attempt = 0
+        
+        while attempt < max_attempts:
+            try:
+                await asyncio.sleep(10)  # 非阻塞等待10秒
+                status, video_url = await self.text2video_client.check_generation_status(task_id)
+                
+                if status in ["waiting", "active", "queued", "generating"]:
+                    attempt += 1
+                    continue
+                elif status == "completed" and video_url:
+                    # 生成完成，发送更新事件到前端
+                    await self._send_video_completion_update(
+                        video_url, command_id, unique_identifier, video_prompt, generation_timestamp
+                    )
+                    break
+                else:
+                    # 生成失败
+                    await self._send_video_error_update(
+                        command_id, unique_identifier, f"Generation failed with status: {status}"
+                    )
+                    break
+                    
+            except Exception as e:
+                await self._send_video_error_update(
+                    command_id, unique_identifier, f"Error monitoring generation: {str(e)}"
+                )
+                break
+        
+        if attempt >= max_attempts:
+            await self._send_video_error_update(
+                command_id, unique_identifier, "Generation timeout"
             )
+
+    async def _send_video_completion_update(self, video_url: str, command_id: str, 
+                                          unique_identifier: str, video_prompt: str, generation_timestamp: int):
+        """发送视频生成完成的更新事件"""
+        video_markdown = f"![{video_prompt}]({video_url})"
+        
+        # 这里需要通过某种机制发送更新到前端
+        # 由于我们在独立的task中，需要使用WebSocket或其他推送机制
+        # 暂时使用日志记录，实际实现需要添加推送机制
+        print(f"Video generation completed: {unique_identifier}, URL: {video_url}")
+
+    async def _send_video_error_update(self, command_id: str, unique_identifier: str, error_msg: str):
+        """发送视频生成错误的更新事件"""
+        print(f"Video generation error: {unique_identifier}, Error: {error_msg}")

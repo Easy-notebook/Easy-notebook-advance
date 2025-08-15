@@ -2,9 +2,97 @@
 import globalUpdateInterface from '../interfaces/globalUpdateInterface';
 import { AgentMemoryService, AgentType } from './agentMemoryService';
 import useStore from '../store/notebookStore';
-
 // 跟踪正在生成的 cells 的映射表
 const generationCellTracker = new Map<string, string>(); // commandId -> cellId
+
+// 跟踪当前流式 QA 的 ID（用于后端在 finish 阶段未返回 QId 的兜底）
+let lastStreamingQaId: string | null = null;
+
+// 视频生成轮询管理
+const activeVideoPolls = new Map<string, NodeJS.Timeout>();
+
+// 视频生成状态轮询函数
+const startVideoGenerationPolling = async (taskId: string, uniqueIdentifier: string, commandId?: string, prompt?: string) => {
+    // 清理可能存在的旧轮询
+    if (activeVideoPolls.has(taskId)) {
+        clearInterval(activeVideoPolls.get(taskId)!);
+    }
+
+    let attempts = 0;
+    const maxAttempts = 60; // 最多轮询60次，每次10秒 = 10分钟
+
+    const pollInterval = setInterval(async () => {
+        try {
+            attempts++;
+            
+            // 获取当前notebook状态
+            const notebookState = useStore.getState();
+            const notebookId = notebookState.notebookId;
+            
+            if (!notebookId) {
+                console.error('无法获取notebookId，停止轮询');
+                clearInterval(pollInterval);
+                activeVideoPolls.delete(taskId);
+                return;
+            }
+
+            // 发送状态查询请求到后端
+            const { default: useOperatorStore } = await import('../store/operatorStore');
+            const statusCommand = {
+                type: 'check_video_generation_status',
+                payload: {
+                    taskId: taskId,
+                    uniqueIdentifier: uniqueIdentifier,
+                    commandId: commandId
+                }
+            };
+            
+            useOperatorStore.getState().sendOperation(notebookId, statusCommand);
+            
+            // 检查是否超时
+            if (attempts >= maxAttempts) {
+                console.log('视频生成轮询超时，停止轮询');
+                clearInterval(pollInterval);
+                activeVideoPolls.delete(taskId);
+                
+                // 更新cell状态为超时
+                const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
+                    metadata: { 
+                        isGenerating: false, 
+                        generationError: 'Generation timeout',
+                        generationStatus: 'timeout'
+                    }
+                });
+                
+                if (success) {
+                    console.log('✅ 视频生成超时状态已更新');
+                }
+            }
+            
+        } catch (error) {
+            console.error('视频生成状态轮询出错:', error);
+            clearInterval(pollInterval);
+            activeVideoPolls.delete(taskId);
+        }
+    }, 10000); // 每10秒轮询一次
+
+    activeVideoPolls.set(taskId, pollInterval);
+    console.log('✅ 视频生成状态轮询已启动:', taskId);
+};
+
+// Normalize incoming cell type to store-supported types
+const normalizeCellTypeForStore = (
+  t: string | undefined | null
+): 'code' | 'markdown' | 'hybrid' | 'image' => {
+  if (!t) return 'markdown';
+  if (t === 'Hybrid') return 'hybrid';
+  if (t === 'image') return 'image';
+  if (t === 'video') return 'image';
+  if (t === 'thinking') return 'markdown';
+  return (t as any) === 'code' || (t as any) === 'markdown' || (t as any) === 'hybrid' || (t as any) === 'image'
+    ? (t as any)
+    : 'markdown';
+};
 
 // Type definitions for stream data structures
 export interface ToastMessage {
@@ -25,6 +113,21 @@ export interface StreamPayload {
     type?: string;
     description?: string;
     QId?: string | number;
+    // Optional fields used across various stream events
+    metadata?: any;
+    commandId?: string;
+    prompt?: string;
+    uniqueIdentifier?: string;
+    title?: string;
+    variable_name?: string;
+    default_value?: any;
+    variable_value?: any;
+    variable_type?: string;
+    action?: string;
+    event?: string;
+    target_agent?: string;
+    message?: string;
+    help_request?: string;
 }
 
 export interface StreamData {
@@ -36,7 +139,7 @@ export interface StreamData {
 }
 
 export interface GlobalUpdateInterface {
-    setViewMode: (mode: string) => Promise<void>;
+    setViewMode: (mode: 'create' | 'step' | string) => Promise<void>;
     setCurrentPhase: (phaseId: string) => Promise<void>;
     setCurrentStepIndex: (index: number) => Promise<void>;
     setAllowPagination: (allow: boolean) => Promise<void>;
@@ -50,7 +153,7 @@ export interface GlobalUpdateInterface {
     clearAllOutputs: () => Promise<void>;
     setCurrentCell: (cellId: string) => Promise<void>;
     setCurrentRunningPhaseId: (phaseId: string) => Promise<void>;
-    addNewCell2End: (type: string, description: string) => Promise<void>;
+    addNewCell2End: (type: 'code' | 'markdown' | 'hybrid' | 'Hybrid' | 'image' | 'video' | string, description: string, enableEdit?: boolean) => Promise<string>;
     addNewContent2CurrentCell: (content: string) => Promise<void>;
     runCurrentCodeCell: () => Promise<void>;
     setCurrentCellMode_onlyCode: () => Promise<void>;
@@ -63,6 +166,8 @@ export interface GlobalUpdateInterface {
     convertCurrentCodeCellToHybridCell: () => Promise<void>;
     updateCurrentCellWithContent: (content: string) => Promise<void>;
     addNewCell2Next: (type: string, description: string) => Promise<void>;
+    updateCellMetadata: (cellId: string, metadata: any) => Promise<void>;
+    getAddedLastCellID: () => string;
 }
 
 export type ShowToastFunction = (toast: ToastMessage) => Promise<void>;
@@ -76,9 +181,9 @@ export const handleStreamResponse = async (
         case 'update_view_mode': {
             const mode = data.payload?.mode;
             if (mode) {
-                await globalUpdateInterface.setViewMode(mode);
+                await globalUpdateInterface.setViewMode(mode as any);
                 await showToast({
-                    message: `切换到 ${mode === 'complete' ? 'Complete' : 'Step'} Mode 成功`,
+                    message: `切换到 ${mode === 'create' ? 'Create' : 'Step'} Mode 成功`,
                     type: "success"
                 });
             }
@@ -276,17 +381,14 @@ export const handleStreamResponse = async (
                 
                 // 如果是图片或视频生成任务，使用唯一标识符策略
                 if ((cellType === 'image' || cellType === 'video') && metadata?.isGenerating && (prompt || serverUniqueIdentifier)) {
-                    console.log('🎯 使用唯一标识符策略创建生成cell:', {
-                        type: cellType,
-                        prompt: (prompt || '').substring(0, 50),
-                        commandId
-                    });
+
                     
                     // 优先使用服务端提供的唯一标识符，否则回退到本地生成
                     const uniqueIdentifier = serverUniqueIdentifier || `gen-${Date.now()}-${(prompt || '').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
                     
+                    const normalizedType = normalizeCellTypeForStore(cellType);
                     newCellId = useStore.getState().addNewCellWithUniqueIdentifier(
-                        cellType, 
+                        normalizedType,
                         description, 
                         enableEdit, 
                         uniqueIdentifier,
@@ -306,7 +408,8 @@ export const handleStreamResponse = async (
                     }
                 } else {
                     // 普通cell创建
-                    newCellId = await globalUpdateInterface.addNewCell2End(cellType, description, enableEdit);
+                    const normalizedType2 = normalizeCellTypeForStore(cellType);
+                    newCellId = await globalUpdateInterface.addNewCell2End(normalizedType2, description, enableEdit);
                     
                     // 如果这是一个生成任务且有 commandId，存储映射关系
                     if (newCellId && commandId && metadata?.isGenerating) {
@@ -315,8 +418,11 @@ export const handleStreamResponse = async (
                     }
                 }
             }
-            if (content) {
-                await globalUpdateInterface.addNewContent2CurrentCell(content);
+            if (content && newCellId) {
+                // Sticky-aware: append to the cell's existing content instead of overwriting
+                const target = useStore.getState().cells.find(c => c.id === newCellId);
+                const appended = `${target?.content || ''}${content}`;
+                useStore.getState().updateCell(newCellId, appended);
             }
             
             // Handle metadata for the newly created cell
@@ -337,6 +443,17 @@ export const handleStreamResponse = async (
             console.log('添加新的chunk到当前的cell');
             const content = data.data?.payload?.content;
             if (content) {
+                // 首选当前编辑单元；如无，则回退到最近一次创建且仍在流式的单元
+                const state = useStore.getState();
+                if (!state.currentCellId) {
+                    const streamingCandidate = [...state.cells].reverse().find(
+                        c => (c.metadata as any)?.isStreaming === true
+                    );
+                    if (streamingCandidate) {
+                        state.setCurrentCell(streamingCandidate.id);
+                        state.setEditingCellId(streamingCandidate.id);
+                    }
+                }
                 await globalUpdateInterface.addNewContent2CurrentCell(content);
             }
             break;
@@ -353,8 +470,8 @@ export const handleStreamResponse = async (
                 
                 if (notebookId) {
                     // 检查是否是debug上下文中的代码运行
-                    const debugMemory = AgentMemoryService.getAgentMemory(notebookId, 'debug' as AgentType);
-                    const currentContext = debugMemory?.current_context;
+                    const debugMemory: any = AgentMemoryService.getAgentMemory(notebookId, 'debug' as AgentType);
+                    const currentContext = (debugMemory as any)?.current_context;
                     
                     if (currentContext && currentContext.interaction_status === 'in_progress') {
                         console.log('记录debug完成 - 代码已修复并运行');
@@ -441,6 +558,8 @@ export const handleStreamResponse = async (
             if (qid !== undefined && qid !== null) {
                 const qidStr = Array.isArray(qid) ? qid[0] : qid.toString();
                 await globalUpdateInterface.initStreamingAnswer(qidStr);
+                // 记录当前正在流式的 QA，便于 finish 阶段后台未返回 QId 时兜底
+                lastStreamingQaId = qidStr;
                 
                 // 记录QA交互开始
                 try {
@@ -485,14 +604,30 @@ export const handleStreamResponse = async (
 
         case 'finishStreamingAnswer': {
             console.log('结束流式响应:', data);
-            const finishQid = data.data?.payload?.QId || data.payload?.QId;
+            const finishQid = (data as any).data?.payload?.QId || (data as any).payload?.QId;
+            const finalResponse = ((data as any).data?.payload?.response) || ((data as any).payload?.response) || '';
+            let qidStr: string | null = null;
             if (finishQid !== undefined && finishQid !== null) {
-                const qidStr = Array.isArray(finishQid) ? finishQid[0] : finishQid.toString();
-                await globalUpdateInterface.finishStreamingAnswer(qidStr);
-                
+                qidStr = Array.isArray(finishQid) ? finishQid[0] : finishQid.toString();
+            } else {
+                // 兜底：使用最后一次 init 的 QA id，或查找正在处理的 QA
+                qidStr = lastStreamingQaId;
+                if (!qidStr) {
+                    try {
+                        // 动态访问，避免引入循环依赖类型问题
+                        const state = (require('../store/AIAgentStore') as any).useAIAgentStore?.getState?.();
+                        const candidate = state?.qaList?.find?.((q: any) => q.onProcess);
+                        qidStr = candidate?.id || null;
+                    } catch {}
+                }
+            }
+            if (qidStr) {
+                await globalUpdateInterface.finishStreamingAnswer(qidStr, finalResponse);
+                lastStreamingQaId = null;
+
                 // 记录Agent交互完成
                 try {
-                    const response = data.data?.payload?.response || '';
+                    const response = finalResponse;
                     if (response) {
                         // 从全局状态获取notebook信息进行记录
                         const notebookState = (window as any).__notebookStore?.getState?.();
@@ -529,14 +664,7 @@ export const handleStreamResponse = async (
                             );
                             
                             // 根据响应质量学习成功模式
-                            if (response.length > 200) {
-                                AgentMemoryService.learnFromSuccess(
-                                    notebookId,
-                                    'general' as AgentType,
-                                    'detailed_response',
-                                    `生成了${response.length}字符的详细回答`
-                                );
-                            }
+                            // 留空：如需学习成功模式，请在 AgentMemoryService 中实现 learnFromSuccess 并在此启用
                         }
                     }
                 } catch (error) {
@@ -625,6 +753,33 @@ export const handleStreamResponse = async (
                 }
             } else {
                 console.error('❌ updateCurrentCellWithContent - 没有content数据');
+            }
+            break;
+        }
+
+        // TipTap 富文本主动更新（流式或替换）
+        case 'tiptap_update': {
+            const cellId = data.data?.payload?.cellId || data.payload?.cellId;
+            const content = data.data?.payload?.content || data.payload?.content;
+            const replace = (data.data?.payload as any)?.replace ?? (data.payload as any)?.replace ?? false;
+            if (!cellId || typeof content !== 'string') {
+                console.warn('tiptap_update: invalid payload', data);
+                break;
+            }
+            const state = useStore.getState();
+            const target = state.cells.find(c => c.id === cellId);
+            if (!target) {
+                console.warn('tiptap_update: cell not found', cellId);
+                break;
+            }
+            if (replace) {
+                state.updateCell(cellId, content);
+            } else {
+                state.updateCell(cellId, (target.content || '') + content);
+            }
+            // 可选：确保处于编辑态便于用户看到实时变化
+            if (state.editingCellId !== cellId) {
+                state.setEditingCellId(cellId);
             }
             break;
         }
@@ -766,6 +921,23 @@ export const handleStreamResponse = async (
             const content = data.payload?.content;
             console.log('更新TODO:', action, event, content);
             // 这里可以添加TODO管理的逻辑
+            // 同时也可将有代表性的操作记录到当前QA的工具调用中
+            try {
+                const { useAIAgentStore } = require('../store/AIAgentStore');
+                const state = useAIAgentStore.getState();
+                const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
+                if (runningQA && (action || event)) {
+                    const op = String(action || event);
+                    // 仅在常见操作时添加，避免噪音
+                    if (/add-text|insert|draw|image|create|update/i.test(op)) {
+                        state.addToolCallToQA(runningQA.id, {
+                            type: op.toLowerCase(),
+                            content: typeof content === 'string' ? content : JSON.stringify(content),
+                            agent: 'workflow'
+                        });
+                    }
+                }
+            } catch {}
             break;
         }
 
@@ -794,7 +966,7 @@ export const handleStreamResponse = async (
                 // 获取当前notebook状态和操作器
                 const notebookState = useStore.getState();
                 const notebookId = notebookState.notebookId;
-                const currentCellId = notebookState.currentCellId;
+                // const currentCellId = notebookState.currentCellId; // not used
                 const viewMode = notebookState.viewMode;
                 const currentPhaseId = notebookState.currentPhaseId;
                 const currentStepIndex = notebookState.currentStepIndex;
@@ -822,7 +994,160 @@ export const handleStreamResponse = async (
                     message: `开始生成图片: ${prompt.substring(0, 30)}...`,
                     type: "info"
                 });
+
+                // 将工具调用记录到当前进行中的 QA（如果有）
+                try {
+                    const { useAIAgentStore } = require('../store/AIAgentStore');
+                    const state = useAIAgentStore.getState();
+                    const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
+                    if (runningQA) {
+                        state.addToolCallToQA(runningQA.id, {
+                            type: 'draw-image',
+                            content: prompt,
+                            agent: 'image-generator'
+                        });
+                    }
+                } catch (e) {
+                    console.warn('记录工具调用失败（忽略）：', e);
+                }
             }
+            break;
+        }
+
+        // 统一的视频生成入口（与 text2video_agent 对应）
+        case 'trigger_video_generation': {
+            const prompt = data.payload?.prompt;
+            const commandId = data.payload?.commandId;
+            if (prompt && commandId) {
+                console.log('触发视频生成:', prompt);
+                const notebookState = useStore.getState();
+                const notebookId = notebookState.notebookId;
+                const viewMode = notebookState.viewMode;
+                const currentPhaseId = notebookState.currentPhaseId;
+                const currentStepIndex = notebookState.currentStepIndex;
+                const { default: useOperatorStore } = await import('../store/operatorStore');
+                const videoCommand = {
+                    type: 'user_command',
+                    payload: {
+                        content: `/video ${prompt}`,
+                        commandId: commandId,
+                        current_view_mode: viewMode,
+                        current_phase_id: currentPhaseId,
+                        current_step_index: currentStepIndex,
+                        notebook_id: notebookId
+                    }
+                };
+                console.log('发送视频生成命令到后端:', videoCommand);
+                useOperatorStore.getState().sendOperation(notebookId, videoCommand);
+                await showToast({ message: `开始生成视频: ${prompt.substring(0, 30)}...`, type: 'info' });
+
+                // 记录到当前 QA 的工具调用
+                try {
+                    const { useAIAgentStore } = require('../store/AIAgentStore');
+                    const state = useAIAgentStore.getState();
+                    const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
+                    if (runningQA) {
+                        state.addToolCallToQA(runningQA.id, {
+                            type: 'create-video',
+                            content: prompt,
+                            agent: 'video-generator'
+                        });
+                    }
+                } catch {}
+            }
+            break;
+        }
+
+        // 新增：视频生成任务启动事件
+        case 'video_generation_task_started': {
+            const taskId = data.payload?.taskId;
+            const commandId = data.payload?.commandId;
+            const uniqueIdentifier = data.payload?.uniqueIdentifier;
+            const prompt = data.payload?.prompt;
+            
+            if (taskId && uniqueIdentifier) {
+                console.log('视频生成任务已启动，开始轮询状态:', { taskId, uniqueIdentifier });
+                
+                // 启动前端状态轮询
+                startVideoGenerationPolling(taskId, uniqueIdentifier, commandId, prompt);
+                
+                await showToast({ 
+                    message: `视频生成任务已启动，正在后台处理...`, 
+                    type: 'info' 
+                });
+            }
+            break;
+        }
+
+        // 新增：视频生成状态更新事件
+        case 'video_generation_status_update': {
+            const taskId = data.payload?.taskId;
+            const status = data.payload?.status;
+            const videoUrl = data.payload?.videoUrl;
+            const uniqueIdentifier = data.payload?.uniqueIdentifier;
+            const commandId = data.payload?.commandId;
+            const prompt = data.payload?.prompt;
+            const error = data.payload?.error;
+            
+            console.log('收到视频生成状态更新:', { taskId, status, uniqueIdentifier });
+            
+            if (status === 'completed' && videoUrl && uniqueIdentifier) {
+                // 生成完成，停止轮询
+                if (activeVideoPolls.has(taskId)) {
+                    clearInterval(activeVideoPolls.get(taskId)!);
+                    activeVideoPolls.delete(taskId);
+                }
+                
+                // 更新cell内容
+                const videoMarkdown = `![${prompt || 'Generated Video'}](${videoUrl})`;
+                const contentSuccess = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
+                    content: videoMarkdown
+                });
+                
+                // 更新cell metadata
+                const metadataSuccess = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
+                    metadata: {
+                        isGenerating: false,
+                        generationCompleted: true,
+                        generationEndTime: Date.now(),
+                        videoUrl: videoUrl,
+                        generationStatus: 'completed'
+                    }
+                });
+                
+                if (contentSuccess && metadataSuccess) {
+                    console.log('✅ 视频生成完成，内容已更新');
+                    await showToast({ 
+                        message: `视频生成完成！`, 
+                        type: 'success' 
+                    });
+                }
+                
+            } else if (status === 'failed' || error) {
+                // 生成失败，停止轮询
+                if (activeVideoPolls.has(taskId)) {
+                    clearInterval(activeVideoPolls.get(taskId)!);
+                    activeVideoPolls.delete(taskId);
+                }
+                
+                // 更新失败状态
+                const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
+                    metadata: {
+                        isGenerating: false,
+                        generationError: error || 'Generation failed',
+                        generationStatus: 'failed'
+                    }
+                });
+                
+                if (success) {
+                    console.log('❌ 视频生成失败状态已更新');
+                    await showToast({ 
+                        message: `视频生成失败: ${error || 'Unknown error'}`, 
+                        type: 'error' 
+                    });
+                }
+            }
+            // 对于 'waiting', 'active', 'queued', 'generating' 等状态，继续等待轮询
             break;
         }
 

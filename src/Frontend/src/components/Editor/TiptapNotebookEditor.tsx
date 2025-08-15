@@ -35,7 +35,7 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import { Extension } from '@tiptap/react'
-import { Plugin, PluginKey } from 'prosemirror-state'
+import { Plugin, PluginKey, Selection } from 'prosemirror-state'
 import Heading from '@tiptap/extension-heading'
 import { Cell } from '../../store/notebookStore';
 
@@ -141,6 +141,67 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         })
       ]
     }
+  })
+
+  // 在文档末尾始终保留一个段落，确保代码块后可以换行到新段落
+  const TrailingParagraphExtension = Extension.create({
+    name: 'trailingParagraph',
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: new PluginKey('trailingParagraph'),
+          appendTransaction: (transactions, oldState, newState) => {
+            const { doc, tr, schema } = newState
+            const last = doc.lastChild
+            const paragraph = schema.nodes.paragraph
+            if (!paragraph) return null
+            if (!last || last.type !== paragraph) {
+              const insertPos = doc.content.size
+              const nextTr = tr.insert(insertPos, paragraph.create())
+              return nextTr
+            }
+            return null
+          },
+        }),
+      ]
+    },
+  })
+
+  // 点击编辑器尾部空白区域时，自动在末尾插入一个空段落并将光标放置其中
+  const ClickBlankToNewLineExtension = Extension.create({
+    name: 'clickBlankToNewLine',
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: new PluginKey('clickBlankToNewLine'),
+          props: {
+            handleClick(view, pos, event) {
+              try {
+                const { state } = view
+                const { doc, schema } = state
+                const paragraph = schema.nodes.paragraph
+                if (!paragraph) return false
+                // 如果点击位置在文档末尾或之后
+                const atEnd = pos >= doc.content.size
+                if (atEnd) {
+                  const last = doc.lastChild
+                  if (!last || last.type.name !== 'paragraph' || last.content.size > 0) {
+                    const trInsert = state.tr.insert(doc.content.size, paragraph.create())
+                    view.dispatch(trInsert)
+                  }
+                  // 将光标放到文档末尾段落
+                  const $end = view.state.doc.resolve(view.state.doc.content.size)
+                  const trSel = view.state.tr.setSelection(Selection.near($end))
+                  view.dispatch(trSel)
+                  return true
+                }
+              } catch {}
+              return false
+            },
+          },
+        }),
+      ]
+    },
   })
 
   // 防止循环更新的标志
@@ -297,6 +358,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       
       // 动态游标样式扩展
       CursorStyleExtension,
+      // 结尾始终保留一个段落，并支持点击空白新起一行
+      TrailingParagraphExtension,
+      ClickBlankToNewLineExtension,
       
       // 图片支持
       ImageExtension,
@@ -405,22 +469,19 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         step.jsonID === 'setNodeMarkup'
       )
       
-      // 根据操作类型调整防抖时间，减少不必要的同步
-      // 调整为更快的同步节奏，提升编辑实时性（25ms）
-      const debounceTime = 25
+      // 优化防抖时间：仅格式化操作使用较短延迟，内容编辑使用更长延迟减少性能开销
+      const debounceTime = isFormattingOperation ? 50 : 150
       
       // 使用防抖延迟同步，避免频繁更新
       clearTimeout(window.tiptapSyncTimeout)
       window.tiptapSyncTimeout = setTimeout(() => {
         const newCells = convertEditorStateToCells()
         
-        // 简化比较：只关心结构和markdown内容变化
-        // 判断是否为结构性改动（增删单元格 / 类型变更）
+        // 优化比较逻辑：减少不必要的深度比较
         const structuralChange = newCells.length !== cells.length ||
           newCells.some((newCell, index) => {
             const existingCell = cells[index];
-            if (!existingCell) return true;
-            return newCell.type !== existingCell.type;
+            return !existingCell || newCell.type !== existingCell.type || newCell.id !== existingCell.id;
           });
 
         // 收集仅 Markdown 内容变化的单元格
@@ -454,8 +515,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
                 console.log(`Code cell at ${index}: keep existing ${existingCodeCell.id}`);
                 return existingCodeCell; // Keep code cell intact
               } else {
-                console.log(`Code cell at ${index}: unknown ${newCell.id}, skipping`);
-                return null; // Mark as invalid, will be filtered
+                console.log(`Code cell at ${index}: new code cell ${newCell.id}`);
+                return newCell; // 新的代码块
               }
             } else if (newCell.type === 'markdown') {
               // Reuse existing markdown cell id/metadata when possible to keep store in sync
@@ -468,10 +529,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
               }
               return newCell;
             } else {
-              // Keep other cell types as is
-              return newCell;
+              // Keep other cell types as is - 重要：保持其他特殊cell类型的处理
+              const existingSpecialCell = currentCells.find(cell => cell.id === newCell.id);
+              return existingSpecialCell || newCell;
             }
-          }).filter(cell => cell !== null); // Filter invalid cells
+          });
           
           console.log('合并后cells:', mergedCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
           console.log('===============================================');
@@ -497,8 +559,17 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     editorProps: {
       attributes: {
         class: `tiptap-notebook-editor markdown-cell prose max-w-none focus:outline-none ${className}`,
-        style: 'min-height: 200px; padding: 24px;',
+        style: 'min-height: 120px; padding: 16px; transition: all 0.2s ease;',
         spellcheck: 'false',
+      },
+      // 优化编辑器性能
+      handleKeyDown: (view, event) => {
+        // 减少不必要的事件冒泡和处理
+        if (event.key === 'Tab') {
+          event.preventDefault();
+          return true;
+        }
+        return false;
       },
     },
     
@@ -616,7 +687,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     if (editor && cells && !isInternalUpdate.current) {
       const lastCells = lastCellsRef.current
       
-      // 更严格的检查：只在真正需要时才更新tiptap内容
+      // 完整的更新检查：确保所有cell类型都能正确处理
       const needsTiptapUpdate = cells.length !== lastCells.length ||
         cells.some((cell, index) => {
           const lastCell = lastCells[index]
@@ -633,23 +704,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           
           // image cell的内容或metadata变化也需要更新tiptap
           if (cell.type === 'image') {
-            if (cell.content !== lastCell.content) {
-              console.log('🖼️ TipTap检测到image cell内容变化:', {
-                cellId: cell.id,
-                oldContent: lastCell.content?.substring(0, 50),
-                newContent: cell.content?.substring(0, 50)
-              })
-              return true
-            }
+            if (cell.content !== lastCell.content) return true
             // 检查metadata变化（特别是生成状态）
-            if (JSON.stringify(cell.metadata || {}) !== JSON.stringify(lastCell.metadata || {})) {
-              console.log('🖼️ TipTap检测到image cell metadata变化:', {
-                cellId: cell.id,
-                oldMetadata: lastCell.metadata,
-                newMetadata: cell.metadata
-              })
-              return true
-            }
+            if (JSON.stringify(cell.metadata || {}) !== JSON.stringify(lastCell.metadata || {})) return true
           }
 
           // thinking cell 的字段变化也需要更新（agentName/customText/textArray/useWorkflowThinking）
@@ -660,23 +717,20 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
               JSON.stringify((cell as any).textArray || []) !== JSON.stringify((lastCell as any).textArray || []) ||
               (cell as any).useWorkflowThinking !== (lastCell as any).useWorkflowThinking
             )
-            if (fieldsChanged) {
-              console.log('🧠 TipTap检测到thinking cell字段变化:', {
-                cellId: cell.id,
-                oldAgent: (lastCell as any).agentName,
-                newAgent: (cell as any).agentName,
-                oldCustom: (lastCell as any).customText,
-                newCustom: (cell as any).customText,
-                oldTextArrayLen: ((lastCell as any).textArray || []).length,
-                newTextArrayLen: ((cell as any).textArray || []).length,
-                oldUseWorkflow: (lastCell as any).useWorkflowThinking,
-                newUseWorkflow: (cell as any).useWorkflowThinking,
-              })
-              return true
-            }
+            if (fieldsChanged) return true
           }
           
-          // code cell的内容、输出变化都不需要更新tiptap
+          // code cell 和其他 cell 类型的内容和输出变化也需要同步到 tiptap
+          if (cell.type === 'code' || cell.type === 'Hybrid') {
+            // 检查代码内容变化
+            if (cell.content !== lastCell.content) return true
+            // 检查输出变化
+            if (JSON.stringify(cell.outputs || []) !== JSON.stringify(lastCell.outputs || [])) return true
+            // 检查其他属性变化
+            if (cell.language !== (lastCell as any).language) return true
+          }
+          
+          // 其他任何类型的 cell 变化都需要同步
           return false
         })
       
@@ -1649,8 +1703,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
   return (
     <div className="tiptap-notebook-editor-container w-full h-full bg-transparent">
-      {/* 浮动工具栏 - 选中文本时显示 */}
-      <div className="bubble-menu-wrapper">
+      {/* 浮动工具栏 - 选中文本时显示 - 已注释 */}
+      {/* <div className="bubble-menu-wrapper">
         <div>
           <BubbleMenu 
           editor={editor}
@@ -1778,7 +1832,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         </button>
           </BubbleMenu>
         </div>
-      </div>
+      </div> */}
 
       {/* 主编辑器内容 - 使用简化的拖拽管理器 */}
       <SimpleDragManager editor={currentEditor}>
@@ -1798,6 +1852,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         }}
         position={slashCommands.menuPosition}
         searchQuery={slashCommands.searchQuery}
+        onQueryUpdate={slashCommands.updateSlashQuery}
       />
 
 

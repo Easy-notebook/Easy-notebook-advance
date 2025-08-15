@@ -12,8 +12,11 @@ import {
   Table,
   Calculator,
   Image,
-  Brain
+  Brain,
+  Video,
 } from 'lucide-react';
+
+import './types';
 
 interface TipTapCommand {
   id: string;
@@ -21,7 +24,7 @@ interface TipTapCommand {
   description: string;
   icon: React.ReactNode;
   keywords: string[];
-  action: (editor: Editor) => void;
+  action: (editor: Editor, query?: string) => void;
 }
 
 interface TipTapSlashCommandsProps {
@@ -30,6 +33,7 @@ interface TipTapSlashCommandsProps {
   onClose: () => void;
   position: { x: number; y: number };
   searchQuery?: string;
+  onQueryUpdate?: (query: string) => void;
 }
 
 const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
@@ -37,7 +41,8 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
   isOpen,
   onClose,
   position,
-  searchQuery = ''
+  searchQuery = '',
+  onQueryUpdate
 }) => {
   const [filteredCommands, setFilteredCommands] = useState<TipTapCommand[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -51,7 +56,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       title: '段落',
       description: '普通文本段落',
       icon: <Type size={16} />,
-      keywords: ['text', 'paragraph', '文本', '段落'],
+      keywords: ['text', 'paragraph', '文本', '段落', 'txt'],
       action: (editor) => {
         editor.chain().focus().setParagraph().run();
       }
@@ -143,13 +148,12 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       icon: <Calculator size={16} />,
       keywords: ['math', 'latex', 'formula', '数学', '公式'],
       action: (editor) => {
-        // 检查是否有LaTeX扩展
-        if (editor.commands.setLaTeX) {
+        try {
           editor.chain().focus().setLaTeX({
             latex: 'E = mc^2',
             displayMode: true
           }).run();
-        } else {
+        } catch {
           // fallback: 插入普通文本
           editor.chain().focus().insertContent('$$E = mc^2$$').run();
         }
@@ -158,13 +162,59 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
     {
       id: 'image',
       title: '图片',
-      description: '插入图片',
+      description: '插入图片 /image [url]',
       icon: <Image size={16} />,
-      keywords: ['image', 'photo', 'picture', '图片', '照片'],
-      action: (editor) => {
-        const url = prompt('请输入图片URL:');
+      keywords: ['image', 'photo', 'picture', '图片', '照片', 'img'],
+      action: (editor, query) => {
+        // 检查查询中是否已包含URL参数
+        const imageMatch = query?.match(/^image\s+(.+)$/);
+        let url = imageMatch ? imageMatch[1].trim() : null;
+        
+        // 如果没有URL参数，弹出输入框
+        if (!url) {
+          url = prompt('请输入图片URL:');
+        }
+        
         if (url) {
-          editor.chain().focus().setImage({ src: url }).run();
+          try {
+            editor.chain().focus().setImage({ 
+              src: url,
+              alt: '图片',
+              title: '图片'
+            }).run();
+          } catch {
+            // fallback: 插入普通文本
+            editor.chain().focus().insertContent(`![图片](${url})`).run();
+          }
+        }
+      }
+    },
+    {
+      id: 'video',
+      title: '视频',
+      description: '插入视频 /video [url]',
+      icon: <Video size={16} />,
+      keywords: ['video', 'movie', 'mp4', '视频', '影片', 'vid'],
+      action: (editor, query) => {
+        // 检查查询中是否已包含URL参数
+        const videoMatch = query?.match(/^video\s+(.+)$/);
+        let url = videoMatch ? videoMatch[1].trim() : null;
+        
+        // 如果没有URL参数，弹出输入框
+        if (!url) {
+          url = prompt('请输入视频URL:');
+        }
+        
+        if (url) {
+          // 插入视频HTML
+          editor.chain().focus().insertContent(`
+            <div class="video-container">
+              <video controls style="max-width: 100%; height: auto;">
+                <source src="${url}" type="video/mp4">
+                您的浏览器不支持视频标签。
+              </video>
+            </div>
+          `).run();
         }
       }
     },
@@ -175,8 +225,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       icon: <Brain size={16} />,
       keywords: ['ai', 'thinking', 'assistant', 'AI', '思考', '助手'],
       action: (editor) => {
-        // 检查是否有思考cell扩展
-        if (editor.commands.insertThinkingCell) {
+        try {
           editor.chain().focus().insertThinkingCell({
             cellId: `thinking-${Date.now()}`,
             agentName: 'AI',
@@ -184,13 +233,21 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
             textArray: [],
             useWorkflowThinking: false,
           }).run();
-        } else {
+        } catch {
           // fallback: 插入普通文本
           editor.chain().focus().insertContent('<div class="thinking-placeholder">🤖 AI思考区域</div>').run();
         }
       }
     }
   ];
+
+  // 处理查询更新
+  const handleQueryUpdate = (newQuery: string) => {
+    setQuery(newQuery);
+    if (onQueryUpdate) {
+      onQueryUpdate(newQuery);
+    }
+  };
 
   // 过滤命令
   useEffect(() => {
@@ -209,41 +266,87 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
     setSelectedIndex(0);
   }, [query]);
 
-  // 键盘导航
+  // 同步外部 searchQuery 到内部 query
+  useEffect(() => {
+    setQuery(searchQuery);
+  }, [searchQuery]);
+
+  // 键盘导航 - 增强事件处理，支持字符输入过滤
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
 
+      // 处理导航和控制键
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
-          setSelectedIndex(prev => 
-            prev < filteredCommands.length - 1 ? prev + 1 : 0
-          );
+          e.stopPropagation();
+          if (filteredCommands.length > 0) {
+            setSelectedIndex(prev => {
+              const nextIndex = prev < filteredCommands.length - 1 ? prev + 1 : 0;
+              return nextIndex;
+            });
+          }
           break;
         case 'ArrowUp':
           e.preventDefault();
-          setSelectedIndex(prev => 
-            prev > 0 ? prev - 1 : filteredCommands.length - 1
-          );
+          e.stopPropagation();
+          if (filteredCommands.length > 0) {
+            setSelectedIndex(prev => {
+              const nextIndex = prev > 0 ? prev - 1 : filteredCommands.length - 1;
+              return nextIndex;
+            });
+          }
           break;
         case 'Enter':
           e.preventDefault();
+          e.stopPropagation();
           if (filteredCommands[selectedIndex] && editor) {
-            filteredCommands[selectedIndex].action(editor);
+            filteredCommands[selectedIndex].action(editor, query);
             onClose();
           }
           break;
         case 'Escape':
           e.preventDefault();
+          e.stopPropagation();
           onClose();
+          break;
+        case 'Tab':
+          e.preventDefault();
+          e.stopPropagation();
+          if (filteredCommands.length > 0) {
+            setSelectedIndex(prev => 
+              prev < filteredCommands.length - 1 ? prev + 1 : 0
+            );
+          }
+          break;
+        case 'Backspace':
+          e.preventDefault();
+          e.stopPropagation();
+          // 删除查询字符
+          if (query.length > 0) {
+            const newQuery = query.slice(0, -1);
+            handleQueryUpdate(newQuery);
+          } else {
+            onClose();
+          }
+          break;
+        default:
+          // 处理普通字符输入
+          if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            const newQuery = query + e.key;
+            handleQueryUpdate(newQuery);
+          }
           break;
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredCommands, selectedIndex, editor, onClose]);
+    // 使用 capture 阶段来确保我们能拦截到事件
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen, filteredCommands, selectedIndex, editor, onClose, query, handleQueryUpdate]);
 
   // 点击外部关闭
   useEffect(() => {
@@ -262,60 +365,74 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
     };
   }, [isOpen, onClose]);
 
+  // 确保菜单获得焦点以接收键盘事件
+  useEffect(() => {
+    if (isOpen && menuRef.current) {
+      // 给菜单设置焦点，但不显示焦点轮廓
+      menuRef.current.focus();
+      console.log('Menu focused');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 min-w-80 max-w-96"
+      className="fixed z-50 bg-white rounded-lg shadow-lg border border-theme-200 min-w-72 max-w-80 focus:outline-none"
+      tabIndex={-1} // 允许接收焦点但不参与Tab导航
       style={{
         left: position.x,
         top: position.y,
-        maxHeight: '400px'
+        maxHeight: '320px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2)'
       }}
     >
-      {/* 搜索输入框 */}
-      <div className="p-3 border-b border-gray-100">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索命令..."
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          autoFocus
-        />
-      </div>
+      {/* 搜索状态显示 */}
+      {query && (
+        <div className="px-3 py-2 border-b border-theme-100 bg-theme-25">
+          <div className="text-xs text-theme-600 font-medium flex items-center gap-2">
+            <span className="font-mono bg-white px-2 py-1 rounded border">/{query}</span>
+          </div>
+        </div>
+      )}
 
       {/* 命令列表 */}
       <div className="max-h-80 overflow-y-auto">
         {filteredCommands.length === 0 ? (
-          <div className="p-4 text-center text-gray-500 text-sm">
-            没有找到匹配的命令
-          </div>
+          null
         ) : (
-          <div className="py-2">
+          <div className="py-1">
             {filteredCommands.map((command, index) => (
               <button
                 key={command.id}
-                className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors ${
-                  index === selectedIndex ? 'bg-blue-50 border-r-2 border-blue-500' : ''
+                className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 ${
+                  index === selectedIndex 
+                    ? 'bg-gradient-to-r from-theme-100 to-theme-50 border-r-3 border-theme-500 text-theme-800' 
+                    : 'hover:bg-theme-50 text-gray-700'
                 }`}
                 onClick={() => {
                   if (editor) {
-                    command.action(editor);
+                    command.action(editor, query);
                     onClose();
                   }
                 }}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
-                <div className="flex-shrink-0 text-gray-600">
+                <div className={`flex-shrink-0 ${
+                  index === selectedIndex ? 'text-theme-600' : 'text-gray-500'
+                }`}>
                   {command.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 text-sm">
+                  <div className={`font-medium text-sm ${
+                    index === selectedIndex ? 'text-theme-900' : 'text-gray-900'
+                  }`}>
                     {command.title}
                   </div>
-                  <div className="text-gray-500 text-xs truncate">
+                  <div className={`text-xs truncate ${
+                    index === selectedIndex ? 'text-theme-600' : 'text-gray-500'
+                  }`}>
                     {command.description}
                   </div>
                 </div>
@@ -323,13 +440,6 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
             ))}
           </div>
         )}
-      </div>
-
-      {/* 底部提示 */}
-      <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
-        <span>↑↓ 导航</span>
-        <span>Enter 选择</span>
-        <span>Esc 关闭</span>
       </div>
     </div>
   );

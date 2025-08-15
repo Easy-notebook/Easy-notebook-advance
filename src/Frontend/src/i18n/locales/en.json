@@ -174,9 +174,10 @@
     "youSelectedDefault": "You selected your analysis"
   },
   "rightSideBar": {
+    "thinking": "is thinking...",
     "noWorkflowPlan": "No workflow plan available",
     "history": "History",
-    "chat": "Chat",
+    "chat": "Request",
     "workflow": "Tasks",
     "noContent": "No content available",
     "collapseDetails": "Collapse Details",

@@ -329,3 +329,33 @@ class Action:
         self.actions.append(action)
 
         return self.build()
+
+    def generate_image(self,prompt:str):
+        action = {
+            "action": "command_call",
+            "command": f"/image {prompt}",
+            "command_id": f"img-{hash(prompt) % 10000}",
+            "state": self._get_context()
+        }
+        self.actions.append(action)
+        return self
+    
+    def generate_video(self,prompt:str):
+        action = {
+            "action": "command_call",
+            "command": f"/video {prompt}",
+            "command_id": f"video-{hash(prompt) % 10000}",
+            "state": self._get_context()
+        }
+        self.actions.append(action)
+        return self
+    
+    def comunicate_with_agent(self,agent_name:str,content:str):
+        action = {
+            "action": "comunicate_with_agent",
+            "agent_name": agent_name,
+            "content": content,
+            "state": self._get_context()
+        }
+        self.actions.append(action)
+        return self
