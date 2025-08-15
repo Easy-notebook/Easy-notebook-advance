@@ -11,7 +11,7 @@ const AgentInfo: React.FC<AgentInfoProps> = ({ agent, model, type }) => {
   const getAgentIcon = (agentType?: string) => {
     switch (agentType) {
       case 'general':
-        return <Bot className="w-4 h-4 text-blue-600" />;
+        return <Bot className="w-4 h-4 text-theme-600" />;
       case 'text2image':
         return <Image className="w-4 h-4 text-purple-600" />;
       case 'text2video':
@@ -36,9 +36,9 @@ const AgentInfo: React.FC<AgentInfoProps> = ({ agent, model, type }) => {
   if (!agent && !type) return null;
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 rounded-md">
+    <div className="flex items-center gap-2 px-2 py-1 bg-theme-50 rounded-md">
       {getAgentIcon(type || agent)}
-      <span className="text-xs text-blue-700 font-medium">
+      <span className="text-xs text-theme-700 font-medium">
         {getAgentName(type || agent)}
       </span>
       {model && (

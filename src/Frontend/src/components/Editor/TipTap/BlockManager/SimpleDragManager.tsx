@@ -158,7 +158,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
         >
           <button
             onClick={moveBlockUp}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            className="p-2 text-gray-600 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
             title="向上移动"
             disabled={getCellIndex(currentCellId) === 0}
           >
@@ -167,7 +167,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
           
           <button
             onClick={moveBlockDown}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            className="p-2 text-gray-600 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
             title="向下移动"
             disabled={getCellIndex(currentCellId) === cells.length - 1}
           >
@@ -186,7 +186,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
           
           <button
             onClick={insertNewCell}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            className="p-2 text-gray-600 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
             title="插入新cell"
           >
             <Plus size={16} />
@@ -202,8 +202,10 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
         </div>
       )} */}
 
-      {/* CSS样式 */}
+      {/* CSS样式 - hover效果已禁用 */}
       <style>{`
+        /* Hover effects disabled for cells */
+        /*
         .ProseMirror p:hover,
         .ProseMirror h1:hover,
         .ProseMirror h2:hover,
@@ -226,6 +228,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
           margin-left: -11px;
           transition: all 0.15s ease;
         }
+        */
       `}</style>
     </div>
   );

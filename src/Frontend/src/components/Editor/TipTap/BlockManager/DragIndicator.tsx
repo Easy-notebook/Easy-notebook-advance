@@ -51,7 +51,7 @@ const DragIndicator: React.FC<DragIndicatorProps> = ({
         {/* 拖拽光标指示器 */}
         {dragPosition && (
           <div
-            className="absolute w-4 h-4 bg-blue-500 rounded-full shadow-lg transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            className="absolute w-4 h-4 bg-theme-500 rounded-full shadow-lg transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             style={{
               left: dragPosition.x,
               top: dragPosition.y,
@@ -68,8 +68,8 @@ const DragIndicator: React.FC<DragIndicatorProps> = ({
         onDragLeave={handleDragLeave}
       >
         {showDropZone && (
-          <div className="absolute inset-4 border-2 border-dashed border-blue-400 bg-blue-50 bg-opacity-50 rounded-lg flex items-center justify-center">
-            <div className="text-blue-600 text-lg font-medium">
+          <div className="absolute inset-4 border-2 border-dashed border-theme-400 bg-theme-50 bg-opacity-50 rounded-lg flex items-center justify-center">
+            <div className="text-theme-600 text-lg font-medium">
               拖拽到此处重新排序
             </div>
           </div>

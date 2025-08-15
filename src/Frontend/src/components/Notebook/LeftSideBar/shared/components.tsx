@@ -4,7 +4,7 @@
  */
 
 import { memo, ReactNode } from 'react';
-import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { SHARED_STYLES, TabId, TAB_CONFIG } from './constants';
 
 // 状态指示器组件
@@ -38,7 +38,7 @@ export const StatusDot = memo<{
 
 StatusDot.displayName = 'StatusDot';
 
-// 通用按钮组件
+// Obsidian风格通用按钮组件
 export const SidebarButton = memo<{
   children: ReactNode;
   isActive?: boolean;
@@ -47,20 +47,20 @@ export const SidebarButton = memo<{
   size?: 'sm' | 'md' | 'lg';
 }>(({ children, isActive = false, onClick, className = '', size = 'md' }) => {
   const sizeClasses = {
-    sm: 'px-2 py-1 text-sm',
-    md: 'px-3 py-2 text-base',
-    lg: 'px-4 py-3 text-lg'
+    sm: 'px-2.5 py-1.5 text-sm',
+    md: 'px-3 py-2 text-sm',
+    lg: 'px-4 py-2.5 text-base'
   };
 
   return (
     <button
       onClick={onClick}
       className={`
-        w-full flex items-center gap-2.5 rounded-lg
+        w-full flex items-center gap-2.5 rounded-md group
         ${SHARED_STYLES.button.base}
         ${sizeClasses[size]}
-        ${isActive 
-          ? SHARED_STYLES.button.active 
+        ${isActive
+          ? SHARED_STYLES.button.active
           : `${SHARED_STYLES.button.inactive} ${SHARED_STYLES.button.hover}`
         }
         ${className}
@@ -68,7 +68,7 @@ export const SidebarButton = memo<{
     >
       {children}
       {isActive && (
-        <ArrowRight size={16} className="ml-auto text-theme-600" />
+        <div className="ml-auto w-1.5 h-1.5 bg-slate-600 rounded-full" />
       )}
     </button>
   );
@@ -76,27 +76,31 @@ export const SidebarButton = memo<{
 
 SidebarButton.displayName = 'SidebarButton';
 
-// Tab 切换组件
+// Obsidian风格Tab切换组件
 export const TabSwitcher = memo<{
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   className?: string;
 }>(({ activeTab, onTabChange, className = '' }) => {
   return (
-    <div className={`flex space-x-1 ${className}`}>
+    <div className={`flex space-x-0.5 bg-slate-100/60 p-1 rounded-lg ${className}`}>
       {TAB_CONFIG.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
           className={`
             ${SHARED_STYLES.tab.base}
-            ${activeTab === tab.id 
-              ? SHARED_STYLES.tab.active 
+            ${activeTab === tab.id
+              ? SHARED_STYLES.tab.active
               : SHARED_STYLES.tab.inactive
             }
+            relative overflow-hidden
           `}
         >
-          {tab.label}
+          <span className="relative z-10">{tab.label}</span>
+          {activeTab === tab.id && (
+            <div className="absolute inset-0 bg-white shadow-sm rounded-md border border-slate-300/50" />
+          )}
         </button>
       ))}
     </div>

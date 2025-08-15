@@ -117,7 +117,7 @@ const DraggableCell = forwardRef<HTMLDivElement, DraggableCellProps>(
         className={`
           relative group
           ${isDragging ? 'opacity-50 z-50' : ''}
-          ${isActive ? 'ring-2 ring-blue-300 ring-opacity-50' : ''}
+          ${isActive ? 'ring-2 ring-theme-300 ring-opacity-50' : ''}
           ${className}
         `}
       >
@@ -135,7 +135,7 @@ const DraggableCell = forwardRef<HTMLDivElement, DraggableCellProps>(
                 bg-white rounded border border-gray-200 shadow-sm
                 hover:shadow-md hover:border-gray-300
                 transition-all duration-200
-                ${showAddMenu ? 'bg-blue-50 border-blue-300 text-blue-600' : ''}
+                ${showAddMenu ? 'bg-theme-50 border-theme-300 text-theme-600' : ''}
               `}
               style={{ color: showAddMenu ? '#3B82F6' : VUE_SECONDARY }}
               title="添加 Cell (快捷键: C/M/I/A)"
@@ -232,7 +232,7 @@ const DraggableCell = forwardRef<HTMLDivElement, DraggableCellProps>(
 
         {/* 拖拽时的视觉指示器 */}
         {isDragging && (
-          <div className="absolute inset-0 bg-blue-100 bg-opacity-30 rounded-lg border-2 border-dashed border-blue-300" />
+          <div className="absolute inset-0 bg-theme-100 bg-opacity-30 rounded-lg border-2 border-dashed border-theme-300" />
         )}
       </div>
     );

@@ -1,5 +1,4 @@
 // src/App.tsx
-import React from 'react'
 import NotebookApp from './components/Notebook/NotebookApp'
 
 function App(): JSX.Element {

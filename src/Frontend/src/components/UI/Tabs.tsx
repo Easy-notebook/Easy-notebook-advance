@@ -56,7 +56,7 @@ interface TabsListProps {
 
 export const TabsList: React.FC<TabsListProps> = ({ children, className = '' }) => {
   return (
-    <div className={`inline-flex h-10 items-center justify-center rounded-md bg-gray-100 p-1 text-gray-500 ${className}`}>
+    <div className={`inline-flex h-9 items-center justify-center rounded-lg bg-slate-100/60 p-1 text-slate-500 ${className}`}>
       {children}
     </div>
   );
@@ -75,12 +75,12 @@ export const TabsTrigger: React.FC<TabsTriggerProps> = ({ value, children, class
   return (
     <button
       className={`
-        inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium 
-        ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 
-        focus-visible:ring-gray-400 focus-visible:ring-offset-2 disabled:pointer-events-none 
-        disabled:opacity-50 data-[state=active]:bg-white data-[state=active]:text-gray-950 
-        data-[state=active]:shadow-sm
-        ${isSelected ? 'bg-white text-gray-950 shadow-sm' : 'hover:bg-gray-200'}
+        inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium
+        ring-offset-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2
+        focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:pointer-events-none
+        disabled:opacity-50 data-[state=active]:bg-white data-[state=active]:text-slate-800
+        data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-slate-300/50
+        ${isSelected ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-300/50' : 'hover:bg-slate-100/60 text-slate-600 hover:text-slate-700'}
         ${className}
       `}
       onClick={() => onValueChange(value)}

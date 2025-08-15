@@ -140,7 +140,7 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
       {/* 拖拽覆盖层 - 显示正在被拖拽的元素 */}
       <DragOverlay>
         {activeId && draggedCell ? (
-          <div className="bg-white rounded-lg shadow-2xl border-2 border-blue-300 transform rotate-2 opacity-95">
+          <div className="bg-white rounded-lg shadow-2xl border-2 border-theme-300 transform rotate-2 opacity-95">
             {renderCell(draggedCell, true)}
           </div>
         ) : null}

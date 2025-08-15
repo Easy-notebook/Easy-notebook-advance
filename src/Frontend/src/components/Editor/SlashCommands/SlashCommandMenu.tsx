@@ -256,7 +256,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'basic': return 'text-blue-600';
+      case 'basic': return 'text-theme-600';
       case 'advanced': return 'text-purple-600';
       case 'media': return 'text-green-600';
       case 'ai': return 'text-orange-600';
@@ -282,7 +282,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索命令..."
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-theme-500 focus:border-transparent"
         />
       </div>
 
@@ -298,7 +298,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
               <button
                 key={command.id}
                 className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors ${
-                  index === selectedIndex ? 'bg-blue-50 border-r-2 border-blue-500' : ''
+                  index === selectedIndex ? 'bg-theme-50 border-r-2 border-theme-500' : ''
                 }`}
                 onClick={() => onCommand(command)}
                 onMouseEnter={() => setSelectedIndex(index)}

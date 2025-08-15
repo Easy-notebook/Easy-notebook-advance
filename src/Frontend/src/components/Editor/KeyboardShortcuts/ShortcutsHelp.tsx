@@ -75,7 +75,7 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ isOpen, onClose }) => {
         {/* 头部 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <Keyboard className="text-blue-600" size={24} />
+            <Keyboard className="text-theme-600" size={24} />
             <h2 className="text-xl font-bold text-gray-800">键盘快捷键</h2>
           </div>
           <button
@@ -100,9 +100,9 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ isOpen, onClose }) => {
           </div>
 
           {/* 提示信息 */}
-          <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h4 className="font-semibold text-blue-800 mb-2">💡 使用提示</h4>
-            <ul className="text-sm text-blue-700 space-y-1">
+          <div className="mt-8 p-4 bg-theme-50 rounded-lg border border-theme-200">
+            <h4 className="font-semibold text-theme-800 mb-2">💡 使用提示</h4>
+            <ul className="text-sm text-theme-700 space-y-1">
               <li>• 在编辑模式下，输入 <kbd className="px-1 py-0.5 bg-white border rounded text-xs">/</kbd> 可以快速打开命令菜单</li>
               <li>• 悬停在cell左侧可以看到拖拽手柄，拖拽可以重新排序</li>
               <li>• 使用 <kbd className="px-1 py-0.5 bg-white border rounded text-xs">Ctrl/Cmd + /</kbd> 可以在任何时候打开命令面板</li>
@@ -119,7 +119,7 @@ const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ isOpen, onClose }) => {
             </span>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-theme-600 text-white rounded-lg hover:bg-theme-700 transition-colors"
             >
               关闭
             </button>

@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { parseMarkdownCells, findCellsByPhase, findCellsByStep } from '../utils/markdownParser';
+import { parseMarkdownCells, findCellsByPhase, findCellsByStep, updateCellsPhaseId } from '../utils/markdownParser';
 import { v4 as uuidv4 } from 'uuid';
 import { showToast } from '../components/UI/Toast';
 import { produce } from 'immer';
@@ -398,6 +398,7 @@ const useStore = create(
         metadata: { isDefaultTitle: true }
       };
       const tasks = parseMarkdownCells([titleCell] as any);
+      updateCellsPhaseId([titleCell] as any, tasks);
       set({ cells: [titleCell], tasks, currentRunningPhaseId: null });
     },
     clearAllOutputs: () =>
@@ -441,6 +442,7 @@ const useStore = create(
       }
       
       const tasks = parseMarkdownCells(processedCells as any);
+      updateCellsPhaseId(processedCells as any, tasks);
       set({ cells: processedCells, tasks });
     },
 
@@ -532,7 +534,9 @@ const useStore = create(
             (cell.content.includes('#') || state.tasks.length === 0);
             
           if (needsReparse) {
-            state.tasks = parseMarkdownCells(state.cells as any) as any;
+            const updatedTasks = parseMarkdownCells(state.cells as any) as any;
+            updateCellsPhaseId(state.cells as any, updatedTasks);
+            state.tasks = updatedTasks;
           } else {
             console.log('⏭️ 跳过tasks重新解析（非标题cell）');
           }
@@ -635,7 +639,9 @@ const useStore = create(
           }
           
           state.cells = state.cells.filter((cell) => cell.id !== cellId);
-          state.tasks = parseMarkdownCells(state.cells as any) as any;
+          const updatedTasks = parseMarkdownCells(state.cells as any) as any;
+          updateCellsPhaseId(state.cells as any, updatedTasks);
+          state.tasks = updatedTasks;
 
           if (cellToDelete && cellToDelete.phaseId === state.currentPhaseId) {
             const phaseCellsResult = findCellsByPhase(
@@ -688,7 +694,11 @@ const useStore = create(
               state.notebookTitle = title || 'Untitled';
             }
           }
-          state.tasks = parseMarkdownCells(state.cells as any) as any;
+          // 重新解析 markdown cells 并更新 tasks，同时确保 phaseId 被正确设置
+          const updatedTasks = parseMarkdownCells(state.cells as any) as any;
+          state.tasks = updatedTasks;
+          // 更新 cells 的 phaseId 以确保与 tasks 中的 phase ID 一致
+          updateCellsPhaseId(state.cells as any, updatedTasks);
         })
       ),
 
@@ -801,6 +811,7 @@ const useStore = create(
         get().clearAllOutputs();
 
         const tasks = parseMarkdownCells(state.cells as any) as any;
+        updateCellsPhaseId(state.cells as any, tasks);
         set({ tasks });
 
         const codeCells = state.cells.filter((cell) => cell.type === 'code');
@@ -1137,7 +1148,9 @@ const useStore = create(
           }
 
           // 重新解析任务
-          state.tasks = parseMarkdownCells(state.cells as any) as any;
+          const updatedTasks = parseMarkdownCells(state.cells as any) as any;
+          updateCellsPhaseId(state.cells as any, updatedTasks);
+          state.tasks = updatedTasks;
         })
       ),
 

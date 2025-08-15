@@ -820,6 +820,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     console.log('=== convertCellsToHtml 转换 ===');
     console.log('输入cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
 
+    // 子标题ID唯一化计数器：baseId -> (slug -> count)
+    const headingSlugCounter = new Map<string, Map<string, number>>();
+
     const htmlParts = cells.map((cell, index) => {
       if (cell.type === 'code' || cell.type === 'Hybrid') {
         // code和Hybrid cell转换为可执行代码块，确保包含正确的ID和位置信息
@@ -827,7 +830,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         return `<div data-type="executable-code-block" data-language="${cell.language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}"></div>`
       } else if (cell.type === 'markdown') {
         // markdown cell转换为HTML
-        return convertMarkdownToHtml(cell.content || '', cell)
+        return convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter)
       } else if (cell.type === 'image') {
         // image cell转换为HTML - 包含cellId和metadata信息
         console.log(`转换图片单元格 ${index}: ID=${cell.id}`);
@@ -899,11 +902,28 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         if (currentMarkdownContent.length > 0) {
           const markdownText = currentMarkdownContent.join('\n').trim()
           if (markdownText) {
-            // 检查是否是重复的标题内容
-            const isDuplicateTitle = markdownText.startsWith('#') && 
-              newCells.some(cell => cell.type === 'markdown' && cell.content.trim() === markdownText.trim())
-            
+            // 检查是否是重复的标题内容，但允许替换默认的 "Untitled" 标题
+            const isDuplicateTitle = markdownText.startsWith('#') &&
+              newCells.some(cell => {
+                if (cell.type === 'markdown' && cell.content.trim() === markdownText.trim()) {
+                  // 如果是默认的 "Untitled" 标题，允许被替换
+                  return !(cell.content.trim() === '# Untitled' && markdownText.trim() !== '# Untitled');
+                }
+                return false;
+              });
+
             if (!isDuplicateTitle) {
+              // 如果新标题不是 "Untitled"，移除现有的默认 "Untitled" 标题
+              if (markdownText.startsWith('#') && markdownText.trim() !== '# Untitled') {
+                const untitledIndex = newCells.findIndex(cell =>
+                  cell.type === 'markdown' && cell.content.trim() === '# Untitled'
+                );
+                if (untitledIndex !== -1) {
+                  newCells.splice(untitledIndex, 1);
+                  console.log('🔄 移除默认的 Untitled 标题，替换为:', markdownText.substring(0, 30));
+                }
+              }
+
               newCells.push({
                 id: generateCellId(),
                 type: 'markdown',
@@ -1138,11 +1158,28 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         if (markdownText) {
           const convertedMarkdown = convertHtmlToMarkdown(markdownText)
           
-          // 检查是否是重复的标题内容
-          const isDuplicateTitle = convertedMarkdown.startsWith('#') && 
-            newCells.some(cell => cell.type === 'markdown' && cell.content.trim() === convertedMarkdown.trim())
-          
+          // 检查是否是重复的标题内容，但允许替换默认的 "Untitled" 标题
+          const isDuplicateTitle = convertedMarkdown.startsWith('#') &&
+            newCells.some(cell => {
+              if (cell.type === 'markdown' && cell.content.trim() === convertedMarkdown.trim()) {
+                // 如果是默认的 "Untitled" 标题，允许被替换
+                return !(cell.content.trim() === '# Untitled' && convertedMarkdown.trim() !== '# Untitled');
+              }
+              return false;
+            });
+
           if (!isDuplicateTitle) {
+            // 如果新标题不是 "Untitled"，移除现有的默认 "Untitled" 标题
+            if (convertedMarkdown.startsWith('#') && convertedMarkdown.trim() !== '# Untitled') {
+              const untitledIndex = newCells.findIndex(cell =>
+                cell.type === 'markdown' && cell.content.trim() === '# Untitled'
+              );
+              if (untitledIndex !== -1) {
+                newCells.splice(untitledIndex, 1);
+                console.log('🔄 移除默认的 Untitled 标题 (HTML)，替换为:', convertedMarkdown.substring(0, 30));
+              }
+            }
+
             newCells.push({
               id: generateCellId(),
               type: 'markdown',
@@ -1327,7 +1364,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   /**
    * Markdown到HTML转换 - 支持格式化标记、LaTeX和图片
    */
-  function convertMarkdownToHtml(markdown, cell = null) {
+  function convertMarkdownToHtml(markdown, cell = null, headingSlugCounter = null) {
     if (!markdown) return '<p></p>'
     
     // 处理LaTeX语法 - 分步骤处理避免嵌套问题
@@ -1462,9 +1499,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           if (cell) {
             // 优先使用 phaseId（与 OutlineSidebar 的 phase.id 对应），否则回退到 cell.id
             if ((cell as any).phaseId) {
+              console.log('🎯 使用phaseId作为标题ID:', { cellId: (cell as any).id, phaseId: (cell as any).phaseId, content: line.substring(0, 20) });
               return (cell as any).phaseId;
             }
             if ((cell as any).id) {
+              console.log('⚠️ 回退使用cellId作为标题ID:', { cellId: (cell as any).id, content: line.substring(0, 20) });
               return (cell as any).id;
             }
           }
@@ -1474,32 +1513,101 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         if (line.startsWith('# ')) {
           const text = processInlineFormatting(line.slice(2));
           const id = generateHeadingId();
-          return id ? `<h1 id="${id}">${text}</h1>` : `<h1>${text}</h1>`;
+          return id
+            ? `<h1 id="${id}" data-level="1" data-base-id="${id}" data-heading-key="${id}">${text}</h1>`
+            : `<h1 data-level="1">${text}</h1>`;
         }
         if (line.startsWith('## ')) {
           const text = processInlineFormatting(line.slice(3));
           const id = generateHeadingId();
-          return id ? `<h2 id="${id}">${text}</h2>` : `<h2>${text}</h2>`;
+          return id
+            ? `<h2 id="${id}" data-level="2" data-base-id="${id}" data-heading-key="${id}">${text}</h2>`
+            : `<h2 data-level="2">${text}</h2>`;
         }
         if (line.startsWith('### ')) {
-          const text = processInlineFormatting(line.slice(4));
-          const id = generateHeadingId();
-          return id ? `<h3 id="${id}">${text}</h3>` : `<h3>${text}</h3>`;
+          const raw = line.slice(4).trim();
+          const text = processInlineFormatting(raw);
+          const baseId = generateHeadingId();
+          let slug = raw.toLowerCase()
+            .replace(/<[^>]+>/g, '')
+            .replace(/[^a-z0-9\s-]/gi, '')
+            .replace(/\s+/g, '-')
+            .slice(0, 80);
+          // 唯一化：同一个baseId下相同slug加序号
+          if (headingSlugCounter && baseId) {
+            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
+            const map = headingSlugCounter.get(baseId)!;
+            const count = (map.get(slug) || 0) + 1;
+            map.set(slug, count);
+            if (count > 1) slug = `${slug}-${count}`;
+          }
+          const subId = baseId ? `${baseId}--${slug}` : slug;
+          console.log('🧭 生成H3子标题ID:', { baseId, slug, subId });
+          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
+          return `<h3 id=\"${subId}\" data-level=\"3\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h3>`;
         }
         if (line.startsWith('#### ')) {
-          const text = processInlineFormatting(line.slice(5));
-          const id = generateHeadingId();
-          return id ? `<h4 id="${id}">${text}</h4>` : `<h4>${text}</h4>`;
+          const raw = line.slice(5).trim();
+          const text = processInlineFormatting(raw);
+          const baseId = generateHeadingId();
+          let slug = raw.toLowerCase()
+            .replace(/<[^>]+>/g, '')
+            .replace(/[^a-z0-9\s-]/gi, '')
+            .replace(/\s+/g, '-')
+            .slice(0, 80);
+          if (headingSlugCounter && baseId) {
+            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
+            const map = headingSlugCounter.get(baseId)!;
+            const count = (map.get(slug) || 0) + 1;
+            map.set(slug, count);
+            if (count > 1) slug = `${slug}-${count}`;
+          }
+          const subId = baseId ? `${baseId}--${slug}` : slug;
+          console.log('🧭 生成H4子标题ID:', { baseId, slug, subId });
+          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
+          return `<h4 id=\"${subId}\" data-level=\"4\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h4>`;
         }
         if (line.startsWith('##### ')) {
-          const text = processInlineFormatting(line.slice(6));
-          const id = generateHeadingId();
-          return id ? `<h5 id="${id}">${text}</h5>` : `<h5>${text}</h5>`;
+          const raw = line.slice(6).trim();
+          const text = processInlineFormatting(raw);
+          const baseId = generateHeadingId();
+          let slug = raw.toLowerCase()
+            .replace(/<[^>]+>/g, '')
+            .replace(/[^a-z0-9\s-]/gi, '')
+            .replace(/\s+/g, '-')
+            .slice(0, 80);
+          if (headingSlugCounter && baseId) {
+            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
+            const map = headingSlugCounter.get(baseId)!;
+            const count = (map.get(slug) || 0) + 1;
+            map.set(slug, count);
+            if (count > 1) slug = `${slug}-${count}`;
+          }
+          const subId = baseId ? `${baseId}--${slug}` : slug;
+          console.log('🧭 生成H5子标题ID:', { baseId, slug, subId });
+          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
+          return `<h5 id=\"${subId}\" data-level=\"5\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h5>`;
         }
         if (line.startsWith('###### ')) {
-          const text = processInlineFormatting(line.slice(7));
-          const id = generateHeadingId();
-          return id ? `<h6 id="${id}">${text}</h6>` : `<h6>${text}</h6>`;
+          const raw = line.slice(7).trim();
+          const text = processInlineFormatting(raw);
+          const baseId = generateHeadingId();
+          let slug = raw.toLowerCase()
+            .replace(/<[^>]+>/g, '')
+            .replace(/[^a-z0-9\s-]/gi, '')
+            .replace(/\s+/g, '-')
+            .slice(0, 80);
+          if (headingSlugCounter && baseId) {
+            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
+            const map = headingSlugCounter.get(baseId)!;
+            const count = (map.get(slug) || 0) + 1;
+            map.set(slug, count);
+            if (count > 1) slug = `${slug}-${count}`;
+          }
+          const subId = baseId ? `${baseId}--${slug}` : slug;
+          console.log('🧭 生成H6子标题ID:', { baseId, slug, subId });
+          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
+          return `<h6 id=\"${subId}\" data-level=\"6\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h6>`;
         }
         if (line.startsWith('> ')) {
           return `<blockquote>${processInlineFormatting(line.slice(2))}</blockquote>`

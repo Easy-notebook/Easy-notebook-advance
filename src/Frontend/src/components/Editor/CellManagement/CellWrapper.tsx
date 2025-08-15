@@ -161,7 +161,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
       ref={wrapperRef}
       className={`
         relative group cell-wrapper
-        ${isSelected ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}
+        ${isSelected ? 'ring-2 ring-theme-500 ring-opacity-50' : ''}
         ${isFocused ? 'shadow-lg' : 'shadow-sm'}
         ${isEditing ? 'ring-2 ring-green-500 ring-opacity-50' : ''}
         bg-white rounded-lg transition-all duration-200
@@ -180,7 +180,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
     >
       {/* 左侧选中指示器 */}
       {isSelected && (
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-lg" />
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-theme-500 rounded-l-lg" />
       )}
 
       {/* 顶部插入区域 */}
@@ -325,7 +325,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="编辑中" />
         )}
         {isFocused && !isEditing && (
-          <div className="w-2 h-2 bg-blue-500 rounded-full" title="已聚焦" />
+          <div className="w-2 h-2 bg-theme-500 rounded-full" title="已聚焦" />
         )}
       </div>
     </div>

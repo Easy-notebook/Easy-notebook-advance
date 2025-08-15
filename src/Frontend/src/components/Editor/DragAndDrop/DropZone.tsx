@@ -31,7 +31,7 @@ const DropZone: React.FC<DropZoneProps> = ({
       ref={setNodeRef}
       className={`
         relative h-8 group
-        ${isOver ? 'bg-blue-50' : ''}
+        ${isOver ? 'bg-theme-50' : ''}
         ${className}
       `}
       onMouseEnter={() => setIsHovered(true)}
@@ -39,7 +39,7 @@ const DropZone: React.FC<DropZoneProps> = ({
     >
       {/* 拖拽目标指示器 */}
       {isOver && (
-        <div className="absolute inset-0 border-2 border-dashed border-blue-400 bg-blue-50 rounded-lg" />
+        <div className="absolute inset-0 border-2 border-dashed border-theme-400 bg-theme-50 rounded-lg" />
       )}
 
       {/* 添加按钮 */}
@@ -47,7 +47,7 @@ const DropZone: React.FC<DropZoneProps> = ({
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/90 backdrop-blur-sm shadow-lg rounded-lg p-2 z-10">
           <button
             onClick={() => handleAddCell('code')}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
             title="添加代码块"
           >
             <Plus size={12} />
@@ -76,7 +76,7 @@ const DropZone: React.FC<DropZoneProps> = ({
       <div className={`
         absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
         w-full h-px bg-gray-200
-        ${isHovered || isOver ? 'bg-blue-300' : ''}
+        ${isHovered || isOver ? 'bg-theme-300' : ''}
         transition-colors duration-200
       `} />
     </div>

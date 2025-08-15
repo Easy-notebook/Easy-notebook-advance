@@ -52,34 +52,171 @@ const PhaseSection = memo(({
   currentStepId,
   isTitle
 }) => {
-  const handleStepClick = useCallback((stepId) => {
-    onStepSelect(phase.id, stepId);
-  }, [phase.id, onStepSelect]);
-
   const IconComponent = iconMapping[phase.icon] || CheckCircle2;
   const introStep = phase.steps[0];
   const regularSteps = phase.steps.slice(1);
 
   const scrollToElement = useCallback((elementId: string) => {
-    const targetElement = document.getElementById(elementId);
-    if (targetElement) {
-      targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return true;
-    }
+    console.log('🎯 尝试滚动到元素:', elementId);
 
-    // 如果直接查找失败，尝试在 TiptapNotebookEditor 容器内查找
-    const tiptapContainer = document.querySelector('.tiptap-notebook-editor');
-    if (tiptapContainer) {
-      const headings = tiptapContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
-      for (const heading of headings) {
-        if (heading.id === elementId) {
-          heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 使用双重 requestAnimationFrame 确保 DOM 更新完成
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+      const targetElement = document.getElementById(elementId);
+      if (targetElement) {
+        console.log('✅ 找到目标元素:', targetElement);
+
+        // 查找滚动容器 - 主内容区域
+        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto.scroll-smooth') ||
+                               document.querySelector('.flex-1.overflow-y-auto') ||
+                               document.querySelector('[class*="overflow-y-auto"]') ||
+                               document.documentElement;
+
+        console.log('📦 使用滚动容器:', scrollContainer);
+
+        // 计算目标元素相对于滚动容器的位置
+        const targetRect = targetElement.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
+
+        console.log('📍 目标元素位置:', { top: targetRect.top, left: targetRect.left });
+        console.log('📍 容器位置:', { top: containerRect.top, left: containerRect.left });
+
+        // 如果是文档元素，使用 scrollIntoView
+        if (scrollContainer === document.documentElement) {
+          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          // 如果是特定容器，计算滚动位置
+          const scrollTop = targetRect.top - containerRect.top + scrollContainer.scrollTop - 20; // 20px 偏移
+          console.log('📊 滚动计算:', {
+            targetTop: targetRect.top,
+            containerTop: containerRect.top,
+            currentScrollTop: scrollContainer.scrollTop,
+            newScrollTop: scrollTop
+          });
+
+          scrollContainer.scrollTo({
+            top: scrollTop,
+            behavior: 'smooth'
+          });
+
+          // 添加多个备用的滚动方法，以防第一个不工作
+          setTimeout(() => {
+            console.log('🔄 执行备用滚动方法 1: scrollIntoView');
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 100);
+
+          // 第二个备用方法：强制滚动到页面顶部然后滚动到元素
+          setTimeout(() => {
+            console.log('🔄 执行备用滚动方法 2: 强制滚动');
+            const elementTop = targetElement.offsetTop;
+            const container = scrollContainer as HTMLElement;
+            if (container && container.scrollTo) {
+              container.scrollTo({ top: elementTop - 50, behavior: 'smooth' });
+            }
+          }, 200);
+        }
+
+        console.log('✅ 滚动命令已执行');
+        return true;
+      }
+
+      console.log('⚠️ 直接查找失败，尝试在 TiptapNotebookEditor 容器内查找');
+      // 如果直接查找失败，尝试在 TiptapNotebookEditor 容器内查找
+      const tiptapContainer = document.querySelector('.tiptap-notebook-editor');
+      if (tiptapContainer) {
+        // 优先用 meta 属性精准匹配（data-base-id + data-heading-key），避免仅依赖 id
+        const [baseId, key] = elementId.includes('--') ? elementId.split('--') : [elementId, ''];
+        let heading = null as HTMLElement | null;
+        if (key) {
+          heading = tiptapContainer.querySelector(`[data-base-id="${CSS.escape(baseId)}"][data-heading-key="${CSS.escape(key)}"]`) as HTMLElement | null;
+        }
+        // 回退到按 id 匹配
+        if (!heading) heading = tiptapContainer.querySelector(`#${CSS.escape(elementId)}`) as HTMLElement | null;
+
+        const headings = tiptapContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        console.log('📋 找到的标题元素:', Array.from(headings).map(h => ({ tag: h.tagName, id: h.id, key: (h as any).dataset?.headingKey, base: (h as any).dataset?.baseId, text: h.textContent?.substring(0, 20) })));
+
+        if (heading) {
+          console.log('✅ 在容器内找到目标标题(通过 meta 或 id):', heading);
+
+          // 同样的滚动逻辑
+          const scrollContainer = document.querySelector('.flex-1.overflow-y-auto.scroll-smooth') ||
+                                 document.querySelector('.flex-1.overflow-y-auto') ||
+                                 document.querySelector('[class*="overflow-y-auto"]') ||
+                                 document.documentElement;
+
+          const targetRect = heading.getBoundingClientRect();
+          const containerRect = scrollContainer.getBoundingClientRect();
+
+          if (scrollContainer === document.documentElement) {
+            heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            const scrollTop = targetRect.top - containerRect.top + scrollContainer.scrollTop - 20;
+            scrollContainer.scrollTo({
+              top: scrollTop,
+              behavior: 'smooth'
+            });
+
+            // 添加多个备用的滚动方法
+            setTimeout(() => {
+              console.log('🔄 执行容器内备用滚动方法 1: scrollIntoView');
+              heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+
+            setTimeout(() => {
+              console.log('🔄 执行容器内备用滚动方法 2: 强制滚动');
+              const elementTop = heading.offsetTop;
+              const container = scrollContainer as HTMLElement;
+              if (container && container.scrollTo) {
+                container.scrollTo({ top: elementTop - 50, behavior: 'smooth' });
+              }
+            }, 200);
+          }
+
+          console.log('✅ 容器内滚动命令已执行');
           return true;
         }
       }
-    }
-    return false;
+
+        console.log('❌ 未找到目标元素:', elementId);
+        return false;
+      });
+    });
   }, []);
+
+  const handleStepClick = useCallback((stepId) => {
+    onStepSelect(phase.id, stepId);
+
+    // 计算子标题的 DOM ID：`${phase.id}--${slug(step.title)}`
+    const slug = (text: string) => text
+      .toLowerCase()
+      .replace(/<[^>]+>/g, '')
+      .replace(/[^a-z0-9\s-]/gi, '')
+      .replace(/\s+/g, '-')
+      .slice(0, 80);
+    const stepTitle = (phase.steps.find(s => s.id === stepId)?.title) || '';
+    if (!stepTitle) return;
+
+    // 与编辑器相同的唯一化规则：同一阶段下重复 slug 加序号
+    const baseId = phase.id;
+    const rawSlug = slug(stepTitle);
+    const siblings = phase.steps.filter(s => s.title === stepTitle);
+    let indexAmongSame = 0;
+    if (siblings.length > 1) {
+      // 在同标题列表中找到当前 step 的序号（从 1 起），用于构造与渲染一致的 id
+      indexAmongSame = siblings.findIndex(s => s.id === stepId);
+    }
+    const uniqueSlug = indexAmongSame > 0 ? `${rawSlug}-${indexAmongSame + 1}` : rawSlug;
+    const elementId = `${baseId}--${uniqueSlug}`;
+
+    // 使用相同的滚动逻辑
+    scrollToElement(elementId);
+
+    // 兼容 fallback：如果没找到，尝试不用序号
+    setTimeout(() => {
+      scrollToElement(`${baseId}--${rawSlug}`);
+    }, 150);
+  }, [phase.id, onStepSelect, scrollToElement]);
 
   const handleTitleClick = useCallback(() => {
     onStepSelect(phase.id, introStep.id);

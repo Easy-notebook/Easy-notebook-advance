@@ -3,41 +3,41 @@
  * 用于保持 LeftSideBar 各个栏目的一致性
  */
 
-// 状态样式配置
+// Obsidian风格的状态样式配置
 export const SHARED_STYLES = {
   status: {
     colors: {
-      completed: 'text-theme-600 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
-      'in-progress': 'text-theme-800 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
-      pending: 'text-black bg-white/10 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)]'
+      completed: 'text-emerald-600 bg-emerald-50/80 backdrop-blur-md border border-emerald-200/50',
+      'in-progress': 'text-theme-600 bg-theme-50/80 backdrop-blur-md border border-theme-200/50',
+      pending: 'text-slate-500 bg-slate-50/80 backdrop-blur-md border border-slate-200/50'
     },
     steps: {
-      completed: 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
-      'in-progress': 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
-      pending: 'bg-gray-300/50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]'
+      completed: 'bg-emerald-500 shadow-sm ring-1 ring-emerald-200',
+      'in-progress': 'bg-theme-500 shadow-sm ring-1 ring-theme-200 animate-pulse',
+      pending: 'bg-slate-300 shadow-sm ring-1 ring-slate-200'
     }
   },
-  
-  // 通用按钮样式
+
+  // Obsidian风格按钮样式
   button: {
-    base: 'transition-all duration-300 backdrop-blur-sm',
-    hover: 'hover:bg-white/10',
-    active: 'bg-white/10 text-theme-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]',
-    inactive: 'text-gray-700'
+    base: 'transition-all duration-200 ease-out font-medium text-sm',
+    hover: 'hover:bg-slate-100/80 hover:text-slate-700',
+    active: 'bg-slate-200/80 text-slate-800 shadow-sm ring-1 ring-slate-300/50',
+    inactive: 'text-slate-600 hover:text-slate-700'
   },
-  
-  // 容器样式
+
+  // Obsidian风格容器样式
   container: {
-    base: 'relative h-full flex flex-col isolate overflow-hidden bg-gray-50',
-    header: 'h-16 flex items-center justify-between px-5 border-b border-white/10 bg-white/5 backdrop-blur-sm relative',
-    content: 'flex-1 h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50'
+    base: 'relative h-full flex flex-col bg-white border-r border-slate-200/60 shadow-sm',
+    header: 'h-14 flex items-center justify-between px-4 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-sm',
+    content: 'flex-1 h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300/50 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60'
   },
-  
-  // Tab 样式
+
+  // Obsidian风格Tab样式
   tab: {
-    base: 'px-2 py-1 rounded text-xs transition-all duration-200',
-    active: 'bg-white text-theme-800 font-semibold',
-    inactive: 'text-gray-600 hover:bg-white/10'
+    base: 'px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
+    active: 'bg-slate-200/80 text-slate-800 shadow-sm ring-1 ring-slate-300/50',
+    inactive: 'text-slate-600 hover:bg-slate-100/60 hover:text-slate-700'
   }
 };
 
@@ -80,24 +80,26 @@ export const LAYOUT_CONSTANTS = {
   }
 };
 
-// 滚动条样式（CSS-in-JS）
+// Obsidian风格滚动条样式（CSS-in-JS）
 export const SCROLLBAR_STYLES = `
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 4px;
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 3px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
   }
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(148, 163, 184, 0.6);
+    border-color: rgba(148, 163, 184, 0.3);
   }
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
   }
 `;
 
