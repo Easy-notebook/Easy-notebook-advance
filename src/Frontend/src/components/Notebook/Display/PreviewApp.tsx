@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Papa from 'papaparse';
 import usePreviewStore from '../../../store/previewStore';
+import useStore from '../../../store/notebookStore';
 import CSVPreviewApp from './CSVPreviewApp';
 import ImageDisplay from './ImageDisplay';
+import PDFDisplay from './PDFDisplay';
+import { Minimize2, Maximize2, X } from 'lucide-react';
 
 const PreviewApp: React.FC = () => {
     const [data, setData] = useState<any[]>([]);
@@ -11,10 +14,11 @@ const PreviewApp: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(false);
     const [fileName, setFileName] = useState<string | null>(null);
     const [lastModified, setLastModified] = useState<string | null>(null);
+    const [pdfUrl, setPdfUrl] = useState<string>('');
 
     const processCsvData = useCallback((fileContent: string) => {
         if (!fileContent) return;
-        
+
         setLoading(true);
         Papa.parse(fileContent, {
             header: true,
@@ -46,6 +50,10 @@ const PreviewApp: React.FC = () => {
                         setData(state.activeFile.content);
                         setFileName(state.activeFile.name);
                         setLastModified(state.activeFile.lastModified);
+                    } else if (state.activeFile.type === 'pdf') {
+                        setPdfUrl(state.activeFile.content);
+                        setFileName(state.activeFile.name);
+                        setLastModified(state.activeFile.lastModified);
                     }
                 }
             }
@@ -59,14 +67,19 @@ const PreviewApp: React.FC = () => {
             {error && <div className="error-message">{error}</div>}
             {loading && <div className="loading">Loading...</div>}
             {!loading && previewMode === 'csv' && <CSVPreviewApp/>}
-            {!loading && previewMode === 'image' && <ImageDisplay imageData={data} 
+            {!loading && previewMode === 'image' && (
+                <ImageDisplay
+                    imageData={data}
                     showDetails={true}
                     showControls={true}
                     imageInitialHeight="50vh"
                     fileName={fileName}
                     lastModified={lastModified}
-                    />
-                    }
+                />
+            )}
+            {!loading && previewMode === 'pdf' && (
+                <PDFDisplay dataUrl={pdfUrl} fileName={fileName} />
+            )}
         </div>
     );
 };

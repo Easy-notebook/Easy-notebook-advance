@@ -31,6 +31,7 @@ initializeFileTypeIcons();
 // 使用共享的文件预览配置
 const PREVIEWABLE_IMAGE_TYPES = FILE_PREVIEW_CONFIG.image;
 const PREVIEWABLE_TEXT_TYPES = FILE_PREVIEW_CONFIG.text;
+const PREVIEWABLE_PDF_TYPES = FILE_PREVIEW_CONFIG.pdf;
 
 /** Get file icon based on extension */
 const getFileIcon = (filename) => {
@@ -63,7 +64,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
     }, [onClose]);
 
     const ext = file?.name ? `.${file.name.split('.').pop().toLowerCase()}` : '';
-    const isPreviewable = file?.type === 'file' && [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES].includes(ext);
+    const isPreviewable = file?.type === 'file' && [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES].includes(ext);
 
     return (
         <div
@@ -281,7 +282,8 @@ const FileTree = memo(({ notebookId, projectName }) => {
         mode: 'restricted',
         maxFileSize: 10 * 1024 * 1024, // 10MB
         maxFiles: 10,
-        allowedTypes: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv']
+        allowedTypes: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv', '.pdf'],
+        targetDir: '.assets'
     }), []);
 
     // Toast notification stub (replace with your own toast system)
@@ -407,9 +409,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 return;
             }
 
-            const fileInfo = await notebookApiIntegration.getFileInfo(useStore.getState().notebookId, file.path);
             await usePreviewStore.getState().previewFile(useStore.getState().notebookId, file.path, {
-                lastModified: fileInfo.lastModified,
                 file: file
             });
         } catch (err) {
@@ -431,12 +431,12 @@ const FileTree = memo(({ notebookId, projectName }) => {
             return;
         }
 
-        if (usePreviewStore.getState().previewMode === 'notebook') {
-            usePreviewStore.getState().changePreviewMode('file');
+        if (usePreviewStore.getState().previewMode !== 'file') {
+            usePreviewStore.getState().changePreviewMode();
         }
 
         const fileExt = file.name.split('.').pop().toLowerCase();
-        const isPreviewable = [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES].includes(`.${fileExt}`);
+        const isPreviewable = [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES].includes(`.${fileExt}`);
 
         if (isPreviewable) {
             handlePreviewFile(file);
@@ -714,7 +714,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 onClick={() => {
                     if (usePreviewStore.getState().previewMode === 'file') {
                         usePreviewStore.getState().changePreviewMode();
-                    } 
+                    }
                 }}
             >
                 <div className={`mr-3`}>

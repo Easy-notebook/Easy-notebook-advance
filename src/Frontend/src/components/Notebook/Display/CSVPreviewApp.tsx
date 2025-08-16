@@ -163,31 +163,32 @@ const CSVPreviewApp: React.FC<CSVPreviewAppProps> = ({
         // Subscribe to changes in activeFile from the preview store
         const unsubscribe = usePreviewStore.subscribe(
             (state) => {
-                    // console.log('activeFile changed:', state.activeFile);
-                    setLoading(true);
-                    setError('');
-                    // console.log('newActiveFile', state.activeFile);
-                    setFileName(state.activeFile.name);
-                    // console.log('newActiveFile.size', state.activeFile.size);
-                    setFileSize(state.activeFile.size);
-                    // console.log('newActiveFile.content', state.activeFile.content);
-                    Papa.parse(state.activeFile.content, {
-                        header: true,
-                        dynamicTyping: true,
-                        skipEmptyLines: true,
-                        complete: (results) => {
-                            if (results.errors && results.errors.length > 0) {
-                                setError(`Parse error: ${results.errors[0].message}`);
-                            }
-                            processCsvData(results.data);
-                            setLoading(false);
-                            setLastModified(state.activeFile.lastModified);
-                        },
-                        error: (error) => {
-                            setError(`Parse error: ${error.message}`);
-                            setLoading(false);
+                const file = state.activeFile as any;
+                if (!file || file.type !== 'csv') {
+                    setLoading(false);
+                    return;
+                }
+                setLoading(true);
+                setError('');
+                setFileName(file.name || '');
+                setFileSize(file.size || 0);
+                Papa.parse(file.content || '', {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        if (results.errors && results.errors.length > 0) {
+                            setError(`Parse error: ${results.errors[0].message}`);
                         }
-                    });
+                        processCsvData(results.data);
+                        setLoading(false);
+                        setLastModified(file.lastModified || '');
+                    },
+                    error: (error) => {
+                        setError(`Parse error: ${error.message}`);
+                        setLoading(false);
+                    }
+                });
             }
         );
         return () => unsubscribe();

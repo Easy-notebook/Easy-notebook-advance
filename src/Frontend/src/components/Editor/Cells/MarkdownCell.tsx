@@ -210,6 +210,76 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
     tr: MarkdownTableRow,
     td: MarkdownTableCell,
     th: MarkdownTableHead,
+    a: ({ href = '', children, ...props }: any) => (
+      <a
+        {...props}
+        href={href}
+        onClick={(e) => {
+          if (!href) return;
+          e.preventDefault();
+          // Delegate to LinkCell-like split preview
+          import('../../../store/previewStore').then(async (mod) => {
+            const usePreviewStore = (mod as any).default;
+            const useNotebookStore = (await import('../../../store/notebookStore')).default as any;
+            const notebookId = useNotebookStore.getState().notebookId;
+            if (!notebookId) return;
+            const { notebookApiIntegration } = await import('../../../services/notebookServices');
+            const { Backend_BASE_URL } = await import('../../../config/base_url');
+
+            // Normalize file path similar to LinkCell
+            const base = (Backend_BASE_URL as any)?.replace(/\/$/, '');
+            let filePath: string | null = null;
+            try {
+              const pattern = new RegExp(`^${base}/download_file/${notebookId}/(.+)$`);
+              const m = href.match(pattern);
+              if (m && m[1]) filePath = decodeURIComponent(m[1]);
+            } catch {}
+            if (!filePath) {
+              const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)');
+              if (relPattern.test(href)) {
+                filePath = href.replace(new RegExp('^\\./'), '');
+              } else if (!new RegExp('^[a-z]+://', 'i').test(href) && href.indexOf('/') === -1) {
+                filePath = href;
+              }
+            }
+
+            if (!filePath) {
+              // External link fallback
+              window.open(href, '_blank', 'noopener,noreferrer');
+              return;
+            }
+
+            try {
+              const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
+              await usePreviewStore.getState().previewFile(notebookId, filePath, {
+                file: fileObj,
+              } as any);
+              if (usePreviewStore.getState().previewMode !== 'file') {
+                usePreviewStore.getState().changePreviewMode();
+              }
+            } catch (err: any) {
+              console.error('Markdown link split preview failed:', err);
+              // 兜底：如果 .assets 下不存在，则尝试 notebook 根目录同名文件
+              try {
+                const baseName = (filePath || href).split('/').pop() || '';
+                if (baseName && baseName !== filePath) {
+                  const fileObj2 = { name: baseName, path: baseName, type: 'file' } as any;
+                  await usePreviewStore.getState().previewFile(notebookId, baseName, { file: fileObj2 } as any);
+                  if (usePreviewStore.getState().previewMode !== 'file') {
+                    usePreviewStore.getState().changePreviewMode();
+                  }
+                  return;
+                }
+              } catch (e) {
+                console.error('Fallback to root failed:', e);
+              }
+            }
+          });
+        }}
+      >
+        {children}
+      </a>
+    ),
   }), []) as any;
 
   // 双击切换编辑模式

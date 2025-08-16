@@ -114,8 +114,9 @@ export type TabId = typeof TAB_CONFIG[number]['id'];
 
 // 预览文件类型配置
 export const FILE_PREVIEW_CONFIG = {
-  image: ['.png', '.jpg', '.jpeg', '.gif', '.svg'],
+  image: ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'],
   text: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.csv'],
+  pdf: ['.pdf'],
   maxFileSize: 10 * 1024 * 1024, // 10MB
   maxFiles: 10
 };

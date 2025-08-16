@@ -12,7 +12,7 @@ import useCodeStore from './codeStore';
 /**
  * 单元格类型
  */
-export type CellType = 'code' | 'markdown' | 'hybrid' | 'image' | 'thinking';
+export type CellType = 'code' | 'markdown' | 'hybrid' | 'image' | 'thinking' | 'link';
 
 /**
  * 视图模式类型

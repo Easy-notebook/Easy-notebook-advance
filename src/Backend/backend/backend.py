@@ -370,6 +370,7 @@ async def upload_file_endpoint(
     mode: str = Body(...),
     allowed_types: List[str] = Body(default_factory=list),
     max_files: int = Body(default=None),
+    target_dir: str = Body(default=""),
     db: Session = Depends(get_db)
 ):
     request_id = str(uuid.uuid4())
@@ -381,6 +382,15 @@ async def upload_file_endpoint(
         work_dir = Path(f"./notebooks/{notebook_id}")
         if not work_dir.exists():
             os.makedirs(work_dir, exist_ok=True)
+
+        # Only allow writing to notebook root or .assets
+        if target_dir not in ("", ".assets"):
+            raise HTTPException(status_code=400, detail="Invalid target directory")
+
+        base_dir = work_dir / target_dir if target_dir else work_dir
+        if not base_dir.exists():
+            os.makedirs(base_dir, exist_ok=True)
+
         saved_files = []
         for file in files:
             content = await file.read()
@@ -389,17 +399,18 @@ async def upload_file_endpoint(
                     status_code=400,
                     detail=f"File size exceeds maximum limit of {MAX_FILE_SIZE/1024/1024}MB"
                 )
-            # filename = secure_filename(file.filename)
             filename = file.filename
-            unique_filename = f"{filename}"
-            file_path = work_dir / unique_filename
+            # Normalize filename to avoid path traversal
+            filename = os.path.basename(filename)
+            file_path = base_dir / filename
             with open(file_path, "wb") as f:
                 f.write(content)
-            saved_files.append(unique_filename)
+            saved_files.append(filename)
         return {
             'status': 'ok',
             'message': f"{len(saved_files)} files uploaded successfully",
-            'files': saved_files
+            'files': saved_files,
+            'target_dir': target_dir
         }
     except Exception as e:
         logger.error(f"Request {request_id}: Upload failed: {str(e)}")
@@ -577,7 +588,8 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
                 dataUrl=data_url
             )
         else:
-            # For text files (including CSV)
+            # For text files (including CSV) and other non-image types
+            is_binary = False
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     file_content = f.read()
@@ -585,10 +597,11 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
                 # If not a text file, return base64 encoded binary
                 with open(file_path, 'rb') as f:
                     file_content = base64.b64encode(f.read()).decode('utf-8')
-            
-            # 过滤文件内容中的敏感信息
-            sanitized_content = sanitize_response_content(file_content, request.notebook_id)
-            
+                is_binary = True
+
+            # 仅对可读文本做脱敏，二进制（如 PDF、Office 等）不要改动 base64 防止损坏
+            sanitized_content = file_content if is_binary else sanitize_response_content(file_content, request.notebook_id)
+
             response = FileContentResponse(
                 content=sanitized_content,
                 size=stat.st_size,

@@ -2,6 +2,7 @@ import React from 'react';
 import CodeCell from '../../Editor/Cells/CodeCell';
 import MarkdownCell from '../../Editor/Cells/MarkdownCell';
 import ImageCell from '../../Editor/Cells/ImageCell';
+import LinkCell from '../../Editor/Cells/LinkCell';
 import useStore from '../../../store/notebookStore';
 
 const DetachedCellView: React.FC = () => {
@@ -25,6 +26,8 @@ const DetachedCellView: React.FC = () => {
                 return <MarkdownCell {...(props as any)} />;
             case 'image':
                 return <ImageCell {...(props as any)} />;
+            case 'link':
+                return <LinkCell {...(props as any)} />;
             default:
                 return <CodeCell {...(props as any)} />;
         }

@@ -379,13 +379,12 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-white rounded-lg shadow-lg border border-theme-200 min-w-72 max-w-80 focus:outline-none"
+      className="fixed z-50 bg-white rounded-lg shadow-theme border border-theme-200 min-w-72 max-w-80 focus:outline-none slash-command-menu"
       tabIndex={-1} // 允许接收焦点但不参与Tab导航
       style={{
         left: position.x,
         top: position.y,
         maxHeight: '320px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2)'
       }}
     >
       {/* 搜索状态显示 */}
@@ -406,10 +405,10 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
             {filteredCommands.map((command, index) => (
               <button
                 key={command.id}
-                className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 ${
+                className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 command-item ${
                   index === selectedIndex 
-                    ? 'bg-gradient-to-r from-theme-100 to-theme-50 border-r-3 border-theme-500 text-theme-800' 
-                    : 'hover:bg-theme-50 text-gray-700'
+                    ? 'command-item-selected' 
+                    : 'text-gray-700'
                 }`}
                 onClick={() => {
                   if (editor) {

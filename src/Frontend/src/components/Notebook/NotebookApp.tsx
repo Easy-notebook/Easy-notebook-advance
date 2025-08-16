@@ -426,6 +426,8 @@ const NotebookApp = () => {
         return <ImageCell key={cell.id} {...props} />;
       case 'thinking':
         return <AIThinkingCell key={cell.id} {...props} />;
+      case 'link':
+        return <MarkdownCell key={cell.id} {...props} />; // 回退：在 NotebookApp 中临时渲染为 Markdown 链接
       default:
         return null;
     }

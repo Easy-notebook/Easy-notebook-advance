@@ -1,28 +1,34 @@
-import React, { forwardRef, useImperativeHandle, useState, useRef, useEffect } from 'react';
+import { forwardRef, useImperativeHandle, useState, useRef, useEffect, useCallback } from 'react';
 import useStore from '../../store/notebookStore';
 import CodeCell from './Cells/CodeCell';
 import HybridCell from './Cells/HybridCell';
 import MarkdownCell from './Cells/MarkdownCell';
 import ImageCell from './Cells/ImageCell';
 import AIThinkingCell from './Cells/AIThinkingCell';
+import LinkCell from './Cells/LinkCell';
 import DraggableCellList from './DragAndDrop/DraggableCellList';
-import SlashCommandMenu from './SlashCommands/SlashCommandMenu';
-import { useSlashCommands } from './SlashCommands/useSlashCommands';
-import { useKeyboardShortcuts } from './KeyboardShortcuts/useKeyboardShortcuts';
 import ShortcutsHelp from './KeyboardShortcuts/ShortcutsHelp';
+import { handleFileUpload } from '../../utils/fileUtils';
+import { notebookApiIntegration } from '../../services/notebookServices';
+import { Backend_BASE_URL } from '../../config/base_url';
 
 // JupyterNotebookEditor - TiptapNotebookEditor integration
 const JupyterNotebookEditor = forwardRef(({
   className = "",
-  placeholder = "Start your notebook by adding cells...",
   readOnly = false
 }, ref) => {
   
-  const { cells, setCells } = useStore();
+  const { cells, setCells, updateCell, notebookId } = useStore();
   const containerRef = useRef(null);
   const [focusedCellId, setFocusedCellId] = useState(null);
   const [isDragEnabled, setIsDragEnabled] = useState(true);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  // Upload state (local to editor)
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState(null);
+  const abortControllerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Add debug logging for cells changes
   useEffect(() => {
@@ -33,140 +39,7 @@ const JupyterNotebookEditor = forwardRef(({
   const generateCellId = () => {
     return `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   };
-
-  // 快捷指令Hook配置
-  const slashCommands = useSlashCommands({
-    onInsertCodeCell: () => handleAddCell('code'),
-    onInsertMarkdownCell: () => handleAddCell('markdown'),
-    onInsertImageCell: () => handleAddCell('image'),
-    onInsertThinkingCell: () => handleAddCell('thinking'),
-    onInsertTable: () => {
-      // 插入表格到markdown cell
-      const tableMarkdown = `| 列1 | 列2 | 列3 |
-|-----|-----|-----|
-| 行1 | 数据 | 数据 |
-| 行2 | 数据 | 数据 |`;
-      const newCell = {
-        id: generateCellId(),
-        type: 'markdown',
-        content: tableMarkdown,
-        outputs: [],
-        enableEdit: true,
-      };
-      setCells([...cells, newCell]);
-    },
-    onInsertMath: () => {
-      // 插入数学公式到markdown cell
-      const mathMarkdown = `$$
-E = mc^2
-$$`;
-      const newCell = {
-        id: generateCellId(),
-        type: 'markdown',
-        content: mathMarkdown,
-        outputs: [],
-        enableEdit: true,
-      };
-      setCells([...cells, newCell]);
-    },
-    onInsertHeading: (level) => {
-      const headingMarkdown = `${'#'.repeat(level)} 标题`;
-      const newCell = {
-        id: generateCellId(),
-        type: 'markdown',
-        content: headingMarkdown,
-        outputs: [],
-        enableEdit: true,
-      };
-      setCells([...cells, newCell]);
-    },
-    onInsertList: (ordered) => {
-      const listMarkdown = ordered
-        ? `1. 第一项\n2. 第二项\n3. 第三项`
-        : `- 第一项\n- 第二项\n- 第三项`;
-      const newCell = {
-        id: generateCellId(),
-        type: 'markdown',
-        content: listMarkdown,
-        outputs: [],
-        enableEdit: true,
-      };
-      setCells([...cells, newCell]);
-    },
-    onInsertQuote: () => {
-      const quoteMarkdown = `> 这是一个引用块`;
-      const newCell = {
-        id: generateCellId(),
-        type: 'markdown',
-        content: quoteMarkdown,
-        outputs: [],
-        enableEdit: true,
-      };
-      setCells([...cells, newCell]);
-    },
-    onInsertText: () => handleAddCell('markdown'),
-    onAIGenerate: () => {
-      console.log('AI生成功能待实现');
-      // 这里可以集成AI生成功能
-    },
-  });
-
-  // 键盘快捷键配置
-  useKeyboardShortcuts({
-    onInsertCodeCell: () => handleAddCell('code'),
-    onInsertMarkdownCell: () => handleAddCell('markdown'),
-    onInsertImageCell: () => handleAddCell('image'),
-    onInsertThinkingCell: () => handleAddCell('thinking'),
-    onInsertTable: () => {
-      const tableMarkdown = `| 列1 | 列2 | 列3 |
-|-----|-----|-----|
-| 行1 | 数据 | 数据 |
-| 行2 | 数据 | 数据 |`;
-      const newCell = {
-        id: generateCellId(),
-        type: 'markdown',
-        content: tableMarkdown,
-        outputs: [],
-        enableEdit: true,
-      };
-      setCells([...cells, newCell]);
-    },
-    onInsertMath: () => {
-      const mathMarkdown = `$$
-E = mc^2
-$$`;
-      const newCell = {
-        id: generateCellId(),
-        type: 'markdown',
-        content: mathMarkdown,
-        outputs: [],
-        enableEdit: true,
-      };
-      setCells([...cells, newCell]);
-    },
-    onOpenCommandPalette: () => {
-      // 打开快捷指令菜单
-      const activeElement = document.activeElement;
-      if (activeElement) {
-        slashCommands.openMenu(activeElement);
-      }
-    },
-
-    onSaveNotebook: () => {
-      console.log('保存笔记本功能待实现');
-      // 这里可以集成保存功能
-    },
-    onRunCell: () => {
-      console.log('运行当前cell功能待实现');
-      // 这里可以集成运行功能
-    },
-    onRunAllCells: () => {
-      console.log('运行所有cells功能待实现');
-      // 这里可以集成运行所有功能
-    },
-    disabled: readOnly,
-  });
-
+  
   // 处理cell拖拽排序
   const handleCellsReorder = (newCells) => {
     setCells(newCells);
@@ -176,7 +49,7 @@ $$`;
     const newCell = {
       id: generateCellId(),
       type,
-      content: '',
+      content: type === 'link' ? '' : '',
       outputs: [],
       enableEdit: true,
       language: type === 'code' || type === 'Hybrid' ? 'python' : undefined,
@@ -244,6 +117,8 @@ $$`;
         return <ImageCell key={cell.id} {...cellProps} />;
       case 'thinking':
         return <AIThinkingCell key={cell.id} {...cellProps} />;
+      case 'link':
+        return <LinkCell key={cell.id} {...cellProps} />;
       default:
         return (
           <div key={cell.id} className="p-4 border border-red-200 rounded-lg bg-red-50">
@@ -303,6 +178,10 @@ $$`;
           case 'a': // a - 插入AI思考
             event.preventDefault();
             onAddCell('thinking', index);
+            break;
+          case 'l': // l - 插入链接
+            event.preventDefault();
+            onAddCell('link', index);
             break;
         }
       }
@@ -441,10 +320,70 @@ $$`;
   // Determine which cells should be visible based on the current view mode
   const visibleCells = getCurrentViewCells();
 
+  // Handle drop files into the editor area
+  const handleEditorDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      if (!notebookId) {
+        console.warn('Notebook ID not set, cannot upload.');
+        return;
+      }
+      const dt = e.dataTransfer;
+      if (!dt || !dt.files || dt.files.length === 0) return;
+      const files = Array.from(dt.files);
+
+      const uploadConfig = {
+        mode: 'open',
+        maxFileSize: 50 * 1024 * 1024,
+        allowedTypes: [],
+        maxFiles: files.length,
+        targetDir: '.assets',
+      };
+
+      await handleFileUpload({
+        notebookId,
+        files,
+        notebookApiIntegration,
+        uploadConfig,
+        setUploading,
+        setUploadProgress,
+        setError: setUploadError,
+        fileInputRef,
+        setIsPreview: () => {},
+        toast: ({ title, description }) => console.log(title, description),
+        onUpdate: (_cellId, { uploadedFiles }) => {
+          // Insert cells for uploaded files
+          (uploadedFiles || []).forEach((name) => {
+            const lower = name.toLowerCase();
+            const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].some(ext => lower.endsWith(ext));
+            const relPath = `.assets/${name}`;
+            const url = `${Backend_BASE_URL}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
+            if (isImage) {
+              const id = handleAddCell('image', cells.length);
+              updateCell(id, `![${name}](${url})`);
+            } else {
+              const id = handleAddCell('link', cells.length);
+              // Prefer relative path in content for portability
+              updateCell(id, `[${name}](${relPath})`);
+            }
+          });
+        },
+        cellId: '',
+        abortControllerRef,
+        fetchFileList: async () => { try { await notebookApiIntegration.listFiles(notebookId); } catch {} },
+      });
+    } catch (err) {
+      console.error('Editor drop upload failed:', err);
+    }
+  }, [notebookId, cells.length, handleFileUpload, updateCell]);
+
   return (
     <div
       ref={containerRef}
       className={`jupyter-notebook-editor ${className} w-full h-full bg-transparent`}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onDrop={handleEditorDrop}
     >
       {/* Complete mode content with drag and drop */}
       <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 my-auto">
@@ -452,8 +391,7 @@ $$`;
 
         {/* 拖拽提示和快捷键帮助 */}
         <div className="relative">
-          <div className="h-4 w-full "></div>
-          {/* <CellDivider index={0} onAddCell={handleAddCell} viewMode="complete" /> */}
+          {/* <div className="h-4 w-full "></div> */}
 
           {/* 使用拖拽组件渲染cells */}
           <DraggableCellList
@@ -466,8 +404,8 @@ $$`;
               <div
                 id={`cell-${cell.id}`}
                 data-cell-id={cell.id}
-                className={`relative w-full bg-white rounded-lg px-8 transition-all duration-200 ${
-                  isDragging ? 'shadow-lg scale-105' : 'shadow-sm'
+                className={`relative w-full duration-200 ${
+                  isDragging ? 'shadow-lg scale-105' : ''
                 }`}
               >
                 {renderCell(cell)}
@@ -483,15 +421,6 @@ $$`;
         </div>
         <div className="h-20 w-full"></div>
       </div>
-
-      {/* 快捷指令菜单 */}
-      <SlashCommandMenu
-        isOpen={slashCommands.isMenuOpen}
-        onClose={slashCommands.closeMenu}
-        onCommand={slashCommands.handleCommand}
-        position={slashCommands.menuPosition}
-        searchQuery={slashCommands.searchQuery}
-      />
 
       {/* 快捷键帮助面板 */}
       <ShortcutsHelp

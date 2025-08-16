@@ -69,6 +69,14 @@ const DropZone: React.FC<DropZoneProps> = ({
             <Plus size={12} />
             图片
           </button>
+          <button
+            onClick={() => handleAddCell('link')}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            title="添加链接"
+          >
+            <Plus size={12} />
+            链接
+          </button>
         </div>
       )}
 

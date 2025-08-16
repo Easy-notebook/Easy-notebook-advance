@@ -2,6 +2,9 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
 import { Node as ProseMirrorNode } from 'prosemirror-model';
 import useStore from '../../../../store/notebookStore';
+import { handleFileUpload } from '../../../../utils/fileUtils';
+import { notebookApiIntegration } from '../../../../services/notebookServices';
+import { Backend_BASE_URL } from '../../../../config/base_url';
 
 interface SimpleDragManagerProps {
   editor: Editor | null;
@@ -15,7 +18,14 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { cells } = useStore();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const { cells, notebookId } = useStore();
 
   // 清除隐藏定时器
   const clearHideTimeout = useCallback(() => {
@@ -111,12 +121,12 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
 
     const handleMouseMove = (event: MouseEvent) => {
       if (isDragging) return;
-      
+
       const target = event.target as HTMLElement;
-      
+
       // 查找块级元素
       const blockElement = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre, [data-cell-id], [data-type="executable-code-block"], [data-type="thinking-cell"], [data-type="markdown-image"]');
-      
+
       if (blockElement) {
         showToolbarForElement(blockElement as HTMLElement);
       } else {
@@ -130,15 +140,85 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
       }
     };
 
+    const handleDragOver = (e: DragEvent) => {
+      // 允许拖入文件
+      if (e.dataTransfer && e.dataTransfer.types?.includes('Files')) {
+        e.preventDefault();
+      }
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      // 文件拖入上传到 .assets
+      if (!notebookId) return;
+      if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+      e.preventDefault();
+
+      const files = Array.from(e.dataTransfer.files as any as File[]);
+
+      const uploadConfig = {
+        mode: 'restricted',
+        maxFileSize: 10 * 1024 * 1024,
+        maxFiles: files.length,
+        allowedTypes: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv', '.pdf'],
+        targetDir: '.assets'
+      } as any;
+
+      const toast = ({ title, description, variant }: any) => {
+        console.log(`${variant || 'info'}: ${title} - ${description}`);
+      };
+
+      try {
+        await handleFileUpload({
+          notebookId,
+          files,
+          notebookApiIntegration,
+          uploadConfig,
+          setUploading,
+          setUploadProgress,
+          setError: setUploadError,
+          fileInputRef: fileInputRef as any,
+          setIsPreview: () => {},
+          toast,
+          onUpdate: (_cellId: string, { uploadedFiles }: { uploadedFiles: string[] }) => {
+            if (!editor) return;
+            (uploadedFiles || []).forEach((name) => {
+              const lower = name.toLowerCase();
+              const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].some(ext => lower.endsWith(ext));
+              const relPath = `.assets/${name}`;
+              const url = `${Backend_BASE_URL}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
+              if (isImage) {
+                try {
+                  editor.chain().focus().insertContent(`<img src="${url}" alt="${name}" title="${name}" />`).run();
+                } catch {
+                  editor.chain().focus().insertContent(`![${name}](${url})`).run();
+                }
+              } else {
+                editor.chain().focus().insertContent(`<a href="${relPath}">${name}</a>`).run();
+              }
+            });
+          },
+          cellId: '',
+          abortControllerRef: abortControllerRef as any,
+          fetchFileList: async () => { try { await notebookApiIntegration.listFiles(notebookId); } catch {} },
+        });
+      } catch (err) {
+        console.error('TipTap drop upload failed:', err);
+      }
+    };
+
     container.addEventListener('mousemove', handleMouseMove);
     container.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('dragover', handleDragOver as any);
+    container.addEventListener('drop', handleDrop as any);
 
     return () => {
       container.removeEventListener('mousemove', handleMouseMove);
       container.removeEventListener('mouseleave', handleMouseLeave);
+      container.removeEventListener('dragover', handleDragOver as any);
+      container.removeEventListener('drop', handleDrop as any);
       clearHideTimeout();
     };
-  }, [editor, showToolbarForElement, scheduleHide, clearHideTimeout, isDragging]);
+  }, [editor, showToolbarForElement, scheduleHide, clearHideTimeout, isDragging, notebookId]);
 
   return (
     <div ref={containerRef} className="relative">

@@ -11,7 +11,7 @@ const FILE_STORE = 'files';
 /**
  * 文件类型
  */
-export type FileType = 'image' | 'csv' | 'text';
+export type FileType = 'image' | 'csv' | 'text' | 'pdf';
 
 /**
  * 预览模式类型
@@ -216,13 +216,18 @@ const getFileType = (filePath: string): FileType => {
     const fileExt = filePath.split('.').pop()?.toLowerCase();
 
     // Image files
-    if (['.png', '.jpg', '.jpeg', '.gif', '.svg'].includes(`.${fileExt}`)) {
+    if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(`.${fileExt}`)) {
         return 'image';
     }
 
     // CSV files
     if (fileExt === 'csv') {
         return 'csv';
+    }
+
+    // PDF files
+    if (fileExt === 'pdf') {
+        return 'pdf';
     }
 
     // Other text files
@@ -293,66 +298,91 @@ const usePreviewStore = create<PreviewStore>()(
                     (lastModifiedBackend && cachedFile.lastModified !== lastModifiedBackend);
 
                 if (needsFetch) {
-                    // Get file info from backend
-                    const response: FileApiResponse = await notebookApiIntegration.getFile(notebookId, filePath);
+                    try {
+                        // Get file from backend for the requested path
+                        const response: FileApiResponse = await notebookApiIntegration.getFile(notebookId, filePath);
 
-                    if (!response || response.error) {
-                        throw new Error(response?.error || 'Failed to fetch file');
-                    }
-
-                    // Determine the file content and type
-                    let content = response.content || '';
-                    const fileType = getFileType(filePath);
-
-                    // Handle specific file types
-                    if (fileType === 'image') {
-                        // For images, content should be the data URL
-                        if (typeof content === 'string' && content.startsWith('data:')) {
-                            // Already in correct format
-                        } else {
-                            // Convert to data URL if needed
-                            const fileExt = filePath.split('.').pop()?.toLowerCase();
-                            content = response.dataUrl || `data:image/${fileExt};base64,${content}`;
+                        if (!response || response.error) {
+                            throw new Error(response?.error || 'Failed to fetch file');
                         }
-                    }
 
-                    // Create file object
-                    const fileObject: FileObject = {
-                        id: fileId,
-                        notebookId,
-                        path: filePath,
-                        name: file.name,
-                        content,
-                        type: fileType,
-                        lastModified: lastModifiedBackend || new Date().toISOString(),
-                        size: response.size || 0
-                    };
+                        // Determine the file content and type
+                        let content = response.content || '';
+                        const fileType = getFileType(filePath);
 
-                    // Save to IndexedDB
-                    await saveFileToCache(fileObject);
+                        // Handle specific file types
+                        if (fileType === 'image') {
+                            // For images, content should be the data URL
+                            if (typeof content === 'string' && content.startsWith('data:')) {
+                                // Already in correct format
+                            } else {
+                                // Convert to data URL if needed
+                                const fileExt = filePath.split('.').pop()?.toLowerCase();
+                                content = response.dataUrl || `data:image/${fileExt};base64,${content}`;
+                            }
+                        } else if (fileType === 'pdf') {
+                            // For PDFs, build data URL. If content empty, fall back to served assets URL
+                            if (typeof content === 'string' && content.startsWith('data:')) {
+                                // Already data URL
+                            } else {
+                                const dataUrl = content ? `data:application/pdf;base64,${content}` : '';
+                                let assetsUrl = '';
+                                try {
+                                    const base = (window as any).Backend_BASE_URL ? (window as any).Backend_BASE_URL.replace(/\/$/, '') : '';
+                                    const name = filePath.split('/').pop() || filePath;
+                                    assetsUrl = `${base}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
+                                } catch {}
+                                content = dataUrl || assetsUrl;
+                            }
+                        }
 
-                    // Set as active file
-                    set({
-                        activeFile: fileObject,
-                        isLoading: false
-                    });
+                        // Create file object
+                        const fileObject: FileObject = {
+                            id: fileId,
+                            notebookId,
+                            path: filePath,
+                            name: file.name,
+                            content,
+                            type: fileType,
+                            lastModified: lastModifiedBackend || new Date().toISOString(),
+                            size: response.size || 0
+                        };
 
-                    // Update current preview files list
-                    const { currentPreviewFiles } = get();
-                    if (!currentPreviewFiles.some(f => f.id === fileId)) {
+                        // Save to IndexedDB
+                        await saveFileToCache(fileObject);
+
+                        // Set as active file
                         set({
-                            currentPreviewFiles: [...currentPreviewFiles, {
-                                id: fileId,
-                                path: filePath,
-                                name: file.name,
-                                type: fileType
-                            }]
+                            activeFile: fileObject,
+                            isLoading: false
                         });
-                    }
 
-                    get().currentPreviewFiles.pop();
-                    get().currentPreviewFiles.push(fileObject as any);
-                    return fileObject;
+                        // Update current preview files list
+                        const { currentPreviewFiles } = get();
+                        if (!currentPreviewFiles.some(f => f.id === fileId)) {
+                            set({
+                                currentPreviewFiles: [...currentPreviewFiles, {
+                                    id: fileId,
+                                    path: filePath,
+                                    name: file.name,
+                                    type: fileType
+                                }]
+                            });
+                        }
+
+                        get().currentPreviewFiles.pop();
+                        get().currentPreviewFiles.push(fileObject as any);
+                        return fileObject;
+                    } catch (e: any) {
+                        // Fallback: if .assets path not found, try basename at notebook root
+                        const msg = (e && e.message) ? String(e.message) : '';
+                        const baseName = filePath.split('/').pop() || filePath;
+                        const isNotFound = /not\s*found/i.test(msg) || /404/.test(msg);
+                        if (isNotFound && baseName !== filePath) {
+                            return await get().previewFile(notebookId, baseName, fileMetadata);
+                        }
+                        throw e;
+                    }
                 } else {
                     set({
                         activeFile: cachedFile,

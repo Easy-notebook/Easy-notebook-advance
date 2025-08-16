@@ -135,7 +135,8 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     const uploadConfig = {
       mode: 'unrestricted',
       allowedTypes: ['.csv', '.xlsx', '.xls','.jpg','.png','.jpeg','.gif','.pdf','.doc','.docx','.ppt','.pptx','.txt','.md'],
-      maxFileSize: maxSize // Match backend limit
+      maxFileSize: maxSize, // Match backend limit
+      targetDir: '.assets'
     };
 
     console.log('Upload config:', uploadConfig);

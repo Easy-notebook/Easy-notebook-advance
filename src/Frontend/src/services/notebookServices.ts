@@ -237,19 +237,22 @@ export class NotebookApiService {
     }
 
     // Upload file
-    static async uploadFile(notebookId: string, files: File[], uploadConfig: UploadConfig): Promise<ApiResponse> {
+    static async uploadFile(notebookId: string, files: File[], uploadConfig: UploadConfig & { targetDir?: string }): Promise<ApiResponse> {
         try {
             console.log('=== NotebookApiService.uploadFile ===');
             console.log('API_BASE_URL:', API_BASE_URL);
             console.log('notebookId:', notebookId);
             console.log('files:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
             console.log('uploadConfig:', uploadConfig);
-            
+
             const formData = new FormData();
             formData.append('notebook_id', notebookId);
             formData.append('mode', uploadConfig.mode);
             formData.append('allowed_types', JSON.stringify(uploadConfig.allowedTypes || []));
             formData.append('max_files', (uploadConfig.maxFiles || 10).toString());
+            if (uploadConfig.targetDir) {
+                formData.append('target_dir', uploadConfig.targetDir);
+            }
 
             files.forEach(file => {
                 console.log('Appending file to FormData:', file.name);
@@ -532,7 +535,7 @@ export const notebookApiIntegration = {
     },
 
     // Upload files
-    uploadFiles: async (notebookId: string, files: File[], config: UploadConfig, signal?: AbortSignal): Promise<ApiResponse> => {
+    uploadFiles: async (notebookId: string, files: File[], config: UploadConfig & { targetDir?: string }, signal?: AbortSignal): Promise<ApiResponse> => {
         try {
             return await NotebookApiService.uploadFile(notebookId, files, config);
         } catch (error) {
