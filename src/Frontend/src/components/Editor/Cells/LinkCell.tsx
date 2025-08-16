@@ -122,6 +122,11 @@ const LinkCell: React.FC<LinkCellProps> = ({
     try {
       const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
       await usePreviewStore.getState().previewFile(notebookId, filePath, { file: fileObj } as any);
+      
+      // Ensure preview mode is set to 'file' for proper display
+      if (usePreviewStore.getState().previewMode !== 'file') {
+        usePreviewStore.getState().changePreviewMode();
+      }
     } catch (err: any) {
       console.error('Open split preview failed:', err);
       try {

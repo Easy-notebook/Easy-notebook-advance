@@ -4,6 +4,7 @@ import MarkdownCell from '../../Editor/Cells/MarkdownCell';
 import ImageCell from '../../Editor/Cells/ImageCell';
 import LinkCell from '../../Editor/Cells/LinkCell';
 import useStore from '../../../store/notebookStore';
+import PreviewApp from '../Display/PreviewApp';
 
 const DetachedCellView: React.FC = () => {
     const { getDetachedCell} = useStore();

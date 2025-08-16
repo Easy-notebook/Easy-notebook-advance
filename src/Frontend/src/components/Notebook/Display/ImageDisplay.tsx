@@ -1,5 +1,7 @@
 import React, { useState, memo } from 'react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { Minimize2, Maximize2, Split } from 'lucide-react';
+import useStore from '../../../store/notebookStore';
 
 interface ImageControlsProps {
   zoomIn: () => void;
@@ -76,6 +78,10 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(({
 }) => {
     const [status, setStatus] = useState('loading');
     const [imgHeight, setImgHeight] = useState(imageInitialHeight);
+    
+    const setDetachedCellId = useStore(s => s.setDetachedCellId);
+    const isDetachedCellFullscreen = useStore(s => s.isDetachedCellFullscreen);
+    const toggleDetachedCellFullscreen = useStore(s => s.toggleDetachedCellFullscreen);
 
     const getImageSource = () => {
         if (!imageData) return null;
@@ -134,10 +140,34 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(({
     }
 
     return (
-        <div
-            className={`relative flex items-center justify-center overflow-hidden ${className} h-full`}
-            style={{ width }}
-        >
+        <div className="w-full h-full flex flex-col">
+            {/* Header with toolbar */}
+            {fileName && (
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white/70">
+                    <div className="text-sm font-medium text-gray-700 truncate">{fileName}</div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={toggleDetachedCellFullscreen}
+                            className="p-1.5 hover:bg-gray-200 rounded"
+                            title={isDetachedCellFullscreen ? "Switch to split view" : "Switch to fullscreen"}
+                        >
+                            {isDetachedCellFullscreen ? <Split size={16} /> : <Maximize2 size={16} />}
+                        </button>
+                        <button
+                            onClick={() => setDetachedCellId(null)}
+                            className="p-1.5 hover:bg-red-200 rounded text-red-600"
+                            title="Close preview"
+                        >
+                            <Minimize2 size={16} />
+                        </button>
+                    </div>
+                </div>
+            )}
+            {/* Image content */}
+            <div
+                className={`relative flex items-center justify-center overflow-hidden ${className} ${fileName ? 'flex-1' : 'h-full'}`}
+                style={{ width }}
+            >
             {/* 加载动画 */}
             {status === 'loading' && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 backdrop-blur-sm z-10">
@@ -208,6 +238,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(({
                     )}
                 </TransformWrapper>
             )}
+            </div>
         </div>
     );
 });
