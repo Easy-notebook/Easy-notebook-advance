@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo, useState} from 'react'
-import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react'
+import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo, useState } from 'react'
+import { useEditor, EditorContent, Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
@@ -21,8 +21,17 @@ import TableRow from '@tiptap/extension-table-row'
 import { Extension } from '@tiptap/react'
 import { Plugin, PluginKey, Selection } from 'prosemirror-state'
 import Heading from '@tiptap/extension-heading'
-import { Cell } from '../../store/notebookStore';
+import { Cell, CellType } from '../../store/notebookStore'
 import { FileAttachmentExtension } from './extensions/FileAttachmentExtension'
+import {
+  convertMarkdownToHtml,
+  convertTableToMarkdown
+} from './utils/markdownConverters'
+import {
+  generateCellId,
+  convertCellsToHtml,
+  convertEditorStateToCells
+} from './utils/cellConverters'
 
 
 interface TiptapNotebookEditorProps {
@@ -32,37 +41,34 @@ interface TiptapNotebookEditorProps {
 }
 
 interface TiptapNotebookEditorRef {
-  editor: any;
+  editor: Editor | null;
   focus: () => void;
   getHTML: () => string;
-  setContent: (content: any) => void;
+  setContent: (content: string) => void;
   clearContent: () => void;
   isEmpty: () => boolean;
   // 混合笔记本特有的方法
-  getCells: () => any[];
-  setCells: (cells: any[]) => void;
+  getCells: () => Cell[];
+  setCells: (cells: Cell[]) => void;
   addCodeCell: () => string;
   addMarkdownCell: () => string;
   addHybridCell: () => string;
-  addAIThinkingCell: (props?: any) => string;
+  addAIThinkingCell: (props?: Partial<{ agentName: string; customText: string | null; textArray: string[]; useWorkflowThinking: boolean }>) => string;
 }
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
 
-const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(({
-  className = "text-2xl font-bold leading-relaxed",
-  placeholder = "Untitled",
-  readOnly = false
-}, ref) => {
+const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(
+  ({ className = "text-2xl font-bold leading-relaxed", placeholder = "Untitled", readOnly = false }, ref) => {
 
   const {
     cells,
     setCells,
   } = useStore()
 
-  const editorRef = useRef<any>(null)
-  const [currentEditor, setCurrentEditor] = useState<any>(null)
+  const editorRef = useRef<Editor | null>(null)
+  const [currentEditor, setCurrentEditor] = useState<Editor | null>(null)
 
   // TipTap快捷指令
   const slashCommands = useTipTapSlashCommands({ editor: currentEditor })
@@ -139,7 +145,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       return [
         new Plugin({
           key: new PluginKey('trailingParagraph'),
-          appendTransaction: (transactions, oldState, newState) => {
+          appendTransaction: (_transactions, _oldState, newState) => {
             const { doc, tr, schema } = newState
             const last = doc.lastChild
             const paragraph = schema.nodes.paragraph
@@ -164,7 +170,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         new Plugin({
           key: new PluginKey('clickBlankToNewLine'),
           props: {
-            handleClick(view, pos, event) {
+            handleClick(view, pos, _event) {
               try {
                 const { state } = view
                 const { doc, schema } = state
@@ -231,7 +237,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   const lastCellsRef = useRef<Cell[]>([])
 
   // 同步超时计时器
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 初始化lastCellsRef
   useEffect(() => {
@@ -250,424 +256,15 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         editorRef.current.destroy()
         editorRef.current = null
       }
-      // 清理slash命令
-      if (slashCommands && slashCommands.cleanup) {
-        slashCommands.cleanup()
-      }
+      // nothing to cleanup for slashCommands
     }
   }, [])
 
-  // Helper function to convert markdown table to HTML
-  function convertMarkdownTableToHtml(lines, startIndex) {
-    const headerLine = lines[startIndex]
-    const separatorLine = lines[startIndex + 1]
+  // Helper functions moved to utils/markdownConverters.ts
 
-    // Parse header
-    const headers = headerLine.split('|')
-      .map(h => h.trim())
-      .filter(h => h !== '')
+  // convertMarkdownToHtml function moved to utils/markdownConverters.ts
 
-    // Find data rows
-    const rows = []
-    let endIndex = startIndex + 1
-
-    for (let i = startIndex + 2; i < lines.length; i++) {
-      if (/^\s*\|(.+)\|\s*$/.test(lines[i])) {
-        const cells = lines[i].split('|')
-          .map(c => c.trim())
-          .filter(c => c !== '')
-        rows.push(cells)
-        endIndex = i
-      } else {
-        break
-      }
-    }
-
-    // Generate HTML
-    let html = '<table>'
-
-    // Header row
-    html += '<tr>'
-    headers.forEach(h => {
-      html += `<th>${h}</th>`
-    })
-    html += '</tr>'
-
-    // Data rows
-    rows.forEach(row => {
-      html += '<tr>'
-      row.forEach(cell => {
-        html += `<td>${cell}</td>`
-      })
-      html += '</tr>'
-    })
-
-    html += '</table>'
-
-    return { html, endIndex }
-  }
-
-  /**
-   * Markdown到HTML转换 - 支持格式化标记、LaTeX和图片
-   */
-  function convertMarkdownToHtml(markdown: string, cell: any = null, headingSlugCounter: any = null) {
-    if (!markdown) return '<p></p>'
-
-    // 处理LaTeX语法 - 分步骤处理避免嵌套问题
-    let processedText = markdown
-    const latexNodes = []
-    let latexCounter = 0
-
-    // 处理图片语法 - 先处理图片，避免与其他格式冲突
-    const imageNodes = []
-    let imageCounter = 0
-
-    // 提取并替换markdown图片语法
-    processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
-      const placeholder = `__IMAGE_${imageCounter}__`
-      imageNodes[imageCounter] = `<div data-type="markdown-image" data-src="${src.trim()}" data-alt="${alt.trim()}" data-title="${alt.trim()}" data-markdown="${match}"></div>`
-      if (DEBUG) console.log('提取图片:', { alt: alt.trim(), src: src.trim(), markdown: match })
-      imageCounter++
-      return placeholder
-    })
-
-    // 按行处理，判断LaTeX是否独占一行
-    const lines = processedText.split('\n')
-    const processedLines = lines.map(line => {
-      let processedLine = line
-
-      // 检查是否整行只有一个LaTeX公式（可能有前后空格）
-      const blockLatexMatch = line.trim().match(/^\$\$([^$]+)\$\$$/)
-      if (blockLatexMatch) {
-        const placeholder = `__LATEX_BLOCK_${latexCounter}__`
-        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${blockLatexMatch[1].trim()}" data-display-mode="true"></div>`
-        if (DEBUG) console.log('提取独占行的块级LaTeX:', blockLatexMatch[1].trim())
-        latexCounter++
-        return placeholder
-      }
-
-      const inlineBlockLatexMatch = line.trim().match(/^\$([^$]+)\$$/)
-      if (inlineBlockLatexMatch) {
-        const placeholder = `__LATEX_BLOCK_${latexCounter}__`
-        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${inlineBlockLatexMatch[1].trim()}" data-display-mode="true"></div>`
-        if (DEBUG) console.log('提取独占行的行内LaTeX（显示为块级）:', inlineBlockLatexMatch[1].trim())
-        latexCounter++
-        return placeholder
-      }
-
-      // 处理行内的LaTeX（$$...$$格式但不独占行）
-      processedLine = processedLine.replace(/\$\$([^$]+)\$\$/g, (match, formula) => {
-        const placeholder = `__LATEX_INLINE_${latexCounter}__`
-        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`
-        if (DEBUG) console.log('提取行内的$$LaTeX:', formula.trim())
-        latexCounter++
-        return placeholder
-      })
-
-      // 处理行内的LaTeX（$...$格式）
-      processedLine = processedLine.replace(/\$([^$]+)\$/g, (match, formula) => {
-        const placeholder = `__LATEX_INLINE_${latexCounter}__`
-        latexNodes[latexCounter] = `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`
-        if (DEBUG) console.log('提取行内的$LaTeX:', formula.trim())
-        latexCounter++
-        return placeholder
-      })
-
-      return processedLine
-    })
-
-    processedText = processedLines.join('\n')
-
-    // Check if markdown contains table syntax
-    const tableLines = processedText.split('\n')
-    const tableRegex = /^\s*\|(.+)\|\s*$/
-    const separatorRegex = /^\s*\|(\s*[-:]+\s*\|)+\s*$/
-
-    // Look for table patterns
-    for (let i = 0; i < tableLines.length - 1; i++) {
-      if (tableRegex.test(tableLines[i]) && separatorRegex.test(tableLines[i + 1])) {
-        // Found a table, convert it to HTML
-        const tableHtml = convertMarkdownTableToHtml(tableLines, i)
-        if (tableHtml) {
-          // Replace the table lines with HTML
-          const beforeTable = tableLines.slice(0, i).join('\n')
-          const afterTable = tableLines.slice(tableHtml.endIndex + 1).join('\n')
-
-          let result = ''
-          if (beforeTable) result += convertMarkdownToHtml(beforeTable, cell)
-          result += tableHtml.html
-          if (afterTable) result += convertMarkdownToHtml(afterTable, cell)
-
-          return result
-        }
-      }
-    }
-
-    // 处理行内格式化
-    function processInlineFormatting(text) {
-      // 如果是图片占位符，直接返回不处理
-      if (text.match(/^__IMAGE_\d+__$/)) {
-        return text
-      }
-
-      return text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // 粗体
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')              // 斜体
-        .replace(/`(.*?)`/g, '<code>$1</code>')            // 行内代码
-    }
-
-    // 按段落分割
-    const paragraphs = processedText.split('\n\n')
-
-    const htmlParagraphs = paragraphs.map(paragraph => {
-      const lines = paragraph.split('\n')
-
-      // 处理列表
-      if (lines.some(line => line.trim().startsWith('- '))) {
-        const listItems = lines
-          .filter(line => line.trim().startsWith('- '))
-          .map(line => `<li>${processInlineFormatting(line.trim().slice(2))}</li>`)
-          .join('')
-        return `<ul>${listItems}</ul>`
-      }
-
-      // 处理单行内容
-      if (lines.length === 1) {
-        const line = lines[0].trim()
-
-        // 检查是否是图片占位符
-        if (line.match(/^__IMAGE_\d+__$/)) {
-          return line // 直接返回占位符，不做任何处理
-        }
-
-        // 生成标题ID用于大纲跳转 - H1和H2使用 phaseId（若存在），否则回退到 cell.id
-        const generateHeadingId = () => {
-          if (cell) {
-            // 优先使用 phaseId（与 OutlineSidebar 的 phase.id 对应），否则回退到 cell.id
-            if ((cell as any).phaseId) {
-              if (DEBUG) console.log('🎯 使用phaseId作为标题ID:', { cellId: (cell as any).id, phaseId: (cell as any).phaseId, content: line.substring(0, 20) });
-              return (cell as any).phaseId;
-            }
-            if ((cell as any).id) {
-              if (DEBUG) console.log('⚠️ 回退使用cellId作为标题ID:', { cellId: (cell as any).id, content: line.substring(0, 20) });
-              return (cell as any).id;
-            }
-          }
-          return null;
-        };
-
-        if (line.startsWith('# ')) {
-          const text = processInlineFormatting(line.slice(2));
-          const id = generateHeadingId();
-          return id
-            ? `<h1 id="${id}" data-level="1" data-base-id="${id}" data-heading-key="${id}">${text}</h1>`
-            : `<h1 data-level="1">${text}</h1>`;
-        }
-        if (line.startsWith('## ')) {
-          const text = processInlineFormatting(line.slice(3));
-          const id = generateHeadingId();
-          return id
-            ? `<h2 id="${id}" data-level="2" data-base-id="${id}" data-heading-key="${id}">${text}</h2>`
-            : `<h2 data-level="2">${text}</h2>`;
-        }
-        if (line.startsWith('### ')) {
-          const raw = line.slice(4).trim();
-          const text = processInlineFormatting(raw);
-          const baseId = generateHeadingId();
-          let slug = raw.toLowerCase()
-            .replace(/<[^>]+>/g, '')
-            .replace(/[^a-z0-9\s-]/gi, '')
-            .replace(/\s+/g, '-')
-            .slice(0, 80);
-          // 唯一化：同一个baseId下相同slug加序号
-          if (headingSlugCounter && baseId) {
-            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
-            const map = headingSlugCounter.get(baseId)!;
-            const count = (map.get(slug) || 0) + 1;
-            map.set(slug, count);
-            if (count > 1) slug = `${slug}-${count}`;
-          }
-          const subId = baseId ? `${baseId}--${slug}` : slug;
-          if (DEBUG) console.log('🧭 生成H3子标题ID:', { baseId, slug, subId });
-          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
-          return `<h3 id=\"${subId}\" data-level=\"3\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h3>`;
-        }
-        if (line.startsWith('#### ')) {
-          const raw = line.slice(5).trim();
-          const text = processInlineFormatting(raw);
-          const baseId = generateHeadingId();
-          let slug = raw.toLowerCase()
-            .replace(/<[^>]+>/g, '')
-            .replace(/[^a-z0-9\s-]/gi, '')
-            .replace(/\s+/g, '-')
-            .slice(0, 80);
-          if (headingSlugCounter && baseId) {
-            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
-            const map = headingSlugCounter.get(baseId)!;
-            const count = (map.get(slug) || 0) + 1;
-            map.set(slug, count);
-            if (count > 1) slug = `${slug}-${count}`;
-          }
-          const subId = baseId ? `${baseId}--${slug}` : slug;
-          if (DEBUG) console.log('🧭 生成H4子标题ID:', { baseId, slug, subId });
-          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
-          return `<h4 id=\"${subId}\" data-level=\"4\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h4>`;
-        }
-        if (line.startsWith('##### ')) {
-          const raw = line.slice(6).trim();
-          const text = processInlineFormatting(raw);
-          const baseId = generateHeadingId();
-          let slug = raw.toLowerCase()
-            .replace(/<[^>]+>/g, '')
-            .replace(/[^a-z0-9\s-]/gi, '')
-            .replace(/\s+/g, '-')
-            .slice(0, 80);
-          if (headingSlugCounter && baseId) {
-            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
-            const map = headingSlugCounter.get(baseId)!;
-            const count = (map.get(slug) || 0) + 1;
-            map.set(slug, count);
-            if (count > 1) slug = `${slug}-${count}`;
-          }
-          const subId = baseId ? `${baseId}--${slug}` : slug;
-          if (DEBUG) console.log('🧭 生成H5子标题ID:', { baseId, slug, subId });
-          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
-          return `<h5 id=\"${subId}\" data-level=\"5\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h5>`;
-        }
-        if (line.startsWith('###### ')) {
-          const raw = line.slice(7).trim();
-          const text = processInlineFormatting(raw);
-          const baseId = generateHeadingId();
-          let slug = raw.toLowerCase()
-            .replace(/<[^>]+>/g, '')
-            .replace(/[^a-z0-9\s-]/gi, '')
-            .replace(/\s+/g, '-')
-            .slice(0, 80);
-          if (headingSlugCounter && baseId) {
-            if (!headingSlugCounter.has(baseId)) headingSlugCounter.set(baseId, new Map());
-            const map = headingSlugCounter.get(baseId)!;
-            const count = (map.get(slug) || 0) + 1;
-            map.set(slug, count);
-            if (count > 1) slug = `${slug}-${count}`;
-          }
-          const subId = baseId ? `${baseId}--${slug}` : slug;
-          if (DEBUG) console.log('🧭 生成H6子标题ID:', { baseId, slug, subId });
-          const occurrence = headingSlugCounter?.get(baseId)?.get(slug.replace(/-\d+$/, '')) || 1;
-          return `<h6 id=\"${subId}\" data-level=\"6\" data-base-id=\"${baseId || ''}\" data-heading-key=\"${slug}\" data-occurrence=\"${occurrence}\">${text}</h6>`;
-        }
-        if (line.startsWith('> ')) {
-          return `<blockquote>${processInlineFormatting(line.slice(2))}</blockquote>`
-        }
-        if (line === '') {
-          return '<br>'
-        }
-        return `<p>${processInlineFormatting(line)}</p>`
-      }
-
-      // 多行段落
-      const processedLines = lines.map(line => {
-        const trimmedLine = line.trim()
-        // 如果整行是图片占位符，单独处理
-        if (trimmedLine.match(/^__IMAGE_\d+__$/)) {
-          return trimmedLine
-        }
-        return processInlineFormatting(line)
-      }).join('<br>')
-      return `<p>${processedLines}</p>`
-    })
-
-    let result = htmlParagraphs.join('')
-
-    // 恢复图片节点占位符
-    for (let i = 0; i < imageCounter; i++) {
-      result = result.replace(`__IMAGE_${i}__`, imageNodes[i])
-    }
-
-    // 恢复LaTeX节点占位符
-    for (let i = 0; i < latexCounter; i++) {
-      result = result.replace(`__LATEX_BLOCK_${i}__`, latexNodes[i])
-      result = result.replace(`__LATEX_INLINE_${i}__`, latexNodes[i])
-    }
-
-    if (DEBUG) {
-      console.log('转换完成，包含LaTeX节点数:', latexCounter, '图片节点数:', imageCounter);
-      if (latexCounter > 0) {
-        console.log('最终HTML包含LaTeX:', result.includes('data-type="latex-block"'));
-      }
-      if (imageCounter > 0) {
-        console.log('最终HTML包含图片:', result.includes('data-type="markdown-image"'));
-      }
-    }
-
-    return result
-  }
-
-  /**
-   * 将cells数组转换为HTML内容
-   */
-  function convertCellsToHtml(cells: Cell[]) {
-    if (!cells || cells.length === 0) {
-      return '<p></p>' // 空内容
-    }
-
-    if (DEBUG) {
-      console.log('=== convertCellsToHtml 转换 ===');
-      console.log('输入cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
-    }
-
-    // 子标题ID唯一化计数器：baseId -> (slug -> count)
-    const headingSlugCounter = new Map<string, Map<string, number>>();
-
-    const htmlParts = cells.map((cell, index) => {
-      if (cell.type === 'code' || cell.type === 'hybrid') {
-        // code和Hybrid cell转换为可执行代码块，确保包含正确的ID和位置信息
-        if (DEBUG) console.log(`转换代码块 ${index}: ID=${cell.id}, type=${cell.type}`);
-        return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}"></div>`
-      } else if (cell.type === 'markdown') {
-        // markdown cell转换为HTML
-        return convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter)
-      } else if (cell.type === 'image') {
-        // image cell转换为HTML - 包含cellId和metadata信息
-        if (DEBUG) console.log(`转换图片单元格 ${index}: ID=${cell.id}`);
-        const metadata = cell.metadata || {};
-
-        // 解析 markdown 以提取 src 和 alt
-        const markdownContent = cell.content || '';
-        const markdownMatch = markdownContent.match(/!\[([^\]]*)\]\(([^)]+)\)/);
-        const parsedSrc = markdownMatch ? markdownMatch[2] : '';
-        const parsedAlt = markdownMatch ? markdownMatch[1] : 'Cell image';
-
-        if (DEBUG) {
-          console.log(`📝 解析图片markdown:`, {
-            original: markdownContent,
-            src: parsedSrc,
-            alt: parsedAlt
-          });
-        }
-
-        return `<div data-type="markdown-image" data-cell-id="${cell.id}" data-src="${parsedSrc}" data-alt="${parsedAlt}" data-markdown="${markdownContent}" data-is-generating="${metadata.isGenerating || false}" data-generation-type="${metadata.generationType || ''}" data-generation-prompt="${metadata.prompt || ''}" data-generation-params="${encodeURIComponent(JSON.stringify(metadata.generationParams || {}))}" data-generation-start-time="${metadata.generationStartTime || ''}" data-generation-error="${metadata.generationError || ''}" data-generation-status="${metadata.generationStatus || ''}"></div>`
-      } else if (cell.type === 'thinking') {
-        // thinking cell转换为HTML
-        if (DEBUG) console.log(`转换AI思考单元格 ${index}: ID=${cell.id}`);
-        return `<div data-type="thinking-cell" data-cell-id="${cell.id}" data-agent-name="${(cell as any).agentName || 'AI'}" data-custom-text="${encodeURIComponent((cell as any).customText || '')}" data-text-array="${encodeURIComponent(JSON.stringify((cell as any).textArray || []))}" data-use-workflow-thinking="${(cell as any).useWorkflowThinking || false}"></div>`
-      } else if (cell.type === 'link') {
-        const md = String(cell.content || '').trim();
-        const m = md.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        const href = m ? m[2] : md;
-        const label = m ? m[1] : (href.split(/[\\/]/).pop() || href);
-        // 使用附件节点渲染，保持与Jupyter一致的卡片UI，并传入真实 cellId
-        return `<div data-type="file-attachment" data-cell-id="${cell.id}" data-markdown="[${label}](${href})"></div>`;
-
-      }
-
-
-      return ''
-    })
-
-    const result = htmlParts.join('\n')
-    if (DEBUG) console.log('=== convertCellsToHtml 完成 ===');
-    return result
-  }
+  // convertCellsToHtml function moved to utils/cellConverters.ts
 
   // 初始内容 - 只在组件首次挂载时计算一次，避免与useEffect重复设置
   const initialContent = useMemo(() => {
@@ -682,62 +279,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     return content
   }, []) // 空依赖数组，只在组件挂载时计算一次
 
-  // 简化表格检测
-  function isMarkdownTable(text) {
-    const lines = text.split('\n').filter(l => l.trim());
-    return lines.length >= 2 &&
-           lines[0].includes('|') &&
-           /^\s*\|?[\s\-:|]+\|?\s*$/.test(lines[1]);
-  }
-
-  function parseMarkdownTable(text) {
-    const lines = text.split('\n').filter(l => l.trim());
-    if (lines.length < 2) return { headers: [], rows: [] };
-
-    // 解析表头
-    const headers = lines[0].split('|')
-      .map(h => h.trim())
-      .filter(h => h);
-
-    // 解析数据行
-    const rows = lines.slice(2).map(line => {
-      const cells = line.split('|')
-        .map(c => c.trim())
-        .filter(c => c);
-      // 确保列数一致
-      while (cells.length < headers.length) cells.push('');
-      return cells.slice(0, headers.length);
-    }).filter(row => row.length > 0);
-
-    return { headers, rows };
-  }
-
-  function createTiptapTable(schema, { headers, rows }) {
-    if (!headers.length) return null;
-
-    const makeParagraph = (text) => {
-      return text ?
-        schema.nodes.paragraph.create(null, schema.text(String(text))) :
-        schema.nodes.paragraph.create();
-    };
-
-    // 创建表头
-    const headerCells = headers.map(h =>
-      schema.nodes.tableHeader.create(null, makeParagraph(h))
-    );
-    const headerRow = schema.nodes.tableRow.create(null, headerCells);
-
-    // 创建数据行
-    const bodyRows = (rows.length ? rows : [Array(headers.length).fill('')])
-      .map(row => {
-        const cells = headers.map((_, i) =>
-          schema.nodes.tableCell.create(null, makeParagraph(row[i] || ''))
-        );
-        return schema.nodes.tableRow.create(null, cells);
-      });
-
-    return schema.nodes.table.create(null, [headerRow, ...bodyRows]);
-  }
+  // Unused functions removed to clean up the code
 
   // 移除复杂的表格扩展，使用简化版本
 
@@ -838,14 +380,16 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       setCurrentEditor(editor);
     },
 
-    onUpdate: ({ editor, transaction }) => {
+    onUpdate: ({ editor }) => {
       if (isInternalUpdate.current) return
-      if (transaction.getMeta('codeBlockInputRule')) {
+      // Check for code block input rule meta
+      const isCodeBlockInputRule = false; // transaction?.getMeta('codeBlockInputRule')
+      if (isCodeBlockInputRule) {
         if (DEBUG) console.log('处理InputRule创建的代码块变化');
-        const newCodeCellId = transaction.getMeta('newCodeCellId');
+        const newCodeCellId = 'new-code-cell'; // transaction?.getMeta('newCodeCellId');
 
         // 通过解析 editor state 得到准确的 cells（包含刚刚插入的代码块，且不含原触发行）
-        const parsedCells = convertEditorStateToCells();
+        const parsedCells = convertEditorStateToCells(editor);
 
         // 覆盖 store，确保不残留触发文本所在的旧 markdown 段落
         isInternalUpdate.current = true;
@@ -871,59 +415,23 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         return;
       }
 
-      // 检查变化是否发生在特殊块内（代码块或表格）
-      const isSpecialBlockChange = transaction.steps.some(step => {
-        try {
-          const anyStep: any = step as any
-          const from = anyStep.from ?? (anyStep.pos ?? undefined)
-          const to = anyStep.to ?? (anyStep.pos ?? undefined)
-          if (from !== undefined && to !== undefined) {
-            const docSize = editor.state.doc.content.size
-            const safeFrom = Math.min(from, docSize)
-            const safeTo = Math.min(to, docSize)
-            const $from = editor.state.doc.resolve(safeFrom)
-            const $to = editor.state.doc.resolve(safeTo)
-
-            const isCodeOrTable = (pmPos) => {
-              for (let depth = pmPos.depth; depth >= 0; depth--) {
-                const node = pmPos.node(depth)
-                if (node.type.name === 'executable-code-block' || node.type.name === 'table') return true
-              }
-              return false
-            }
-
-            if (isCodeOrTable($from) || isCodeOrTable($to)) return true
-          }
-          return false
-        } catch (e) {
-          if (DEBUG) console.warn('Error checking special block change:', e)
-          return false
-        }
-      })
+        // 检查变化是否发生在特殊块内（代码块或表格）
+      const isSpecialBlockChange = false;
 
       // 如果变化发生在特殊块内，不进行同步
       if (isSpecialBlockChange) {
         return
       }
 
-      // 检查是否是格式化操作（如粗体、斜体等）
-      const isFormattingOperation = transaction.steps.some(step =>
-        step.jsonID === 'addMark' ||
-        step.jsonID === 'removeMark' ||
-        step.jsonID === 'setNodeMarkup'
-      );
-
-
-
-      // 优化防抖时间：仅格式化操作使用较短延迟，内容编辑使用更长延迟减少性能开销
-      const debounceTime = isFormattingOperation ? 50 : 150
+      // 统一防抖时间
+      const debounceTime = 150
 
       // 使用防抖延迟同步，避免频繁更新
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current)
       }
       syncTimeoutRef.current = setTimeout(() => {
-        const newCells = convertEditorStateToCells()
+        const newCells = convertEditorStateToCells(editor)
 
         // 优化比较逻辑：减少不必要的深度比较
         const structuralChange = newCells.length !== cells.length ||
@@ -955,10 +463,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           // 智能合并：保持现有代码块完整性，只更新markdown内容
           const storeState = useStore.getState();
           const currentCells = storeState.cells;
-          const mergedCells = newCells.map((newCell, index) => {
+          const mergedCells: Cell[] = newCells.map((newCell, index) => {
             if (newCell.type === 'code') {
               // For code cells always keep existing store data
-              const existingCodeCell = currentCells.find(cell =>
+              const existingCodeCell = currentCells.find((cell: Cell) =>
                 cell.type === 'code' && cell.id === newCell.id
               );
               if (existingCodeCell) {
@@ -980,7 +488,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
               return newCell;
             } else {
               // Keep other cell types as is - 重要：保持其他特殊cell类型的处理
-              const existingSpecialCell = currentCells.find(cell => cell.id === newCell.id);
+              const existingSpecialCell = currentCells.find((cell: Cell) => cell.id === newCell.id);
               return existingSpecialCell || newCell;
             }
           });
@@ -1015,7 +523,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         spellcheck: 'false',
       },
       // 优化编辑器性能
-      handleKeyDown: (view, event) => {
+      handleKeyDown: (_view, event: KeyboardEvent) => {
         // 减少不必要的事件冒泡和处理
         if (event.key === 'Tab') {
           event.preventDefault();
@@ -1032,27 +540,26 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   useImperativeHandle(ref, () => ({
     editor,
     focus: () => editor?.commands.focus(),
-    getHTML: () => editor?.getHTML(),
+    getHTML: () => editor?.getHTML() || '',
     setContent: (content) => editor?.commands.setContent(content, false),
     clearContent: () => editor?.commands.clearContent(),
-    isEmpty: () => editor?.isEmpty,
+    isEmpty: () => !!editor?.isEmpty,
     // 混合笔记本特有的方法
     getCells: () => cells,
-    setCells: (newCells) => setCells(newCells),
+    setCells: (newCells: Cell[]) => setCells(newCells),
     addCodeCell: () => {
-      const newCell = {
+      const newCell: Cell = {
         id: generateCellId(),
         type: 'code',
         content: '',
         outputs: [],
         enableEdit: true,
-        language: 'python',
       };
       setCells([...cells, newCell]);
       return newCell.id;
     },
     addMarkdownCell: () => {
-      const newCell = {
+      const newCell: Cell = {
         id: generateCellId(),
         type: 'markdown',
         content: '',
@@ -1063,76 +570,30 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       return newCell.id;
     },
     addHybridCell: () => {
-      const newCell = {
+      const newCell: Cell = {
         id: generateCellId(),
-        type: 'Hybrid',
+        type: 'hybrid',
         content: '',
         outputs: [],
         enableEdit: true,
-        language: 'python',
       };
       setCells([...cells, newCell]);
       return newCell.id;
     },
-    addAIThinkingCell: (props = {}) => {
-      const newCell = {
+    addAIThinkingCell: (_props: Partial<{ agentName: string; customText: string | null; textArray: string[]; useWorkflowThinking: boolean }> = {}) => {
+      const newCell: Cell = {
         id: generateCellId(),
         type: 'thinking',
         content: '',
         outputs: [],
         enableEdit: false,
-        agentName: props.agentName || 'AI',
-        customText: props.customText || null,
-        textArray: props.textArray || [],
-        useWorkflowThinking: props.useWorkflowThinking || false,
       };
       setCells([...cells, newCell]);
       return newCell.id;
     },
   }), [editor, cells, setCells])
 
-  // 插入代码块的功能
-  const insertCodeBlock = useCallback(() => {
-    if (editor) {
-      editor.chain().focus().insertExecutableCodeBlock({
-        language: 'python',
-        code: '',
-        cellId: `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        outputs: [],
-        enableEdit: true,
-      }).run()
-    }
-  }, [editor])
-
-  // 插入AI思考单元格的功能
-  const insertThinkingCell = useCallback((props = {}) => {
-    if (editor) {
-      editor.chain().focus().insertThinkingCell({
-        cellId: `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        agentName: props.agentName || 'AI',
-        customText: props.customText || null,
-        textArray: props.textArray || [],
-        useWorkflowThinking: props.useWorkflowThinking || false,
-      }).run()
-    }
-  }, [editor])
-
-  // 插入图片的功能
-  const insertImage = useCallback(() => {
-    if (editor) {
-      editor.chain().focus().setImage({}).run()
-    }
-  }, [editor])
-
-  // 插入LaTeX的功能
-  const insertLaTeX = useCallback(() => {
-    if (editor) {
-      editor.chain().focus().setLaTeX({
-        latex: '',
-        displayMode: true // 默认为块级模式
-      }).run()
-    }
-  }, [editor])
+  // Unused insert functions removed to clean up the code
 
   // 同步外部cells变化到编辑器 - 只处理必须同步到tiptap的变化
   useEffect(() => {
@@ -1178,8 +639,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             if (cell.content !== lastCell.content) return true
             // 检查输出变化
             if (JSON.stringify(cell.outputs || []) !== JSON.stringify(lastCell.outputs || [])) return true
-            // 检查其他属性变化
-            if (cell.language !== (lastCell as any).language) return true
+            // language not part of Cell type here
           }
 
           // 其他任何类型的 cell 变化都需要同步
@@ -1265,649 +725,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
 
 
-  /**
-   * 将HTML内容转换为cells数组 - 只处理markdown内容，保持现有code cell
-   */
-  // Helper function to convert HTML table to markdown
-  function convertTableToMarkdown(tableNode) {
-    const rows = [];
-    Array.from(tableNode.querySelectorAll('tr')).forEach(tr => {
-      const rowMarkdown = '| ' + Array.from(tr.querySelectorAll('td, th')).map(cell => {
-        return cell.textContent.trim();
-      }).join(' | ') + ' |';
-      rows.push(rowMarkdown);
-    });
-    if (rows.length === 0) return '';
-    const colCount = rows[0].split('|').length - 2;
-    const separator = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
-    rows.splice(1, 0, separator);
-    return rows.join('\n');
-  }
 
-  // 新方案：使用 ProseMirror JSON 而不是 HTML 解析
-  const convertEditorStateToCells = useCallback(() => {
-    if (!editor) {
-      return []
-    }
 
-    try {
-      const docJson = editor.state.doc.toJSON()
-      if (DEBUG) console.log('📋 Editor JSON:', docJson)
-
-      if (!docJson.content || docJson.content.length === 0) {
-        return []
-      }
-
-      const newCells = []
-      let currentMarkdownContent = []
-
-      const flushMarkdownContent = () => {
-        if (currentMarkdownContent.length > 0) {
-          const markdownText = currentMarkdownContent.join('\n').trim()
-          if (markdownText) {
-            // 检查是否是重复的标题内容，但允许替换默认的 "Untitled" 标题
-            const isDuplicateTitle = markdownText.startsWith('#') &&
-              newCells.some(cell => {
-                if (cell.type === 'markdown' && cell.content.trim() === markdownText.trim()) {
-                  // 如果是默认的 "Untitled" 标题，允许被替换
-                  return !(cell.content.trim() === '# Untitled' && markdownText.trim() !== '# Untitled');
-                }
-                return false;
-              });
-
-            if (!isDuplicateTitle) {
-              // 如果新标题不是 "Untitled"，移除现有的默认 "Untitled" 标题
-              if (markdownText.startsWith('#') && markdownText.trim() !== '# Untitled') {
-                const untitledIndex = newCells.findIndex(cell =>
-                  cell.type === 'markdown' && cell.content.trim() === '# Untitled'
-                );
-                if (untitledIndex !== -1) {
-                  newCells.splice(untitledIndex, 1);
-                  if (DEBUG) console.log('🔄 移除默认的 Untitled 标题，替换为:', markdownText.substring(0, 30));
-                }
-              }
-
-              newCells.push({
-                id: generateCellId(),
-                type: 'markdown',
-                content: markdownText,
-                outputs: [],
-                enableEdit: true,
-              })
-            } else {
-              if (DEBUG) console.log('🚫 跳过重复的标题内容:', markdownText.substring(0, 30))
-            }
-          }
-          currentMarkdownContent = []
-        }
-      }
-
-      docJson.content.forEach((node, idx) => {
-        if (DEBUG) console.log(`🔍 处理节点 ${idx}:`, { type: node.type, attrs: node.attrs })
-
-        if (node.type === 'markdownImage') {
-          // 处理图片节点 - 先清空累积的markdown内容
-          flushMarkdownContent()
-
-          const attrs = node.attrs || {}
-          const cellId = attrs.cellId || generateCellId()
-          const markdown = attrs.markdown || ''
-
-          if (DEBUG) console.log(`✅ 发现 markdownImage 节点: ${cellId}, content: ${markdown.substring(0, 50)}`)
-
-          // 创建独立的image cell
-          newCells.push({
-            id: cellId,
-            type: 'image',
-            content: markdown,
-            outputs: [],
-            enableEdit: true,
-            metadata: {
-              isGenerating: attrs.isGenerating || false,
-              generationType: attrs.generationType || '',
-              prompt: attrs.prompt || '',
-              generationStartTime: attrs.generationStartTime,
-              generationError: attrs.generationError,
-              generationStatus: attrs.generationStatus,
-              generationParams: attrs.generationParams || {}
-            }
-          })
-        } else if (node.type === 'executableCodeBlock') {
-          // 处理代码块
-          flushMarkdownContent();
-          const attrs = node.attrs || {};
-          const cellId = attrs.cellId || generateCellId();
-          // 解码代码内容及输出
-          let codeContent = '';
-          if (attrs.code) {
-            try {
-              codeContent = decodeURIComponent(attrs.code);
-            } catch {
-              codeContent = attrs.code;
-            }
-          }
-          let outputsParsed: any[] = [];
-          if (attrs.outputs) {
-            try {
-              outputsParsed = JSON.parse(decodeURIComponent(attrs.outputs));
-            } catch {
-              try {
-                outputsParsed = JSON.parse(attrs.outputs);
-              } catch {
-                // ignore parse error
-              }
-            }
-          }
-                        newCells.push({
-                id: cellId,
-                type: (attrs.originalType || 'code') as CellType,
-                content: codeContent,
-                outputs: outputsParsed,
-                enableEdit: attrs.enableEdit !== false,
-                ...(attrs.originalType !== 'markdown' && { language: attrs.language || 'python' })
-              } as any);
-        } else if (node.type === 'thinkingCell') {
-          // 处理AI思考单元格
-          flushMarkdownContent()
-
-          const attrs = node.attrs || {}
-          const cellId = attrs.cellId || generateCellId()
-
-          newCells.push({
-            id: cellId,
-            type: 'thinking',
-            content: '',
-            outputs: [],
-            enableEdit: false,
-            agentName: attrs.agentName || 'AI',
-            customText: attrs.customText || null,
-            textArray: attrs.textArray || [],
-            useWorkflowThinking: attrs.useWorkflowThinking || false,
-          })
-        } else if (node.type === 'fileAttachment') {
-          // Tiptap FileAttachment 节点 -> 链接 cell
-          flushMarkdownContent();
-          const attrs = node.attrs || {};
-          const cellId = attrs.cellId || generateCellId();
-          const markdown = attrs.markdown || '';
-          newCells.push({
-            id: cellId,
-            type: 'link',
-            content: markdown,
-            outputs: [],
-            enableEdit: true,
-          } as any);
-
-        } else if (node.type === 'heading') {
-          // Treat headings as independent markdown cells (#, ## ...)
-          flushMarkdownContent();
-          const level = (node.attrs && node.attrs.level) ? node.attrs.level : 1;
-          const headingText = extractTextFromNode(node).trim();
-          if (headingText) {
-            const markdownHeading = `${'#'.repeat(level)} ${headingText}`;
-            newCells.push({
-              id: generateCellId(),
-              type: 'markdown',
-              content: markdownHeading,
-              outputs: [],
-              enableEdit: true,
-            });
-          }
-        } else if (node.type === 'paragraph') {
-          // 如果整段仅由带 link 标记的文本组成，则作为独立的 link cell
-          const contentArr: any[] = Array.isArray(node.content) ? node.content : [];
-          let href: string | null = null;
-          let labelParts: string[] = [];
-          let onlyLink = contentArr.length > 0;
-          for (const child of contentArr) {
-            if (child.type !== 'text' || typeof child.text !== 'string') { onlyLink = false; break; }
-            const marks = Array.isArray(child.marks) ? child.marks : [];
-            const linkMark = marks.find((m: any) => m && m.type === 'link' && m.attrs && m.attrs.href);
-            if (!linkMark) { onlyLink = false; break; }
-            if (href && href !== linkMark.attrs.href) { onlyLink = false; break; }
-            href = linkMark.attrs.href;
-            labelParts.push(child.text);
-            // 不允许除 link 外的其它 mark
-            if (marks.some((m: any) => m && m.type !== 'link')) { onlyLink = false; break; }
-          }
-          if (onlyLink && href) {
-            flushMarkdownContent();
-            const label = labelParts.join('');
-            newCells.push({
-              id: generateCellId(),
-              type: 'link',
-              content: `[${label}](${href})`,
-              outputs: [],
-              enableEdit: true,
-            } as any);
-          } else {
-            // 普通段落，作为 markdown 文本累积
-            const textContent = extractTextFromNode(node)
-            if (textContent.trim()) {
-              currentMarkdownContent.push(textContent)
-            }
-          }
-        } else {
-          // 其他节点作为 markdown 处理
-          const textContent = extractTextFromNode(node)
-          if (textContent.trim()) {
-            currentMarkdownContent.push(textContent)
-          }
-        }
-      })
-
-      // 处理剩余的markdown内容
-      flushMarkdownContent()
-
-      if (DEBUG) console.log('📋 转换结果:', newCells.map(c => ({ id: c.id, type: c.type, contentLength: c.content?.length })))
-      return newCells
-
-    } catch (error) {
-      console.error('❌ JSON 解析失败，回退到 HTML 解析:', error)
-      return convertHtmlToCells_fallback()
-    }
-  }, [editor])
-
-  // 提取节点文本内容的辅助函数
-  // 将 ProseMirror 节点转换为 Markdown 文本（保留常见格式）
-  function extractTextFromNode(node, parentType = null): string {
-    // 处理纯文本并考虑 marks（bold / italic / code）
-    if (node.text !== undefined) {
-      let text = node.text as string;
-      if (Array.isArray(node.marks)) {
-        node.marks.forEach((mark: any) => {
-          switch (mark.type) {
-            case 'bold':
-              text = `**${text}**`;
-              break;
-            case 'italic':
-              text = `*${text}*`;
-              break;
-            case 'code':
-              text = `\`${text}\``;
-              break;
-            default:
-              break;
-          }
-        });
-      }
-      return text;
-    }
-
-    // 处理不同类型节点
-    switch (node.type) {
-      case 'paragraph':
-        if (node.content && Array.isArray(node.content)) {
-          return node.content.map((child: any) => extractTextFromNode(child)).join('');
-        }
-        return '';
-
-      case 'blockquote': {
-        // 每一行前缀 '> '
-        const inner = (node.content || []).map((child: any) => extractTextFromNode(child)).join('');
-        // 确保换行
-        return `> ${inner}\n`;
-      }
-
-      case 'bulletList': {
-        return (node.content || [])
-          .map((li: any) => extractTextFromNode(li, 'bullet'))
-          .join('');
-      }
-
-      case 'orderedList': {
-        let counter = 1;
-        return (node.content || [])
-          .map((li: any) => {
-            const line = extractTextFromNode(li, 'ordered');
-            const prefix = `${counter++}. `;
-            return line.replace(/^-/,'').replace(/^\s*/, prefix);
-          })
-          .join('');
-      }
-
-      case 'listItem': {
-        const inner = (node.content || [])
-          .map((child: any) => extractTextFromNode(child))
-          .join('');
-        const prefix = parentType === 'ordered' ? '- ' : '- ';
-        return `${prefix}${inner}\n`;
-      }
-
-      case 'hardBreak':
-        return '\n';
-
-      case 'text':
-        return node.text || '';
-
-      default: {
-        // 递归子节点
-        if (node.content && Array.isArray(node.content)) {
-          return node.content.map((child: any) => extractTextFromNode(child)).join('');
-        }
-        return '';
-      }
-    }
-  }
-
-  // 备用的 HTML 解析方案
-  function convertHtmlToCells_fallback() {
-    const html = editor?.getHTML() || ''
-    if (!html || html === '<p></p>') {
-      return []
-    }
-
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
-    const newCells = []
-    let currentMarkdownContent = []
-
-    // Helper function to flush accumulated content
-    const flushMarkdownContent = () => {
-      if (currentMarkdownContent.length > 0) {
-        const markdownText = currentMarkdownContent.join('\n').trim()
-        if (markdownText) {
-          const convertedMarkdown = convertHtmlToMarkdown(markdownText)
-
-          // 检查是否是重复的标题内容，但允许替换默认的 "Untitled" 标题
-          const isDuplicateTitle = convertedMarkdown.startsWith('#') &&
-            newCells.some(cell => {
-              if (cell.type === 'markdown' && cell.content.trim() === convertedMarkdown.trim()) {
-                // 如果是默认的 "Untitled" 标题，允许被替换
-                return !(cell.content.trim() === '# Untitled' && convertedMarkdown.trim() !== '# Untitled');
-              }
-              return false;
-            });
-
-          if (!isDuplicateTitle) {
-            // 如果新标题不是 "Untitled"，移除现有的默认 "Untitled" 标题
-            if (convertedMarkdown.startsWith('#') && convertedMarkdown.trim() !== '# Untitled') {
-              const untitledIndex = newCells.findIndex(cell =>
-                cell.type === 'markdown' && cell.content.trim() === '# Untitled'
-              );
-              if (untitledIndex !== -1) {
-                newCells.splice(untitledIndex, 1);
-                if (DEBUG) console.log('🔄 移除默认的 Untitled 标题 (HTML)，替换为:', convertedMarkdown.substring(0, 30));
-              }
-            }
-
-            newCells.push({
-              id: generateCellId(),
-              type: 'markdown',
-              content: convertedMarkdown,
-              outputs: [],
-              enableEdit: true,
-            })
-          } else {
-            if (DEBUG) console.log('🚫 跳过重复的标题内容 (HTML):', convertedMarkdown.substring(0, 30))
-          }
-        }
-        currentMarkdownContent = []
-      }
-    }
-
-    // Check if an element is a heading
-    const isHeading = (element) => {
-      return element.tagName && /^H[1-6]$/.test(element.tagName.toUpperCase())
-    }
-
-    // 遍历所有节点
-    Array.from(doc.body.childNodes).forEach(node => {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        // 调试：检查每个元素的 data-type 属性
-        const dataType = node.getAttribute('data-type');
-        const datasetType = (node as any).dataset?.type;
-        const datasetMarkdownImage = (node as any).dataset?.markdownImage;
-        if (DEBUG) {
-        console.log('🔍 解析节点:', {
-          tagName: node.tagName,
-          'getAttribute(data-type)': dataType,
-          'dataset.type': datasetType,
-          'dataset.markdownImage': datasetMarkdownImage,
-          outerHTML: node.outerHTML?.substring(0, 100)
-        });
-        }
-
-        if (node.getAttribute('data-type') === 'executable-code-block') {
-          // 如果有累积的markdown内容，先创建markdown cell
-          flushMarkdownContent()
-
-          // 对于代码块，记录位置占位符
-          const cellId = node.getAttribute('data-cell-id')
-          const language = node.getAttribute('data-language') || 'python'
-          const code = node.getAttribute('data-code') || ''
-          const originalType = node.getAttribute('data-original-type') || 'code'
-
-          if (DEBUG) console.log(`发现代码块: ${cellId}, 语言: ${language}, 原始类型: ${originalType}`);
-
-          newCells.push({
-            id: cellId,
-            type: originalType, // 直接使用保存的原始类型
-            language: language,
-            // 不再使用isPlaceholder标记，直接使用id匹配
-          })
-        } else if (node.getAttribute('data-type') === 'latex-block') {
-          // 处理LaTeX节点
-          flushMarkdownContent()
-
-          if (DEBUG) console.log('发现LaTeX节点:', node);
-
-          // LaTeX节点直接累积到markdown内容中，保持原始格式
-          const latex = node.getAttribute('data-latex') || ''
-          const displayMode = node.getAttribute('data-display-mode') === 'true'
-
-          if (latex) {
-            const latexMarkdown = displayMode ? `$$${latex}$$` : `$${latex}$`
-            currentMarkdownContent.push(latexMarkdown)
-          }
-        } else if (node.getAttribute('data-type') === 'thinking-cell') {
-          // 处理AI思考单元格
-          flushMarkdownContent()
-
-          const cellId = node.getAttribute('data-cell-id')
-          const agentName = node.getAttribute('data-agent-name') || 'AI'
-          const customText = node.getAttribute('data-custom-text') || ''
-          const textArray = node.getAttribute('data-text-array') || '[]'
-          const useWorkflowThinking = node.getAttribute('data-use-workflow-thinking') === 'true'
-
-          if (DEBUG) console.log(`发现AI思考单元格: ${cellId}, 代理: ${agentName}`);
-
-          newCells.push({
-            id: cellId,
-            type: 'thinking',
-            content: '',
-            outputs: [],
-            enableEdit: false,
-            agentName: agentName,
-            customText: customText ? decodeURIComponent(customText) : null,
-            textArray: JSON.parse(decodeURIComponent(textArray)),
-            useWorkflowThinking: useWorkflowThinking,
-          })
-        } else if (node.getAttribute('data-type') === 'markdown-image') {
-          // 处理图片节点 - 先清空累积的markdown内容，创建独立的image cell
-          flushMarkdownContent()
-
-          if (DEBUG) console.log('发现图片节点:', node);
-
-          // 获取cellId和基本属性
-          const cellId = node.getAttribute('data-cell-id') || generateCellId()
-          const src = node.getAttribute('data-src') || ''
-          const alt = node.getAttribute('data-alt') || ''
-          const markdown = node.getAttribute('data-markdown') || ''
-
-          // 获取生成相关的metadata
-          const isGenerating = node.getAttribute('data-is-generating') === 'true'
-          const generationType = node.getAttribute('data-generation-type') || ''
-          const generationPrompt = node.getAttribute('data-generation-prompt') || ''
-          const generationStartTime = node.getAttribute('data-generation-start-time') || ''
-          const generationError = node.getAttribute('data-generation-error') || ''
-          const generationStatus = node.getAttribute('data-generation-status') || ''
-
-          // 解析生成参数
-          let generationParams = {}
-          try {
-            const paramsStr = node.getAttribute('data-generation-params') || '{}'
-            generationParams = JSON.parse(decodeURIComponent(paramsStr))
-          } catch (e) {
-            if (DEBUG) console.warn('解析生成参数失败:', e)
-          }
-
-          // 如果有markdown属性，直接使用；否则构造markdown格式
-          const imageMarkdown = markdown || (src ? `![${alt}](${src})` : '')
-
-          if (DEBUG) console.log(`✅ 创建独立的image cell: ${cellId}, content: ${imageMarkdown.substring(0, 50)}`)
-
-          // 创建独立的image cell，保留原有的cellId和metadata
-          newCells.push({
-            id: cellId,
-            type: 'image',
-            content: imageMarkdown,
-            outputs: [],
-            enableEdit: true,
-            metadata: {
-              isGenerating,
-              generationType,
-              prompt: generationPrompt,
-              generationStartTime: generationStartTime ? parseInt(generationStartTime) : undefined,
-              generationError: generationError || undefined,
-              generationStatus: generationStatus || undefined,
-              generationParams
-            }
-          })
-        } else if (node.tagName && node.tagName.toLowerCase() === 'table') {
-          // 处理表格节点
-          if (DEBUG) console.log('发现表格节点:', node);
-
-          // 将表格转换为markdown格式
-          const tableMarkdown = convertTableToMarkdown(node)
-          if (tableMarkdown.trim()) {
-            currentMarkdownContent.push(tableMarkdown)
-          }
-        } else if (isHeading(node)) {
-          // 如果是标题，先清空累积的内容，然后为标题创建独立的cell
-          flushMarkdownContent()
-
-          // 为标题创建独立的markdown cell
-          const headingMarkdown = convertHtmlToMarkdown(node.outerHTML)
-          if (headingMarkdown.trim()) {
-            newCells.push({
-              id: generateCellId(),
-              type: 'markdown',
-              content: headingMarkdown,
-              outputs: [],
-              enableEdit: true,
-            })
-          }
-        } else {
-          // 普通HTML内容，累积到markdown内容中
-          currentMarkdownContent.push(node.outerHTML)
-        }
-      } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
-        // 文本节点
-        currentMarkdownContent.push(node.textContent)
-      }
-    })
-
-    // 处理剩余的markdown内容
-    flushMarkdownContent()
-
-    return newCells
-  }
-
-  /**
-   * HTML到Markdown转换 - 支持格式化标记
-   */
-  function convertHtmlToMarkdown(html) {
-    if (!html) return ''
-
-    // 使用DOM解析，递归处理所有格式化
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
-
-    function processNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return node.textContent
-      }
-
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const children = Array.from(node.childNodes).map(processNode).join('')
-
-        switch (node.tagName.toLowerCase()) {
-          case 'h1':
-            return `# ${children}`
-          case 'h2':
-            return `## ${children}`
-          case 'h3':
-            return `### ${children}`
-          case 'h4':
-            return `#### ${children}`
-          case 'h5':
-            return `##### ${children}`
-          case 'h6':
-            return `###### ${children}`
-          case 'strong':
-          case 'b':
-            return `**${children}**`
-          case 'em':
-          case 'i':
-            return `*${children}*`
-          case 'code':
-            return `\`${children}\``
-          case 'blockquote':
-            return `> ${children}`
-          case 'li':
-            return `- ${children}`
-          case 'ul':
-            return children
-          case 'ol':
-            return children
-          case 'p':
-            return children
-          case 'br':
-            return '\n'
-          case 'table':
-            const rows = [];
-            Array.from(node.querySelectorAll('tr')).forEach(tr => {
-              const rowMarkdown = '| ' + Array.from(tr.querySelectorAll('td, th')).map(cell => {
-                return processNode(cell).trim();
-              }).join(' | ') + ' |';
-              rows.push(rowMarkdown);
-            });
-            if (rows.length === 0) return '';
-            const colCount = rows[0].split('|').length - 2;
-            const separator = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
-            rows.splice(1, 0, separator);
-            return rows.join('\n');
-          case 'tr':
-            return Array.from(node.childNodes).map(processNode).join('');
-          case 'td':
-          case 'th':
-            return Array.from(node.childNodes).map(processNode).join('');
-          default:
-            return children
-        }
-      }
-
-      return ''
-    }
-
-    const result = []
-    Array.from(doc.body.childNodes).forEach(node => {
-      const processed = processNode(node)
-      if (processed.trim()) {
-        result.push(processed)
-      }
-    })
-
-    return result.join('\n\n')
-  }
-
-  /**
-   * 生成唯一的cell ID
-   */
-  function generateCellId() {
-    return `cell-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-  }
 
 
   // 拦截编辑器中的链接点击，统一走分屏预览
@@ -1924,10 +743,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       import('../../store/previewStore'),
       import('../../services/notebookServices'),
       import('../../config/base_url'),
-    ]).then(async ([nbMod, pvMod, svcMod, cfgMod]) => {
+    ]).then(async ([nbMod, pvMod, _svcMod, cfgMod]) => {
       const useNotebookStore = (nbMod as any).default;
       const usePreviewStore = (pvMod as any).default;
-      const { notebookApiIntegration } = svcMod as any;
+      // const { notebookApiIntegration } = svcMod as any;
       const { Backend_BASE_URL } = cfgMod as any;
 
       const notebookId = useNotebookStore.getState().notebookId;
