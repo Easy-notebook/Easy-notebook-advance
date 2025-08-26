@@ -11,7 +11,7 @@ const FILE_STORE = 'files';
 /**
  * 文件类型
  */
-export type FileType = 'image' | 'csv' | 'text' | 'pdf';
+export type FileType = 'image' | 'csv' | 'text' | 'pdf' | 'html';
 
 /**
  * 预览模式类型
@@ -230,8 +230,13 @@ const getFileType = (filePath: string): FileType => {
         return 'pdf';
     }
 
+    // HTML files
+    if (fileExt === 'html' || fileExt === 'htm') {
+        return 'html';
+    }
+
     // Other text files
-    if (['.txt', '.md', '.json', '.js', '.py', '.html', '.css'].includes(`.${fileExt}`)) {
+    if (['.txt', '.md', '.json', '.js', '.py', '.css'].includes(`.${fileExt}`)) {
         return 'text';
     }
 

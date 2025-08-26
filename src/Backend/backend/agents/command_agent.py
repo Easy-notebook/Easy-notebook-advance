@@ -126,8 +126,8 @@ class CommandAgent(BaseAgentTemplate):
     ) -> AsyncGenerator[str, None]:
         """处理OpenAI API流式响应"""
         try:
-            # 创建异步流
-            stream = await self.client.chat.completions.create(
+            # 创建流（OpenAI Python SDK 返回同步 Stream 对象，不需要 await）
+            stream = self.client.chat.completions.create(
                 model=self.engine,
                 messages=messages,
                 stream=True,

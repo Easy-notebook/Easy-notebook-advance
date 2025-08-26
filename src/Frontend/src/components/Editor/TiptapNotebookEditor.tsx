@@ -21,12 +21,9 @@ import TableRow from '@tiptap/extension-table-row'
 import { Extension } from '@tiptap/react'
 import { Plugin, PluginKey, Selection } from 'prosemirror-state'
 import Heading from '@tiptap/extension-heading'
-import { Cell, CellType } from '../../store/notebookStore'
+import { Cell } from '../../store/notebookStore'
 import { FileAttachmentExtension } from './extensions/FileAttachmentExtension'
-import {
-  convertMarkdownToHtml,
-  convertTableToMarkdown
-} from './utils/markdownConverters'
+
 import {
   generateCellId,
   convertCellsToHtml,

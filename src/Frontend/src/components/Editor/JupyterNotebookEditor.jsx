@@ -110,6 +110,7 @@ const JupyterNotebookEditor = forwardRef(({
       case 'code':
         return <CodeCell key={cell.id} {...cellProps} />;
       case 'Hybrid':
+      case 'hybrid':
         return <HybridCell key={cell.id} {...cellProps} />;
       case 'markdown':
         return <MarkdownCell key={cell.id} {...cellProps} disableDefaultTitleStyle />;

@@ -223,7 +223,6 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
             const useNotebookStore = (await import('../../../store/notebookStore')).default as any;
             const notebookId = useNotebookStore.getState().notebookId;
             if (!notebookId) return;
-            const { notebookApiIntegration } = await import('../../../services/notebookServices');
             const { Backend_BASE_URL } = await import('../../../config/base_url');
 
             // Normalize file path similar to LinkCell

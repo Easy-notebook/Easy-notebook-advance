@@ -208,6 +208,7 @@ export interface NotebookStoreActions {
     // 单元格类型转换
     convertCurrentCodeCellToHybridCell: () => void;
     convertToCodeCell: (cellId: string) => void;
+    updateCellType: (cellId: string, newType: CellType) => void;
 
     // 历史代码获取
     getHistoryCode: () => string;
@@ -1151,6 +1152,22 @@ const useStore = create(
           const updatedTasks = parseMarkdownCells(state.cells as any) as any;
           updateCellsPhaseId(state.cells as any, updatedTasks);
           state.tasks = updatedTasks;
+        })
+      ),
+
+    // 通用的单元格类型更新方法
+    updateCellType: (cellId: string, newType: CellType) =>
+      set(
+        produce((state: NotebookStoreState) => {
+          const cell = state.cells.find((c) => c.id === cellId);
+          if (cell) {
+            cell.type = newType;
+
+            // 重新解析任务
+            const updatedTasks = parseMarkdownCells(state.cells as any) as any;
+            updateCellsPhaseId(state.cells as any, updatedTasks);
+            state.tasks = updatedTasks;
+          }
         })
       ),
 

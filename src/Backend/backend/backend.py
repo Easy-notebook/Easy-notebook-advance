@@ -173,6 +173,21 @@ class FileContentResponse(BaseModel):
     dataUrl: Optional[str] = None
     error: Optional[str] = None
 
+class GenerateHtmlRequest(BaseModel):
+    """Request body for generating a simple HTML sandbox page."""
+    subdir: Optional[str] = None
+    title: Optional[str] = "Sandbox Page"
+    body_html: Optional[str] = "<h1>Hello Sandbox</h1>"
+    css: Optional[str] = ""
+    js: Optional[str] = ""
+
+class GenerateHtmlResponse(BaseModel):
+    status: str
+    notebook_id: str
+    subdir: str
+    url: str
+    message: str = ""
+
 # ========================
 # 辅助函数：记录请求日志
 # ========================
@@ -192,7 +207,7 @@ def sanitize_response_content(content: any, notebook_id: str) -> any:
     """
     if not notebook_id or not content:
         return content
-    
+
     if isinstance(content, str):
         if notebook_id in content:
             return ""
@@ -221,17 +236,17 @@ class SecurityFilterMiddleware(BaseHTTPMiddleware):
     """
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        
+
         # 尝试从URL路径中提取notebook_id
         notebook_id = None
         path_parts = request.url.path.split('/')
-        
+
         # 查找可能的notebook_id (32位十六进制字符串)
         for part in path_parts:
             if len(part) == 32 and all(c in '0123456789abcdef' for c in part.lower()):
                 notebook_id = part
                 break
-        
+
         # 如果找到notebook_id且响应是JSON，则过滤内容
         if notebook_id and hasattr(response, 'body'):
             try:
@@ -239,7 +254,7 @@ class SecurityFilterMiddleware(BaseHTTPMiddleware):
                 logger.debug(f"Security filter applied for notebook {notebook_id}")
             except Exception as e:
                 logger.error(f"Error in security filter: {str(e)}")
-        
+
         return response
 
 # ========================
@@ -321,7 +336,7 @@ async def execute_code_endpoint(execute_request: ExecuteRequest, db: Session = D
             kernel_managers[execute_request.notebook_id] = KernelExecutionManager(work_dir=work_dir)
         kem = kernel_managers[execute_request.notebook_id]
         result = await kem.execute_code_with_progress(execute_request.code)
-        
+
         # 过滤结果中的敏感信息
         sanitized_result = sanitize_response_content(result, execute_request.notebook_id)
         return ExecuteResponse(**sanitized_result)
@@ -419,25 +434,25 @@ async def upload_file_endpoint(
 def build_file_tree(directory: Path, base_dir: Path) -> List[Dict]:
     """Build a hierarchical file tree structure"""
     tree = []
-    
+
     # Get all items in the directory
     items = []
     try:
         for item in directory.iterdir():
-            # Skip hidden files and directories
-            if item.name.startswith('.'):
+            # Skip hidden files and directories, but allow .sandbox and .assets
+            if item.name.startswith('.') and item.name not in ['.sandbox', '.assets']:
                 continue
             items.append(item)
     except PermissionError:
         return tree
-    
+
     # Sort items: directories first, then files
     items.sort(key=lambda x: (x.is_file(), x.name.lower()))
-    
+
     for item in items:
         # Calculate relative path from the base directory (notebook folder)
         relative_path = str(item.relative_to(base_dir))
-        
+
         if item.is_dir():
             # Recursively build subtree for directories
             subtree = build_file_tree(item, base_dir)
@@ -460,7 +475,7 @@ def build_file_tree(directory: Path, base_dir: Path) -> List[Dict]:
                 'size': stat.st_size,
                 'lastModified': datetime.fromtimestamp(stat.st_mtime).isoformat()
             })
-    
+
     return tree
 
 @app.get("/list_files/{notebook_id}")
@@ -470,16 +485,16 @@ async def list_files_endpoint(notebook_id: str, db: Session = Depends(get_db)):
         work_dir = Path(f"./notebooks/{notebook_id}")
         if not work_dir.exists():
             return {'status': 'error', 'message': 'Notebook directory not found'}
-        
+
         # Build hierarchical file tree
         file_tree = build_file_tree(work_dir, work_dir)
-        
+
         # 过滤文件树中的敏感信息
         sanitized_tree = sanitize_response_content(file_tree, notebook_id)
-        
+
         logger.info(f"Built file tree for notebook {notebook_id}")
         return {'status': 'ok', 'files': sanitized_tree}
-        
+
     except Exception as e:
         error_msg = sanitize_response_content(str(e), notebook_id)
         logger.error(f"Error listing files: {error_msg}")
@@ -503,11 +518,22 @@ async def send_operation_endpoint(send_operation_request: SendOperationRequest, 
     log_request(db, endpoint="/send_operation", notebook_id=send_operation_request.notebook_id)
     notebook_id = send_operation_request.notebook_id
     operation = send_operation_request.operation
-    
-    # 过滤操作请求中的敏感信息
+
+    # 确保 notebook_id 也写回到 operation.payload，便于后续 Agent 使用
+    try:
+        if not isinstance(operation, dict):
+            operation = dict(operation)
+        if "payload" not in operation or not isinstance(operation.get("payload"), dict):
+            operation["payload"] = {}
+        # 不覆盖前端已携带的 notebook_id
+        operation["payload"].setdefault("notebook_id", notebook_id)
+    except Exception as e:
+        logger.warning(f"Failed to inject notebook_id into operation payload: {e}")
+
+    # 过滤操作请求中的敏感信息（仅用于日志显示，不影响传递给引擎的原始operation）
     sanitized_operation = sanitize_response_content(operation, notebook_id)
     logger.info(f"Received operation for notebook {notebook_id}: {sanitized_operation}")
-    
+
     # 对流式响应进行包装以过滤输出
     async def filtered_generate_response():
         async for chunk in generate_response(operation):
@@ -517,7 +543,7 @@ async def send_operation_endpoint(send_operation_request: SendOperationRequest, 
                     yield sanitized_chunk
             else:
                 yield chunk
-    
+
     return StreamingResponse(
         filtered_generate_response(),
         media_type="application/json",
@@ -533,13 +559,13 @@ async def get_file_info_endpoint(request: GetFileInfoRequest, db: Session = Depe
     try:
         work_dir = Path(f"./notebooks/{request.notebook_id}")
         file_path = work_dir / request.filename
-        
+
         if not file_path.exists():
             raise HTTPException(status_code=404, detail=f"File {request.filename} not found")
-        
+
         stat = file_path.stat()
         file_type = "directory" if file_path.is_dir() else "file"
-        
+
         # 过滤文件信息中的敏感内容
         response_data = {
             "name": file_path.name,
@@ -548,10 +574,10 @@ async def get_file_info_endpoint(request: GetFileInfoRequest, db: Session = Depe
             "lastModified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             "type": file_type
         }
-        
+
         sanitized_data = sanitize_response_content(response_data, request.notebook_id)
         return FileInfoResponse(**sanitized_data)
-        
+
     except Exception as e:
         error_msg = sanitize_response_content(str(e), request.notebook_id)
         logger.error(f"Error getting file info: {error_msg}")
@@ -563,24 +589,24 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
     try:
         work_dir = Path(f"./notebooks/{request.notebook_id}")
         file_path = work_dir / request.filename
-        
+
         if not file_path.exists():
             raise HTTPException(status_code=404, detail=f"File {request.filename} not found")
-        
+
         stat = file_path.stat()
         last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
-        
+
         # Detect file type
         file_type, _ = mimetypes.guess_type(file_path)
-        
+
         # Handle different file types
         if file_type and file_type.startswith('image/'):
             # For image files, return base64 encoded content
             with open(file_path, 'rb') as f:
                 file_content = base64.b64encode(f.read()).decode('utf-8')
-            
+
             data_url = f"data:{file_type};base64,{file_content}"
-            
+
             response = FileContentResponse(
                 content=file_content,
                 size=stat.st_size,
@@ -607,9 +633,9 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
                 size=stat.st_size,
                 lastModified=last_modified
             )
-        
+
         return response
-            
+
     except Exception as e:
         error_msg = sanitize_response_content(str(e), request.notebook_id)
         logger.error(f"Error reading file: {error_msg}")
@@ -620,55 +646,193 @@ async def get_file_endpoint(request: GetFileRequest, db: Session = Depends(get_d
             error=error_msg
         )
 
+@app.post("/sandbox/{notebook_id}/generate_html", response_model=GenerateHtmlResponse)
+async def generate_html_sandbox(
+    notebook_id: str,
+    payload: GenerateHtmlRequest = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a simple HTML sandbox under notebooks/{id}/.sandbox/{subdir}/ and
+    return a URL that can be opened directly or embedded in an iframe.
+    """
+    log_request(db, endpoint="/sandbox/generate_html", notebook_id=notebook_id)
+
+    if not is_valid_notebook_id(notebook_id):
+        raise HTTPException(status_code=400, detail=f"Invalid notebook_id: {notebook_id}")
+
+    try:
+        # Prepare directories
+        work_dir = Path(f"./notebooks/{notebook_id}")
+        sandbox_root = work_dir / ".sandbox"
+        sandbox_root.mkdir(parents=True, exist_ok=True)
+
+        subdir = payload.subdir.strip("/") if payload.subdir else "default"
+        target_dir = sandbox_root / subdir
+
+        # Security check: ensure target_dir is within sandbox_root (no traversal)
+        try:
+            target_dir.resolve().relative_to(sandbox_root.resolve())
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid subdir path")
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write optional assets
+        css_href = ""
+        js_src = ""
+
+        if payload.css:
+            css_path = target_dir / "style.css"
+            css_path.write_text(payload.css, encoding="utf-8")
+            css_href = "<link rel=\"stylesheet\" href=\"./style.css\" />"
+
+        if payload.js:
+            js_path = target_dir / "main.js"
+            js_path.write_text(payload.js, encoding="utf-8")
+            js_src = "<script defer src=\"./main.js\"></script>"
+
+        # Compose index.html
+        html = (
+            "<!doctype html>\n"
+            "<html lang=\"en\">\n"
+            "  <head>\n"
+            "    <meta charset=\"UTF-8\" />\n"
+            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n"
+            f"    <title>{payload.title or 'Sandbox Page'}</title>\n"
+            f"    {css_href}\n"
+            "  </head>\n"
+            "  <body style=\"margin:0;padding:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto\">\n"
+            f"    {payload.body_html or ''}\n"
+            f"    {js_src}\n"
+            "  </body>\n"
+            "</html>\n"
+        )
+        (target_dir / "index.html").write_text(html, encoding="utf-8")
+
+        url = f"/sandbox/{notebook_id}/{subdir}/"
+        return GenerateHtmlResponse(status="ok", notebook_id=notebook_id, subdir=subdir, url=url, message="HTML sandbox generated")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating HTML sandbox for notebook {notebook_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate HTML sandbox")
+
+
+@app.get("/sandbox/{notebook_id}/{path:path}")
+async def serve_sandbox(notebook_id: str, path: str, request: Request, db: Session = Depends(get_db)):
+    """
+    Serve files from notebooks/{id}/.sandbox with SPA fallback.
+    - If path is a directory (ends with /) serve index.html inside it.
+    - If file doesn't exist and Accept includes text/html, fall back to the nearest subdir index.html.
+    """
+    log_request(db, endpoint="/sandbox", notebook_id=notebook_id)
+
+    if not is_valid_notebook_id(notebook_id):
+        raise HTTPException(status_code=400, detail=f"Invalid notebook_id: {notebook_id}")
+
+    try:
+        base_dir = Path(f"./notebooks/{notebook_id}/.sandbox")
+        if not base_dir.exists():
+            raise HTTPException(status_code=404, detail="Sandbox directory not found")
+
+        # Normalize path
+        normalized = path or ""
+        # If ends with slash or empty, default to index.html in that directory
+        if normalized == "" or normalized.endswith("/"):
+            normalized = normalized + "index.html"
+
+        file_path = (base_dir / normalized)
+
+        # Path traversal protection
+        try:
+            file_path.resolve().relative_to(base_dir.resolve())
+        except Exception:
+            raise HTTPException(status_code=403, detail="Access denied: path traversal detected")
+
+        if file_path.exists() and file_path.is_file():
+            mime_type, _ = mimetypes.guess_type(str(file_path))
+            if not mime_type:
+                mime_type = "application/octet-stream"
+            headers = {
+                "Cache-Control": "public, max-age=60",
+                "Last-Modified": datetime.fromtimestamp(file_path.stat().st_mtime).strftime('%a, %d %b %Y %H:%M:%S GMT')
+            }
+            return FileResponse(path=str(file_path), media_type=mime_type, headers=headers)
+
+        # SPA fallback: try first segment's index.html
+        accept = request.headers.get("accept", "")
+        wants_html = "text/html" in accept.lower()
+        if wants_html:
+            first_segment = normalized.split("/")[0] if "/" in normalized else normalized
+            if first_segment:
+                fallback = base_dir / first_segment / "index.html"
+                try:
+                    fallback.resolve().relative_to(base_dir.resolve())
+                except Exception:
+                    fallback = None
+                if fallback and fallback.exists() and fallback.is_file():
+                    return FileResponse(path=str(fallback), media_type="text/html")
+
+        raise HTTPException(status_code=404, detail="Sandbox file not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving sandbox '{path}' for notebook {notebook_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @app.get("/assets/{notebook_id}/{filename}")
 async def serve_asset(notebook_id: str, filename: str, db: Session = Depends(get_db)):
     """
     Serve assets (images, videos, etc.) from notebook's .assets folder
     """
     log_request(db, endpoint="/assets", notebook_id=notebook_id)
-    
+
     # Validate notebook_id format
     if not is_valid_notebook_id(notebook_id):
         raise HTTPException(status_code=400, detail=f"Invalid notebook_id: {notebook_id}")
-    
+
     try:
         # Construct paths
         work_dir = Path(f"./notebooks/{notebook_id}")
         assets_dir = work_dir / ".assets"
         file_path = assets_dir / filename
-        
+
         # Security check: ensure file is within assets directory
         try:
             file_path.resolve().relative_to(assets_dir.resolve())
         except ValueError:
             raise HTTPException(status_code=403, detail="Access denied: path traversal detected")
-        
+
         # Check if file exists
         if not file_path.exists():
             raise HTTPException(status_code=404, detail=f"Asset {filename} not found")
-        
+
         # Check if it's actually a file
         if not file_path.is_file():
             raise HTTPException(status_code=404, detail=f"{filename} is not a file")
-        
+
         # Detect MIME type
         mime_type, _ = mimetypes.guess_type(file_path)
         if not mime_type:
             mime_type = 'application/octet-stream'
-        
+
         # Set appropriate cache headers for assets
         headers = {
             "Cache-Control": "public, max-age=3600",  # Cache for 1 hour
             "Last-Modified": datetime.fromtimestamp(file_path.stat().st_mtime).strftime('%a, %d %b %Y %H:%M:%S GMT')
         }
-        
+
         return FileResponse(
             path=file_path,
             media_type=mime_type,
             filename=filename,
             headers=headers
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -681,21 +845,21 @@ async def cleanup_assets(notebook_id: str, db: Session = Depends(get_db)):
     Clean up old assets for a notebook (optional maintenance endpoint)
     """
     log_request(db, endpoint="/cleanup_assets", notebook_id=notebook_id)
-    
+
     # Validate notebook_id format
     if not is_valid_notebook_id(notebook_id):
         raise HTTPException(status_code=400, detail=f"Invalid notebook_id: {notebook_id}")
-    
+
     try:
         assets_dir = Path(f"./notebooks/{notebook_id}/.assets")
-        
+
         if not assets_dir.exists():
             return {"status": "ok", "message": "No assets directory found", "deleted_files": 0}
-        
+
         # Get all files older than 7 days
         cutoff_time = datetime.now().timestamp() - (7 * 24 * 60 * 60)  # 7 days ago
         deleted_files = 0
-        
+
         for file_path in assets_dir.iterdir():
             if file_path.is_file() and file_path.stat().st_mtime < cutoff_time:
                 try:
@@ -703,13 +867,13 @@ async def cleanup_assets(notebook_id: str, db: Session = Depends(get_db)):
                     deleted_files += 1
                 except Exception as e:
                     logger.warning(f"Failed to delete asset {file_path}: {str(e)}")
-        
+
         return {
-            "status": "ok", 
+            "status": "ok",
             "message": f"Cleaned up {deleted_files} old assets",
             "deleted_files": deleted_files
         }
-        
+
     except Exception as e:
         logger.error(f"Error cleaning assets for notebook {notebook_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Asset cleanup failed")

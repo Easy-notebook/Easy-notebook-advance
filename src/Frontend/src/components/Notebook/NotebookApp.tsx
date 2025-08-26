@@ -6,6 +6,7 @@ import MarkdownCell from '../Editor/Cells/MarkdownCell';
 import HybridCell from '../Editor/Cells/HybridCell';
 import ImageCell from '../Editor/Cells/ImageCell';
 import AIThinkingCell from '../Editor/Cells/AIThinkingCell';
+import LinkCell from '../Editor/Cells/LinkCell';
 import OutlineSidebarOrig from './LeftSideBar/OutlineSidebar';
 import StepNavigation from './MainContainer/StepNavigation';
 
@@ -417,6 +418,7 @@ const NotebookApp = () => {
 
     switch (cell.type) {
       case 'Hybrid':
+      case 'hybrid':
         return <HybridCell key={cell.id} {...props} />;
       case 'code':
         return <CodeCell key={cell.id} {...codeProps} />;
@@ -427,7 +429,7 @@ const NotebookApp = () => {
       case 'thinking':
         return <AIThinkingCell key={cell.id} {...props} />;
       case 'link':
-        return <MarkdownCell key={cell.id} {...props} />; // 回退：在 NotebookApp 中临时渲染为 Markdown 链接
+        return <LinkCell key={cell.id} {...props} />;
       default:
         return null;
     }

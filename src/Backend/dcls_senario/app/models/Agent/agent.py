@@ -27,7 +27,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                  operation: Optional[Dict[str, Any]] = None,
                  api_key: Optional[str] = None,
                  base_url: Optional[str] = None,
-                 engine: str = "gpt-4o-mini",
+                 engine: str = "openai/gpt-oss-120b",
                  role: str = "You are AI Agent behind easyremote notebook."):
         """Initialize Agent with new ability system."""
         # 初始化基础组件

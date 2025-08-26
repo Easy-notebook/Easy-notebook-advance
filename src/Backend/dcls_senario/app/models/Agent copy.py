@@ -94,7 +94,7 @@ class Agent(ABC,Oracle,Token):
                  operation: Optional[Dict[str, Any]] = None,
                  api_key: Optional[str] = None,
                  base_url: Optional[str] = None,
-                 engine: str = "gpt-4o-mini",
+                 engine: str = "openai/gpt-oss-120b",
                  role: str = "You are AI Agent behind easyremote notebook.",
                  ability: Ability = Ability()):
         """Initialize Agent with capabilities and environment settings."""

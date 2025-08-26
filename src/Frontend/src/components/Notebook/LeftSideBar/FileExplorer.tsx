@@ -318,6 +318,19 @@ const FileTree = memo(({ notebookId, projectName }) => {
         fetchFileListWrapper();
     }, [fetchFileListWrapper]);
 
+    // Listen for global file list refresh events (e.g., when new files are generated)
+    useEffect(() => {
+        const handleRefreshFileList = () => {
+            console.log('📁 Received refreshFileList event, refreshing file list...');
+            fetchFileListWrapper();
+        };
+
+        window.addEventListener('refreshFileList', handleRefreshFileList);
+        return () => {
+            window.removeEventListener('refreshFileList', handleRefreshFileList);
+        };
+    }, [fetchFileListWrapper]);
+
 
     // Process file tree from backend - backend now returns hierarchical structure
     const processFileTree = useMemo(() => {

@@ -31,14 +31,6 @@ function parseContent(content: string): { href: string; label: string } {
   const label = href.split(/[\\/]/).pop() || href;
   return { href, label };
 }
-
-function formatFileSize(bytes?: number): string {
-  if (!bytes) return '';
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-}
-
 const LinkCell: React.FC<LinkCellProps> = ({ 
   cell, 
   readOnly = false, 
@@ -64,22 +56,29 @@ const LinkCell: React.FC<LinkCellProps> = ({
     updateCell(cell.id, e.target.value);
   };
 
-  // Get file extension and icon props
+  // Get file extension from href (not label) and icon props
   const fileExtension = useMemo(() => {
-    const parts = label.split('.');
+    if (!href) return '';
+
+    // Extract extension from href path
+    const pathParts = href.split('/');
+    const fileName = pathParts[pathParts.length - 1];
+    const parts = fileName.split('.');
     return parts.length > 1 ? parts.pop()?.toLowerCase() || '' : '';
-  }, [label]);
+  }, [href]);
 
   const iconProps = useMemo(() => {
     if (!href) return getFileTypeIconProps({ extension: 'generic', size: 32 });
-    
+
     // Special handling for URLs
     if (/^https?:\/\//i.test(href)) {
       return getFileTypeIconProps({ extension: 'html', size: 32 });
     }
-    
-    return getFileTypeIconProps({ 
-      extension: fileExtension || 'generic',
+
+    // Use extension from href path
+    const extension = fileExtension || 'generic';
+    return getFileTypeIconProps({
+      extension,
       size: 32
     });
   }, [href, fileExtension]);
@@ -92,7 +91,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
       if (m && m[1]) return decodeURIComponent(m[1]);
     } catch {}
 
-    const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)');
+    const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.(assets|sandbox)\\/|\\.(assets|sandbox)\\/)');
     if (relPattern.test(url)) {
       return url.replace(new RegExp('^\\./'), '');
     }
@@ -122,11 +121,6 @@ const LinkCell: React.FC<LinkCellProps> = ({
     try {
       const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
       await usePreviewStore.getState().previewFile(notebookId, filePath, { file: fileObj } as any);
-      
-      // Ensure preview mode is set to 'file' for proper display
-      if (usePreviewStore.getState().previewMode !== 'file') {
-        usePreviewStore.getState().changePreviewMode();
-      }
     } catch (err: any) {
       console.error('Open split preview failed:', err);
       try {
@@ -217,10 +211,10 @@ const LinkCell: React.FC<LinkCellProps> = ({
       <div className="flex items-center p-3 gap-3">
         {/* File Icon */}
         <div className="flex-shrink-0">
-          <div 
+          <div
             className="w-10 h-10 flex items-center justify-center rounded"
-            style={{ 
-              backgroundColor: iconProps.iconColor ? `${iconProps.iconColor}15` : '#f3f4f6'
+            style={{
+              backgroundColor: (iconProps as any).iconColor ? `${(iconProps as any).iconColor}15` : '#f3f4f6'
             }}
           >
             <Icon {...iconProps} />

@@ -24,11 +24,11 @@ const startVideoGenerationPolling = async (taskId: string, uniqueIdentifier: str
     const pollInterval = setInterval(async () => {
         try {
             attempts++;
-            
+
             // 获取当前notebook状态
             const notebookState = useStore.getState();
             const notebookId = notebookState.notebookId;
-            
+
             if (!notebookId) {
                 console.error('无法获取notebookId，停止轮询');
                 clearInterval(pollInterval);
@@ -46,29 +46,29 @@ const startVideoGenerationPolling = async (taskId: string, uniqueIdentifier: str
                     commandId: commandId
                 }
             };
-            
+
             useOperatorStore.getState().sendOperation(notebookId, statusCommand);
-            
+
             // 检查是否超时
             if (attempts >= maxAttempts) {
                 console.log('视频生成轮询超时，停止轮询');
                 clearInterval(pollInterval);
                 activeVideoPolls.delete(taskId);
-                
+
                 // 更新cell状态为超时
                 const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
-                    metadata: { 
-                        isGenerating: false, 
+                    metadata: {
+                        isGenerating: false,
                         generationError: 'Generation timeout',
                         generationStatus: 'timeout'
                     }
                 });
-                
+
                 if (success) {
                     console.log('✅ 视频生成超时状态已更新');
                 }
             }
-            
+
         } catch (error) {
             console.error('视频生成状态轮询出错:', error);
             clearInterval(pollInterval);
@@ -83,13 +83,14 @@ const startVideoGenerationPolling = async (taskId: string, uniqueIdentifier: str
 // Normalize incoming cell type to store-supported types
 const normalizeCellTypeForStore = (
   t: string | undefined | null
-): 'code' | 'markdown' | 'hybrid' | 'image' => {
+): 'code' | 'markdown' | 'hybrid' | 'image' | 'link' => {
   if (!t) return 'markdown';
   if (t === 'Hybrid') return 'hybrid';
   if (t === 'image') return 'image';
   if (t === 'video') return 'image';
   if (t === 'thinking') return 'markdown';
-  return (t as any) === 'code' || (t as any) === 'markdown' || (t as any) === 'hybrid' || (t as any) === 'image'
+  if (t === 'link') return 'link';
+  return (t as any) === 'code' || (t as any) === 'markdown' || (t as any) === 'hybrid' || (t as any) === 'image' || (t as any) === 'link'
     ? (t as any)
     : 'markdown';
 };
@@ -173,10 +174,10 @@ export interface GlobalUpdateInterface {
 export type ShowToastFunction = (toast: ToastMessage) => Promise<void>;
 
 export const handleStreamResponse = async (
-    data: StreamData, 
+    data: StreamData,
     showToast: ShowToastFunction
 ): Promise<void> => {
-    
+
     switch (data.type) {
         case 'update_view_mode': {
             const mode = data.payload?.mode;
@@ -231,7 +232,7 @@ export const handleStreamResponse = async (
             const cellId = data.payload?.cellId;
             const content = data.payload?.content;
             const outputs = data.payload?.outputs;
-            
+
             if (cellId) {
                 if (content) {
                     await globalUpdateInterface.updateCell(cellId, content);
@@ -264,15 +265,15 @@ export const handleStreamResponse = async (
             const error = data.payload?.error;
             if (error) {
                 await globalUpdateInterface.setError(error);
-                
+
                 // 记录失败的交互
                 try {
                     const notebookState = (window as any).__notebookStore?.getState?.();
                     const notebookId = notebookState?.notebookId;
-                    
+
                     if (notebookId) {
                         console.log('记录Agent错误:', error);
-                        
+
                         // 根据错误类型判断Agent类型（简单启发式方法）
                         let agentType: AgentType = 'general';
                         if (error.includes('command') || error.includes('code generation')) {
@@ -282,7 +283,7 @@ export const handleStreamResponse = async (
                         } else if (error.includes('output') || error.includes('分析')) {
                             agentType = 'output';
                         }
-                        
+
                         AgentMemoryService.recordOperationInteraction(
                             notebookId,
                             agentType,
@@ -363,6 +364,16 @@ export const handleStreamResponse = async (
 
         case 'ok': {
             console.log('操作成功:', data);
+
+            // 如果是网页生成成功，触发文件列表刷新
+            if (data.data?.message?.includes('webpage generated') || data.data?.path?.includes('.sandbox')) {
+                try {
+                    window.dispatchEvent(new CustomEvent('refreshFileList'));
+                    console.log('📁 Triggered file list refresh for webpage generation');
+                } catch (refreshError) {
+                    console.warn('Failed to trigger file list refresh:', refreshError);
+                }
+            }
             break;
         }
 
@@ -370,31 +381,31 @@ export const handleStreamResponse = async (
             const cellType = data.data?.payload?.type;
             const description = data.data?.payload?.description;
             const content = data.data?.payload?.content;
-            const metadata = data.data?.payload?.metadata;
+            const metadata = data.data?.payload?.metadata || {};
             const commandId = data.data?.payload?.commandId;
             const prompt = data.data?.payload?.prompt;
             const serverUniqueIdentifier = (data.data as any)?.payload?.uniqueIdentifier || metadata?.uniqueIdentifier;
-            
+
             let newCellId = null;
             if (cellType && description) {
                 const enableEdit = !metadata?.isGenerating; // 如果正在生成，不启用编辑
-                
+
                 // 如果是图片或视频生成任务，使用唯一标识符策略
                 if ((cellType === 'image' || cellType === 'video') && metadata?.isGenerating && (prompt || serverUniqueIdentifier)) {
 
-                    
+
                     // 优先使用服务端提供的唯一标识符，否则回退到本地生成
                     const uniqueIdentifier = serverUniqueIdentifier || `gen-${Date.now()}-${(prompt || '').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
-                    
+
                     const normalizedType = normalizeCellTypeForStore(cellType);
                     newCellId = useStore.getState().addNewCellWithUniqueIdentifier(
                         normalizedType,
-                        description, 
-                        enableEdit, 
+                        description,
+                        enableEdit,
                         uniqueIdentifier,
                         prompt
                     );
-                    
+
                     // 同时保持commandId映射作为备份
                     if (commandId) {
                         generationCellTracker.set(commandId, newCellId);
@@ -410,7 +421,7 @@ export const handleStreamResponse = async (
                     // 普通cell创建
                     const normalizedType2 = normalizeCellTypeForStore(cellType);
                     newCellId = await globalUpdateInterface.addNewCell2End(normalizedType2, description, enableEdit);
-                    
+
                     // 如果这是一个生成任务且有 commandId，存储映射关系
                     if (newCellId && commandId && metadata?.isGenerating) {
                         generationCellTracker.set(commandId, newCellId);
@@ -424,13 +435,13 @@ export const handleStreamResponse = async (
                 const appended = `${target?.content || ''}${content}`;
                 useStore.getState().updateCell(newCellId, appended);
             }
-            
+
             // Handle metadata for the newly created cell
             if (metadata && newCellId) {
                 // Update the cell's metadata in the store
                 const cells = useStore.getState().cells;
                 const targetCell = cells.find(cell => cell.id === newCellId);
-                
+
                 if (targetCell) {
                     // 使用专门的updateCellMetadata方法
                     useStore.getState().updateCellMetadata(newCellId, metadata);
@@ -462,20 +473,20 @@ export const handleStreamResponse = async (
         case 'runCurrentCodeCell': {
             console.log('执行当前代码cell:', data);
             await globalUpdateInterface.runCurrentCodeCell();
-            
+
             // 记录debug完成（如果这是debug flow的一部分）
             try {
                 const notebookState = (window as any).__notebookStore?.getState?.();
                 const notebookId = notebookState?.notebookId;
-                
+
                 if (notebookId) {
                     // 检查是否是debug上下文中的代码运行
                     const debugMemory: any = AgentMemoryService.getAgentMemory(notebookId, 'debug' as AgentType);
                     const currentContext = (debugMemory as any)?.current_context;
-                    
+
                     if (currentContext && currentContext.interaction_status === 'in_progress') {
                         console.log('记录debug完成 - 代码已修复并运行');
-                        
+
                         // 更新debug状态
                         AgentMemoryService.updateCurrentContext(
                             notebookId,
@@ -486,7 +497,7 @@ export const handleStreamResponse = async (
                                 fix_applied: true
                             }
                         );
-                        
+
                         // 记录成功的debug交互
                         AgentMemoryService.recordOperationInteraction(
                             notebookId,
@@ -517,16 +528,16 @@ export const handleStreamResponse = async (
         case 'setCurrentCellMode_onlyOutput': {
             console.log('设置当前cell模式为只有输出:', data);
             await globalUpdateInterface.setCurrentCellMode_onlyOutput();
-            
+
             // 记录代码生成完成
             try {
                 const notebookState = (window as any).__notebookStore?.getState?.();
                 const notebookId = notebookState?.notebookId;
                 const commandId = data.data?.payload?.commandId;
-                
+
                 if (notebookId && commandId) {
                     console.log('记录代码生成完成 - commandId:', commandId);
-                    
+
                     // 记录成功的代码生成交互
                     AgentMemoryService.recordOperationInteraction(
                         notebookId,
@@ -560,15 +571,15 @@ export const handleStreamResponse = async (
                 await globalUpdateInterface.initStreamingAnswer(qidStr);
                 // 记录当前正在流式的 QA，便于 finish 阶段后台未返回 QId 时兜底
                 lastStreamingQaId = qidStr;
-                
+
                 // 记录QA交互开始
                 try {
                     const notebookState = (window as any).__notebookStore?.getState?.();
                     const notebookId = notebookState?.notebookId;
-                    
+
                     if (notebookId) {
                         console.log('记录QA交互开始 - qid:', qidStr);
-                        
+
                         // 更新用户意图和当前上下文
                         AgentMemoryService.updateCurrentContext(
                             notebookId,
@@ -632,10 +643,10 @@ export const handleStreamResponse = async (
                         // 从全局状态获取notebook信息进行记录
                         const notebookState = (window as any).__notebookStore?.getState?.();
                         const notebookId = notebookState?.notebookId;
-                        
+
                         if (notebookId) {
                             console.log('记录QA交互完成 - notebookId:', notebookId, '响应长度:', response.length);
-                            
+
                             // 更新当前上下文状态
                             AgentMemoryService.updateCurrentContext(
                                 notebookId,
@@ -647,7 +658,7 @@ export const handleStreamResponse = async (
                                     response_quality: response.length > 100 ? 'detailed' : 'brief'
                                 }
                             );
-                            
+
                             // 记录成功的问答交互
                             AgentMemoryService.recordOperationInteraction(
                                 notebookId,
@@ -662,7 +673,7 @@ export const handleStreamResponse = async (
                                     interaction_type: 'qa_session'
                                 }
                             );
-                            
+
                             // 根据响应质量学习成功模式
                             // 留空：如需学习成功模式，请在 AgentMemoryService 中实现 learnFromSuccess 并在此启用
                         }
@@ -691,18 +702,47 @@ export const handleStreamResponse = async (
             break;
         }
 
+        case 'convertCurrentHybridCellToLinkCell': {
+            console.log('将当前混合cell转换为链接cell:', data);
+            const content = data.data?.payload?.content;
+            const commandId = data.data?.payload?.commandId;
+            const metadata = data.data?.payload?.metadata || {};
+
+            if (content) {
+                // 获取当前 cell 并转换为 link 类型
+                const state = useStore.getState();
+                const currentCell = state.cells.find(c => c.id === state.currentCellId);
+
+                if (currentCell) {
+                    // 更新 cell 类型和内容
+                    state.updateCell(currentCell.id, content);
+                    state.updateCellType(currentCell.id, 'link');
+
+                    // 更新 metadata
+                    if (metadata) {
+                        state.updateCellMetadata(currentCell.id, metadata);
+                    }
+
+                    console.log('✅ 成功转换为 LinkCell:', currentCell.id);
+                } else {
+                    console.warn('⚠️ 未找到当前 cell，无法转换');
+                }
+            }
+            break;
+        }
+
         case 'updateCurrentCellWithContent': {
             console.log('更新当前cell的内容:', data);
             const content = data.data?.payload?.content;
             const cellId = data.data?.payload?.cellId;
             const commandId = data.data?.payload?.commandId;
             const uniqueIdentifier = data.data?.payload?.uniqueIdentifier;
-            
+
             console.log('updateCurrentCellWithContent - cellId:', cellId, 'commandId:', commandId, 'uniqueIdentifier:', uniqueIdentifier, 'content length:', content?.length);
-            
+
             if (content) {
                 let targetCellId = cellId; // 如果直接提供了cellId，优先使用
-                
+
                 // 尝试使用uniqueIdentifier直接更新（最高优先级）
                 if (!targetCellId && uniqueIdentifier) {
                     const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, { content });
@@ -711,13 +751,13 @@ export const handleStreamResponse = async (
                         break;
                     }
                 }
-                
+
                 if (!targetCellId && commandId && generationCellTracker.has(commandId)) {
                     // 使用commandId从映射表获取cellId
                     targetCellId = generationCellTracker.get(commandId);
                     console.log('从映射表获取cellId用于内容更新:', commandId, '->', targetCellId);
                 }
-                
+
                 if (targetCellId) {
                     // 直接更新指定的cell
                     console.log('更新指定cell的内容:', targetCellId, 'content preview:', content.substring(0, 100));
@@ -727,13 +767,13 @@ export const handleStreamResponse = async (
                     // 回退到原有逻辑
                     const lastAddedCellId = globalUpdateInterface.getAddedLastCellID();
                     console.log('回退逻辑 - lastAddedCellId:', lastAddedCellId);
-                    
+
                     if (lastAddedCellId) {
                         // Check if the last added cell has generation metadata (likely a generation cell)
                         const cells = useStore.getState().cells;
                         const targetCell = cells.find(cell => cell.id === lastAddedCellId);
                         console.log('找到的targetCell:', targetCell?.id, 'isGenerating:', targetCell?.metadata?.isGenerating);
-                        
+
                         if (targetCell && targetCell.metadata?.isGenerating) {
                             console.log('更新最后添加的生成cell内容:', lastAddedCellId);
                             await globalUpdateInterface.updateCell(lastAddedCellId, content);
@@ -788,23 +828,23 @@ export const handleStreamResponse = async (
             console.log('更新当前cell metadata:', data);
             const metadata = data.data?.payload?.metadata;
             const commandId = data.data?.payload?.commandId;
-            const cellId = data.data?.payload?.cellId; 
+            const cellId = data.data?.payload?.cellId;
             const uniqueIdentifier = data.data?.payload?.uniqueIdentifier;
-            
+
             console.log('updateCurrentCellMetadata - metadata:', metadata);
             console.log('updateCurrentCellMetadata - commandId:', commandId);
             console.log('updateCurrentCellMetadata - cellId:', cellId);
             console.log('updateCurrentCellMetadata - uniqueIdentifier:', uniqueIdentifier);
-            
+
             if (metadata) {
                 let targetCellId = cellId; // 如果直接提供了cellId，优先使用
-                
+
                 // 尝试使用uniqueIdentifier直接更新（最高优先级）
                 if (!targetCellId && uniqueIdentifier) {
                     const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, { metadata });
                     if (success) {
                         console.log('✅ 通过uniqueIdentifier成功更新cell metadata:', uniqueIdentifier);
-                        
+
                         // 如果生成完成，清理相关映射
                         if (metadata.isGenerating === false || metadata.generationCompleted) {
                             if (commandId) generationCellTracker.delete(commandId);
@@ -814,12 +854,12 @@ export const handleStreamResponse = async (
                         break;
                     }
                 }
-                
+
                 // 首先尝试使用 commandId 从映射表中获取 cellId
                 if (!targetCellId && commandId && generationCellTracker.has(commandId)) {
                     targetCellId = generationCellTracker.get(commandId);
                     console.log('从映射表获取cellId:', commandId, '->', targetCellId);
-                    
+
                     // 如果生成完成，清理映射表
                     if (metadata.isGenerating === false || metadata.generationCompleted) {
                         generationCellTracker.delete(commandId);
@@ -830,20 +870,20 @@ export const handleStreamResponse = async (
                     targetCellId = globalUpdateInterface.getAddedLastCellID();
                     console.log('使用lastAddedCellId作为fallback:', targetCellId);
                 }
-                
+
                 if (targetCellId) {
                     console.log('🔄 正在更新cell metadata, cellId:', targetCellId, 'metadata:', metadata);
                     // Use the proper updateCellMetadata method
                     useStore.getState().updateCellMetadata(targetCellId, metadata);
                     console.log('✅ metadata更新完成');
-                    
+
                     // 额外验证：检查更新后的状态
                     const updatedCells = useStore.getState().cells;
                     const updatedCell = updatedCells.find(c => c.id === targetCellId);
-                    console.log('📋 验证更新后的cell:', { 
-                        id: updatedCell?.id, 
+                    console.log('📋 验证更新后的cell:', {
+                        id: updatedCell?.id,
                         contentLength: updatedCell?.content?.length,
-                        metadata: updatedCell?.metadata 
+                        metadata: updatedCell?.metadata
                     });
                 } else {
                     console.error('❌ 无法确定目标cellId，尝试使用当前选中的cell');
@@ -866,7 +906,7 @@ export const handleStreamResponse = async (
             console.log('添加新的phase到下一个:', data);
             const description = data.data?.payload?.description;
             const content = data.data?.payload?.content;
-            
+
             if (description) {
                 await globalUpdateInterface.addNewCell2Next('markdown', description);
             }
@@ -949,6 +989,83 @@ export const handleStreamResponse = async (
             break;
         }
 
+        case 'open_link_in_split': {
+            console.log('🔗 Received open_link_in_split event:', data);
+            const href = data.payload?.href || data.data?.payload?.href;
+            const label = data.payload?.label || data.data?.payload?.label;
+            const notebookId = data.payload?.notebook_id || data.data?.payload?.notebook_id;
+            console.log('🔗 Extracted values:', { href, label, notebookId });
+
+            if (href && notebookId) {
+                try {
+                    const linkMarkdown = `[${label || 'Webpage'}](${href})`;
+
+                    // 添加小延迟，确保 LinkCell 完全创建完成
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    const state = useStore.getState();
+
+                    // 查找最近创建的匹配的 LinkCell（后端应该已经通过 addCell2EndWithContent 创建了）
+                    const existing = [...state.cells].reverse().find(c =>
+                        c.type === 'link' &&
+                        typeof c.content === 'string' &&
+                        (c.content.includes(href) || c.content === linkMarkdown)
+                    );
+
+                    if (existing) {
+                        console.log('🔗 Found existing LinkCell:', existing.id);
+                        // 分屏打开现有的 LinkCell
+                        state.setDetachedCellId(existing.id);
+                        console.log('🔗 Set detached cell ID:', existing.id);
+                    } else {
+                        console.warn('🔗 No matching LinkCell found for href:', href);
+                        // 如果没找到，创建一个新的（备用方案）
+                        const cellId = await globalUpdateInterface.addNewCell2End('link', '网页预览');
+                        await globalUpdateInterface.updateCell(cellId, linkMarkdown);
+                        console.log('🔗 Created new LinkCell:', cellId);
+                        state.setDetachedCellId(cellId);
+                        console.log('🔗 Set detached cell ID:', cellId);
+                    }
+
+                    // 触发预览：解析到实际文件并加载
+                    const { default: usePreviewStore } = await import('../store/previewStore');
+                    const filePath = href.replace(/^\.\//, '');
+                    const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
+                    console.log('🔗 About to preview file:', { filePath, fileObj });
+
+                    await usePreviewStore.getState().previewFile(notebookId, filePath, { file: fileObj } as any);
+                    console.log('🔗 Preview file called, current mode:', usePreviewStore.getState().previewMode);
+
+                    // 不要自动切换视图模式，保持在当前的 notebook 视图
+                    // 用户可以手动切换到 file 预览模式如果需要的话
+                    console.log('🔗 Keeping current view mode, not switching to file mode');
+
+                    // 触发文件列表刷新，显示新生成的 .sandbox 文件
+                    try {
+                        // 触发全局文件列表刷新事件
+                        window.dispatchEvent(new CustomEvent('refreshFileList'));
+                        console.log('🔗 Triggered file list refresh');
+                    } catch (refreshError) {
+                        console.warn('Failed to trigger file list refresh:', refreshError);
+                    }
+
+                    await showToast({
+                        message: `网页已生成并打开预览: ${label}`,
+                        type: 'success'
+                    });
+                } catch (e) {
+                    console.error('open_link_in_split failed:', e);
+                    await showToast({
+                        message: `分屏预览失败: ${e.message}`,
+                        type: 'error'
+                    });
+                }
+            } else {
+                console.warn('🔗 Missing required data for open_link_in_split:', { href, notebookId });
+            }
+            break;
+        }
+
         case 'ask_agent_for_help': {
             const targetAgent = data.payload?.target_agent;
             const helpRequest = data.payload?.help_request;
@@ -962,7 +1079,7 @@ export const handleStreamResponse = async (
             const commandId = data.payload?.commandId;
             if (prompt && commandId) {
                 console.log('触发图片生成:', prompt);
-                
+
                 // 获取当前notebook状态和操作器
                 const notebookState = useStore.getState();
                 const notebookId = notebookState.notebookId;
@@ -970,10 +1087,10 @@ export const handleStreamResponse = async (
                 const viewMode = notebookState.viewMode;
                 const currentPhaseId = notebookState.currentPhaseId;
                 const currentStepIndex = notebookState.currentStepIndex;
-                
+
                 // 使用 dynamic import 来获取 operatorStore 以避免循环依赖
                 const { default: useOperatorStore } = await import('../store/operatorStore');
-                
+
                 // 发送/image命令到后端
                 const imageCommand = {
                     type: 'user_command',
@@ -986,10 +1103,10 @@ export const handleStreamResponse = async (
                         notebook_id: notebookId
                     }
                 };
-                
+
                 console.log('发送图片生成命令到后端:', imageCommand);
                 useOperatorStore.getState().sendOperation(notebookId, imageCommand);
-                
+
                 await showToast({
                     message: `开始生成图片: ${prompt.substring(0, 30)}...`,
                     type: "info"
@@ -1005,6 +1122,62 @@ export const handleStreamResponse = async (
                             type: 'draw-image',
                             content: prompt,
                             agent: 'image-generator'
+                        });
+                    }
+                } catch (error) {
+                    console.error('添加工具调用到QA失败:', error);
+                }
+            }
+            break;
+        }
+
+        case 'trigger_webpage_generation': {
+            const prompt = data.payload?.prompt;
+            const commandId = data.payload?.commandId;
+            if (prompt && commandId) {
+                console.log('触发网页生成:', prompt);
+
+                // 获取当前notebook状态和操作器
+                const notebookState = useStore.getState();
+                const notebookId = notebookState.notebookId;
+                const viewMode = notebookState.viewMode;
+                const currentPhaseId = notebookState.currentPhaseId;
+                const currentStepIndex = notebookState.currentStepIndex;
+
+                // 使用 dynamic import 来获取 operatorStore 以避免循环依赖
+                const { default: useOperatorStore } = await import('../store/operatorStore');
+
+                // 发送/webpage命令到后端
+                const webpageCommand = {
+                    type: 'user_command',
+                    payload: {
+                        content: `/webpage ${prompt}`,
+                        commandId: commandId,
+                        current_view_mode: viewMode,
+                        current_phase_id: currentPhaseId,
+                        current_step_index: currentStepIndex,
+                        notebook_id: notebookId
+                    }
+                };
+
+                console.log('发送网页生成命令到后端:', webpageCommand);
+                useOperatorStore.getState().sendOperation(notebookId, webpageCommand);
+
+                await showToast({
+                    message: `开始生成网页: ${prompt.substring(0, 30)}...`,
+                    type: "info"
+                });
+
+                // 将工具调用记录到当前进行中的 QA（如果有）
+                try {
+                    const { useAIAgentStore } = require('../store/AIAgentStore');
+                    const state = useAIAgentStore.getState();
+                    const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
+                    if (runningQA) {
+                        state.addToolCallToQA(runningQA.id, {
+                            type: 'create-webpage',
+                            content: prompt,
+                            agent: 'webpage-generator'
                         });
                     }
                 } catch (e) {
@@ -1064,16 +1237,16 @@ export const handleStreamResponse = async (
             const commandId = data.payload?.commandId;
             const uniqueIdentifier = data.payload?.uniqueIdentifier;
             const prompt = data.payload?.prompt;
-            
+
             if (taskId && uniqueIdentifier) {
                 console.log('视频生成任务已启动，开始轮询状态:', { taskId, uniqueIdentifier });
-                
+
                 // 启动前端状态轮询
                 startVideoGenerationPolling(taskId, uniqueIdentifier, commandId, prompt);
-                
-                await showToast({ 
-                    message: `视频生成任务已启动，正在后台处理...`, 
-                    type: 'info' 
+
+                await showToast({
+                    message: `视频生成任务已启动，正在后台处理...`,
+                    type: 'info'
                 });
             }
             break;
@@ -1088,22 +1261,22 @@ export const handleStreamResponse = async (
             const commandId = data.payload?.commandId;
             const prompt = data.payload?.prompt;
             const error = data.payload?.error;
-            
+
             console.log('收到视频生成状态更新:', { taskId, status, uniqueIdentifier });
-            
+
             if (status === 'completed' && videoUrl && uniqueIdentifier) {
                 // 生成完成，停止轮询
                 if (activeVideoPolls.has(taskId)) {
                     clearInterval(activeVideoPolls.get(taskId)!);
                     activeVideoPolls.delete(taskId);
                 }
-                
+
                 // 更新cell内容
                 const videoMarkdown = `![${prompt || 'Generated Video'}](${videoUrl})`;
                 const contentSuccess = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
                     content: videoMarkdown
                 });
-                
+
                 // 更新cell metadata
                 const metadataSuccess = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
                     metadata: {
@@ -1114,22 +1287,22 @@ export const handleStreamResponse = async (
                         generationStatus: 'completed'
                     }
                 });
-                
+
                 if (contentSuccess && metadataSuccess) {
                     console.log('✅ 视频生成完成，内容已更新');
-                    await showToast({ 
-                        message: `视频生成完成！`, 
-                        type: 'success' 
+                    await showToast({
+                        message: `视频生成完成！`,
+                        type: 'success'
                     });
                 }
-                
+
             } else if (status === 'failed' || error) {
                 // 生成失败，停止轮询
                 if (activeVideoPolls.has(taskId)) {
                     clearInterval(activeVideoPolls.get(taskId)!);
                     activeVideoPolls.delete(taskId);
                 }
-                
+
                 // 更新失败状态
                 const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
                     metadata: {
@@ -1138,12 +1311,12 @@ export const handleStreamResponse = async (
                         generationStatus: 'failed'
                     }
                 });
-                
+
                 if (success) {
                     console.log('❌ 视频生成失败状态已更新');
-                    await showToast({ 
-                        message: `视频生成失败: ${error || 'Unknown error'}`, 
-                        type: 'error' 
+                    await showToast({
+                        message: `视频生成失败: ${error || 'Unknown error'}`,
+                        type: 'error'
                     });
                 }
             }

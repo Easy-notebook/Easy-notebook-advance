@@ -5,7 +5,7 @@ class GeneralAgent(BaseAgent):
     def __init__(self, llm=None):        
         super().__init__(
             name="General Agent",
-            model=llm if llm else "gpt-4o-mini",
+            model=llm if llm else "openai/gpt-oss-120b",
             system_prompt="you are a general agent of dcls, you can provide general response to the user's question"
         )
     

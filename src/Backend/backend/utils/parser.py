@@ -9,61 +9,103 @@ class StreamingTemplateParser:
         self.text_buffer = ""  # 缓存纯文本内容
         self.in_tag = False  # 是否正在处理标签内容
         self.current_tag = None  # 当前正在处理的标签信息
+        self.pending_tag_start = None  # 等待结束标签的开始标签信息
         
     def parse_chunk(self, chunk: str) -> List[Dict[str, Any]]:
         """解析单个文本块，返回完整的前端actions列表"""
         actions = []
         if not chunk:
             return actions
-            
+
         self.buffer += chunk
-        
-        # 不断查找并处理完整的标签
+
+        # 如果正在等待结束标签，优先查找结束标签
+        if self.pending_tag_start:
+            end_tag_pattern = rf'</{re.escape(self.pending_tag_start["name"])}>'
+            end_tag_match = re.search(end_tag_pattern, self.buffer)
+
+            if end_tag_match:
+                # 找到结束标签，提取内容
+                content = self.buffer[:end_tag_match.start()]
+
+                # 创建action
+                attributes = self.pending_tag_start["attributes"]
+                action = self._create_action_from_tag(self.pending_tag_start["name"], content, attributes)
+                if action:
+                    actions.append(action)
+
+                # 清理状态
+                self.buffer = self.buffer[end_tag_match.end():]
+                self.pending_tag_start = None
+
+                # 继续处理剩余内容
+                if self.buffer:
+                    actions.extend(self.parse_chunk(""))
+                return actions
+            else:
+                # 还没有找到结束标签，继续等待
+                return actions
+
+        # 正常处理标签
         while True:
-            # 查找完整的XML标签 <tag>content</tag> 或 <tag attr="value">content</tag>
-            tag_pattern = r'<([a-zA-Z-]+)(?:\s+([^>]*?))?>(.*?)<\/\1>'
-            match = re.search(tag_pattern, self.buffer, re.DOTALL)
-            
-            if match:
-                # 输出标签前的文本
-                before_tag = self.buffer[:match.start()]
-                if before_tag.strip():
-                    actions.append(self._create_text_action(before_tag.strip()))
-                
-                # 解析标签
-                tag_name = match.group(1)
-                attributes_str = match.group(2) or ""
-                content = match.group(3)
-                
+            # 查找标签开始
+            tag_start_match = re.search(r'<([a-zA-Z-]+)(?:\s+([^>]*?))?>', self.buffer)
+
+            if not tag_start_match:
+                # 没有找到标签开始，处理剩余文本
+                if len(self.buffer) > 50:  # 如果buffer足够长，输出部分文本
+                    text_to_output = self.buffer[:-20]  # 保留20个字符防止标签被截断
+                    if text_to_output.strip():
+                        actions.append(self._create_text_action(text_to_output))
+                    self.buffer = self.buffer[len(text_to_output):]
+                break
+
+            # 输出标签前的文本
+            before_tag = self.buffer[:tag_start_match.start()]
+            if before_tag.strip():
+                actions.append(self._create_text_action(before_tag.strip()))
+
+            # 获取标签信息
+            tag_name = tag_start_match.group(1)
+            attributes_str = tag_start_match.group(2) or ""
+
+            # 查找对应的结束标签
+            end_tag_pattern = rf'</{re.escape(tag_name)}>'
+            remaining_buffer = self.buffer[tag_start_match.end():]
+            end_tag_match = re.search(end_tag_pattern, remaining_buffer)
+
+            if end_tag_match:
+                # 找到完整的标签对
+                content = remaining_buffer[:end_tag_match.start()]
+
                 # 创建对应的action
                 attributes = self._parse_attributes(attributes_str)
                 action = self._create_action_from_tag(tag_name, content, attributes)
                 if action:
                     actions.append(action)
-                
-                # 移除已处理的内容
-                self.buffer = self.buffer[match.end():]
+
+                # 移除已处理的内容（包括结束标签）
+                processed_length = tag_start_match.end() + end_tag_match.end()
+                self.buffer = self.buffer[processed_length:]
             else:
-                # 没有找到完整标签，检查是否有纯文本可以输出
-                # 查找下一个可能的标签开始
-                next_tag_start = self.buffer.find('<')
-                if next_tag_start == -1:
-                    # 没有标签，如果buffer足够长就输出部分文本
-                    if len(self.buffer) > 20:
-                        text_to_output = self.buffer[:-10]  # 保留10个字符防止标签被截断
-                        if text_to_output.strip():
-                            actions.append(self._create_text_action(text_to_output))
-                        self.buffer = self.buffer[len(text_to_output):]
-                elif next_tag_start > 0:
-                    # 有文本在标签前，输出这些文本
-                    text_before_tag = self.buffer[:next_tag_start]
-                    if text_before_tag.strip():
-                        actions.append(self._create_text_action(text_before_tag))
-                    self.buffer = self.buffer[next_tag_start:]
-                
-                # 没有更多可处理的内容，退出循环
-                break
-                    
+                # 没有找到结束标签
+                if tag_start_match.group(0).endswith('/>'):
+                    # 自闭合标签
+                    attributes = self._parse_attributes(attributes_str)
+                    action = self._create_action_from_tag(tag_name, "", attributes)
+                    if action:
+                        actions.append(action)
+                    self.buffer = self.buffer[tag_start_match.end():]
+                else:
+                    # 不完整的标签，设置等待状态
+                    self.pending_tag_start = {
+                        "name": tag_name,
+                        "attributes": self._parse_attributes(attributes_str)
+                    }
+                    # 移除开始标签，保留内容等待结束标签
+                    self.buffer = self.buffer[tag_start_match.end():]
+                    break
+
         return actions
         
     def _extract_immediate_text(self) -> str:
@@ -105,6 +147,7 @@ class StreamingTemplateParser:
         self.text_buffer = ""
         self.in_tag = False
         self.current_tag = None
+        self.pending_tag_start = None
         
         return actions
     
@@ -229,14 +272,14 @@ class StreamingTemplateParser:
         elif tag_name == "add-code":
             language = attributes.get("language", "python")
             return {
-                "type": "addCell2EndWithContent", 
+                "type": "addCell2EndWithContent",
                 "data": {
                     "payload": {
                         "type": "code",
                         "description": f"Code Block ({language})",
-                        "content": "",  # 空内容，等待流式填充
+                        "content": content,  # 使用实际内容
                         "language": language,
-                        "metadata": {"isStreaming": True}
+                        "metadata": {"isStreaming": False}  # 标记为非流式，因为内容已完整
                     }
                 }
             }
@@ -474,6 +517,16 @@ class StreamingTemplateParser:
                     "content": f"/image {content}",
                     "prompt": content,
                     "commandId": f"img-{hash(content) % 10000}"
+                }
+            }
+        
+        elif tag_name == "create-webpage":
+            return {
+                "type": "trigger_webpage_generation",
+                "payload": {
+                    "content": f"/webpage {content}",
+                    "prompt": content,
+                    "commandId": f"web-{hash(content) % 10000}"
                 }
             }
             

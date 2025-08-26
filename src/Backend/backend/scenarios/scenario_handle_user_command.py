@@ -12,12 +12,12 @@ class UserCommandScenario(BaseScenarioTemplate):
     """
     处理用户命令的场景类
     """
-    
+
     def __init__(self, operation: Dict[str, Any]):
         super().__init__(operation)
-        
-        # 检查是否为视频生成命令
-        content = self._get_payload_value("content", "")
+
+        # 检查是否为特定命令
+        content = self._get_payload_value("content", "").strip()
         if content.startswith("/video"):
             # 创建Text2Video Agent
             agent_operation = self._create_agent_operation(Text2VideoAgent, agent_type="text2video")
@@ -26,15 +26,33 @@ class UserCommandScenario(BaseScenarioTemplate):
             # 创建Text2Image Agent
             agent_operation = self._create_agent_operation(Text2ImageAgent, agent_type="text2image")
             self.agent = Text2ImageAgent(operation=agent_operation)
+        elif content.startswith("/webpage"):
+            # 直接 /webpage
+            from agents.webpage_agent import WebPageAgent
+            agent_operation = self._create_agent_operation(WebPageAgent, agent_type="webpage")
+            self.agent = WebPageAgent(operation=agent_operation)
+        elif content.startswith("/command"):
+            # /command 子命令解析
+            rest = content[len("/command"):].strip()
+            if rest.lower().startswith("webpage"):
+                # 将 /command webpage ... 规范化为 /webpage ...
+                prompt = rest[len("webpage"):].strip(": ")
+                from agents.webpage_agent import WebPageAgent
+                agent_operation = self._create_agent_operation(WebPageAgent, agent_type="webpage", content=f"/webpage {prompt}")
+                self.agent = WebPageAgent(operation=agent_operation)
+            else:
+                # 其他 /command 走默认命令Agent
+                agent_operation = self._create_agent_operation(CommandAgent, agent_type="command")
+                self.agent = CommandAgent(operation=agent_operation)
         else:
-            # 创建普通Command Agent
+            # 默认：普通Command Agent
             agent_operation = self._create_agent_operation(CommandAgent, agent_type="command")
             self.agent = CommandAgent(operation=agent_operation)
-        
+
     def validate_operation(self) -> bool:
         """验证操作参数"""
         return bool(self._get_payload_value("content") and self._get_payload_value("commandId"))
-        
+
     async def process(self) -> AsyncGenerator[str, None]:
         """处理用户命令场景"""
         try:
@@ -44,7 +62,7 @@ class UserCommandScenario(BaseScenarioTemplate):
                     {"commandId": self._get_payload_value("commandId")}
                 )
                 return
-                
+
             async for chunk in self.agent.process():
                 yield chunk
 
