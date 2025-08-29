@@ -17,7 +17,7 @@ class PredictionAndInferenceAgent(BaseAgent):
 
         super().__init__(
             name="Prediction and Inference",
-            model=llm if llm else "openai/gpt-oss-120b",
+            model=llm if llm else "gpt-5-mini",
             system_prompt=system_message_content
         )
         self.info("PredictionAndInferenceAgent initialized")

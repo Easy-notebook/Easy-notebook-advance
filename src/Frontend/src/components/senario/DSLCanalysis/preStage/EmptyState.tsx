@@ -52,18 +52,18 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const [isVDSMode, setIsVDSMode] = useState(false);
   
   const defaultPresetQuestions = useMemo(() => [
-    {
-      problem_name: "代码解释与优化",
-      problem_description: "/explain 帮我解释这段代码的功能并提供优化建议"
-    },
-    {
-      problem_name: "数据分析咨询",
-      problem_description: "如何对我的数据进行统计分析？"
-    },
-    {
-      problem_name: "代码生成",
-      problem_description: "/gen 生成一个Python函数来处理数据"
-    }
+    // {
+    //   problem_name: "代码解释与优化",
+    //   problem_description: "/explain 帮我解释这段代码的功能并提供优化建议"
+    // },
+    // {
+    //   problem_name: "数据分析咨询",
+    //   problem_description: "如何对我的数据进行统计分析？"
+    // },
+    // {
+    //   problem_name: "代码生成",
+    //   problem_description: "/gen 生成一个Python函数来处理数据"
+    // }
   ], []);
   
   const [presetQuestions, setPresetQuestions] = useState(defaultPresetQuestions);
@@ -289,7 +289,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         const existingChoiceMap = usePreStageStore.getState().choiceMap;
         if (existingChoiceMap && existingChoiceMap.length > 0) {
           // 如果已经有VDS问题，直接使用
-          setPresetQuestions(existingChoiceMap);
+          // setPresetQuestions(existingChoiceMap);
         } else {
           // 否则重新生成VDS相关问题
           try {
@@ -634,7 +634,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       )}
 
       {/* 预设问题展示 */}
-      {presetQuestions.length > 0 && (
+      {/* {presetQuestions.length > 0 && (
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
           {presetQuestions.map((q, idx) => (
             <button
@@ -650,7 +650,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             </button>
           ))}
         </div>
-      )}
+      )} */}
     </div>
   );
 };

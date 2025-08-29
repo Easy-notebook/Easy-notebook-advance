@@ -20,6 +20,47 @@ import {
     handleDownload,
     handleDeleteFile
 } from '../../../utils/fileUtils';
+
+// Types
+type FileNodeDirectory = {
+    name: string;
+    type: 'directory';
+    path: string;
+    children: FileNode[];
+};
+
+type FileNodeFile = {
+    name: string;
+    type: 'file';
+    path: string;
+    size?: number;
+    lastModified?: number | string;
+};
+
+type FileNode = FileNodeDirectory | FileNodeFile;
+
+type ToastVariant = 'success' | 'destructive' | 'info' | 'default';
+interface ToastOptions { title: string; description: string; variant: ToastVariant; }
+
+// Infer a simple mime type from file name
+const getMimeTypeForFileName = (name: string): string => {
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+    if (ext === 'svg') return 'image/svg+xml';
+    if (ext === 'pdf') return 'application/pdf';
+    if (['html', 'htm'].includes(ext)) return 'text/html';
+    if (['txt', 'md', 'json', 'js', 'py', 'css', 'csv'].includes(ext)) return 'text/plain';
+    return 'application/octet-stream';
+};
+
+// Create a placeholder File object for preview API which requires a File
+const createPlaceholderFile = (name: string, lastModified?: number | string): File => {
+    const mime = getMimeTypeForFileName(name);
+    const lm = typeof lastModified === 'number' ? lastModified : Date.now();
+    return new File([''], name, { type: mime, lastModified: lm });
+};
+
+// (no-op)
 import usePreviewStore from '../../../store/previewStore';
 import useStore from '../../../store/notebookStore';
 import { SHARED_STYLES, LAYOUT_CONSTANTS, FILE_PREVIEW_CONFIG } from './shared/constants';
@@ -34,25 +75,49 @@ const PREVIEWABLE_TEXT_TYPES = FILE_PREVIEW_CONFIG.text;
 const PREVIEWABLE_PDF_TYPES = FILE_PREVIEW_CONFIG.pdf;
 
 /** Get file icon based on extension */
-const getFileIcon = (filename) => {
-    if (!filename) return <Icon {...getFileTypeIconProps({ extension: '', size: 20 })} />;
+const getFileIcon = (filename: string | undefined) => {
+    if (!filename) return <Icon {...getFileTypeIconProps({ extension: 'txt', size: 20 })} />;
 
     try {
-        const extension = filename.split('.').pop().toLowerCase();
-        return <Icon {...getFileTypeIconProps({ extension, size: 20 })} />;
+        const extension = (filename.split('.').pop() || '').toLowerCase();
+        // Handle common file types with proper icons
+        const iconProps = getFileTypeIconProps({ 
+            extension: extension || 'txt', 
+            size: 20 
+        });
+        return <Icon {...iconProps} style={{ color: iconProps.iconName?.includes('python') ? '#3776ab' : 
+                                               iconProps.iconName?.includes('javascript') ? '#f7df1e' :
+                                               iconProps.iconName?.includes('typescript') ? '#3178c6' :
+                                               iconProps.iconName?.includes('react') ? '#61dafb' :
+                                               iconProps.iconName?.includes('html') ? '#e34f26' :
+                                               iconProps.iconName?.includes('css') ? '#1572b6' :
+                                               iconProps.iconName?.includes('json') ? '#000000' :
+                                               iconProps.iconName?.includes('markdown') ? '#083fa1' :
+                                               '#666666' }} />;
     } catch (error) {
-        console.error('Error getting file icon:', error);
-        return <Icon {...getFileTypeIconProps({ extension: '', size: 20 })} />;
+        console.error('Error getting file icon for:', filename, error);
+        return <Icon {...getFileTypeIconProps({ extension: 'txt', size: 20 })} />;
     }
 };
 
 // Context Menu Component
-const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) => {
+interface ContextMenuProps {
+    x: number;
+    y: number;
+    file: FileNode | null;
+    onClose: () => void;
+    onPreview: (file: FileNodeFile) => void;
+    onDownload: (file: FileNodeFile) => void;
+    onDelete: (file: FileNodeFile) => void;
+}
+
+const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }: ContextMenuProps) => {
     const menuRef = useRef(null);
 
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (menuRef.current && !menuRef.current.contains(event.target)) {
+        const handleClickOutside = (event: MouseEvent) => {
+            const node = menuRef.current as unknown as HTMLElement | null;
+            if (node && !node.contains(event.target as Node)) {
                 onClose();
             }
         };
@@ -63,7 +128,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
         };
     }, [onClose]);
 
-    const ext = file?.name ? `.${file.name.split('.').pop().toLowerCase()}` : '';
+    const ext = file?.name ? `.${file.name.split('.').pop()?.toLowerCase()}` : '';
     const isPreviewable = file?.type === 'file' && [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES].includes(ext);
 
     return (
@@ -78,7 +143,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
                         <button
                             className="w-full text-left px-4 py-2 hover:bg-theme-50 flex items-center transition-colors duration-200 rounded-md mx-1"
                             onClick={() => {
-                                onPreview(file);
+                                onPreview(file as FileNodeFile);
                                 onClose();
                             }}
                         >
@@ -89,7 +154,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
                     <button
                         className="w-full text-left px-4 py-2 hover:bg-theme-50 flex items-center transition-colors duration-200 rounded-md mx-1"
                         onClick={() => {
-                            onDownload(file);
+                            onDownload(file as FileNodeFile);
                             onClose();
                         }}
                     >
@@ -99,7 +164,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
                     <button
                         className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center transition-colors duration-200 rounded-md mx-1"
                         onClick={() => {
-                            onDelete(file);
+                            onDelete(file as FileNodeFile);
                             onClose();
                         }}
                     >
@@ -121,15 +186,17 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }) =
 };
 
 // FileTreeItem Component
-const FileTreeItem = memo(({
-    item,
-    level = 0,
-    onFileSelect,
-    notebookId,
-    onContextMenu,
-    onDragOver,
-    onDrop
-}) => {
+interface FileTreeItemProps {
+    item: FileNode;
+    level?: number;
+    onFileSelect?: (file: FileNodeFile) => void;
+    notebookId?: string;
+    onContextMenu: (e: React.MouseEvent<HTMLDivElement>, item: FileNode) => void;
+    onDragOver?: (e: React.DragEvent<HTMLDivElement>, item: FileNodeDirectory) => void;
+    onDrop?: (e: React.DragEvent<HTMLDivElement>, item: FileNodeDirectory) => void;
+}
+
+const FileTreeItem = memo(({ item, level = 0, onFileSelect, notebookId, onContextMenu, onDragOver, onDrop }: FileTreeItemProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const toggleExpand = useCallback(() => {
@@ -146,12 +213,12 @@ const FileTreeItem = memo(({
         }
     }, [item, toggleExpand, onFileSelect]);
 
-    const handleContextMenu = useCallback((e) => {
+    const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         e.preventDefault();
         onContextMenu(e, item);
     }, [item, onContextMenu]);
 
-    const handleDragOver = useCallback((e) => {
+    const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         if (item.type === 'directory') {
             e.preventDefault();
             e.stopPropagation();
@@ -159,7 +226,7 @@ const FileTreeItem = memo(({
         }
     }, [item, onDragOver]);
 
-    const handleDrop = useCallback((e) => {
+    const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
         if (item.type === 'directory') {
             e.preventDefault();
             e.stopPropagation();
@@ -236,7 +303,7 @@ const FileTreeItem = memo(({
             {/* Render children if directory is expanded */}
             {item.type === 'directory' && isExpanded && item.children && (
                 <div>
-                    {item.children.map((child, index) => (
+                    {item.children.map((child: FileNode, index: number) => (
                         <FileTreeItem
                             key={`${child.type}-${child.name}-${index}`}
                             item={child}
@@ -257,18 +324,20 @@ const FileTreeItem = memo(({
 
 
 // Main FileTree Component
-const FileTree = memo(({ notebookId, projectName }) => {
+interface FileTreeProps { notebookId: string; projectName?: string; }
+
+const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     // Get tasks from store to determine if outline can be parsed
     const tasks = useStore((state) => state.tasks);
-    const [files, setFiles] = useState(null);
-    const [fileTree, setFileTree] = useState([]);
+    const [files, setFiles] = useState<any[] | null>(null);
+    const [fileTree, setFileTree] = useState<FileNode[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, item: null });
-    const [draggedOver, setDraggedOver] = useState(null);
-    const fileInputRef = useRef(null);
-    const abortControllerRef = useRef(null);
-    const dropZoneRef = useRef(null);
-    const [uploadState, setUploadState] = useState({
+    const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; item: FileNode | null}>({ visible: false, x: 0, y: 0, item: null });
+    const [draggedOver, setDraggedOver] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const dropZoneRef = useRef<HTMLDivElement | null>(null);
+    const [uploadState, setUploadState] = useState<{ uploading: boolean; progress: number; error: string | null}>({
         uploading: false,
         progress: 0,
         error: null
@@ -279,18 +348,80 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
     // Upload configuration wrapped in useMemo to prevent recreation on every render
     const uploadConfig = useMemo(() => ({
-        mode: 'restricted',
-        maxFileSize: 10 * 1024 * 1024, // 10MB
+        mode: 'restricted' as const,
+        maxFileSize: 10 * 1024 * 1024,
         maxFiles: 10,
         allowedTypes: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv', '.pdf'],
         targetDir: '.assets'
     }), []);
 
     // Toast notification stub (replace with your own toast system)
-    const toast = useCallback(({ title, description, variant }) => {
+    const toast = useCallback(({ title, description, variant }: ToastOptions) => {
         console.log(`${variant}: ${title} - ${description}`);
         // Implement your toast notification here
     }, []);
+
+    // Adapter to satisfy utils NotebookApiIntegration shape
+    const utilsApi = useMemo(() => ({
+        listFiles: async (nid: string) => {
+            const resp: any = await notebookApiIntegration.listFiles(nid);
+            const mapNode = (f: any): any => ({
+                name: f.name,
+                size: f.size,
+                type: f.type,
+                lastModified: f.lastModified ?? 0,
+                path: f.path || f.name,
+                ...(f.type === 'directory' ? { children: Array.isArray(f.children) ? f.children.map(mapNode) : [] } : {})
+            });
+            return {
+                status: resp.status,
+                message: resp.message,
+                files: Array.isArray(resp.files) ? resp.files.map(mapNode) : []
+            } as { status: 'ok' | 'error'; message?: string; files?: any[] };
+        },
+        uploadFiles: async (
+            nid: string,
+            files: File[],
+            config: { mode: 'restricted' | 'open'; allowedTypes: string[]; maxFiles?: number },
+            _onProgress: (e: ProgressEvent) => void,
+            _signal: AbortSignal
+        ) => {
+            // Include targetDir via type cast to match backend while keeping local types strict
+            return await notebookApiIntegration.uploadFiles(nid, files, {
+                mode: config.mode,
+                allowedTypes: config.allowedTypes,
+                maxFiles: config.maxFiles,
+                ...(uploadConfig.targetDir ? { targetDir: uploadConfig.targetDir } : {})
+            } as any);
+        },
+        getFilePreviewUrl: async (nid: string, filename: string) => {
+            try {
+                const base = window.Backend_BASE_URL ? window.Backend_BASE_URL.replace(/\/$/, '') : '';
+                const name = filename.split('/').pop() || filename;
+                return `${base}/assets/${encodeURIComponent(nid)}/${encodeURIComponent(name)}`;
+            } catch {
+                return '';
+            }
+        },
+        getFileContent: async (nid: string, filename: string) => {
+            const resp: any = await notebookApiIntegration.getFile(nid, filename);
+            return resp.content || '';
+        },
+        downloadFile: async (nid: string, filename: string) => {
+            const blob = await notebookApiIntegration.downloadFile(nid, filename);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename.split('/').pop() || filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        },
+        deleteFile: async (_nid: string, _filename: string) => {
+            throw new Error('Delete API not implemented');
+        }
+    }), [uploadConfig.targetDir]);
 
     // Fetch file list function
     const fetchFileListWrapper = useCallback(async () => {
@@ -300,8 +431,8 @@ const FileTree = memo(({ notebookId, projectName }) => {
             // Fetch notebook files
             await fetchFileList({
                 notebookId,
-                notebookApiIntegration,
-                setFileList: setFiles,
+                notebookApiIntegration: utilsApi as any,
+                setFileList: (list) => setFiles(list as any[]),
                 toast
             });
             
@@ -333,28 +464,35 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
 
     // Process file tree from backend - backend now returns hierarchical structure
-    const processFileTree = useMemo(() => {
+    const processFileTree = useMemo<FileNode[]>(() => {
         if (!files || files.length === 0) {
             return [];
         }
 
         try {
+            console.log('Processing file tree, files:', files);
+            
             // If files is already a hierarchical structure (array of objects with children)
-            if (Array.isArray(files) && files.length > 0 && typeof files[0] === 'object' && files[0].type) {
-                return files; // Backend already provided the tree structure
+            if (Array.isArray(files) && files.length > 0 && typeof files[0] === 'object' && (files[0] as any).type) {
+                console.log('Files already in tree structure:', files);
+                return files as unknown as FileNode[]; // Backend already provided the tree structure
             }
 
             // Fallback: if still receiving flat file paths, build tree manually
-            const tree = [];
-            const directories = {};
+            const tree: FileNode[] = [];
+            const directories: Record<string, FileNodeDirectory> = {};
 
-            files.forEach(filePath => {
+            console.log('Building tree from flat structure...');
+
+            (files as any[]).forEach((filePath: any, index: number) => {
                 const pathStr = typeof filePath === 'string' ? filePath : filePath.path || filePath.name;
+                console.log(`Processing file ${index}:`, pathStr, filePath);
+                
                 if (!pathStr) return;
                 
-                const parts = pathStr.split('/');
+                const parts = pathStr.split('/').filter((part: string) => part.trim() !== ''); // Filter empty parts
                 let currentPath = '';
-                let currentTree = tree;
+                let currentTree = tree as FileNode[];
 
                 // Build directory structure
                 for (let i = 0; i < parts.length - 1; i++) {
@@ -362,8 +500,12 @@ const FileTree = memo(({ notebookId, projectName }) => {
                     if (!part) continue;
                     
                     currentPath = currentPath ? `${currentPath}/${part}` : part;
-                    if (!directories[currentPath]) {
-                        const newDir = {
+                    
+                    // Find existing directory or create new one
+                    let existingDir = currentTree.find(item => item.type === 'directory' && item.name === part) as FileNodeDirectory;
+                    
+                    if (!existingDir) {
+                        const newDir: FileNodeDirectory = {
                             name: part,
                             type: 'directory',
                             path: currentPath,
@@ -371,14 +513,16 @@ const FileTree = memo(({ notebookId, projectName }) => {
                         };
                         directories[currentPath] = newDir;
                         currentTree.push(newDir);
+                        existingDir = newDir;
                     }
-                    currentTree = directories[currentPath].children;
+                    
+                    currentTree = existingDir.children;
                 }
 
                 // Add file
                 const fileName = parts[parts.length - 1];
                 if (fileName) {
-                    const fileObj = {
+                    const fileObj: FileNodeFile = {
                         name: fileName,
                         type: 'file',
                         path: pathStr,
@@ -386,17 +530,11 @@ const FileTree = memo(({ notebookId, projectName }) => {
                         lastModified: typeof filePath === 'object' ? filePath.lastModified : undefined
                     };
 
-                    if (parts.length === 1) {
-                        tree.push(fileObj);
-                    } else {
-                        const parentPath = parts.slice(0, -1).join('/');
-                        if (directories[parentPath]) {
-                            directories[parentPath].children.push(fileObj);
-                        }
-                    }
+                    currentTree.push(fileObj);
                 }
             });
 
+            console.log('Final processed tree:', tree);
             return tree;
         } catch (error) {
             console.error('Error processing file tree:', error);
@@ -410,7 +548,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
     }, [processFileTree]);
 
     // Handle preview using the preview store
-    const handlePreviewFile = useCallback(async (file) => {
+    const handlePreviewFile = useCallback(async (file: FileNodeFile) => {
         try {
             if (!file) {
                 console.error('Error previewing file: file is null');
@@ -422,21 +560,21 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 return;
             }
 
-            await usePreviewStore.getState().previewFile(useStore.getState().notebookId, file.path, {
-                file: file
-            });
+            await usePreviewStore.getState().previewFile(notebookId, file.path, {
+                file: createPlaceholderFile(file.name, file.lastModified)
+            } as any);
         } catch (err) {
             console.error('Error previewing file:', err);
             toast({
                 title: "Preview Error",
-                description: `Failed to preview ${file?.name || 'file'}: ${err.message}`,
+                description: `Failed to preview ${file?.name || 'file'}: ${err instanceof Error ? err.message : String(err)}`,
                 variant: "destructive",
             });
         }
-    },[toast]);
+    },[toast, notebookId]);
 
     // Handle file selection using the preview store
-    const handleFileSelect = useCallback(async (file) => {
+    const handleFileSelect = useCallback(async (file: FileNodeFile) => {
         console.log('File selected:', file);
         
         if (!file) {
@@ -444,20 +582,34 @@ const FileTree = memo(({ notebookId, projectName }) => {
             return;
         }
 
+        // Switch to file preview mode
         if (usePreviewStore.getState().previewMode !== 'file') {
             usePreviewStore.getState().changePreviewMode();
         }
 
-        const fileExt = file.name.split('.').pop().toLowerCase();
-        const isPreviewable = [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES].includes(`.${fileExt}`);
+        const fileExt = (file.name.split('.').pop() || '').toLowerCase();
+        
+        // Extended previewable types including JSX/TSX
+        const jsxTypes = ['.jsx', '.tsx'];
+        const allPreviewableTypes = [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES, ...jsxTypes];
+        const isPreviewable = allPreviewableTypes.includes(`.${fileExt}`);
+
+        console.log('File extension:', fileExt, 'Is previewable:', isPreviewable);
 
         if (isPreviewable) {
             handlePreviewFile(file);
+        } else {
+            // For non-previewable files, show a message
+            toast({
+                title: "File Type Not Supported",
+                description: `Cannot preview ${file.name}. File type .${fileExt} is not supported for preview.`,
+                variant: "info"
+            });
         }
-    }, [handlePreviewFile]);
+    }, [handlePreviewFile, toast]);
 
     // Handle state menu
-    const handleContextMenu = useCallback((e, item) => {
+    const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>, item: FileNode) => {
         e.preventDefault();
         setContextMenu({
             visible: true,
@@ -473,47 +625,47 @@ const FileTree = memo(({ notebookId, projectName }) => {
     }, []);
 
     // Handle download
-    const handleDownloadFile = useCallback((file) => {
+    const handleDownloadFile = useCallback((file: FileNodeFile) => {
         handleDownload({
             notebookId,
             filename: file.path,
-            notebookApiIntegration,
+            notebookApiIntegration: utilsApi as any,
             toast
         });
-    }, [notebookId, toast]);
+    }, [notebookId, toast, utilsApi]);
 
     // Handle delete
-    const handleDeleteFileAction = useCallback((file) => {
+    const handleDeleteFileAction = useCallback((file: FileNodeFile) => {
         if (confirm(`Are you sure you want to delete ${file.name}?`)) {
             handleDeleteFile({
                 notebookId,
                 filename: file.path,
-                notebookApiIntegration,
+                notebookApiIntegration: utilsApi as any,
                 fetchFileList: fetchFileListWrapper,
                 toast
             });
         }
-    }, [notebookId, fetchFileListWrapper, toast]);
+    }, [notebookId, fetchFileListWrapper, toast, utilsApi]);
 
 
     // Handle drag over
-    const handleDragOver = useCallback((e, item) => {
+    const handleDragOver = useCallback((e: React.DragEvent, item: FileNodeDirectory) => {
         e.preventDefault();
         setDraggedOver(item.path);
     }, []);
 
     // Handle file drop
-    const handleDrop = useCallback((e, targetDir) => {
+    const handleDrop = useCallback((e: React.DragEvent, targetDir: FileNodeDirectory) => {
         e.preventDefault();
         setDraggedOver(null);
 
         // Handle file dropping from file explorer
-        if (e.dataTransfer.files.length > 0) {
-            const files = Array.from(e.dataTransfer.files);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const files = Array.from(e.dataTransfer.files) as File[];
             handleFileUpload({
                 notebookId,
                 files,
-                notebookApiIntegration,
+                notebookApiIntegration: utilsApi as any,
                 uploadConfig,
                 setUploading: (uploading) => setUploadState(prev => ({ ...prev, uploading })),
                 setUploadProgress: (progress) => setUploadState(prev => ({ ...prev, progress })),
@@ -531,7 +683,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
         // Handle internal drag and drop (file moving between directories)
         try {
-            const draggedItem = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const draggedItem = JSON.parse(e.dataTransfer.getData('text/plain')) as FileNode;
             if (draggedItem && draggedItem.type === 'file') {
                 console.log(`Move ${draggedItem.path} to ${targetDir.path}`);
                 // Implement file moving functionality here
@@ -549,20 +701,21 @@ const FileTree = memo(({ notebookId, projectName }) => {
 
     // Handle global drop zone
     useEffect(() => {
-        const handleGlobalDrop = (e) => {
-            if (!dropZoneRef.current || !dropZoneRef.current.contains(e.target)) {
+        const handleGlobalDrop = (e: DragEvent) => {
+            const node = dropZoneRef.current as unknown as HTMLElement | null;
+            if (!node || !node.contains(e.target as Node)) {
                 return;
             }
 
             e.preventDefault();
             e.stopPropagation();
 
-            if (e.dataTransfer.files.length > 0) {
-                const files = Array.from(e.dataTransfer.files);
+            if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+                const files = Array.from(e.dataTransfer.files) as File[];
                 handleFileUpload({
                     notebookId,
                     files,
-                    notebookApiIntegration,
+                    notebookApiIntegration: utilsApi as any,
                     uploadConfig,
                     setUploading: (uploading) => setUploadState(prev => ({ ...prev, uploading })),
                     setUploadProgress: (progress) => setUploadState(prev => ({ ...prev, progress })),
@@ -585,8 +738,9 @@ const FileTree = memo(({ notebookId, projectName }) => {
             }
         };
 
-        const handleGlobalDragOver = (e) => {
-            if (dropZoneRef.current && dropZoneRef.current.contains(e.target)) {
+        const handleGlobalDragOver = (e: DragEvent) => {
+            const node = dropZoneRef.current as unknown as HTMLElement | null;
+            if (node && node.contains(e.target as Node)) {
                 e.preventDefault();
                 e.stopPropagation();
             }
@@ -602,13 +756,13 @@ const FileTree = memo(({ notebookId, projectName }) => {
     }, [notebookId, uploadConfig, fetchFileListWrapper, toast]);
 
     // We're keeping the file input for future use if needed but not actively using it
-    const handleFileInputChange = useCallback((e) => {
-        if (e.target.files.length > 0) {
-            const files = Array.from(e.target.files);
+    const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files) as File[];
             handleFileUpload({
                 notebookId,
                 files,
-                notebookApiIntegration,
+                notebookApiIntegration: utilsApi as any,
                 uploadConfig,
                 setUploading: (uploading) => setUploadState(prev => ({ ...prev, uploading })),
                 setUploadProgress: (progress) => setUploadState(prev => ({ ...prev, progress })),
@@ -622,13 +776,11 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 fetchFileList: fetchFileListWrapper,
             });
         }
-    }, [notebookId, uploadConfig, fetchFileListWrapper, toast]);
+    }, [notebookId, uploadConfig, fetchFileListWrapper, toast, utilsApi]);
 
     // Cancel upload
     const handleCancelUpload = useCallback(() => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-        }
+        abortControllerRef.current?.abort();
     }, []);
 
     if (isLoading && !files) {
@@ -731,7 +883,7 @@ const FileTree = memo(({ notebookId, projectName }) => {
                 }}
             >
                 <div className={`mr-3`}>
-                    <img src={"./icon.svg"} className="w-8 h-8" />
+                    <img src={"/icon.svg"} className="w-8 h-8" />
                 </div>
                 {/* File or folder name */}
                 <span

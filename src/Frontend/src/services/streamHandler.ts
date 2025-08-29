@@ -1030,8 +1030,22 @@ export const handleStreamResponse = async (
                     // 触发预览：解析到实际文件并加载
                     const { default: usePreviewStore } = await import('../store/previewStore');
                     const filePath = href.replace(/^\.\//, '');
-                    const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
-                    console.log('🔗 About to preview file:', { filePath, fileObj });
+                    const fileName = filePath.split('/').pop() || filePath;
+
+                    // 根据文件扩展名确定文件类型
+                    const getFileTypeFromExtension = (filename: string) => {
+                        const ext = filename.split('.').pop()?.toLowerCase();
+                        if (ext === 'jsx' || ext === 'tsx') return 'jsx';
+                        if (ext === 'html' || ext === 'htm') return 'html';
+                        if (ext === 'csv') return 'csv';
+                        if (ext === 'pdf') return 'pdf';
+                        if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(`.${ext}`)) return 'image';
+                        return 'text';
+                    };
+
+                    const fileType = getFileTypeFromExtension(fileName);
+                    const fileObj = { name: fileName, path: filePath, type: fileType } as any;
+                    console.log('🔗 About to preview file:', { filePath, fileName, fileType, fileObj });
 
                     await usePreviewStore.getState().previewFile(notebookId, filePath, { file: fileObj } as any);
                     console.log('🔗 Preview file called, current mode:', usePreviewStore.getState().previewMode);
@@ -1049,8 +1063,9 @@ export const handleStreamResponse = async (
                         console.warn('Failed to trigger file list refresh:', refreshError);
                     }
 
+                    const contentType = fileType === 'jsx' ? 'React组件' : fileType === 'html' ? '网页' : '文件';
                     await showToast({
-                        message: `网页已生成并打开预览: ${label}`,
+                        message: `${contentType}已生成并打开预览: ${label}`,
                         type: 'success'
                     });
                 } catch (e) {

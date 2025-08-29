@@ -31,6 +31,16 @@ class UserCommandScenario(BaseScenarioTemplate):
             from agents.webpage_agent import WebPageAgent
             agent_operation = self._create_agent_operation(WebPageAgent, agent_type="webpage")
             self.agent = WebPageAgent(operation=agent_operation)
+        elif content.startswith("/react"):
+            # React组件生成
+            from agents.webpage_agent import WebPageAgent
+            agent_operation = self._create_agent_operation(WebPageAgent, agent_type="react")
+            self.agent = WebPageAgent(operation=agent_operation)
+        elif content.startswith("/component"):
+            # React组件生成
+            from agents.webpage_agent import WebPageAgent
+            agent_operation = self._create_agent_operation(WebPageAgent, agent_type="component")
+            self.agent = WebPageAgent(operation=agent_operation)
         elif content.startswith("/command"):
             # /command 子命令解析
             rest = content[len("/command"):].strip()

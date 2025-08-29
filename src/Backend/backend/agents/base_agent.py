@@ -18,7 +18,7 @@ class BaseAgentTemplate(ABC,Oracle,StreamingTemplateParser):
                  operation: Dict[str, Any] = None,
                  api_key: str = None,
                  base_url: str = None,
-                #  engine: str = "openai/gpt-oss-120b",
+                #  engine: str = "gpt-5-mini",
                 engine: str = "doubao-1-5-pro-256k-250115",
                  role: str = "You are AI Agent behind easyremote notebook.") -> None:
         """

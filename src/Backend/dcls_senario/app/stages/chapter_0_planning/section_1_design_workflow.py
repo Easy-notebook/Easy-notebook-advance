@@ -69,7 +69,7 @@ Design optimal data science workflows using Existential First Principles (EFP) a
 
 Use your event-driven consciousness to create comprehensive, goal-oriented data science workflows."""
 
-                self.pcs_agent = EventDrivenAgent(name="PCSPlanningAgent", model="openai/gpt-oss-120b", system_prompt=pcs_prompt)
+                self.pcs_agent = EventDrivenAgent(name="PCSPlanningAgent", model="gpt-5-mini", system_prompt=pcs_prompt)
                 self.agent_mode = True
                 print("✅ PCS规划Agent初始化成功")
             except Exception as e:

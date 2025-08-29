@@ -9,9 +9,6 @@ import AIThinkingCell from '../Editor/Cells/AIThinkingCell';
 import LinkCell from '../Editor/Cells/LinkCell';
 import OutlineSidebarOrig from './LeftSideBar/OutlineSidebar';
 import StepNavigation from './MainContainer/StepNavigation';
-
-
-
 import ErrorAlert from '../UI/ErrorAlert';
 import useStore from '../../store/notebookStore';
 import { findCellsByStep } from '../../utils/markdownParser';

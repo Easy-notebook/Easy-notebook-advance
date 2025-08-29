@@ -311,15 +311,35 @@ export class NotebookApiService {
             const response = await fetch(`${API_BASE_URL}/download_file/${notebookId}/${filename}`, {
                 method: 'GET'
             });
-            // For file downloads, we might want to handle differently
             if (!response.ok) {
                 const data = await response.json();
                 console.error('API error:', data);
                 throw new Error(data.message || `HTTP error! status: ${response.status}`);
             }
-            return response.blob(); // Return as blob for downloading
+            return response.blob();
         } catch (error) {
             console.error('Failed to download file:', error);
+            throw error;
+        }
+    }
+
+    // Create file
+    static async createFile(notebookId: string, filename: string, content: string, options?: { overwrite?: boolean; make_dirs?: boolean }): Promise<ApiResponse> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/create_file`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    notebook_id: notebookId,
+                    filename,
+                    content,
+                    overwrite: options?.overwrite ?? true,
+                    make_dirs: options?.make_dirs ?? true,
+                })
+            });
+            return await handleResponse<ApiResponse>(response);
+        } catch (error) {
+            console.error('Failed to create file:', error);
             throw error;
         }
     }
@@ -560,6 +580,16 @@ export const notebookApiIntegration = {
             return await NotebookApiService.getFile(notebookId, filename);
         } catch (error) {
             console.error('Get file error:', error);
+            throw error;
+        }
+    },
+
+    // createFile
+    createFile: async (notebookId: string, filename: string, content: string, options?: { overwrite?: boolean; make_dirs?: boolean }): Promise<ApiResponse> => {
+        try {
+            return await NotebookApiService.createFile(notebookId, filename, content, options);
+        } catch (error) {
+            console.error('Create file error:', error);
             throw error;
         }
     },

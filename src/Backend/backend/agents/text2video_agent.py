@@ -14,7 +14,7 @@ class Text2VideoAgent(BaseAgentTemplate):
         operation: Dict[str, Any] = None,
         api_key: str = None,
         base_url: str = None,
-        engine: str = "openai/gpt-oss-120b",
+        engine: str = "gpt-5-mini",
         role: str = "You are a video generation AI agent.",
     ) -> None:
         super().__init__(operation, api_key, base_url, engine, role)

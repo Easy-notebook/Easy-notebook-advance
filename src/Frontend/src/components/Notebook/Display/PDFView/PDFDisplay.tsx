@@ -1,6 +1,6 @@
 import React from 'react';
 import { Minimize2, Maximize2, Split } from 'lucide-react';
-import useStore from '../../../store/notebookStore';
+import useStore from '../../../../store/notebookStore';
 
 interface PDFDisplayProps {
   dataUrl: string; // data:application/pdf;base64,...
@@ -17,7 +17,7 @@ const PDFDisplay: React.FC<PDFDisplayProps> = ({ dataUrl, fileName }) => {
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white/70">
         <div className="text-sm font-medium text-gray-700 truncate">{fileName || 'PDF Preview'}</div>
         <div className="flex items-center gap-2">
-          <button
+          {/* <button
             onClick={toggleDetachedCellFullscreen}
             className="p-1.5 hover:bg-gray-200 rounded"
             title={isDetachedCellFullscreen ? "Switch to split view" : "Switch to fullscreen"}
@@ -30,7 +30,7 @@ const PDFDisplay: React.FC<PDFDisplayProps> = ({ dataUrl, fileName }) => {
             title="Close preview"
           >
             <Minimize2 size={16} />
-          </button>
+          </button> */}
           <a
             href={dataUrl}
             download={fileName || 'document.pdf'}

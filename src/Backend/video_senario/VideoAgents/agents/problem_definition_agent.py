@@ -5,7 +5,7 @@ class ProblemDefinitionAndDataCollectionAgent(BaseAgent):
     def __init__(self, llm=None):
         super().__init__(
             name="Problem Definition and Data Collection",
-            model=llm if llm else "openai/gpt-oss-120b",
+            model=llm if llm else "gpt-5-mini",
             system_prompt=PROBLEM_DEFINITION_TEMPLATE
         )
         self.info("ProblemDefinitionAndDataCollectionAgent initialized")

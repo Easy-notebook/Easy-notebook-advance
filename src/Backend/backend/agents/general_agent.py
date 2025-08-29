@@ -13,7 +13,7 @@ class GeneralAgent(BaseAgentTemplate):
                 operation: Dict[str, Any] = None,
                 api_key: str = None, 
                 base_url: str = None, 
-                engine: str = "openai/gpt-oss-120b", 
+                engine: str = "gpt-5-mini", 
                 role: str = """
                 You are a AI assistant can answer any question and write documentation wirter behide the easy-notebook.
                 ## Who you are
@@ -289,7 +289,8 @@ class GeneralAgent(BaseAgentTemplate):
 
         try:
             # 调用 OpenAI 的 chat.completions 流式输出
-            stream = await self.client.chat.completions.create(
+            # Note: OpenAI SDK create() is synchronous, returns a Stream object
+            stream = self.client.chat.completions.create(
                 model=self.engine,   # 这里可替换为你实际使用的模型名称
                 messages=messages,
                 stream=True,
@@ -300,8 +301,8 @@ class GeneralAgent(BaseAgentTemplate):
             full_response = ""
             last_flush_time = asyncio.get_event_loop().time()
 
-            # 异步迭代流式响应
-            async for chunk in stream:
+            # 迭代流式响应 - use regular for loop, not async for
+            for chunk in stream:
                 if not chunk.choices:
                     continue
                 # 从流中取出返回的增量内容
@@ -334,6 +335,9 @@ class GeneralAgent(BaseAgentTemplate):
 
                     # 避免阻塞，稍作延迟
                     await asyncio.sleep(0.01)
+
+                # Allow other coroutines to run
+                await asyncio.sleep(0.001)
 
             # 收尾，把剩余的 buffer 内容发送出去
             if buffer:

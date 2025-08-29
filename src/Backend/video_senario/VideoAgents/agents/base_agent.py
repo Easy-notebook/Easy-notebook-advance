@@ -9,7 +9,7 @@ class BaseAgent(ModernLogger):
         super().__init__()
         self.name = name
         self.model_name = model
-        self.model = Oracle(model) if model else Oracle("openai/gpt-oss-120b")
+        self.model = Oracle(model) if model else Oracle("gpt-5-mini")
         self.system_prompt = system_prompt
         
     def answer(self, question:str) -> str:

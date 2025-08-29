@@ -169,7 +169,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
           value={cell.content || ''}
           onChange={handleChange}
           placeholder="输入文件路径或链接 (例如: ./document.pdf, https://example.com)"
-          className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-theme-500 focus:border-transparent"
           autoFocus
         />
       </div>
@@ -224,7 +224,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
         {/* File Info */}
         <div className="flex-1 min-w-0">
           <div 
-            className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-blue-600 transition-colors"
+            className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-theme-600 transition-colors"
             onClick={handleOpen}
             title={label}
           >
@@ -269,7 +269,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
                   e.stopPropagation();
                   openInSplitPreview();
                 }}
-                className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                className="p-1.5 text-gray-500 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
                 title="分屏预览"
                 type="button"
               >
@@ -302,7 +302,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
             type="text"
             value={cell.content || ''}
             onChange={handleChange}
-            className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-theme-500"
             placeholder="编辑路径..."
           />
         </div>

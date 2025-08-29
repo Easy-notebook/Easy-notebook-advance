@@ -17,7 +17,7 @@ class Oracle(ParallelProcessor):
     # enum for model names
     SUPPORTED_MODELS = {
         "doubao-1-5-lite-32k-250115": 32768,
-        "openai/gpt-oss-120b": 128000,
+        "gpt-5-mini": 128000,
         "gpt-4o": 128000,
         "o4-mini": 200000,
     }
@@ -152,10 +152,10 @@ class Oracle(ParallelProcessor):
             if "o4" not in self.model:
                 request_params["top_p"] = top_p
             
-            # Create streaming request
+            # Create streaming request - note: this is synchronous in OpenAI SDK
             stream = self.client.chat.completions.create(**request_params)
 
-            # Process stream chunks
+            # Process stream chunks - use regular for loop, not async for
             for chunk in stream:
                 if chunk.choices and len(chunk.choices) > 0:
                     delta = chunk.choices[0].delta

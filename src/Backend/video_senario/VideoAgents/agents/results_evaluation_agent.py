@@ -18,7 +18,7 @@ class ResultsEvaluationAgent(BaseAgent):
         
         super().__init__(
             name="Results Evaluation",
-            model=llm if llm else "openai/gpt-oss-120b",
+            model=llm if llm else "gpt-5-mini",
             system_prompt=system_message_content
         )
         self.info("ResultsEvaluationAgent initialized")

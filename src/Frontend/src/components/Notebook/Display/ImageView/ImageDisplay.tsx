@@ -1,7 +1,5 @@
 import React, { useState, memo } from 'react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { Minimize2, Maximize2, Split } from 'lucide-react';
-import useStore from '../../../store/notebookStore';
 
 interface ImageControlsProps {
   zoomIn: () => void;
@@ -10,12 +8,21 @@ interface ImageControlsProps {
 }
 
 interface ImageDisplayProps {
-  imageData: string;
+  imageData: string | { content?: string; path?: string; name?: string };
   width?: string | number;
   height?: string | number;
-  alt?: string;
+  imageInitialHeight?: string | number | null;
   className?: string;
   style?: React.CSSProperties;
+  showControls?: boolean;
+  showDetails?: boolean;
+  initialScale?: number;
+  minScale?: number;
+  maxScale?: number;
+  defaultPositionX?: number;
+  defaultPositionY?: number;
+  fileName?: string | null;
+  lastModified?: string | number | null;
 }
 
 const ImageControls: React.FC<ImageControlsProps> = ({ zoomIn, zoomOut, resetTransform }) => {
@@ -77,12 +84,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(({
     lastModified = null
 }) => {
     const [status, setStatus] = useState('loading');
-    const [imgHeight, setImgHeight] = useState(imageInitialHeight);
-    
-    const setDetachedCellId = useStore(s => s.setDetachedCellId);
-    const isDetachedCellFullscreen = useStore(s => s.isDetachedCellFullscreen);
-    const toggleDetachedCellFullscreen = useStore(s => s.toggleDetachedCellFullscreen);
-
+    const [imgHeight, setImgHeight] = useState<string | number | undefined>(imageInitialHeight === null ? undefined : imageInitialHeight);
     const getImageSource = () => {
         if (!imageData) return null;
         if (typeof imageData === 'string') return imageData;
@@ -141,28 +143,6 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(({
 
     return (
         <div className="w-full h-full flex flex-col">
-            {/* Header with toolbar */}
-            {fileName && (
-                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white/70">
-                    <div className="text-sm font-medium text-gray-700 truncate">{fileName}</div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={toggleDetachedCellFullscreen}
-                            className="p-1.5 hover:bg-gray-200 rounded"
-                            title={isDetachedCellFullscreen ? "Switch to split view" : "Switch to fullscreen"}
-                        >
-                            {isDetachedCellFullscreen ? <Split size={16} /> : <Maximize2 size={16} />}
-                        </button>
-                        <button
-                            onClick={() => setDetachedCellId(null)}
-                            className="p-1.5 hover:bg-red-200 rounded text-red-600"
-                            title="Close preview"
-                        >
-                            <Minimize2 size={16} />
-                        </button>
-                    </div>
-                </div>
-            )}
             {/* Image content */}
             <div
                 className={`relative flex items-center justify-center overflow-hidden ${className} ${fileName ? 'flex-1' : 'h-full'}`}

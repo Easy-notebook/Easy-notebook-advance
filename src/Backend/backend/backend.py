@@ -158,6 +158,13 @@ class GetFileInfoRequest(BaseModel):
     notebook_id: str
     filename: str
 
+class CreateFileRequest(BaseModel):
+    notebook_id: str
+    filename: str  # relative path inside the notebook directory
+    content: str = ""  # text content (UTF-8)
+    overwrite: bool = True
+    make_dirs: bool = True
+
 
 class FileInfoResponse(BaseModel):
     name: str
@@ -201,11 +208,16 @@ def is_valid_notebook_id(notebook_id: str) -> bool:
     pattern = r'^[\w\-]+$'
     return bool(re.match(pattern, notebook_id))
 
-def sanitize_response_content(content: any, notebook_id: str) -> any:
+def sanitize_response_content(content: any, notebook_id: str, is_file_tree: bool = False) -> any:
     """
     简单过滤：如果字符串包含notebook_id，返回空字符串
+    但对于文件树结构，不进行过滤以保持完整性
     """
     if not notebook_id or not content:
+        return content
+
+    # 对于文件树，不进行过滤
+    if is_file_tree:
         return content
 
     if isinstance(content, str):
@@ -489,8 +501,8 @@ async def list_files_endpoint(notebook_id: str, db: Session = Depends(get_db)):
         # Build hierarchical file tree
         file_tree = build_file_tree(work_dir, work_dir)
 
-        # 过滤文件树中的敏感信息
-        sanitized_tree = sanitize_response_content(file_tree, notebook_id)
+        # 对于文件树，不进行过滤以保持完整性
+        sanitized_tree = sanitize_response_content(file_tree, notebook_id, is_file_tree=True)
 
         logger.info(f"Built file tree for notebook {notebook_id}")
         return {'status': 'ok', 'files': sanitized_tree}
@@ -499,6 +511,58 @@ async def list_files_endpoint(notebook_id: str, db: Session = Depends(get_db)):
         error_msg = sanitize_response_content(str(e), notebook_id)
         logger.error(f"Error listing files: {error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
+
+
+@app.post("/create_file")
+async def create_file_endpoint(request: CreateFileRequest, db: Session = Depends(get_db)):
+    """
+    Create or overwrite a text file under notebooks/{notebook_id}/{filename}.
+    - Prevent path traversal; only allow writing within the notebook directory.
+    - Optionally create parent directories.
+    """
+    log_request(db, endpoint="/create_file", notebook_id=request.notebook_id)
+    try:
+        if not is_valid_notebook_id(request.notebook_id):
+            raise HTTPException(status_code=400, detail=f"Invalid notebook_id: {request.notebook_id}")
+
+        work_dir = Path(f"./notebooks/{request.notebook_id}")
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        # Normalize and validate path (no traversal)
+        filename = os.path.normpath(request.filename).lstrip("/\\")
+        target_path = work_dir / filename
+        try:
+            target_path.resolve().relative_to(work_dir.resolve())
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid filename path")
+
+        # Ensure parent dirs
+        if request.make_dirs:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if target_path.exists() and not request.overwrite:
+            raise HTTPException(status_code=409, detail="File already exists")
+
+        # Write content as UTF-8 text
+        target_path.write_text(request.content or "", encoding="utf-8")
+
+        stat = target_path.stat()
+        return {
+            'status': 'ok',
+            'message': 'File created',
+            'file': {
+                'name': target_path.name,
+                'path': str(target_path.relative_to(work_dir)),
+                'size': stat.st_size,
+                'lastModified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                'type': 'file',
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating file: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/download_file/{notebook_id}/{filename}")
 async def download_file_endpoint(notebook_id: str, filename: str, db: Session = Depends(get_db)):
