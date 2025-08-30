@@ -37,18 +37,17 @@ const AIAgentSidebar: any = AIAgentSidebarOrig;
 const CommandInput: any = CommandInputOrig;
 
 
-
 // Main NotebookApp component
 const NotebookApp = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
-  
+
   // Panel width states
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('leftSidebarWidth');
     return saved ? parseInt(saved) : 384; // w-96 = 384px
   });
-  
+
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('rightSidebarWidth');
     return saved ? parseInt(saved) : 384; // w-96 = 384px
@@ -56,8 +55,8 @@ const NotebookApp = () => {
 
   const [currentView, setCurrentView] = useState<'notebook' | 'agent'>('notebook');
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
-  
-  
+
+
   const {
     notebookId,
     cells,
@@ -95,14 +94,14 @@ const NotebookApp = () => {
 
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  
+
   // Optimized resize handlers
   const handleLeftResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = leftSidebarWidth;
     let animationId: number | null = null;
-    
+
     const handleMouseMove = (e: MouseEvent) => {
       if (animationId) cancelAnimationFrame(animationId);
       animationId = requestAnimationFrame(() => {
@@ -110,7 +109,7 @@ const NotebookApp = () => {
         setLeftSidebarWidth(newWidth);
       });
     };
-    
+
     const handleMouseUp = () => {
       if (animationId) cancelAnimationFrame(animationId);
       document.removeEventListener('mousemove', handleMouseMove);
@@ -121,18 +120,18 @@ const NotebookApp = () => {
         localStorage.setItem('leftSidebarWidth', leftSidebarWidth.toString());
       });
     };
-    
+
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, [leftSidebarWidth]);
-  
+
   const handleRightResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = rightSidebarWidth;
     let animationId: number | null = null;
-    
+
     const handleMouseMove = (e: MouseEvent) => {
       if (animationId) cancelAnimationFrame(animationId);
       animationId = requestAnimationFrame(() => {
@@ -140,7 +139,7 @@ const NotebookApp = () => {
         setRightSidebarWidth(newWidth);
       });
     };
-    
+
     const handleMouseUp = () => {
       if (animationId) cancelAnimationFrame(animationId);
       document.removeEventListener('mousemove', handleMouseMove);
@@ -151,7 +150,7 @@ const NotebookApp = () => {
         localStorage.setItem('rightSidebarWidth', rightSidebarWidth.toString());
       });
     };
-    
+
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
@@ -162,9 +161,9 @@ const NotebookApp = () => {
   const { handleImport, initializeNotebook } = ImportNotebook4JsonOrJupyter();
 
   const settingstore = useSettingsStore();
-  
+
   // WorkflowControl store for global state management
-  const { 
+  const {
     setContinueButtonText,
     setIsGenerating,
     setIsCompleted,
@@ -504,12 +503,12 @@ const NotebookApp = () => {
 
   // WorkflowControl state management based on view mode
   useEffect(() => {
-    console.log('NotebookApp: WorkflowControl state update', { 
-      viewMode, 
-      isExecuting, 
-      currentPhaseId 
+    console.log('NotebookApp: WorkflowControl state update', {
+      viewMode,
+      isExecuting,
+      currentPhaseId
     });
-    
+
     if (viewMode === 'demo' || viewMode === 'create') {
       setContinueButtonText('Continue to Next Stage');
       // Clear handlers to let workflow state machine control them
@@ -524,13 +523,13 @@ const NotebookApp = () => {
       setIsGenerating(isExecuting);
       // In non-DSLC modes, consider it completed when not executing
       setIsCompleted(!isExecuting);
-      
+
       // Provide basic handlers for non-DSLC modes
       setOnTerminate(() => {
         console.log('Basic terminate handler called');
         // Could stop any running operations here
       });
-      
+
       setOnContinue(() => {
         console.log('Basic continue handler called');
         // Could implement basic workflow continuation here
@@ -573,7 +572,7 @@ const NotebookApp = () => {
         e.preventDefault();
         handleModeChange(viewMode === 'create' ? 'step' : 'create'); // 切换模式
       }
-      
+
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -593,27 +592,26 @@ const NotebookApp = () => {
   return (
     <div className="h-screen flex">
       <SettingsPage />
-      {/* 左侧边栏 */}
-      {!(cells.length === 0) && (
+      {(
         <div className="flex">
-          <div 
+          <div
             className="transition-all duration-500 ease-in-out relative"
             style={{ width: isCollapsed ? '48px' : `${leftSidebarWidth}px` }}
           >
-        <OutlineSidebar
-          tasks={tasks}
-          currentPhaseId={currentPhaseId}
-          currentStepId={currentStepIndex !== null ? tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.steps[currentStepIndex]?.id : null}
-          isCollapsed={isCollapsed}
-          onPhaseSelect={handlePhaseSelect}
-          onAgentSelect={handleAgentSelect}
-          viewMode={viewMode}
-          currentRunningPhaseId={currentRunningPhaseId}
-          allowPagination={allowPagination} // 传递翻页权限设置
-        />
+            <OutlineSidebar
+              tasks={tasks}
+              currentPhaseId={currentPhaseId}
+              currentStepId={currentStepIndex !== null ? tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.steps[currentStepIndex]?.id : null}
+              isCollapsed={isCollapsed}
+              onPhaseSelect={handlePhaseSelect}
+              onAgentSelect={handleAgentSelect}
+              viewMode={viewMode}
+              currentRunningPhaseId={currentRunningPhaseId}
+              allowPagination={allowPagination}
+            />
           </div>
           {!isCollapsed && (
-            <div 
+            <div
               className="w-px bg-gray-300 hover:bg-thme-500 cursor-col-resize transition-colors duration-150 relative group"
               onMouseDown={handleLeftResize}
             >
@@ -646,21 +644,21 @@ const NotebookApp = () => {
           onOpenSettings={settingstore.openSettings}
           fileInputRef={fileInputRef}
         />
-        
+
         {/* GlobalTabList - 全局文件标签列表 */}
         <GlobalTabList />
-        
+
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
           {/* PreviewApp - 文件预览 */}
           <div className={`${isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
             <TabbedPreviewApp />
           </div>
-          
+
           {/* AgentDetail - Agent详情视图 */}
           <div className={`${currentView === 'agent' && selectedAgentType && !isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
             {selectedAgentType && <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} />}
           </div>
-          
+
           {/* MainContent - 主笔记本内容 */}
           <div className={`${!isShowingFileExplorer && currentView === 'notebook' ? 'block' : 'hidden'} w-full h-full`}>
             <MainContent
@@ -700,13 +698,13 @@ const NotebookApp = () => {
       {/* 右侧边栏 */}
       {isRightSidebarCollapsed && (
         <div className="flex">
-          <div 
+          <div
             className="w-px bg-gray-300 hover:bg-theme-500 cursor-col-resize transition-colors duration-150 relative group"
             onMouseDown={handleRightResize}
           >
             <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-theme-100/50" />
           </div>
-          <div 
+          <div
             className="transition-all duration-500 ease-in-out opacity-100 overflow-hidden flex-shrink-0"
             style={{ width: `${rightSidebarWidth}px` }}
           >
@@ -718,11 +716,11 @@ const NotebookApp = () => {
           </div>
         </div>
       )}
-      
+
       {/* WorkflowPanel moved to MainContainer */}
-      
+
       {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
-      {<WorkflowControl fallbackViewMode={viewMode} /> }
+      {<WorkflowControl fallbackViewMode={viewMode} />}
     </div>
   );
 };

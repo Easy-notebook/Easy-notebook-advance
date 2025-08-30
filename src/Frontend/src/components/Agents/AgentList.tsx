@@ -1,7 +1,6 @@
 import React, { useState, useEffect, memo, useCallback } from 'react';
 import { AgentMemoryService, AgentType } from '../../services/agentMemoryService';
 import useStore from '../../store/notebookStore';
-import { SHARED_STYLES } from '../Notebook/LeftSideBar/shared/constants';
 import {
   StatusDot,
   SidebarButton,
@@ -30,7 +29,6 @@ const AGENT_GROUPS = [
 ];
 
 // 使用共享的状态样式
-const StatusStyles = SHARED_STYLES.status;
 
 const AgentItem = memo(({
   agent,

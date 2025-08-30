@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
-  Upload,
-  Sparkles,
+  Plus,
   SendHorizontal,
   FileText,
   X,
   PlusCircle,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 
 // ------- Type Definitions -------
@@ -24,11 +25,16 @@ interface AICommandInputProps {
   files: UploadFile[];
   setFiles: React.Dispatch<React.SetStateAction<UploadFile[]>>;
 }
+
+interface VDSQuestion {
+  problem_name: string;
+  problem_description: string;
+}
 // ---------------------------------
 
-import { usePipelineStore, PIPELINE_STAGES } from '../store/usePipelineStore.ts';
-import usePreStageStore from '../store/preStageStore.ts';
-import { generalResponse } from '../services/StageGeneralFunction.ts';
+import { usePipelineStore, PIPELINE_STAGES } from '../store/usePipelineStore';
+import usePreStageStore from '../store/preStageStore';
+import { generalResponse } from '../services/StageGeneralFunction';
 import { useAIAgentStore, EVENT_TYPES } from '../../../../store/AIAgentStore';
 import { AgentMemoryService, AgentType } from '../../../../services/agentMemoryService';
 import useStore from '../../../../store/notebookStore';
@@ -37,6 +43,13 @@ import { createUserAskQuestionAction } from '../../../../store/actionCreators';
 import useCodeStore from '../../../../store/codeStore';
 import { notebookApiIntegration } from '../../../../services/notebookServices';
 import { useAIPlanningContextStore } from '../store/aiPlanningContext';
+
+// 扩展 window，避免 TS 报错
+declare global {
+  interface Window {
+    changeTypingText?: (newText: string) => void;
+  }
+}
 
 /**
  * AI 和文件上传交互组件
@@ -49,23 +62,24 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isVDSMode, setIsVDSMode] = useState(false);
-  
+
+  // const defaultPresetQuestions: VDSQuestion[] = useMemo(() => [], []);
   const defaultPresetQuestions = useMemo(() => [
-    // {
-    //   problem_name: "代码解释与优化",
-    //   problem_description: "/explain 帮我解释这段代码的功能并提供优化建议"
-    // },
-    // {
-    //   problem_name: "数据分析咨询",
-    //   problem_description: "如何对我的数据进行统计分析？"
-    // },
-    // {
-    //   problem_name: "代码生成",
-    //   problem_description: "/gen 生成一个Python函数来处理数据"
-    // }
+    {
+      problem_name: "代码解释与优化",
+      problem_description: "/explain 帮我解释这段代码的功能并提供优化建议"
+    },
+    {
+      problem_name: "数据分析咨询",
+      problem_description: "如何对我的数据进行统计分析？"
+    },
+    {
+      problem_name: "代码生成",
+      problem_description: "/gen 生成一个Python函数来处理数据"
+    }
   ], []);
   
-  const [presetQuestions, setPresetQuestions] = useState<any[]>(defaultPresetQuestions);
+  const [presetQuestions, setPresetQuestions] = useState<VDSQuestion[]>(defaultPresetQuestions);
 
   const { setPreStage } = usePipelineStore();
   const sendOperation = useOperatorStore((s) => s.sendOperation);
@@ -90,79 +104,46 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     ta.style.height = `${nh}px`;
     ta.style.overflowY = ta.scrollHeight > mh ? 'auto' : 'hidden';
   }, []);
-  useEffect(() => adjustTextareaHeight(), [input, adjustTextareaHeight]);
+  useEffect(() => { adjustTextareaHeight(); }, [input, adjustTextareaHeight]);
 
   // 根据VDS模式状态动态显示预设问题
   useEffect(() => {
     if (!isVDSMode && files.length === 0) {
-      // 如果不是VDS模式且没有文件，显示默认问题
       setPresetQuestions(defaultPresetQuestions);
     }
-    // 如果是VDS模式，预设问题会通过文件上传或开关切换时设置
   }, [isVDSMode, files.length, defaultPresetQuestions]);
 
-
-  // 处理上传 - 根据历史版本实现
+  // 处理上传
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('=== File Upload Started ===');
     const selectedFiles = Array.from(e.target.files ?? []);
-    console.log('Selected files count:', selectedFiles.length);
-    console.log('Selected files:', selectedFiles.map(f => ({ name: f.name, size: f.size, type: f.type })));
-    
-    if (!selectedFiles.length) {
-      console.log('No files selected, aborting upload');
-      return;
-    }
-    
+    if (!selectedFiles.length) return;
     const csv = selectedFiles.find(f => /\.(csv|xlsx|xls)$/i.test(f.name));
     if (!csv) {
-      console.log('No CSV/Excel file found in selection');
       alert('Please select a CSV or Excel file');
       return;
     }
-    
-    console.log('CSV file selected:', { name: csv.name, size: csv.size, type: csv.type });
-    
-    // Check file size against backend limit (10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB to match backend
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
     if (csv.size > maxSize) {
-      console.error('File too large:', csv.size, 'bytes. Max allowed:', maxSize, 'bytes');
       alert(`File is too large. Maximum size allowed is ${maxSize / 1024 / 1024}MB`);
       return;
     }
 
     const uploadConfig = {
       mode: 'unrestricted',
-      allowedTypes: ['.csv', '.xlsx', '.xls','.jpg','.png','.jpeg','.gif','.pdf','.doc','.docx','.ppt','.pptx','.txt','.md'],
-      maxFileSize: maxSize, // Match backend limit
+      allowedTypes: ['.csv', '.xlsx', '.xls', '.jpg', '.png', '.jpeg', '.gif', '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.txt', '.md'],
+      maxFileSize: maxSize,
       targetDir: '.assets'
     };
 
-    console.log('Upload config:', uploadConfig);
-    console.log('Current Notebook ID:', notebookId);
-    
     // 如果没有 notebookId，先创建一个
     let currentNotebookId = notebookId;
     if (!currentNotebookId) {
-      console.log('No notebook ID available, creating new notebook...');
       try {
         currentNotebookId = await notebookApiIntegration.initializeNotebook();
-        console.log('New notebook created with ID:', currentNotebookId);
-        
-        // 更新 store 中的 notebookId
         useStore.getState().setNotebookId(currentNotebookId);
-        console.log('Notebook ID updated in store:', currentNotebookId);
-        
-        // 确保 codeStore 也标记为已初始化
-        const codeStore = useCodeStore.getState();
-        codeStore.setKernelReady(true);
-        console.log('Kernel marked as ready in codeStore');
-        
-        // 验证 store 状态
-        const updatedNotebookId = useStore.getState().notebookId;
-        console.log('Verified notebook ID in store:', updatedNotebookId);
-        
-      } catch (initError: any) {
+        useCodeStore.getState().setKernelReady(true);
+      } catch (initError) {
         console.error('Failed to create notebook:', initError);
         alert('Failed to create notebook. Please try again.');
         return;
@@ -170,31 +151,20 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     }
 
     setIsUploading(true);
-    
+
     try {
-      console.log('Initializing kernel...');
       await useCodeStore.getState().initializeKernel();
-      console.log('Kernel initialized successfully');
-      
-      console.log('Starting file upload...');
       const result = await notebookApiIntegration.uploadFiles(
-        currentNotebookId,
+        currentNotebookId!,
         [csv],
         uploadConfig,
       );
-      console.log('Upload result:', result);
-      
-      if (result && result.status === 'ok') {
-        console.log('Upload successful! Files uploaded:', (result as any).files);
-        
-        // 确保 notebookId 在上传成功后也是最新的
+      if (result && (result as any).status === 'ok') {
         if (currentNotebookId !== notebookId) {
-          console.log('Updating notebookId after successful upload');
-          useStore.getState().setNotebookId(currentNotebookId);
+          useStore.getState().setNotebookId(currentNotebookId!);
         }
-        
-        const newFiles = [{
-          id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        const newFiles: UploadFile[] = [{
+          id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
           name: csv.name,
           size: csv.size,
           type: csv.type,
@@ -202,72 +172,48 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           file: csv
         }];
         setFiles(newFiles);
-        console.log('Files added to state:', newFiles);
-        
-        // 记录初始化状态
-        console.log('=== Post-upload state check ===');
-        console.log('Current notebookId in component:', currentNotebookId);
-        console.log('NotebookId in store:', useStore.getState().notebookId);
-        console.log('CodeStore state:', useCodeStore.getState());
-        
-        // 设置当前文件到store
-        console.log('Setting current file to store...');
+
         await usePreStageStore.getState().setCurrentFile(csv);
         await usePreStageStore.getState().setCsvFilePath(csv.name);
-        console.log('File set to store successfully');
-        
-        // 启用VDS模式
-        console.log('Enabling VDS mode...');
+
         setIsVDSMode(true);
-        
-        // 设置 VDS 预设问题
-        console.log('Generating VDS preset questions...');
+
         setTimeout(async () => {
           try {
             const cols = usePreStageStore.getState().getFileColumns();
             const info = usePreStageStore.getState().getDatasetInfo();
-            console.log('File columns:', cols);
-            console.log('Dataset info:', info);
-            
             const map = await generalResponse('generate_question_choice_map', { column_info: cols, dataset_info: info }, i18n.language);
-            console.log('Generated question map:', map);
-            
             if (map?.message) {
               usePreStageStore.getState().updateChoiceMap(map.message);
-              // 设置VDS问题列表
-              setPresetQuestions(map.message);
-              // 填充第一个预设问题
+              setPresetQuestions(map.message as VDSQuestion[]);
               if (map.message.length && map.message[0].problem_description) {
                 setInput(map.message[0].problem_description);
               }
-              console.log('VDS questions set successfully');
             }
-          } catch (err: any) {
+          } catch (err) {
             console.error('Error generating preset questions:', err);
           }
         }, 1000);
       } else {
-        console.error('Upload failed with result:', result);
-        alert('Upload failed: ' + (result?.message || 'Unknown error'));
+        alert('Upload failed: ' + ((result as any)?.message || 'Unknown error'));
       }
     } catch (err: any) {
-      console.error('Upload error details:', err);
-      console.error('Error stack:', err.stack);
+      console.error('Upload error:', err);
       alert(t('emptyState.uploadError') || 'Upload failed: ' + err.message);
     } finally {
-      console.log('Upload process finished, setting uploading to false');
       setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }, [notebookId, i18n.language, t, setFiles]);
 
   // 删除文件
   const removeFile = useCallback((fileId: string) => {
-    setFiles(files => files.filter(file => file.id !== fileId));
-    // 如果没有文件了，关闭VDS模式（useEffect会自动恢复默认预设问题）
-    if (files.length <= 1) {
-      setIsVDSMode(false);
-    }
-  }, [files.length]);
+    setFiles(prev => {
+      const next = prev.filter(file => file.id !== fileId);
+      if (next.length === 0) setIsVDSMode(false);
+      return next;
+    });
+  }, [setFiles]);
 
   // 点击上传按钮
   const onFileUpload = useCallback(() => {
@@ -278,32 +224,23 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const handleVDSToggle = useCallback(async () => {
     const newVDSMode = !isVDSMode;
     setIsVDSMode(newVDSMode);
-    
+
     if (!newVDSMode) {
-      // 关闭VDS模式时显示默认预设问题
       setPresetQuestions(defaultPresetQuestions);
-    } else {
-      // 开启VDS模式时，如果有文件则使用已存储的VDS问题或重新生成
-      if (files.length > 0) {
-        const existingChoiceMap = usePreStageStore.getState().choiceMap;
-        if (existingChoiceMap && existingChoiceMap.length > 0) {
-          // 如果已经有VDS问题，直接使用
-          // setPresetQuestions(existingChoiceMap);
-        } else {
-          // 否则重新生成VDS相关问题
-          try {
-            const cols = usePreStageStore.getState().getFileColumns();
-            const info = usePreStageStore.getState().getDatasetInfo();
-            const map = await generalResponse('generate_question_choice_map', { column_info: cols, dataset_info: info }, i18n.language);
-            if (map?.message) {
-              usePreStageStore.getState().updateChoiceMap(map.message);
-              setPresetQuestions(map.message);
-            }
-          } catch (err: any) {
-            console.error('Error generating preset questions:', err);
-            // 如果生成失败，至少设置一个空数组避免显示错误的问题
-            setPresetQuestions([]);
+    } else if (files.length > 0) {
+      const existingChoiceMap = usePreStageStore.getState().choiceMap as VDSQuestion[] | undefined;
+      if (!existingChoiceMap || existingChoiceMap.length === 0) {
+        try {
+          const cols = usePreStageStore.getState().getFileColumns();
+          const info = usePreStageStore.getState().getDatasetInfo();
+          const map = await generalResponse('generate_question_choice_map', { column_info: cols, dataset_info: info }, i18n.language);
+          if (map?.message) {
+            usePreStageStore.getState().updateChoiceMap(map.message);
+            setPresetQuestions(map.message as VDSQuestion[]);
           }
+        } catch (err) {
+          console.error('Error generating preset questions:', err);
+          setPresetQuestions([]);
         }
       }
     }
@@ -325,45 +262,33 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     if (!command) return;
     setIsLoading(true);
     const timestamp = new Date().toLocaleTimeString();
-    
+
     try {
-      // 检查VDS模式 - 只有在VDS模式开启时才能跳转到problem define
-      const hasCsv = files.length && files[0].name.match(/\.(csv|xlsx|xls)$/i);
+      // 仅 VDS 模式时进入 problem define
+      const hasCsv = files.length > 0 && /\.(csv|xlsx|xls)$/i.test(files[0].name);
       if (hasCsv && isVDSMode && command.trim()) {
-        // 在跳转之前设置问题信息到store和规划上下文
-        usePreStageStore.getState().setSelectedProblem(
-          'vds',
-          command.trim(),
-          'VDS Analysis'
-        );
-        
-        // 添加变量到规划上下文
+        usePreStageStore.getState().setSelectedProblem('vds', command.trim(), 'VDS Analysis');
+
         const currentFile = files[0];
         const variables = {
-            csv_file_path: currentFile?.name || '',
-            problem_description: command.trim(),
-            context_description: 'No additional context provided',
-            problem_name: 'VDS Analysis',
-            user_goal: command.trim() // 使用问题描述作为用户目标
+          csv_file_path: currentFile?.name || '',
+          problem_description: command.trim(),
+          context_description: 'No additional context provided',
+          problem_name: 'VDS Analysis',
+          user_goal: command.trim()
         };
-        
-        // 批量添加变量并记录日志
+
         const aiPlanningStore = useAIPlanningContextStore.getState();
         Object.entries(variables).forEach(([key, value]) => {
-            aiPlanningStore.addVariable(key, value);
-            console.log(`[EmptyState] Added variable ${key}:`, value);
+          aiPlanningStore.addVariable(key, value);
         });
-        
-        // 验证变量存储
-        console.log('[EmptyState] All stored variables:', aiPlanningStore.variables);
-        
+
         setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
         return;
       }
 
-      // 保留原有命令/QA逻辑
+      // Command 模式
       if (command.startsWith('/')) {
-        // Command 模式
         setActiveView('script');
         const commandId = `action-${Date.now()}`;
         const actionData = {
@@ -372,14 +297,14 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           timestamp,
           content: command,
           result: '',
-          relatedQAIds: [],
+          relatedQAIds: [] as string[],
           cellId: currentCellId,
           viewMode,
           onProcess: false,
           attachedFiles: files,
         };
-        addAction(actionData);
-        sendOperation(notebookId, {
+        addAction(actionData as any);
+        sendOperation(useStore.getState().notebookId, {
           type: 'user_command',
           payload: {
             current_view_mode: viewMode,
@@ -387,7 +312,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             current_step_index: currentStepIndex,
             content: command,
             commandId,
-            files: files,
+            files,
           }
         });
       } else {
@@ -411,10 +336,8 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         const action = createUserAskQuestionAction(command, [qaId], currentCellId);
         useAIAgentStore.getState().addAction(action);
 
-        // 准备Agent记忆上下文
-        console.log('EmptyState: 准备记忆上下文', { notebookId, command });
         const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-          notebookId,
+          useStore.getState().notebookId || '',
           'general' as AgentType,
           {
             current_cell_id: currentCellId ?? '',
@@ -423,17 +346,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             current_qa_id: qaId,
             question_content: command
           }
-        );
-        console.log('EmptyState: 记忆上下文准备完成', memoryContext);
-
-        // 更新用户意图
-        AgentMemoryService.updateUserIntent(
-          notebookId || '',
-          'general' as AgentType,
-          [command],
-          [], // TODO: 可以添加推断逻辑
-          command,
-          []
         );
 
         const finalPayload = {
@@ -447,62 +359,57 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             related_qas: qaList,
             related_actions: actions,
             related_cells: getCurrentViewCells(),
-            files: files,
-            // 添加记忆上下文
+            files,
             ...memoryContext
           }
         };
-        console.log('EmptyState: 发送最终payload', finalPayload);
-        sendOperation(notebookId, finalPayload);
+        sendOperation(useStore.getState().notebookId, finalPayload);
       }
-      
-      // 清空文件列表
+
       setFiles([]);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Submit error:', err);
     } finally {
       setTimeout(() => setIsLoading(false), 500);
     }
-  }, [files, isVDSMode, setPreStage, setIsLoading, setActiveView, addAction, addQA, sendOperation, notebookId, currentCellId, viewMode, currentPhaseId, currentStepIndex, qaList, actions, getCurrentViewCells, setIsRightSidebarCollapsed, setFiles]);
+  }, [files, isVDSMode, setPreStage, setIsLoading, setActiveView, addAction, addQA, sendOperation, currentCellId, viewMode, currentPhaseId, currentStepIndex, qaList, actions, getCurrentViewCells, setIsRightSidebarCollapsed, setFiles]);
 
   return (
     <div className="relative mb-6">
       {/* 输入框容器 */}
       <div
         className={`
-          relative rounded-3xl transition-all duration-200
-          border-0 margin-0 p-0
-          ${isFocused ? 'shadow-lg' : 'shadow-sm'}
+          relative rounded-full transition-all duration-300 ease-in-out
+          border-0 margin-0 p-0 transform
+          ${isFocused ? 'shadow-lg shadow-theme-200/50' : 'shadow-sm'}
           ${input && input.startsWith('/') ? 'bg-slate-50' : 'bg-white'}
-          focus:outline-none border-2 transition-all duration-200
-          ${isFocused ? 'border-theme-400' : 'border-gray-200'}
+          focus:outline-none border-2 transition-all duration-300
+          ${isFocused ? 'border-theme-400 scale-[1.02]' : 'border-gray-200'}
           ${input && input.startsWith('/') ? 'font-mono' : 'font-normal'}
+          hover:shadow-md
         `}
       >
         {/* 左侧图标 */}
-        <div className="absolute left-0 top-7 -translate-y-1/2 px-3">
-          <Sparkles
-            className={`
-              w-5 h-5 transition-colors duration-200
-              ${input && input.startsWith('/') ? 'text-theme-600' : 'text-theme-600'}
-            `}
-          />
-        </div>
+        {/* <div className="absolute left-0 top-7 -translate-y-1/2 px-3">
+          <Sparkles className={`w-5 h-5 transition-all duration-300 transform ${
+            isFocused ? 'text-theme-600 animate-pulse scale-110' : 'text-theme-500'
+          }`} />
+        </div> */}
 
         <button
           type="button"
           onClick={onFileUpload}
           disabled={isUploading}
           className={`
-            absolute left-10 top-7 -translate-y-1/2
+            absolute left-3 top-7 -translate-y-1/2
             flex items-center justify-center px-2 py-1.5 rounded-full
-            transition-all duration-200
-            ${isUploading 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-              : 'bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer'}
-          `}
+            transition-all duration-300 ease-in-out transform
+            `}
+          aria-label="Upload file"
         >
-          <Upload className="w-4 h-4" />
+          <Plus className={`w-6 h-6 transition-all duration-300 ${
+            isUploading ? 'animate-spin' : ''
+          }`} />
           <input
             type="file"
             ref={fileInputRef}
@@ -528,17 +435,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
                 ? t('emptyState.commandPlaceholder')
                 : t('emptyState.questionPlaceholder')
           }
-          className={`
-            w-full h-full pl-20 pr-36 py-3 pt-4 rounded-3xl
-            text-base placeholder:text-gray-400
-            resize-none leading-6
-            focus:outline-none focus:ring-0
-          `}
+          className="w-full h-full pl-16 pr-36 py-3 pt-4 rounded-3xl text-base placeholder:text-gray-400 resize-none leading-6 focus:outline-none focus:ring-0"
           rows={1}
-          style={{
-            wordWrap: 'break-word',
-            whiteSpace: 'pre-wrap',
-          }}
+          style={{ wordWrap: 'break-word', whiteSpace: 'pre-wrap' }}
         />
 
         {/* 提交按钮 */}
@@ -554,10 +453,10 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           className={`
             absolute right-2 top-7 -translate-y-1/2
             flex items-center gap-1.5 px-4 py-1.5 rounded-full
-            transition-all duration-200 text-sm font-medium
+            transition-all duration-300 ease-in-out text-sm font-medium transform
             ${input.trim()
-              ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer'
-              : 'bg-gray-100 text-gray-400 cursor-not-allowed'}
+              ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'}
           `}
         >
           <SendHorizontal className="w-4 h-4" />
@@ -566,19 +465,25 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
         {/* VDS模式切换开关 - 只有上传文件后才显示 */}
         {files.length > 0 && (
-          <div className="absolute right-2 bottom-2 flex items-center gap-2">
-            <span className="text-xs text-gray-500">VDS Agents</span>
+          <div className="absolute right-2 bottom-2 flex items-center gap-2 animate-fade-in">
+            <span className={`text-xs transition-all duration-300 ${
+              isVDSMode ? 'text-theme-600 font-medium' : 'text-gray-500'
+            }`}>VDS Agents</span>
             <button
               onClick={handleVDSToggle}
               className={`
-                relative inline-flex h-4 w-7 items-center rounded-full transition-colors
-                ${isVDSMode ? 'bg-theme-600' : 'bg-gray-300'}
+                relative inline-flex h-4 w-7 items-center rounded-full 
+                transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95
+                ${isVDSMode ? 'bg-theme-600 shadow-sm' : 'bg-gray-300 hover:bg-gray-400'}
               `}
+              aria-pressed={isVDSMode}
+              aria-label="Toggle VDS mode"
             >
               <span
                 className={`
-                  inline-block h-3 w-3 transform rounded-full bg-white transition-transform
-                  ${isVDSMode ? 'translate-x-3.5' : 'translate-x-0.5'}
+                  inline-block h-3 w-3 transform rounded-full bg-white 
+                  transition-all duration-300 ease-out shadow-sm
+                  ${isVDSMode ? 'translate-x-3.5 scale-110' : 'translate-x-0.5'}
                 `}
               />
             </button>
@@ -594,17 +499,21 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
         {/* 已上传文件列表 */}
         {files.length > 0 && (
-          <div className="pl-2 mb-2 flex flex-wrap gap-2">
-            {files.map((file: UploadFile) => (
+          <div className="pl-2 mb-2 flex flex-wrap gap-2 animate-fade-in">
+            {files.map((file: UploadFile, index) => (
               <div 
                 key={file.id} 
-                className="flex items-center gap-1.5 bg-gray-100 rounded-3xl px-3 py-1.5 text-sm"
+                className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 rounded-3xl px-3 py-1.5 text-sm
+                           transition-all duration-300 ease-in-out transform hover:scale-105 animate-slide-in"
+                style={{ animationDelay: `${index * 100}ms` }}
               >
-                <FileText className="w-4 h-4 text-gray-500" />
+                <FileText className="w-4 h-4 text-gray-500 transition-colors duration-200" />
                 <span className="truncate max-w-xs">{file.name}</span>
                 <button
                   onClick={() => removeFile(file.id)}
-                  className="ml-1 text-gray-400 hover:text-gray-600"
+                  className="ml-1 text-gray-400 hover:text-red-500 transition-all duration-300 
+                           transform hover:scale-110 hover:rotate-90 active:scale-95"
+                  aria-label="Remove file"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -616,12 +525,8 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
       {/* 模式提示 */}
       {input && (
-        <div className="mt-2 ml-10">
-          <div
-            className={`
-              ${isVDSMode ? 'text-theme-600' : input && input.startsWith('/') ? 'text-theme-600' : 'text-theme-600'}
-            `}
-          >
+        <div className="mt-2 ml-10 animate-fade-in">
+          <div className="text-theme-600 font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
             {isVDSMode 
               ? `🤖 VDS Agents Mode`
               : input && input.startsWith('/') 
@@ -632,8 +537,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         </div>
       )}
 
-      {/* 预设问题展示 */}
-      {/* {presetQuestions.length > 0 && (
+      {presetQuestions.length > 0 && (
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
           {presetQuestions.map((q, idx) => (
             <button
@@ -649,235 +553,381 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             </button>
           ))}
         </div>
-      )} */}
+      )}
     </div>
   );
 };
 
-// TypingTitle 组件 - 恢复原来的样式
-const TypingTitle = () => {
-    const { t } = useTranslation();
-    const [text, setText] = useState('');
-    const [isTypingDone, setIsTypingDone] = useState(false);
-    const [showCursor, setShowCursor] = useState(true);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const typingSpeed = 35;
-    const deletingSpeed = 20;
+// TypingTitle 组件
+const TypingTitle: React.FC = () => {
+  const { t } = useTranslation();
+  const [text, setText] = useState('');
+  const [isTypingDone, setIsTypingDone] = useState(false);
+  const [showCursor, setShowCursor] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const typingSpeed = 35;
+  const deletingSpeed = 20;
 
-    const startTyping = useCallback((fullText: string) => {
-        setIsDeleting(false);
-        let index = 0;
-        const interval = setInterval(() => {
-            setText(fullText.slice(0, index + 1));
-            index++;
-            if (index === fullText.length) {
-                clearInterval(interval);
-                setIsTypingDone(true);
-                // Hide cursor after 2 seconds of completion
-                setTimeout(() => {
-                    setShowCursor(false);
-                }, 2000);
-            }
-        }, typingSpeed);
+  const startTyping = useCallback((fullText: string) => {
+    setIsDeleting(false);
+    let index = 0;
+    const interval = window.setInterval(() => {
+      setText(fullText.slice(0, index + 1));
+      index++;
+      if (index === fullText.length) {
+        window.clearInterval(interval);
+        setIsTypingDone(true);
+        setTimeout(() => setShowCursor(false), 2000);
+      }
+    }, typingSpeed);
+    return () => window.clearInterval(interval);
+  }, []);
 
-        return () => clearInterval(interval);
-    }, []);
+  const deleteText = useCallback((onComplete: () => void) => {
+    setIsDeleting(true);
+    setIsTypingDone(false);
+    setShowCursor(true);
+    let index = text.length;
+    const interval = window.setInterval(() => {
+      setText(prev => prev.slice(0, index - 1));
+      index--;
+      if (index === 0) {
+        window.clearInterval(interval);
+        onComplete();
+      }
+    }, deletingSpeed);
+    return () => window.clearInterval(interval);
+  }, [text.length]);
 
-    const deleteText = useCallback((onComplete: () => void) => {
-        setIsDeleting(true);
-        setIsTypingDone(false);
-        setShowCursor(true);
+  const changeText = useCallback((newText: string) => {
+    deleteText(() => {
+      startTyping(newText);
+    });
+  }, [deleteText, startTyping]);
 
-        let index = text.length;
-        const interval = setInterval(() => {
-            setText(prev => prev.slice(0, index - 1));
-            index--;
-            if (index === 0) {
-                clearInterval(interval);
-                onComplete();
-            }
-        }, deletingSpeed);
+  useEffect(() => {
+    const cleanup = startTyping(t('emptyState.title'));
+    return () => cleanup();
+  }, [startTyping, t]);
 
-        return () => clearInterval(interval);
-    }, [text.length]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.changeTypingText = changeText;
+      return () => { delete window.changeTypingText; };
+    }
+    return;
+  }, [changeText]);
 
-    // Function to change text with deletion animation
-    const changeText = useCallback((newText: string) => {
-        deleteText(() => {
-            startTyping(newText);
-        });
-    }, [deleteText, startTyping]);
-
-    useEffect(() => {
-        const cleanup = startTyping(t('emptyState.title'));
-        return () => cleanup();
-    }, [startTyping, t]);
-
-    // Expose changeText method to parent
-    useEffect(() => {
-        if (window) {
-            window.changeTypingText = changeText;
+  return (
+    <div className="relative">
+      <style>{`
+        @keyframes typing-cursor {
+          0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.9; }
+          50% { transform: scaleY(0.7) scaleX(1.2); opacity: 0.7; }
         }
-        return () => {
-            if (window) {
-                delete window.changeTypingText;
-            }
-        };
-    }, [changeText]);
-
-    return (
-        <div className="relative">
-            <style>
-                {`
-                @keyframes typing-cursor {
-                    0%, 100% { 
-                        transform: scaleY(1) scaleX(1);
-                        opacity: 0.9;
-                    }
-                    50% { 
-                        transform: scaleY(0.7) scaleX(1.2);
-                        opacity: 0.7;
-                    }
-                }
-                @keyframes done-cursor {
-                    0%, 49% { 
-                        opacity: 1;
-                    }
-                    50%, 100% { 
-                        opacity: 0;
-                    }
-                }
-                @keyframes deleting-cursor {
-                    0%, 100% { 
-                        transform: scaleY(1) scaleX(1);
-                        opacity: 1;
-                    }
-                    50% { 
-                        transform: scaleY(0.7) scaleX(1.2);
-                        opacity: 0.7;
-                    }
-                }
-                .cursor-typing {
-                    background: #f3f4f6;
-                    animation: typing-cursor ${typingSpeed * 2}ms ease-in-out infinite;
-                }
-                .cursor-done {
-                    background: #f3f4f6;
-                    animation: done-cursor 1.2s steps(1) infinite;
-                }
-                .cursor-deleting {
-                    background: #f3f4f6;
-                    animation: deleting-cursor ${deletingSpeed * 2}ms ease-in-out infinite;
-                }
-                .title-container {
-                    display: inline;
-                    position: relative;
-                }
-                .cursor {
-                    display: inline-block;
-                    position: relative;
-                    vertical-align: text-top;
-                    margin-left: 3px;
-                    margin-top: 5px;
-                }
-                `}
-            </style>
-            <div className="title-container">
-                <span className="text-4xl font-bold mb-4 leading-tight theme-grad-text">
-                    {text}
-                    {showCursor && (
-                        <div
-                            className={`cursor w-1 h-8 rounded-sm inline-block ${isDeleting
-                                ? 'cursor-deleting'
-                                : isTypingDone
-                                    ? 'cursor-done'
-                                    : 'cursor-typing'
-                                }`}
-                        />
-                    )}
-                </span>
-            </div>
-        </div>
-    );
-};
-
-const Divider = () => {
-    const { t } = useTranslation();
-    return (
-        <div className="relative mb-4 max-w-lg mx-auto">
-            <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-            </div>
-            <div className="relative flex justify-center">
-                <span className="px-8 text-base text-gray-400 bg-white">
-                    {t('emptyState.orStartScratch')}
-                </span>
-            </div>
-        </div>
-    );
-};
-
-interface ActionButtonProps {
-  onClick: () => void;
-  children: React.ReactNode;
-  disabled?: boolean;
-}
-
-const ActionButton: React.FC<ActionButtonProps> = ({ onClick, children, disabled = false }) => (
-    <button
-        onClick={onClick}
-        disabled={disabled}
-        className={`flex items-center gap-3 px-6 py-3 ${disabled ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-theme-700'} rounded-full transition-all duration-200 text-lg`}
-    >
-        <PlusCircle size={24} />
-        {children}
-    </button>
-);
-
-/**
- * 页头：标题和副标题
- */
-const Header = () => (
-    <div className="text-center mb-8 flex flex-col items-center justify-center">
-        <TypingTitle />
+        @keyframes done-cursor {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        @keyframes deleting-cursor {
+          0%, 100% { transform: scaleY(1) scaleX(1); opacity: 1; }
+          50% { transform: scaleY(0.7) scaleX(1.2); opacity: 0.7; }
+        }
+        .cursor-typing { background: #f3f4f6; animation: typing-cursor ${typingSpeed * 2}ms ease-in-out infinite; }
+        .cursor-done { background: #f3f4f6; animation: done-cursor 1.2s steps(1) infinite; }
+        .cursor-deleting { background: #f3f4f6; animation: deleting-cursor ${deletingSpeed * 2}ms ease-in-out infinite; }
+        .title-container { display: inline; position: relative; }
+        .cursor { display: inline-block; position: relative; vertical-align: text-top; margin-left: 3px; margin-top: 5px; }
+      `}</style>
+      <div className="title-container">
+        <span className="text-4xl font-bold mb-4 leading-tight theme-grad-text">
+          {text}
+          {showCursor && (
+            <div
+              className={`cursor w-1 h-8 rounded-sm inline-block ${
+                isDeleting ? 'cursor-deleting' : (isTypingDone ? 'cursor-done' : 'cursor-typing')
+              }`}
+            />
+          )}
+        </span>
+      </div>
     </div>
+  );
+};
+
+const Header: React.FC = () => (
+  <div className="text-center mb-8 flex flex-col items-center justify-center">
+    <TypingTitle />
+  </div>
 );
 
 /**
  * EmptyState 主组件
  */
+type AddCellFn = ((type: 'markdown' | 'code') => void) | (() => void);
+
 interface EmptyStateProps {
-  onAddCell: (type: 'markdown' | 'code') => void;
+  onAddCell: AddCellFn;
   onFileUpload?: () => void;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
-    const { t } = useTranslation();
-    const [files, setFiles] = useState<UploadFile[]>([]);
+function isTypedAddCell(fn: AddCellFn): fn is (type: 'markdown' | 'code') => void {
+  // 依据函数参数长度判断是否需要传参
+  return fn.length >= 1;
+}
 
-    return (
-        <div
-            className="relative flex flex-col items-center justify-center"
-            style={{ height: "calc(100vh - 96px)" }}
+const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
+  const [files, setFiles] = useState<UploadFile[]>([]);
+  const [swipeDistance, setSwipeDistance] = useState(0);
+  const [isCreatingNotebook, setIsCreatingNotebook] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 上滑手势相关
+  const touchStartY = useRef<number | null>(null);
+  const isSwipeInProgress = useRef(false);
+
+  // 鼠标长按相关
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressActiveRef = useRef(false);
+  const lastTriggerAtRef = useRef<number>(0);
+
+  // 滚轮累计（下滑触发）
+  const wheelDownAccumRef = useRef<number>(0);
+
+  const safeTrigger = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastTriggerAtRef.current < 1000) return; // 触发节流
+    lastTriggerAtRef.current = now;
+    await createNewNotebook();
+  }, []);
+
+  // 创建新的 notebook
+  const createNewNotebook = useCallback(async () => {
+    if (isCreatingNotebook) return;
+    setIsCreatingNotebook(true);
+    try {
+      const newNotebookId = await notebookApiIntegration.initializeNotebook();
+      useStore.getState().setNotebookId(newNotebookId);
+      useCodeStore.getState().setKernelReady(true);
+
+      // 默认插入一个 markdown 单元
+      if (isTypedAddCell(onAddCell)) {
+        onAddCell('markdown');
+      } 
+    } catch (error) {
+      console.error('Failed to create new notebook:', error);
+      alert('Failed to create new notebook. Please try again.');
+    } finally {
+      setIsCreatingNotebook(false);
+      // 重置滚轮累计，避免下一次轻微滚动立即触发
+      wheelDownAccumRef.current = 0;
+    }
+  }, [isCreatingNotebook, onAddCell]);
+
+  // 触摸开始
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (isCreatingNotebook || isSwipeInProgress.current) return;
+    const touch = e.touches[0];
+    touchStartY.current = touch.clientY;
+    setSwipeDistance(0);
+  }, [isCreatingNotebook]);
+
+  // 触摸移动（上滑）
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (isCreatingNotebook || !touchStartY.current || isSwipeInProgress.current) return;
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - touchStartY.current;
+    if (deltaY < 0) {
+      const distance = Math.min(Math.abs(deltaY), 120);
+      setSwipeDistance(distance);
+    }
+  }, [isCreatingNotebook]);
+
+  // 触摸结束
+  const handleTouchEnd = useCallback(() => {
+    if (isCreatingNotebook || isSwipeInProgress.current) return;
+    const threshold = 80;
+    if (swipeDistance > threshold) {
+      isSwipeInProgress.current = true;
+      void safeTrigger();
+    }
+    touchStartY.current = null;
+    setSwipeDistance(0);
+    window.setTimeout(() => { isSwipeInProgress.current = false; }, 300);
+  }, [swipeDistance, safeTrigger, isCreatingNotebook]);
+
+  // 鼠标长按 + 上滑
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isCreatingNotebook || isSwipeInProgress.current) return;
+    if (e.button !== 0) return; // 仅左键
+
+    touchStartY.current = e.clientY;
+    setSwipeDistance(0);
+    longPressActiveRef.current = false;
+
+    // 300ms 认定为“长按”
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressActiveRef.current = true;
+    }, 300);
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!touchStartY.current || isSwipeInProgress.current) return;
+      // 未达到长按不计算上滑
+      if (!longPressActiveRef.current) return;
+
+      const deltaY = event.clientY - touchStartY.current;
+      if (deltaY < 0) {
+        const distance = Math.min(Math.abs(deltaY), 120);
+        setSwipeDistance(distance);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      const threshold = 80;
+      if (longPressActiveRef.current && swipeDistance > threshold && !isSwipeInProgress.current) {
+        isSwipeInProgress.current = true;
+        void safeTrigger();
+      }
+
+      touchStartY.current = null;
+      setSwipeDistance(0);
+      longPressActiveRef.current = false;
+
+      window.setTimeout(() => { isSwipeInProgress.current = false; }, 300);
+
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [swipeDistance, safeTrigger, isCreatingNotebook]);
+
+  // 滚轮下滑触发
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (isCreatingNotebook) return;
+    // 下滑 deltaY > 0，累计距离
+    if (e.deltaY > 0) {
+      wheelDownAccumRef.current += e.deltaY;
+      // 设定一个合理阈值（屏幕上滚动约半屏）
+      const WHEEL_THRESHOLD = 220;
+      if (wheelDownAccumRef.current >= WHEEL_THRESHOLD) {
+        wheelDownAccumRef.current = 0;
+        void safeTrigger();
+      }
+    } else {
+      // 上滑时稍微衰减，避免误触
+      wheelDownAccumRef.current = Math.max(0, wheelDownAccumRef.current + e.deltaY); // e.deltaY < 0
+    }
+  }, [safeTrigger, isCreatingNotebook]);
+
+  // 底部浮动提示点击触发
+  const handleBottomHintClick = useCallback(() => {
+    if (!isCreatingNotebook) {
+      void safeTrigger();
+    }
+  }, [safeTrigger, isCreatingNotebook]);
+
+  // 添加自定义样式
+  const customStyles = `
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes swipe-up {
+      from { transform: translateY(10px); opacity: 0.8; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-fade-in {
+      animation: fade-in 0.4s ease-out;
+    }
+    .animate-slide-in {
+      animation: slide-in 0.5s ease-out;
+    }
+    .animate-swipe-up {
+      animation: swipe-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+  `;
+
+  return (
+    <>
+      <style>{customStyles}</style>
+      <div
+        ref={containerRef}
+        className="relative flex flex-col items-center justify-start overflow-hidden"
+        style={{ 
+          height: 'calc(100vh - 96px)',
+          paddingTop: 'calc((100vh - 96px) * 0.35)',
+          transform: `translateY(${-swipeDistance * 0.4}px)`,
+          transition: swipeDistance === 0 ? 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+        }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onWheel={handleWheel}
+    >
+      {/* 上滑提示和创建动画（可点击触发） */}
+      {(swipeDistance > 0 || isCreatingNotebook) && (
+        <button
+          type="button"
+          onClick={handleBottomHintClick}
+          className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-center transition-all duration-400 ease-out cursor-pointer select-none hover:scale-105 active:scale-95"
+          style={{
+            height: `${Math.max(swipeDistance, isCreatingNotebook ? 120 : 0)}px`,
+            opacity: swipeDistance > 20 || isCreatingNotebook ? 1 : swipeDistance / 20
+          }}
+          aria-live="polite"
+          aria-label="Create a new Notebook"
         >
-            <div className="w-full max-w-4xl mx-auto px-4 py-16 text-center">
-                <Header />
-                
-                <AICommandInput files={files} setFiles={setFiles} />
-                
-                <Divider />
-                
-                <div className="flex justify-center gap-6">
-                    <ActionButton onClick={() => onAddCell('markdown')}>
-                        {t('emptyState.addText') || 'Add Text'}
-                    </ActionButton>
-                    <ActionButton onClick={() => onAddCell('code')}>
-                        {t('emptyState.addCode') || 'Add Code'}
-                    </ActionButton>
-                </div>
+          {!isCreatingNotebook ? (
+            <>
+              <div
+                className="w-8 h-8 border-2 border-theme-600 rounded-full flex items-center justify-center transition-all duration-300 ease-out mb-2 animate-swipe-up"
+                style={{
+                  transform: `scale(${Math.min(swipeDistance / 70, 1.3)}) rotate(${swipeDistance * 2}deg)`,
+                  backgroundColor: swipeDistance > 60 ? '#3b82f6' : 'transparent',
+                  boxShadow: swipeDistance > 40 ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
+                }}
+              >
+                <PlusCircle
+                  className={`w-4 h-4 transition-colors duration-200 ${
+                    swipeDistance > 60 ? 'text-white' : 'text-theme-600'
+                  }`}
+                />
+              </div>
+              <div className="text-theme-600 text-sm font-medium animate-fade-in transition-all duration-300">
+                {swipeDistance > 60 ? '✨ 松开或点击创建新的 Notebook' : '👆 上滑 / 点击创建新的 Notebook（滚轮下滑也可触发）'}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 border-2 border-theme-600 rounded-full animate-spin border-t-transparent mb-2" />
+              <div className="text-theme-600 text-sm">正在创建新的 Notebook...</div>
             </div>
-        </div>
-    );
+          )}
+        </button>
+      )}
+
+      <div className="w-full max-w-4xl mx-auto px-4 py-6 text-center transform transition-all duration-500 ease-out animate-swipe-up"
+           style={{ 
+             transform: `translateY(${-Math.min(swipeDistance * 0.2, 20)}px)`,
+             marginTop: '0'
+           }}>
+        <Header />
+        <AICommandInput files={files} setFiles={setFiles} />
+      </div>
+      </div>
+    </>
+  );
 };
 
 export default EmptyState;

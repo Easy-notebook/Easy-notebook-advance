@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Upload, BarChartHorizontalBig, TerminalSquare, Settings2 } from 'lucide-react';
+import { Play, Upload, BarChartHorizontalBig, TerminalSquare } from 'lucide-react';
 import ModeToggle from './ModeToggle';
 import ExportToFile from '../FunctionBar/ExportToFile';
 
@@ -25,7 +25,6 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({
   viewMode,
-  isCollapsed,
   cells,
   isExecuting,
   onModeChange,
@@ -38,7 +37,6 @@ const Header: React.FC<HeaderProps> = ({
   onHandleImport,
   onShowCommandInput,
   onToggleRightSidebar,
-  onOpenSettings,
   fileInputRef
 }) => {
   const { t } = useTranslation();
@@ -46,14 +44,6 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <header className="h-14 flex items-center justify-between px-4 bg-white">
       <div className="flex items-center gap-3">
-        {isCollapsed && (
-          <button
-            onClick={onOpenSettings}
-            className="p-2 rounded-md hover:bg-slate-100/80 transition-all duration-200 text-slate-600 hover:text-slate-700"
-          >
-            <Settings2 size={18} />
-          </button>
-        )}
         <ModeToggle viewMode={viewMode} onModeChange={onModeChange} />
       </div>
 

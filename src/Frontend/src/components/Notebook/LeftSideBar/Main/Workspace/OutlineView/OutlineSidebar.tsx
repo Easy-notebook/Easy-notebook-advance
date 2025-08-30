@@ -1,11 +1,9 @@
 import { useState, useCallback, memo, useMemo, useEffect } from 'react';
-import { Settings2 } from 'lucide-react';
 import useStore from '@Store/notebookStore';
 import useSettingsStore from '@Store/settingsStore';
 import FileTree from '@LeftSidebar/Main/Workspace/FileExplorer/FileExplorer';
 import AgentList from '@/components/Agents/AgentList';
 import { AgentType } from '@Services/agentMemoryService';
-import { SHARED_STYLES } from '@LeftSidebar/shared/constants';
 
 // 导入拆分后的组件
 import { PhaseSection } from './PhaseSection';
@@ -47,7 +45,7 @@ const OutlineSidebar = ({
   viewMode,
   onAgentSelect,
 }: OutlineSidebarProps) => {
-  
+
   const isCollapsed = useStore((state) => state.isCollapsed);
   const setIsCollapsed = useStore((state) => state.setIsCollapsed);
   const settingstore = useSettingsStore();
@@ -160,6 +158,7 @@ const OutlineSidebar = ({
           if (itemId === 'library') setActiveTab('file');
           else if (itemId === 'knowledge-forest') setActiveTab('agents');
           else if (itemId === 'tools') setActiveTab('outline');
+          else if (itemId === 'settings') settingstore.openSettings();
         }}
         activeItemId={activeTab === 'file' ? 'library' : activeTab === 'agents' ? 'knowledge-forest' : activeTab === 'outline' ? 'tools' : 'library'}
         onExpandClick={toggleCollapse}
@@ -171,7 +170,7 @@ const OutlineSidebar = ({
   return (
     <div className="flex h-full">
       {/* MiniSidebar - 固定宽度 */}
-      <div className="w-16 shrink-0">
+      <div className="w-17 shrink-0">
         <MiniSidebar
           phases={allPhases}
           currentPhaseId={currentPhaseId}
@@ -186,7 +185,7 @@ const OutlineSidebar = ({
           isMainSidebarExpanded={true}
         />
       </div>
-      
+
       {/* 主侧边栏 - 填充剩余空间 */}
       <div className="flex-1">
         <SidebarContainer
@@ -195,60 +194,53 @@ const OutlineSidebar = ({
         >
           {/* 简化的头部区域：只显示 Tab 切换 + 设置按钮 */}
           <SidebarHeader>
-            <div className="flex items-center">
+            <div className="flex items-center bg-white align-center w-full justify-center flex-col">
               {/* Tab 切换器 */}
               <TabSwitcher
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
               />
             </div>
-
-            <button
-              className={`p-2 rounded-lg ${SHARED_STYLES.button.base} ${SHARED_STYLES.button.hover}`}
-              onClick={settingstore.openSettings}
-            >
-              <Settings2 size={16} className="text-gray-700" />
-            </button>
           </SidebarHeader>
 
-      {/* 中间内容：根据 activeTab 切换显示 */}
-      <SidebarContent>
-        {activeTab === 'file' ? (
-          // 文件视图：使用 FileTree 组件
-          <div className="flex-1 h-full w-full relative">
-            <FileTree notebookId={notebookId || ''} projectName={projectName} />
-          </div>
-        ) : activeTab === 'agents' ? (
-          // Agent视图：显示AI代理列表
-          <div className="flex-1 h-full w-full relative">
-            <AgentList
-              isCollapsed={false}
-              onAgentSelect={handleAgentSelect}
-              selectedAgentType={selectedAgentType}
-            />
-          </div>
-        ) : (
-          // 大纲视图：显示任务和阶段
-          <div className="py-0.5">
-            {tasks.map((task) => (
-              <div key={task.id} className="mb-5">
-                {task.phases.map((phase, index) => (
-                  <PhaseSection
-                    key={phase.id}
-                    isTitle={index === 0}
-                    phase={phase}
-                    isExpanded={expandedSections[phase.id]}
-                    onToggle={() => toggleSection(phase.id)}
-                    onStepSelect={onPhaseSelect}
-                    isActive={currentPhaseId === phase.id}
-                    currentStepId={currentStepId}
-                  />
+          {/* 中间内容：根据 activeTab 切换显示 */}
+          <SidebarContent>
+            {activeTab === 'file' ? (
+              // 文件视图：使用 FileTree 组件
+              <div className="flex-1 h-full w-full relative">
+                <FileTree notebookId={notebookId || ''} projectName={projectName} />
+              </div>
+            ) : activeTab === 'agents' ? (
+              // Agent视图：显示AI代理列表
+              <div className="flex-1 h-full w-full relative">
+                <AgentList
+                  isCollapsed={false}
+                  onAgentSelect={handleAgentSelect}
+                  selectedAgentType={selectedAgentType}
+                />
+              </div>
+            ) : (
+              // 大纲视图：显示任务和阶段
+              <div className="py-0.5">
+                {tasks.map((task) => (
+                  <div key={task.id} className="mb-5">
+                    {task.phases.map((phase, index) => (
+                      <PhaseSection
+                        key={phase.id}
+                        isTitle={index === 0}
+                        phase={phase}
+                        isExpanded={expandedSections[phase.id]}
+                        onToggle={() => toggleSection(phase.id)}
+                        onStepSelect={onPhaseSelect}
+                        isActive={currentPhaseId === phase.id}
+                        currentStepId={currentStepId}
+                      />
+                    ))}
+                  </div>
                 ))}
               </div>
-            ))}
-          </div>
-        )}
-      </SidebarContent>
+            )}
+          </SidebarContent>
 
           {/* 底部区域 */}
           {renderBottomSection()}

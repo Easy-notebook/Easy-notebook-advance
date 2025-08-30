@@ -46,9 +46,9 @@ interface MiniSidebarProps {
 
 /** 功能区（顶部/中部） */
 const PRIMARY_ITEMS: MiniSidebarItem[] = [
-  { id: 'library', icon: Library, title: 'Library' },
-  { id: 'knowledge-forest', icon: TreePine, title: 'Knowledge Forest' },
-  { id: 'tools', icon: Network, title: 'Tools' },
+  // { id: 'library', icon: Library, title: 'Library' },
+  // { id: 'knowledge-forest', icon: TreePine, title: 'Knowledge Forest' },
+  // { id: 'tools', icon: Network, title: 'Tools' },
 ];
 
 /** 固定底部的功能区（只放设置，避免与中部重复且横排） */
@@ -81,7 +81,7 @@ const MiniSidebar = memo(function MiniSidebar({
   onPhaseClick,
   onItemClick,
   onExpandClick,
-  activeItemId = 'library',
+  activeItemId = 'workspace',
   isMainSidebarExpanded = false,
 }: MiniSidebarProps) {
   const hasPhases = useMemo(() => Array.isArray(phases) && phases.length > 0, [phases]);
@@ -98,26 +98,22 @@ const MiniSidebar = memo(function MiniSidebar({
         'flex flex-col',
       ].join(' ')}
     >
-      {/* 顶部：展开按钮（Logo 单独，不受底部对齐约束） */}
-      <div className="h-16 flex items-center justify-center shrink-0">
+      <div className="h-12 flex items-center justify-center shrink-0 mt-2">
         <button
           onClick={handleExpandClick}
           className="rounded-lg transition-colors"
           title="Expand Sidebar"
         >
-          <img src="/icon.svg" className="w-7 h-7" alt="App Icon" />
+          <img src="/icon.svg" className="w-8 h-8"/>
         </button>
       </div>
 
-      {/* 中部：可滚动区域（阶段/主功能） */}
       <div className="flex-1 overflow-y-auto overflow-x-visible">
         {/* 阶段模式 */}
         {hasPhases && (
           <>
             {isMainSidebarExpanded ? (
-              /* 主侧边栏展开时：显示单个 folder 图标代表 workspace，使用与阶段区域相同的挖孔背景 */
-              <div className="relative -mr-2 my-2">
-                {/* 挖孔背景 - 与阶段区域完全相同 */}
+              <div className="relative -mr-2 my-0">
                 <div 
                   className="absolute inset-0 bg-white rounded-l-3xl"
                   style={{
@@ -146,7 +142,7 @@ const MiniSidebar = memo(function MiniSidebar({
               /* 主侧边栏折叠时：显示所有阶段图标 */
               <>
                 {/* 整体阶段挖孔区域 */}
-                <div className="relative -mr-2 my-2">
+                <div className="relative -mr-2 my-0">
                   {/* 整体挖孔背景 - 白色背景 + 圆滑边缘 */}
                   <div 
                     className="absolute inset-0 bg-white rounded-l-3xl"
@@ -187,8 +183,6 @@ const MiniSidebar = memo(function MiniSidebar({
             <ul className="space-y-1">
               {PRIMARY_ITEMS.map((item) => {
                 const Icon = item.icon;
-                // 收缩时：功能区图标不显示 active，因为用户在使用 workspace（阶段导航）
-                // 展开时：功能区图标也不显示 active，因为用户在使用 workspace
                 const isActive = false;
 
                 return (
