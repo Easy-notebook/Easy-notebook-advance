@@ -3,15 +3,15 @@ import { CheckCircle, AlertCircle, X } from 'lucide-react';
 
 // Primary state stores for the component
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
-import { useWorkflowStateMachine, EVENTS } from '../../senario/DSLCanalysis/store/workflowStateMachine';
-import { usePipelineStore } from '../../senario/DSLCanalysis/store/usePipelineStore';
+import { useWorkflowStateMachine, EVENTS } from '../../senario/WorkflowMode/store/workflowStateMachine';
+import { usePipelineStore } from '../../senario/WorkflowMode/store/usePipelineStore';
 import { extractSectionTitle} from '../utils/String';
 import WorkflowErrorBoundary from './WorkflowErrorBoundary';
 
 // ----------------------
 // Type Definitions
 // ----------------------
-import { WorkflowStage, WorkflowTemplate } from '../../senario/DSLCanalysis/store/workflowStateMachine';
+import { WorkflowStage, WorkflowTemplate } from '../../senario/WorkflowMode/store/workflowStateMachine';
 
 type Stage = WorkflowStage;
 interface PendingWorkflowUpdate { workflowTemplate?: WorkflowTemplate };

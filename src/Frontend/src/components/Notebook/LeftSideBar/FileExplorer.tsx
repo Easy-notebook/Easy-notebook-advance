@@ -73,6 +73,7 @@ initializeFileTypeIcons();
 const PREVIEWABLE_IMAGE_TYPES = FILE_PREVIEW_CONFIG.image;
 const PREVIEWABLE_TEXT_TYPES = FILE_PREVIEW_CONFIG.text;
 const PREVIEWABLE_PDF_TYPES = FILE_PREVIEW_CONFIG.pdf;
+const PREVIEWABLE_DOC_TYPES = FILE_PREVIEW_CONFIG.doc;
 
 /** Get file icon based on extension */
 const getFileIcon = (filename: string | undefined) => {
@@ -129,7 +130,7 @@ const ContextMenu = ({ x, y, file, onClose, onPreview, onDownload, onDelete }: C
     }, [onClose]);
 
     const ext = file?.name ? `.${file.name.split('.').pop()?.toLowerCase()}` : '';
-    const isPreviewable = file?.type === 'file' && [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES].includes(ext);
+    const isPreviewable = file?.type === 'file' && [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES, ...PREVIEWABLE_DOC_TYPES].includes(ext);
 
     return (
         <div
@@ -349,9 +350,9 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     // Upload configuration wrapped in useMemo to prevent recreation on every render
     const uploadConfig = useMemo(() => ({
         mode: 'restricted' as const,
-        maxFileSize: 10 * 1024 * 1024,
+        maxFileSize: 50 * 1024 * 1024, // 50MB to support larger DOC/DOCX files
         maxFiles: 10,
-        allowedTypes: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv', '.pdf'],
+        allowedTypes: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv', '.pdf', '.doc', '.docx', '.xlsx', '.xls'],
         targetDir: '.assets'
     }), []);
 
@@ -490,7 +491,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
                 
                 if (!pathStr) return;
                 
-                const parts = pathStr.split('/').filter((part: string) => part.trim() !== ''); // Filter empty parts
+                const parts = pathStr.split('/').filter(part => part.trim() !== ''); // Filter empty parts
                 let currentPath = '';
                 let currentTree = tree as FileNode[];
 
@@ -591,7 +592,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         
         // Extended previewable types including JSX/TSX
         const jsxTypes = ['.jsx', '.tsx'];
-        const allPreviewableTypes = [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES, ...jsxTypes];
+        const allPreviewableTypes = [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES, ...PREVIEWABLE_DOC_TYPES, ...jsxTypes];
         const isPreviewable = allPreviewableTypes.includes(`.${fileExt}`);
 
         console.log('File extension:', fileExt, 'Is previewable:', isPreviewable);
@@ -882,8 +883,8 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
                     }
                 }}
             >
-                <div className={`mr-3`}>
-                    <img src={"/icon.svg"} className="w-8 h-8" />
+                <div className={`mr-2 ml-3`}>
+                    <img src={"/icon.svg"} className="w-7 h-7" />
                 </div>
                 {/* File or folder name */}
                 <span
@@ -906,15 +907,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
                     onDelete={handleDeleteFileAction}
                 />
             )}
-
-            {/* Preview Modal */}
-            {/* <PreviewModal
-                isOpen={previewState.isOpen}
-                onClose={() => setPreviewState(prev => ({ ...prev, isOpen: false }))}
-                file={previewState.file}
-                content={previewState.content}
-                type={previewState.type}
-            /> */}
 
             {/* Error display */}
             {previewError && (

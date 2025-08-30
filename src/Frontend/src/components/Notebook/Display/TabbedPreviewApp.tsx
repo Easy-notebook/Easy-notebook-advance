@@ -5,6 +5,7 @@ import CSVPreviewWrapper from './DataTable/CSVPreviewWrapper';
 import ImageDisplay from './ImageView/ImageDisplay';
 import PDFDisplay from './PDFView/PDFDisplay';
 import ReactLiveSandbox from './WebView/ReactLiveSandbox';
+import DocDisplay from './DocView/DocDisplay';
 import {
   Minimize2,
   Maximize2,
@@ -16,7 +17,8 @@ import {
   Image as ImageIcon,
   File as FileIcon,
   FileCode,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FileImage
 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -46,6 +48,9 @@ const getFileTabIcon = (type: FileType) => {
       return <FileCode className="w-4 h-4" aria-hidden />;
     case 'html':
       return <Code className="w-4 h-4" aria-hidden />;
+    case 'docx':
+    case 'doc':
+      return <FileImage className="w-4 h-4" aria-hidden />;
     default:
       return <FileText className="w-4 h-4" aria-hidden />;
   }
@@ -62,7 +67,7 @@ interface TabProps {
 
 const Tab: React.FC<TabProps> = ({ tab, onSelect, onClose, isClosable = true }) => {
   const handleClose = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
+    (e: React.MouseEvent<HTMLDivElement>) => {
       e.stopPropagation();
       onClose(tab.id);
     },
@@ -70,17 +75,18 @@ const Tab: React.FC<TabProps> = ({ tab, onSelect, onClose, isClosable = true }) 
   );
 
   return (
-    <button
-      type="button"
+    <div
       className={`
         group flex items-center gap-2 px-3 py-2 border-r border-gray-200
-        transition-colors duration-200 min-w-0 max-w-48
+        transition-colors duration-200 min-w-0 max-w-48 cursor-pointer
         ${tab.isActive
           ? 'bg-white border-b-2 border-b-theme-500 text-gray-900'
           : 'bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-900'}
       `}
       onClick={() => onSelect(tab.id)}
       title={tab.name}
+      role="tab"
+      aria-selected={tab.isActive}
       aria-current={tab.isActive ? 'page' : undefined}
     >
       {getFileTabIcon(tab.type)}
@@ -89,17 +95,17 @@ const Tab: React.FC<TabProps> = ({ tab, onSelect, onClose, isClosable = true }) 
         {tab.isDirty && <span className="text-orange-500 ml-1" aria-label="Unsaved changes">*</span>}
       </span>
       {isClosable && (
-        <button
-          type="button"
-          className="ml-1 p-0.5 hover:bg-gray-200 rounded"
+        <div
+          className="ml-1 p-0.5 hover:bg-gray-200 rounded cursor-pointer"
           onClick={handleClose}
           aria-label={`Close ${tab.name}`}
           title="Close"
+          role="button"
         >
           <X className="w-3 h-3" />
-        </button>
+        </div>
       )}
-    </button>
+    </div>
   );
 };
 
@@ -125,14 +131,19 @@ const TabbedPreviewApp: React.FC = () => {
 
   // --- Memos ---
   const tabs = useMemo<FileTab[]>(
-    () =>
-      currentPreviewFiles.map((file) => ({
+    () => {
+      console.log('TabbedPreviewApp - currentPreviewFiles:', currentPreviewFiles);
+      console.log('TabbedPreviewApp - activeFile:', activeFile);
+      const result = currentPreviewFiles.map((file) => ({
         id: file.id,
         name: file.name,
         type: file.type,
         isActive: activeFile?.id === file.id,
         isDirty: isTabDirty(file.id)
-      })),
+      }));
+      console.log('TabbedPreviewApp - tabs:', result);
+      return result;
+    },
     [currentPreviewFiles, activeFile?.id, isTabDirty]
   );
 
@@ -251,6 +262,20 @@ const TabbedPreviewApp: React.FC = () => {
 
       case 'pdf':
         return <PDFDisplay dataUrl={activeFile.content} fileName={activeFile.name} />;
+
+      case 'docx':
+      case 'doc':
+        return (
+          <DocDisplay
+            fileName={activeFile.name}
+            fileContent={activeFile.content}
+            onContentChange={async (newContent: string) => {
+              setTabDirty(activeFile.id, true);
+              await usePreviewStore.getState().updateActiveFileContent(newContent);
+            }}
+            showControls
+          />
+        );
 
       case 'jsx':
       case 'react':

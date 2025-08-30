@@ -30,11 +30,11 @@
 import { create } from 'zustand';
 import workflowAPIClient from '../services/WorkflowAPIClient.js';
 import constants from '../services/constants.js';
-import { useScriptStore } from './useScriptStore'; // Executor dependency
+import { useScriptStore } from './useScriptStore.js'; // Executor dependency
 // @ts-ignore
 import { useAIPlanningContextStore } from './aiPlanningContext.js'; // Executor dependency
-import { usePipelineStore } from './usePipelineStore';
-import { useWorkflowPanelStore } from '../../../Notebook/store/workflowPanelStore';
+import { usePipelineStore } from './usePipelineStore.js';
+import { useWorkflowPanelStore } from '../../../Notebook/store/workflowPanelStore.js';
 
 // ==============================================
 // Types and Interfaces

@@ -3,7 +3,6 @@ import {
   MenuIcon,
   ChevronDown,
   ChevronRight,
-  ArrowRight,
   CheckCircle2,
   Settings2,
 } from 'lucide-react';
@@ -29,7 +28,13 @@ import {
 // 使用共享的样式常量
 const StatusStyles = SHARED_STYLES.status;
 
-const StepButton = memo(({ step, isActive, onClick }) => (
+interface StepButtonProps {
+  step: { id: string; title: string };
+  isActive: boolean;
+  onClick: () => void;
+}
+
+const StepButton = memo(({ step, isActive, onClick }: StepButtonProps) => (
   <SidebarButton
     isActive={isActive}
     onClick={onClick}
@@ -43,6 +48,21 @@ const StepButton = memo(({ step, isActive, onClick }) => (
   </SidebarButton>
 ));
 
+interface PhaseSectionProps {
+  phase: {
+    id: string;
+    title: string;
+    icon: string;
+    steps: Array<{ id: string; title: string }>;
+  };
+  isExpanded: boolean;
+  onToggle: () => void;
+  onStepSelect: (phaseId: string, stepId: string) => void;
+  isActive: boolean;
+  currentStepId: string;
+  isTitle: boolean;
+}
+
 const PhaseSection = memo(({
   phase,
   isExpanded,
@@ -51,20 +71,22 @@ const PhaseSection = memo(({
   isActive,
   currentStepId,
   isTitle
-}) => {
+}: PhaseSectionProps) => {
   const IconComponent = iconMapping[phase.icon] || CheckCircle2;
   const introStep = phase.steps[0];
   const regularSteps = phase.steps.slice(1);
 
   const scrollToElement = useCallback((elementId: string) => {
-    console.log('🎯 尝试滚动到元素:', elementId);
+    // Debug logging in development mode only
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎯 尝试滚动到元素:', elementId);
+    }
 
     // 使用双重 requestAnimationFrame 确保 DOM 更新完成
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
       const targetElement = document.getElementById(elementId);
       if (targetElement) {
-        console.log('✅ 找到目标元素:', targetElement);
 
         // 查找滚动容器 - 主内容区域
         const scrollContainer = document.querySelector('.flex-1.overflow-y-auto.scroll-smooth') ||
@@ -72,14 +94,10 @@ const PhaseSection = memo(({
                                document.querySelector('[class*="overflow-y-auto"]') ||
                                document.documentElement;
 
-        console.log('📦 使用滚动容器:', scrollContainer);
-
         // 计算目标元素相对于滚动容器的位置
         const targetRect = targetElement.getBoundingClientRect();
         const containerRect = scrollContainer.getBoundingClientRect();
 
-        console.log('📍 目标元素位置:', { top: targetRect.top, left: targetRect.left });
-        console.log('📍 容器位置:', { top: containerRect.top, left: containerRect.left });
 
         // 如果是文档元素，使用 scrollIntoView
         if (scrollContainer === document.documentElement) {
@@ -87,27 +105,18 @@ const PhaseSection = memo(({
         } else {
           // 如果是特定容器，计算滚动位置
           const scrollTop = targetRect.top - containerRect.top + scrollContainer.scrollTop - 20; // 20px 偏移
-          console.log('📊 滚动计算:', {
-            targetTop: targetRect.top,
-            containerTop: containerRect.top,
-            currentScrollTop: scrollContainer.scrollTop,
-            newScrollTop: scrollTop
-          });
 
           scrollContainer.scrollTo({
             top: scrollTop,
             behavior: 'smooth'
           });
 
-          // 添加多个备用的滚动方法，以防第一个不工作
+          // 备用滚动方法
           setTimeout(() => {
-            console.log('🔄 执行备用滚动方法 1: scrollIntoView');
             targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }, 100);
 
-          // 第二个备用方法：强制滚动到页面顶部然后滚动到元素
           setTimeout(() => {
-            console.log('🔄 执行备用滚动方法 2: 强制滚动');
             const elementTop = targetElement.offsetTop;
             const container = scrollContainer as HTMLElement;
             if (container && container.scrollTo) {
@@ -116,11 +125,9 @@ const PhaseSection = memo(({
           }, 200);
         }
 
-        console.log('✅ 滚动命令已执行');
         return true;
       }
 
-      console.log('⚠️ 直接查找失败，尝试在 TiptapNotebookEditor 容器内查找');
       // 如果直接查找失败，尝试在 TiptapNotebookEditor 容器内查找
       const tiptapContainer = document.querySelector('.tiptap-notebook-editor');
       if (tiptapContainer) {
@@ -133,11 +140,19 @@ const PhaseSection = memo(({
         // 回退到按 id 匹配
         if (!heading) heading = tiptapContainer.querySelector(`#${CSS.escape(elementId)}`) as HTMLElement | null;
 
-        const headings = tiptapContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
-        console.log('📋 找到的标题元素:', Array.from(headings).map(h => ({ tag: h.tagName, id: h.id, key: (h as any).dataset?.headingKey, base: (h as any).dataset?.baseId, text: h.textContent?.substring(0, 20) })));
+        // Debug: log found headings in development mode
+        if (process.env.NODE_ENV === 'development') {
+          const headings = tiptapContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
+          console.log('📋 找到的标题元素:', Array.from(headings).map(h => ({ 
+            tag: h.tagName, 
+            id: h.id, 
+            key: (h as HTMLElement).dataset?.headingKey, 
+            base: (h as HTMLElement).dataset?.baseId, 
+            text: h.textContent?.substring(0, 20) 
+          })));
+        }
 
         if (heading) {
-          console.log('✅ 在容器内找到目标标题(通过 meta 或 id):', heading);
 
           // 同样的滚动逻辑
           const scrollContainer = document.querySelector('.flex-1.overflow-y-auto.scroll-smooth') ||
@@ -157,14 +172,12 @@ const PhaseSection = memo(({
               behavior: 'smooth'
             });
 
-            // 添加多个备用的滚动方法
+            // 备用滚动方法
             setTimeout(() => {
-              console.log('🔄 执行容器内备用滚动方法 1: scrollIntoView');
               heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
 
             setTimeout(() => {
-              console.log('🔄 执行容器内备用滚动方法 2: 强制滚动');
               const elementTop = heading.offsetTop;
               const container = scrollContainer as HTMLElement;
               if (container && container.scrollTo) {
@@ -173,18 +186,19 @@ const PhaseSection = memo(({
             }, 200);
           }
 
-          console.log('✅ 容器内滚动命令已执行');
           return true;
         }
       }
 
-        console.log('❌ 未找到目标元素:', elementId);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ 未找到目标元素:', elementId);
+        }
         return false;
       });
     });
   }, []);
 
-  const handleStepClick = useCallback((stepId) => {
+  const handleStepClick = useCallback((stepId: string) => {
     onStepSelect(phase.id, stepId);
 
     // 计算子标题的 DOM ID：`${phase.id}--${slug(step.title)}`
@@ -302,7 +316,17 @@ const PhaseSection = memo(({
   );
 });
 
-const MiniSidebar = memo(({ phases, currentPhaseId, onPhaseClick }) => (
+interface MiniSidebarProps {
+  phases: Array<{
+    id: string;
+    title: string;
+    icon: string;
+  }>;
+  currentPhaseId: string;
+  onPhaseClick: (phaseId: string | null) => void;
+}
+
+const MiniSidebar = memo(({ phases, currentPhaseId, onPhaseClick }: MiniSidebarProps) => (
   <div className="w-16 h-full flex flex-col bg-gray-50/80 backdrop-blur-xl">
     <div className="h-16 flex items-center justify-center">
       <button
@@ -348,6 +372,24 @@ const MiniSidebar = memo(({ phases, currentPhaseId, onPhaseClick }) => (
   </div>
 ));
 
+interface OutlineSidebarProps {
+  tasks: Array<{
+    id: string;
+    title: string;
+    phases: Array<{
+      id: string;
+      title: string;
+      icon: string;
+      steps: Array<{ id: string; title: string }>;
+    }>;
+  }>;
+  currentPhaseId: string;
+  currentStepId: string;
+  onPhaseSelect: (phaseId: string, stepId: string) => void;
+  viewMode: string;
+  onAgentSelect?: (agentType: AgentType) => void;
+}
+
 const OutlineSidebar = ({
   tasks,
   currentPhaseId,
@@ -355,7 +397,7 @@ const OutlineSidebar = ({
   onPhaseSelect,
   viewMode,
   onAgentSelect,
-}) => {
+}: OutlineSidebarProps) => {
   
   const isCollapsed = useStore((state) => state.isCollapsed);
   const setIsCollapsed = useStore((state) => state.setIsCollapsed);
@@ -365,8 +407,8 @@ const OutlineSidebar = ({
   const [isHovered, setIsHovered] = useState(false);
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
 
-  const [expandedSections, setExpandedSections] = useState(() => {
-    const initialState = {};
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+    const initialState: Record<string, boolean> = {};
     tasks.forEach(task => {
       task.phases.forEach(phase => {
         initialState[phase.id] = phase.id === currentPhaseId;
@@ -388,14 +430,14 @@ const OutlineSidebar = ({
     setIsCollapsed(!isCollapsed);
   }, [setIsCollapsed, isCollapsed]);
 
-  const toggleSection = useCallback((sectionId) => {
+  const toggleSection = useCallback((sectionId: string) => {
     setExpandedSections(prev => ({
       ...prev,
       [sectionId]: !prev[sectionId]
     }));
   }, []);
 
-  const handlePhaseClick = useCallback((phaseId) => {
+  const handlePhaseClick = useCallback((phaseId: string | null) => {
     if (phaseId === null) {
       toggleCollapse();
       return;

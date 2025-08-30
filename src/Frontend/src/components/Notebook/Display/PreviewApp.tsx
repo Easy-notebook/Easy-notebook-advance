@@ -4,6 +4,7 @@ import CSVPreviewWrapper from './DataTable/CSVPreviewWrapper';
 import ImageDisplay from './ImageView/ImageDisplay';
 import PDFDisplay from './PDFView/PDFDisplay';
 import ReactLiveSandbox from './WebView/ReactLiveSandbox';
+import DocDisplay from './DocView/DocDisplay';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Monitor, Code } from 'lucide-react';
@@ -43,11 +44,20 @@ const PreviewApp: React.FC = () => {
             );
         }
 
-        // Handle Excel files that might be misidentified
+        // Handle Excel and DOCX files that might be misidentified
         const isExcelName = 
             activeFile.name.toLowerCase().endsWith('.xlsx') || 
             activeFile.name.toLowerCase().endsWith('.xls');
-        const effectiveType: FileType = isExcelName ? 'xlsx' : activeFile.type;
+        const isDocxName = 
+            activeFile.name.toLowerCase().endsWith('.docx') || 
+            activeFile.name.toLowerCase().endsWith('.doc');
+        
+        let effectiveType: FileType = activeFile.type;
+        if (isExcelName) {
+            effectiveType = 'xlsx';
+        } else if (isDocxName) {
+            effectiveType = 'docx';
+        }
 
         switch (effectiveType) {
             case 'csv':
@@ -72,6 +82,20 @@ const PreviewApp: React.FC = () => {
 
             case 'pdf':
                 return <PDFDisplay dataUrl={activeFile.content} fileName={activeFile.name} />;
+
+            case 'docx':
+            case 'doc':
+                return (
+                    <DocDisplay
+                        fileName={activeFile.name}
+                        fileContent={activeFile.content}
+                        onContentChange={async (newContent: string) => {
+                            setTabDirty(activeFile.id, true);
+                            await usePreviewStore.getState().updateActiveFileContent(newContent);
+                        }}
+                        showControls
+                    />
+                );
 
             case 'jsx':
             case 'react':

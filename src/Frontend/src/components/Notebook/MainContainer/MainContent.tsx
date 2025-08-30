@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import DSLCPipeline from '../../senario/DSLCanalysis/Pipeline';
+import DSLCPipeline from '../../senario/WorkflowMode/Pipeline';
 import CreateMode from '../../senario/BasicMode/CreateMode';
 import DemoMode from '../../senario/BasicMode/DemoMode';
 import DetachedCellView from './DetachedCellView';

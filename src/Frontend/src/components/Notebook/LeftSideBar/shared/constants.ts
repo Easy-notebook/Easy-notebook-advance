@@ -74,7 +74,7 @@ export const LAYOUT_CONSTANTS = {
   
   // 文件树配置
   fileTree: {
-    indent: 16,
+    indent: 28,
     iconSize: 18,
     padding: 8
   }
@@ -117,6 +117,7 @@ export const FILE_PREVIEW_CONFIG = {
   image: ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'],
   text: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.csv', '.xlsx', '.xls'],
   pdf: ['.pdf'],
-  maxFileSize: 10 * 1024 * 1024, // 10MB
+  doc: ['.doc', '.docx'],
+  maxFileSize: 50 * 1024 * 1024, // 50MB (increased to support larger DOC/DOCX files)
   maxFiles: 10
 };

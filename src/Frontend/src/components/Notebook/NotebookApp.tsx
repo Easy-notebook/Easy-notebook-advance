@@ -22,7 +22,7 @@ import usePreviewStore from '../../store/previewStore';
 import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
 import useSettingsStore from '../../store/settingsStore';
 import SettingsPage from '../senario/settingState';
-import PreviewApp from './Display/PreviewApp';
+import TabbedPreviewApp from './Display/TabbedPreviewApp';
 import Header from './MainContainer/Header';
 import MainContent from './MainContainer/MainContent';
 import WorkflowControl from './MainContainer/WorkflowControl';
@@ -648,7 +648,7 @@ const NotebookApp = () => {
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
           {/* PreviewApp - 文件预览 */}
           <div className={`${isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
-            <PreviewApp />
+            <TabbedPreviewApp />
           </div>
           
           {/* AgentDetail - Agent详情视图 */}

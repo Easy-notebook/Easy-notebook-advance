@@ -11,7 +11,7 @@ const FILE_STORE = 'files';
 /**
  * 文件类型
  */
-export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx' | 'react';
+export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx' | 'react' | 'doc' | 'docx';
 
 /**
  * 预览模式类型
@@ -19,7 +19,7 @@ export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx
 export type PreviewMode = 'notebook' | 'file';
 
 // Active preview renderer mode for the current file
-export type ActivePreviewMode = 'default' | 'csv' | 'jsx' | 'html' | 'image' | 'pdf' | 'text' | null;
+export type ActivePreviewMode = 'default' | 'csv' | 'jsx' | 'html' | 'image' | 'pdf' | 'text' | 'doc' | 'docx' | null;
 
 /**
  * 文件元数据接口
@@ -468,6 +468,11 @@ const getFileType = (filePath: string): FileType => {
         return 'pdf';
     }
 
+    // DOC/DOCX files
+    if (fileExt === 'doc' || fileExt === 'docx') {
+        return 'docx';
+    }
+
     // HTML files
     if (fileExt === 'html' || fileExt === 'htm') {
         return 'html';
@@ -615,6 +620,27 @@ const usePreviewStore = create<PreviewStore>()(
                                 } catch {}
                                 content = dataUrl || assetsUrl;
                             }
+                        } else if (fileType === 'docx') {
+                            // For DOC/DOCX files, content should be base64 or data URL for binary files
+                            console.log('previewStore - Processing DOCX file:', filePath);
+                            console.log('previewStore - Original content type:', typeof content);
+                            console.log('previewStore - Content length:', content ? content.length : 0);
+                            console.log('previewStore - Content preview:', content ? content.substring(0, 100) + '...' : 'empty');
+                            
+                            if (typeof content === 'string' && content.startsWith('data:')) {
+                                console.log('previewStore - Content is already data URL format');
+                                // Already data URL format
+                            } else if (content) {
+                                // Convert to data URL for binary handling
+                                console.log('previewStore - Converting to data URL format');
+                                const mimeType = fileExt === 'doc' ? 
+                                    'application/msword' : 
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                                content = `data:${mimeType};base64,${content}`;
+                                console.log('previewStore - Final content length:', content.length);
+                            } else {
+                                console.error('previewStore - No content received for DOCX file');
+                            }
                         }
 
                         // Create file object data for cache
@@ -647,6 +673,7 @@ const usePreviewStore = create<PreviewStore>()(
                             fileType === 'html' ? 'html' :
                             fileType === 'image' ? 'image' :
                             fileType === 'pdf' ? 'pdf' :
+                            fileType === 'docx' ? 'docx' :
                             'text'
                         );
                         set({
@@ -714,6 +741,7 @@ const usePreviewStore = create<PreviewStore>()(
                         cachedFile.type === 'html' ? 'html' :
                         cachedFile.type === 'image' ? 'image' :
                         cachedFile.type === 'pdf' ? 'pdf' :
+                        cachedFile.type === 'docx' ? 'docx' :
                         'text'
                     );
                     set({
@@ -816,6 +844,8 @@ const usePreviewStore = create<PreviewStore>()(
                             previewMode = 'image';
                         } else if (cachedFile.type === 'pdf') {
                             previewMode = 'pdf';
+                        } else if (cachedFile.type === 'docx') {
+                            previewMode = 'docx';
                         } else if (cachedFile.type === 'text') {
                             previewMode = 'text';
                         }
@@ -888,6 +918,8 @@ const usePreviewStore = create<PreviewStore>()(
                             activePreviewMode = 'image';
                         } else if (activeFile?.type === 'pdf') {
                             activePreviewMode = 'pdf';
+                        } else if (activeFile?.type === 'docx') {
+                            activePreviewMode = 'docx';
                         } else if (activeFile?.type === 'text') {
                             activePreviewMode = 'text';
                         }
