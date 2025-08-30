@@ -72,7 +72,7 @@ const PhaseSection = memo(({
   currentStepId,
   isTitle
 }: PhaseSectionProps) => {
-  const IconComponent = iconMapping[phase.icon] || CheckCircle2;
+  const IconComponent = iconMapping[phase.icon as keyof typeof iconMapping] || CheckCircle2;
   const introStep = phase.steps[0];
   const regularSteps = phase.steps.slice(1);
 
@@ -339,7 +339,7 @@ const MiniSidebar = memo(({ phases, currentPhaseId, onPhaseClick }: MiniSidebarP
     </div>
     <div className="flex-1 py-2.5">
       {phases.map((phase) => {
-        const IconComponent = iconMapping[phase.icon] || CheckCircle2;
+        const IconComponent = iconMapping[phase.icon as keyof typeof iconMapping] || CheckCircle2;
         return (
           <button
             key={phase.id}
@@ -403,7 +403,7 @@ const OutlineSidebar = ({
   const setIsCollapsed = useStore((state) => state.setIsCollapsed);
   const settingstore = useSettingsStore();
   const notebookId = useStore((state) => state.notebookId);
-  const [activeTab, setActiveTab] = useState('outline');
+  const [activeTab, setActiveTab] = useState<'file' | 'outline' | 'agents'>('outline');
   const [isHovered, setIsHovered] = useState(false);
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
 
@@ -548,7 +548,7 @@ const OutlineSidebar = ({
         {activeTab === 'file' ? (
           // 文件视图：使用 FileTree 组件
           <div className="flex-1 h-full w-full relative">
-            <FileTree notebookId={notebookId} projectName={projectName} />
+            <FileTree notebookId={notebookId || ''} projectName={projectName} />
           </div>
         ) : activeTab === 'agents' ? (
           // Agent视图：显示AI代理列表

@@ -491,7 +491,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
                 
                 if (!pathStr) return;
                 
-                const parts = pathStr.split('/').filter(part => part.trim() !== ''); // Filter empty parts
+                const parts = pathStr.split('/').filter((part: string) => part.trim() !== ''); // Filter empty parts
                 let currentPath = '';
                 let currentTree = tree as FileNode[];
 
