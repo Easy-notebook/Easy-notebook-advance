@@ -59,7 +59,13 @@ export const useWorkflowManager = (
     setShowWorkflowConfirm(false);
     setPendingWorkflowUpdate(null);
   }
-  }, [setWorkflowUpdated, incrementWorkflowUpdateCount, setShowWorkflowConfirm, setPendingWorkflowUpdate, setPendingStepCompletion]);
+  }, [
+    setWorkflowUpdated, 
+    incrementWorkflowUpdateCount, 
+    setShowWorkflowConfirm, 
+    setPendingWorkflowUpdate, 
+    setPendingStepCompletion
+  ]);
 
   const handleRejectWorkflowUpdate = useCallback(() => {
     console.log('Workflow update rejected by user');

@@ -29,14 +29,14 @@ interface AICommandInputProps {
 import { usePipelineStore, PIPELINE_STAGES } from '../store/usePipelineStore.ts';
 import usePreStageStore from '../store/preStageStore.ts';
 import { generalResponse } from '../services/StageGeneralFunction.ts';
-import { useAIAgentStore, EVENT_TYPES } from '../../../../store/AIAgentStore.ts';
-import { AgentMemoryService, AgentType } from '../../../../services/agentMemoryService.ts';
-import useStore from '../../../../store/notebookStore.ts';
-import useOperatorStore from '../../../../store/operatorStore.ts';
-import { createUserAskQuestionAction } from '../../../../store/actionCreators.ts';
-import useCodeStore from '../../../../store/codeStore.ts';
-import { notebookApiIntegration } from '../../../../services/notebookServices.ts';
-import { useAIPlanningContextStore } from '../store/aiPlanningContext.ts';
+import { useAIAgentStore, EVENT_TYPES } from '../../../../store/AIAgentStore';
+import { AgentMemoryService, AgentType } from '../../../../services/agentMemoryService';
+import useStore from '../../../../store/notebookStore';
+import useOperatorStore from '../../../../store/operatorStore';
+import { createUserAskQuestionAction } from '../../../../store/actionCreators';
+import useCodeStore from '../../../../store/codeStore';
+import { notebookApiIntegration } from '../../../../services/notebookServices';
+import { useAIPlanningContextStore } from '../store/aiPlanningContext';
 
 /**
  * AI 和文件上传交互组件
@@ -65,7 +65,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     // }
   ], []);
   
-  const [presetQuestions, setPresetQuestions] = useState(defaultPresetQuestions);
+  const [presetQuestions, setPresetQuestions] = useState<any[]>(defaultPresetQuestions);
 
   const { setPreStage } = usePipelineStore();
   const sendOperation = useOperatorStore((s) => s.sendOperation);
@@ -141,6 +141,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     console.log('Upload config:', uploadConfig);
     console.log('Current Notebook ID:', notebookId);
     
+    // 如果没有 notebookId，先创建一个
     let currentNotebookId = notebookId;
     if (!currentNotebookId) {
       console.log('No notebook ID available, creating new notebook...');

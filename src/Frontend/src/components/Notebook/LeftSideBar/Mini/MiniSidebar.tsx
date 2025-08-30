@@ -1,0 +1,265 @@
+import React, { memo, useCallback, useMemo } from 'react';
+import {
+  CheckCircle2,
+  Library,
+  TreePine,
+  Settings2,
+  Network,
+  Folder,
+  type LucideIcon,
+} from 'lucide-react';
+import iconMapping from '@Utils/iconMapping';
+
+interface MiniSidebarItem {
+  id: string;
+  icon: LucideIcon;
+  title: string;
+}
+
+interface PhaseStep {
+  id: string;
+  title: string;
+}
+
+interface Phase {
+  id: string;
+  title: string;
+  /** key from @Utils/iconMapping */
+  icon: string;
+  steps: PhaseStep[];
+}
+
+interface MiniSidebarProps {
+  /** Legacy OutlineView props */
+  phases?: Phase[];
+  currentPhaseId?: string;
+  onPhaseClick?: (phaseId: string | null) => void;
+
+  /** New general-purpose props */
+  onItemClick?: (itemId: string) => void;
+  onExpandClick?: () => void;
+  activeItemId?: string;
+  
+  /** Whether main sidebar is expanded */
+  isMainSidebarExpanded?: boolean;
+}
+
+/** 功能区（顶部/中部） */
+const PRIMARY_ITEMS: MiniSidebarItem[] = [
+  { id: 'library', icon: Library, title: 'Library' },
+  { id: 'knowledge-forest', icon: TreePine, title: 'Knowledge Forest' },
+  { id: 'tools', icon: Network, title: 'Tools' },
+];
+
+/** 固定底部的功能区（只放设置，避免与中部重复且横排） */
+const BOTTOM_ITEMS: MiniSidebarItem[] = [
+  { id: 'settings', icon: Settings2, title: 'Settings' },
+];
+
+/** 按钮（图标底部对齐，去除多余 margin/padding） */
+const ItemButton: React.FC<
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }
+> = ({ className = '', children, active, ...props }) => (
+  <button
+    {...props}
+    aria-current={active ? 'page' : undefined}
+    className={[
+      'w-8 h-8',
+      'relative rounded-lg transition-colors',
+      'flex items-end justify-center',
+      active ? 'text-theme-600' : 'text-gray-500',
+      className,
+    ].join(' ')}
+  >
+    {children}
+  </button>
+);
+
+const MiniSidebar = memo(function MiniSidebar({
+  phases,
+  currentPhaseId,
+  onPhaseClick,
+  onItemClick,
+  onExpandClick,
+  activeItemId = 'library',
+  isMainSidebarExpanded = false,
+}: MiniSidebarProps) {
+  const hasPhases = useMemo(() => Array.isArray(phases) && phases.length > 0, [phases]);
+
+  const handleExpandClick = useCallback(() => {
+    if (onExpandClick) onExpandClick();
+    else onPhaseClick?.(null);
+  }, [onExpandClick, onPhaseClick]);
+
+  return (
+    <nav
+      className={[
+        'w-16 h-full',
+        'flex flex-col',
+      ].join(' ')}
+    >
+      {/* 顶部：展开按钮（Logo 单独，不受底部对齐约束） */}
+      <div className="h-16 flex items-center justify-center shrink-0">
+        <button
+          onClick={handleExpandClick}
+          className="rounded-lg transition-colors"
+          title="Expand Sidebar"
+        >
+          <img src="/icon.svg" className="w-7 h-7" alt="App Icon" />
+        </button>
+      </div>
+
+      {/* 中部：可滚动区域（阶段/主功能） */}
+      <div className="flex-1 overflow-y-auto overflow-x-visible">
+        {/* 阶段模式 */}
+        {hasPhases && (
+          <>
+            {isMainSidebarExpanded ? (
+              /* 主侧边栏展开时：显示单个 folder 图标代表 workspace，使用与阶段区域相同的挖孔背景 */
+              <div className="relative -mr-2 my-2">
+                {/* 挖孔背景 - 与阶段区域完全相同 */}
+                <div 
+                  className="absolute inset-0 bg-white rounded-l-3xl"
+                  style={{
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06), inset 0 -2px 4px rgba(0,0,0,0.06), inset 2px 0 4px rgba(0,0,0,0.06)',
+                    border: '1px solid rgba(0,0,0,0.04)',
+                    borderRight: 'none'
+                  }}
+                />
+                
+                {/* Workspace 图标 */}
+                <ul className="space-y-1 relative z-10 py-3 pl-3 pr-4">
+                  <li className="flex justify-center overflow-visible">
+                    <div className="overflow-visible relative">
+                      <ItemButton
+                        active={true}
+                        onClick={() => onExpandClick?.()}
+                        title="Workspace"
+                      >
+                        <Folder size={18} />
+                      </ItemButton>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            ) : (
+              /* 主侧边栏折叠时：显示所有阶段图标 */
+              <>
+                {/* 整体阶段挖孔区域 */}
+                <div className="relative -mr-2 my-2">
+                  {/* 整体挖孔背景 - 白色背景 + 圆滑边缘 */}
+                  <div 
+                    className="absolute inset-0 bg-white rounded-l-3xl"
+                    style={{
+                      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06), inset 0 -2px 4px rgba(0,0,0,0.06), inset 2px 0 4px rgba(0,0,0,0.06)',
+                      border: '1px solid rgba(0,0,0,0.04)',
+                      borderRight: 'none'
+                    }}
+                  />
+                  
+                  {/* 阶段列表 */}
+                  <ul className="space-y-1 relative z-10 py-3 pl-1 pr-4">
+                    {phases!.map((phase, index) => {
+                      const IconComp =
+                        (iconMapping as Record<string, LucideIcon>)[phase.icon] ?? CheckCircle2;
+                      const isActive = currentPhaseId === phase.id;
+
+                      return (
+                        <li key={phase.id} className="flex justify-center overflow-visible">
+                          <div className="overflow-visible relative">
+                            <ItemButton
+                              active={isActive}
+                              onClick={() => onPhaseClick?.(phase.id)}
+                              title={phase.title}
+                            >
+                              <IconComp size={18} />
+                            </ItemButton>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </>
+            )}
+
+            {/* 其他功能区（不包含底部设置） */}
+            <ul className="space-y-1">
+              {PRIMARY_ITEMS.map((item) => {
+                const Icon = item.icon;
+                // 收缩时：功能区图标不显示 active，因为用户在使用 workspace（阶段导航）
+                // 展开时：功能区图标也不显示 active，因为用户在使用 workspace
+                const isActive = false;
+
+                return (
+                  <li key={item.id} className="flex justify-center overflow-visible">
+                    <div className="overflow-visible">
+                      <ItemButton
+                        active={isActive}
+                        onClick={() => onItemClick?.(item.id)}
+                        title={item.title}
+                      >
+                        <Icon size={18} />
+                      </ItemButton>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+
+        {/* 通用模式（无 phases）：只渲染主功能区，底部另渲染设置 */}
+        {!hasPhases && (
+          <ul className="space-y-1">
+            {PRIMARY_ITEMS.map((item) => {
+              const Icon = item.icon;
+              // 无 phases 模式下，根据 activeItemId 正常显示 active 状态
+              const isActive = activeItemId === item.id;
+
+              return (
+                <li key={item.id} className="flex justify-center overflow-visible">
+                  <div className="overflow-visible">
+                    <ItemButton
+                      active={isActive}
+                      onClick={() => onItemClick?.(item.id)}
+                      title={item.title}
+                    >
+                      <Icon size={18} />
+                    </ItemButton>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* 底部固定：仅纵向渲染底部项（默认只有 Settings），避免横向排布 */}
+      <div className="py-3 border-t border-gray-200 shrink-0">
+        <ul className="space-y-1">
+          {BOTTOM_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeItemId === item.id;
+
+            return (
+              <li key={item.id} className="flex justify-center overflow-visible">
+                <div className="overflow-visible">
+                  <ItemButton
+                    active={isActive}
+                    onClick={() => onItemClick?.(item.id)}
+                    title={item.title}
+                  >
+                    <Icon size={18} />
+                  </ItemButton>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </nav>
+  );
+});
+
+export default MiniSidebar;

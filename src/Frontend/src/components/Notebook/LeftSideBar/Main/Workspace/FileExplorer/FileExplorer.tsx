@@ -13,13 +13,13 @@ import {
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps } from '@fluentui/react-file-type-icons';
 import { initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
-import { notebookApiIntegration } from '../../../services/notebookServices';
+import { notebookApiIntegration } from '@Services/notebookServices';
 import {
     fetchFileList,
     handleFileUpload,
     handleDownload,
     handleDeleteFile
-} from '../../../utils/fileUtils';
+} from '@Utils/fileUtils';
 
 // Types
 type FileNodeDirectory = {
@@ -61,10 +61,10 @@ const createPlaceholderFile = (name: string, lastModified?: number | string): Fi
 };
 
 // (no-op)
-import usePreviewStore from '../../../store/previewStore';
-import useStore from '../../../store/notebookStore';
-import { SHARED_STYLES, LAYOUT_CONSTANTS, FILE_PREVIEW_CONFIG } from './shared/constants';
-import { LoadingIndicator } from './shared/components';
+import usePreviewStore from '@Store/previewStore';
+import useStore from '@Store/notebookStore';
+import { SHARED_STYLES, LAYOUT_CONSTANTS, FILE_PREVIEW_CONFIG } from '@LeftSidebar/shared/constants';
+import { LoadingIndicator } from '@LeftSidebar/shared/components';
 
 // Initialize file type icons
 initializeFileTypeIcons();
@@ -453,7 +453,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     // Listen for global file list refresh events (e.g., when new files are generated)
     useEffect(() => {
         const handleRefreshFileList = () => {
-            console.log('📁 Received refreshFileList event, refreshing file list...');
             fetchFileListWrapper();
         };
 
@@ -798,15 +797,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
                 multiple
                 onChange={handleFileInputChange}
             />
-
-            {/* Drag & drop instruction overlay - appears when dragging over */}
-            {/* {(draggedOver || uploadState.uploading) ? null : (
-                <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity duration-300 bg-theme-50 border border-dashed border-theme-300 rounded-lg">
-                    <div className="text-center">
-                        <p className="text-theme-600 text-sm font-medium">Drag and drop files here to upload</p>
-                    </div>
-                </div>
-            )} */}
 
             {/* Upload status overlay */}
             {uploadState.uploading && (

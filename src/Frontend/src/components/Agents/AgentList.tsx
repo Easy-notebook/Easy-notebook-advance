@@ -1,6 +1,4 @@
 import React, { useState, useEffect, memo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { AgentMemoryService, AgentType } from '../../services/agentMemoryService';
 import useStore from '../../store/notebookStore';
 import { SHARED_STYLES } from '../Notebook/LeftSideBar/shared/constants';
@@ -62,28 +60,12 @@ const AgentItem = memo(({
   );
 });
 
-const formatLastActive = (timestamp: Date | null) => {
-  if (!timestamp) return 'Never';
-  
-  const now = new Date();
-  const diff = now.getTime() - timestamp.getTime();
-  const minutes = Math.floor(diff / (1000 * 60));
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
-};
-
 const AgentList: React.FC<AgentListProps> = ({ 
   isCollapsed, 
   onAgentSelect, 
   selectedAgentType,
   runningAgents = new Set()
 }) => {
-  const { t } = useTranslation();
   const { notebookId } = useStore();
   const [agentMemories, setAgentMemories] = useState<Record<AgentType, any>>({} as Record<AgentType, any>);
 

@@ -264,7 +264,7 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-4">
-          <Loader className="w-8 h-8 animate-spin text-blue-500" />
+          <Loader className="w-8 h-8 animate-spin text-theme-500" />
           <span className="text-gray-600">Loading document...</span>
         </div>
       </div>
@@ -307,7 +307,7 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
               onClick={toggleEditMode}
               className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${
                 isEditMode 
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                  ? 'bg-theme-100 text-theme-700 hover:bg-theme-200' 
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
               title={isEditMode ? 'Switch to preview' : 'Switch to edit'}

@@ -26,6 +26,7 @@
       "@/*": ["./src/*"],
       "@Editor/*": ["./src/components/Editor/*"],
       "@Notebook/*": ["./src/components/Notebook/*"],
+      "@LeftSidebar/*": ["./src/components/Notebook/LeftSideBar/*"],
       "@Store/*": ["./src/store/*"],
       "@Services/*": ["./src/services/*"],
       "@Utils/*": ["./src/utils/*"],

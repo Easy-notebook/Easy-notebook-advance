@@ -153,12 +153,12 @@ const MarkdownTableHead: React.FC<MarkdownTableHeadProps> = ({ children, ...prop
 
 // Markdown syntax highlighting theme to match current design
 const markdownHighlighting = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: '1.8rem', fontWeight: '700', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
-  { tag: tags.heading2, fontSize: '1.3rem', fontWeight: '600', color: '#fff', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
-  { tag: tags.heading3, fontSize: '1.2rem', fontWeight: '600', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
-  { tag: tags.heading4, fontSize: '1.1rem', fontWeight: '500', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
-  { tag: tags.heading5, fontSize: '1rem', fontWeight: '400', color: '#35495E' },
-  { tag: tags.heading6, fontSize: '0.9rem', fontWeight: '400', color: '#35495E', fontStyle: 'italic' },
+  // { tag: tags.heading1, fontSize: '1.8rem', fontWeight: '700', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading2, fontSize: '1.3rem', fontWeight: '600', color: '#fff', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading3, fontSize: '1.2rem', fontWeight: '600', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading4, fontSize: '1.1rem', fontWeight: '500', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading5, fontSize: '1rem', fontWeight: '400', color: '#35495E' },
+  // { tag: tags.heading6, fontSize: '0.9rem', fontWeight: '400', color: '#35495E', fontStyle: 'italic' },
   { tag: tags.strong, fontWeight: '700', color: '#41B883' },
   { tag: tags.emphasis, fontStyle: 'italic', color: '#41B883' },
   { tag: tags.link, color: '#41B883', textDecoration: 'none', borderBottom: '1.5px solid #41B883' },

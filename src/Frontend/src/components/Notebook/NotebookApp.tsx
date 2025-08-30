@@ -7,7 +7,7 @@ import HybridCell from '../Editor/Cells/HybridCell';
 import ImageCell from '../Editor/Cells/ImageCell';
 import AIThinkingCell from '../Editor/Cells/AIThinkingCell';
 import LinkCell from '../Editor/Cells/LinkCell';
-import OutlineSidebarOrig from './LeftSideBar/OutlineSidebar';
+import OutlineSidebarOrig from './LeftSideBar/Main/Workspace/OutlineView/OutlineSidebar';
 import StepNavigation from './MainContainer/StepNavigation';
 import ErrorAlert from '../UI/ErrorAlert';
 import useStore from '../../store/notebookStore';
@@ -23,6 +23,7 @@ import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJu
 import useSettingsStore from '../../store/settingsStore';
 import SettingsPage from '../senario/settingState';
 import TabbedPreviewApp from './Display/TabbedPreviewApp';
+import GlobalTabList from './Display/GlobalTabList';
 import Header from './MainContainer/Header';
 import MainContent from './MainContainer/MainContent';
 import WorkflowControl from './MainContainer/WorkflowControl';
@@ -645,6 +646,10 @@ const NotebookApp = () => {
           onOpenSettings={settingstore.openSettings}
           fileInputRef={fileInputRef}
         />
+        
+        {/* GlobalTabList - 全局文件标签列表 */}
+        <GlobalTabList />
+        
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
           {/* PreviewApp - 文件预览 */}
           <div className={`${isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
