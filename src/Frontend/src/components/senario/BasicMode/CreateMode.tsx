@@ -1,7 +1,7 @@
 import React from 'react';
-import TiptapNotebookEditor from '../../Editor/TiptapNotebookEditor';
+import TiptapNotebookEditor from '../../Editor/TiptapNotebookEditor.js';
 import JupyterNotebookEditor from '../../Editor/JupyterNotebookEditor.jsx';
-import { useSettings } from '../../../store/settingsStore';
+import { useSettings } from '../../../store/settingsStore.js';
 
 interface CreateModeProps {
   className?: string;

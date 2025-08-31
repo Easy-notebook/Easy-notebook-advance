@@ -31,7 +31,9 @@
       "@Services/*": ["./src/services/*"],
       "@Utils/*": ["./src/utils/*"],
       "@Config/*": ["./src/config/*"],
-      "@Types/*": ["./src/types/*"]
+      "@Types/*": ["./src/types/*"],
+      "@WorkflowMode/*": ["./src/components/Senario/WorkflowMode/*"],
+      "@BasicMode/*": ["./src/components/Senario/BasicMode/*"]
     }
   },
   "include": ["src"],

@@ -3,9 +3,9 @@ import { useCallback } from 'react';
 import { usePipelineStore } from './store/usePipelineStore';
 import { useWorkflowStateMachine } from './store/workflowStateMachine';
 import usePreStageStore from './store/preStageStore';
-import PipelineStageWrapper from '../utils/PipelineStageWrapper';
-import EmptyState from './preStage/EmptyState';
-import ProblemDefineState from './preStage/ProblemDefineState';
+import PipelineStageWrapper from './utils/PipelineStageWrapper';
+import EmptyState from './State/EmptyState';
+import ProblemDefineState from './State/ProblemDefineState';
 import { Loader2 } from 'lucide-react';
 
 /**

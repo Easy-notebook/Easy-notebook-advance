@@ -32,17 +32,17 @@ interface VDSQuestion {
 }
 // ---------------------------------
 
-import { usePipelineStore, PIPELINE_STAGES } from '../store/usePipelineStore';
-import usePreStageStore from '../store/preStageStore';
-import { generalResponse } from '../services/StageGeneralFunction';
-import { useAIAgentStore, EVENT_TYPES } from '../../../../store/AIAgentStore';
-import { AgentMemoryService, AgentType } from '../../../../services/agentMemoryService';
-import useStore from '../../../../store/notebookStore';
-import useOperatorStore from '../../../../store/operatorStore';
-import { createUserAskQuestionAction } from '../../../../store/actionCreators';
-import useCodeStore from '../../../../store/codeStore';
-import { notebookApiIntegration } from '../../../../services/notebookServices';
-import { useAIPlanningContextStore } from '../store/aiPlanningContext';
+import { usePipelineStore, PIPELINE_STAGES } from '@WorkflowMode/store/usePipelineStore';
+import usePreStageStore from '@WorkflowMode/store/preStageStore';
+import { generalResponse } from '@WorkflowMode/services/StageGeneralFunction';
+import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
+import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
+import useStore from '@Store/notebookStore';
+import useOperatorStore from '@Store/operatorStore';
+import { createUserAskQuestionAction } from '@Store/actionCreators';
+import useCodeStore from '@Store/codeStore';
+import { notebookApiIntegration } from '@Services/notebookServices';
+import { useAIPlanningContextStore } from '@WorkflowMode/store/aiPlanningContext';
 
 // 扩展 window，避免 TS 报错
 declare global {
@@ -246,17 +246,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     }
   }, [isVDSMode, defaultPresetQuestions, files.length, i18n.language]);
 
-  // 键盘事件处理
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (input.trim()) {
-        handleSubmit(input.trim());
-        setInput('');
-      }
-    }
-  }, [input]);
-
   // 提交
   const handleSubmit = useCallback((command: string) => {
     if (!command) return;
@@ -374,6 +363,17 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     }
   }, [files, isVDSMode, setPreStage, setIsLoading, setActiveView, addAction, addQA, sendOperation, currentCellId, viewMode, currentPhaseId, currentStepIndex, qaList, actions, getCurrentViewCells, setIsRightSidebarCollapsed, setFiles]);
 
+  // 键盘事件处理
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim()) {
+        handleSubmit(input.trim());
+        setInput('');
+      }
+    }
+  }, [input, handleSubmit]);
+
   return (
     <div className="relative mb-6">
       {/* 输入框容器 */}
@@ -384,7 +384,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           ${isFocused ? 'shadow-lg shadow-theme-200/50' : 'shadow-sm'}
           ${input && input.startsWith('/') ? 'bg-slate-50' : 'bg-white'}
           focus:outline-none border-2 transition-all duration-300
-          ${isFocused ? 'border-theme-400 scale-[1.02]' : 'border-gray-200'}
+          ${isFocused ? 'border-theme-400 scale-[1.02]' : 'border-black'}
           ${input && input.startsWith('/') ? 'font-mono' : 'font-normal'}
           hover:shadow-md
         `}
@@ -407,7 +407,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             `}
           aria-label="Upload file"
         >
-          <Plus className={`w-6 h-6 transition-all duration-300 ${
+          <PlusCircle className={`w-6 h-6 transition-all duration-300 ${
             isUploading ? 'animate-spin' : ''
           }`} />
           <input

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import DSLCPipeline from '../../senario/WorkflowMode/Pipeline';
-import CreateMode from '../../senario/BasicMode/CreateMode';
-import DemoMode from '../../senario/BasicMode/DemoMode';
+import DSLCPipeline from '../../Senario/WorkflowMode/Pipeline';
+import CreateMode from '../../Senario/BasicMode/CreateMode';
+import DemoMode from '../../Senario/BasicMode/DemoMode';
 import DetachedCellView from './DetachedCellView';
 import WorkflowPanel from './WorkflowPanel';
 import { findCellsByStep } from '../../../utils/markdownParser';

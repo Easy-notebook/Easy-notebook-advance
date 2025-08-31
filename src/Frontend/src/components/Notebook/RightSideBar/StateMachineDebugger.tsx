@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS } from '../../senario/WorkflowMode/store/workflowStateMachine';
-import { usePipelineStore } from '../../senario/WorkflowMode/store/usePipelineStore';
+import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS } from '../../Senario/WorkflowMode/store/workflowStateMachine';
+import { usePipelineStore } from '../../Senario/WorkflowMode/store/usePipelineStore';
 import { 
   Settings, 
   ChevronDown, 

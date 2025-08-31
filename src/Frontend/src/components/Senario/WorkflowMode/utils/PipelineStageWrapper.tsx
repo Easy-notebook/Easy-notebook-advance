@@ -1,5 +1,21 @@
+import React, { ReactNode } from 'react';
+
+interface PipelineStageWrapperProps {
+    children: ReactNode;
+    stage: string | number;
+    currentStage: string | number;
+    isAnimating: boolean;
+    animationDirection: 'next' | 'previous';
+}
+
 // Animation component wrapper
-const PipelineStageWrapper = ({ children, stage, currentStage, isAnimating, animationDirection }) => {
+const PipelineStageWrapper: React.FC<PipelineStageWrapperProps> = ({ 
+    children, 
+    stage, 
+    currentStage, 
+    isAnimating, 
+    animationDirection 
+}) => {
     // Only render if this is the current stage or we're animating
     const shouldRender = stage === currentStage || isAnimating;
     if (!shouldRender) return null;

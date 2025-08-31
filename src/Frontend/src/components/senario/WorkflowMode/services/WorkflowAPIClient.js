@@ -97,39 +97,7 @@ class WorkflowAPIClient {
         return JSON.stringify(result).substring(0, 100) + '...';
     }
 
-    /**
-     * 获取行为
-     * Get behaviour
-     */
-    // async getBehaviour(behaviourRequest) {
-    //     try {
-    //         const response = await fetch(constants.API.BEHAVIOR_API_URL, {
-    //             method: 'POST',
-    //             headers: {
-    //                 'Content-Type': 'application/json'
-    //             },
-    //             body: JSON.stringify({
-    //                 stage_id: behaviourRequest.stage_id,
-    //                 step_index: behaviourRequest.step_index,
-    //                 state: compressedState,
-    //                 notebook_id: behaviourRequest.notebook_id
-    //             })
-    //         });
-
-    //         if (!response.ok) {
-    //             throw new Error(`HTTP error! status: ${response.status}`);
-    //         }
-
-    //         return await response.json();
-    //     } catch (error) {
-    //         console.error('Failed to get behaviour:', error);
-    //         throw error;
-    //     }
-    // }
-    /**
-     * 发送反馈给后端 (无状态反馈处理)
-     * Send feedback to backend (stateless feedback processing)
-     */
+    
     async sendFeedback(feedbackRequest) {
         try {
             const compressedState = this.compressContext(feedbackRequest.state);

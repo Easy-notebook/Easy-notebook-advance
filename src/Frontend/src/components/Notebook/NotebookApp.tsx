@@ -21,7 +21,7 @@ import { useAIAgentStore } from '../../store/AIAgentStore';
 import usePreviewStore from '../../store/previewStore';
 import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
 import useSettingsStore from '../../store/settingsStore';
-import SettingsPage from '../senario/settingState';
+import SettingsPage from '../Senario/settingState';
 import TabbedPreviewApp from './Display/TabbedPreviewApp';
 import GlobalTabList from './Display/GlobalTabList';
 import Header from './MainContainer/Header';
