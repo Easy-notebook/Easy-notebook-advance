@@ -13,6 +13,8 @@ import TipTapSlashCommands from './TipTap/TipTapSlashCommands'
 import { useTipTapSlashCommands } from './TipTap/useTipTapSlashCommands'
 import SimpleDragManager from './TipTap/BlockManager/SimpleDragManager'
 import useStore from '../../store/notebookStore'
+import { RawCellExtension } from './extensions/RawCellExtension'
+import { UploadDropExtension } from './extensions/UploadDropExtension'
 
 import Table from '@tiptap/extension-table'
 import TableCell from '@tiptap/extension-table-cell'
@@ -51,6 +53,7 @@ interface TiptapNotebookEditorRef {
   addMarkdownCell: () => string;
   addHybridCell: () => string;
   addAIThinkingCell: (props?: Partial<{ agentName: string; customText: string | null; textArray: string[]; useWorkflowThinking: boolean }>) => string;
+  addRawCell: () => string;
 }
 
 // Debug flag - set to true only when debugging
@@ -280,6 +283,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
   // 移除复杂的表格扩展，使用简化版本
 
+  const lastInsertedCodeCellIdRef = useRef<string | null>(null)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -357,6 +362,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
       // LaTeX支持
       LaTeXExtension,
+      RawCellExtension,
+      UploadDropExtension,
 
       // 占位符
       Placeholder.configure({ placeholder, emptyEditorClass: 'is-editor-empty' }),
@@ -375,6 +382,28 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     onCreate: ({ editor }) => {
       editorRef.current = editor;
       setCurrentEditor(editor);
+    },
+
+    onTransaction: ({ editor, transaction }) => {
+      try {
+        const isCodeBlockInputRule = transaction?.getMeta('codeBlockInputRule');
+        if (isCodeBlockInputRule) {
+          const newCodeCellId = transaction?.getMeta('newCodeCellId');
+          // Update store selection so CodeCell can autoFocus
+          const { setCurrentCell, setEditingCellId } = useStore.getState();
+          if (newCodeCellId && setCurrentCell) {
+            setCurrentCell(newCodeCellId);
+            setEditingCellId(newCodeCellId);
+          }
+          lastInsertedCodeCellIdRef.current = newCodeCellId || null;
+          setTimeout(() => {
+            const codeElement = document.querySelector(`[data-cell-id="${newCodeCellId}"] .cm-editor .cm-content`);
+            if (codeElement) {
+              (codeElement as HTMLElement).focus();
+            }
+          }, 60);
+        }
+      } catch {}
     },
 
     onUpdate: ({ editor }) => {
@@ -577,6 +606,17 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       setCells([...cells, newCell]);
       return newCell.id;
     },
+    addRawCell: () => {
+      const newCell: Cell = {
+        id: generateCellId(),
+        type: 'raw',
+        content: '',
+        outputs: [],
+        enableEdit: true,
+      };
+      setCells([...cells, newCell]);
+      return newCell.id;
+    },
     addAIThinkingCell: (_props: Partial<{ agentName: string; customText: string | null; textArray: string[]; useWorkflowThinking: boolean }> = {}) => {
       const newCell: Cell = {
         id: generateCellId(),
@@ -637,6 +677,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             // 检查输出变化
             if (JSON.stringify(cell.outputs || []) !== JSON.stringify(lastCell.outputs || [])) return true
             // language not part of Cell type here
+          }
+
+          // raw cell 的内容变化需要更新 tiptap
+          if (cell.type === 'raw') {
+            if (cell.content !== lastCell.content) return true
           }
 
           // 其他任何类型的 cell 变化都需要同步

@@ -157,9 +157,14 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
 
       const uploadConfig = {
         mode: 'restricted',
-        maxFileSize: 10 * 1024 * 1024,
+        maxFileSize: 50 * 1024 * 1024,
         maxFiles: files.length,
-        allowedTypes: ['.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.csv', '.pdf'],
+        allowedTypes: [
+          '.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.csv', '.pdf', '.zip', '.tar', '.gz',
+          '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+          '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp',
+          '.mp4', '.webm', '.mov', '.avi', '.mkv'
+        ],
         targetDir: '.assets'
       } as any;
 
@@ -188,12 +193,20 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
               const url = `${Backend_BASE_URL}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
               if (isImage) {
                 try {
-                  editor.chain().focus().insertContent(`<img src="${url}" alt="${name}" title="${name}" />`).run();
+                  // 使用自定义的 markdownImage 节点，保证 TipTap 能稳定解析
+                  editor.chain().focus().insertContent(
+                    `<div data-type="markdown-image" data-src="${url}" data-alt="${name}" data-title="${name}" data-markdown="![${name}](${url})"></div>`
+                  ).run();
                 } catch {
-                  editor.chain().focus().insertContent(`![${name}](${url})`).run();
+                  // 兜底为普通的 <img>，ImageExtension 也支持 parseHTML(img[src])
+                  editor.chain().focus().insertContent(`<img src="${url}" alt="${name}" title="${name}" />`).run();
                 }
               } else {
-                editor.chain().focus().insertContent(`<a href="${relPath}">${name}</a>`).run();
+                // 其他文件使用 file-attachment 节点，渲染为 LinkCell 卡片
+                const markdown = `[${name}](${url})`;
+                editor.chain().focus().insertContent(
+                  `<div data-type="file-attachment" data-markdown="${markdown}"></div>`
+                ).run();
               }
             });
           },

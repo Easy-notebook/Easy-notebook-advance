@@ -102,7 +102,7 @@
     }
   },
   "emptyState": {
-    "title": "VDSAgents",
+    "title": "What can I help you with?",
     "commandPlaceholder": "Type a command...",
     "questionPlaceholder": "Ask anything about data science...",
     "commandMode": "Command mode",

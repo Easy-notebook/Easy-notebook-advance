@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import usePreviewStore, { FileType } from '../../../store/previewStore';
-import CSVPreviewWrapper from './DataTable/CSVPreviewWrapper';
+import CSVPreviewWrapper from './DataTable';
 import ImageDisplay from './ImageView/ImageDisplay';
 import PDFDisplay from './PDFView/PDFDisplay';
 import ReactLiveSandbox from './WebView/ReactLiveSandbox';

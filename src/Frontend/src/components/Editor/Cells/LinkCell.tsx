@@ -135,26 +135,6 @@ const LinkCell: React.FC<LinkCellProps> = ({
     }
   };
 
-  const handleOpen = () => {
-    if (!href) return;
-    
-    const filePath = normalizeFilePath(href);
-    if (!filePath || !notebookId) {
-      // External link
-      window.open(href, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    // Internal file - construct download URL
-    try {
-      const base = Backend_BASE_URL?.replace(/\/$/, '') || '';
-      const downloadUrl = `${base}/download_file/${notebookId}/${encodeURIComponent(filePath)}`;
-      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
-    } catch {
-      window.open(href, '_blank', 'noopener,noreferrer');
-    }
-  };
-
   if (!readOnly && !href) {
     // Edit mode when no href is set
     return (
@@ -225,7 +205,6 @@ const LinkCell: React.FC<LinkCellProps> = ({
         <div className="flex-1 min-w-0">
           <div 
             className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-theme-600 transition-colors"
-            onClick={handleOpen}
             title={label}
           >
             {label}
@@ -234,7 +213,6 @@ const LinkCell: React.FC<LinkCellProps> = ({
             {fileExtension && (
               <span className="uppercase">{fileExtension} • </span>
             )}
-            {href.startsWith('http') ? '外部链接' : '本地文件'}
           </div>
         </div>
 

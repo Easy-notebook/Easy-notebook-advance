@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { Editor } from '@tiptap/react';
 import { 
   Code, 
@@ -128,7 +129,25 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       icon: <Code size={16} />,
       keywords: ['code', 'codeblock', '代码'],
       action: (editor) => {
-        editor.chain().focus().toggleCodeBlock().run();
+        const newId = uuidv4();
+        try {
+          editor.chain().focus().insertExecutableCodeBlock({
+            language: 'python',
+            code: '',
+            cellId: newId,
+            outputs: [],
+            enableEdit: true,
+          }).run();
+        } catch {
+          editor.chain().focus().insertContent({
+            type: 'executableCodeBlock',
+            attrs: { language: 'python', code: '', cellId: newId, outputs: [], enableEdit: true }
+          }).run();
+        }
+        setTimeout(() => {
+          const codeElement = document.querySelector(`[data-cell-id="${newId}"] .cm-editor .cm-content`);
+          if (codeElement) (codeElement as HTMLElement).focus();
+        }, 60);
       }
     },
     {
@@ -169,15 +188,15 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
         // 检查查询中是否已包含URL参数
         const imageMatch = query?.match(/^image\s+(.+)$/);
         let url = imageMatch ? imageMatch[1].trim() : null;
-        
+
         // 如果没有URL参数，弹出输入框
         if (!url) {
           url = prompt('请输入图片URL:');
         }
-        
+
         if (url) {
           try {
-            editor.chain().focus().setImage({ 
+            editor.chain().focus().setImage({
               src: url,
               alt: '图片',
               title: '图片'
@@ -186,6 +205,20 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
             // fallback: 插入普通文本
             editor.chain().focus().insertContent(`![图片](${url})`).run();
           }
+        }
+      }
+    },
+    {
+      id: 'raw',
+      title: '原始文本',
+      description: '插入原始文本单元（不解析为Markdown）',
+      icon: <Code size={16} />,
+      keywords: ['raw', 'text', 'plain', '原始', '文本'],
+      action: (editor) => {
+        try {
+          editor.chain().focus().insertContent({ type: 'rawBlock', attrs: { content: '' } }).run();
+        } catch {
+          editor.chain().focus().insertContent('<div data-type="raw-block" data-content=""></div>').run();
         }
       }
     },

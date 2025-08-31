@@ -1,18 +1,6 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef, useDeferredValue } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
-  flexRender,
-  type ColumnDef,
-  type SortingState,
-  type ColumnFiltersState,
-} from '@tanstack/react-table';
-import { FixedSizeGrid as Grid } from 'react-window';
-import { Search, Download, MoreHorizontal, BarChart3, PieChart, TrendingUp, Save } from 'lucide-react';
+import { BarChart3, PieChart, TrendingUp, MoreHorizontal } from 'lucide-react';
 import usePreviewStore from '../../../../store/previewStore';
 
 // =====================================================
@@ -128,66 +116,6 @@ class CSVAnalyzer {
   }
 }
 
-// =====================================================
-// Virtual Grid Cell
-// =====================================================
-interface VirtualCellProps {
-  columnIndex: number;
-  rowIndex: number;
-  style: React.CSSProperties;
-  data: { rows: CSVRow[]; columns: string[] };
-}
-
-const VirtualCell: React.FC<VirtualCellProps> = ({ columnIndex, rowIndex, style, data }) => {
-  const { rows, columns } = data;
-  const isHeader = rowIndex === 0;
-  const cellValue = isHeader ? columns[columnIndex] : rows[rowIndex - 1]?.[columns[columnIndex]] ?? '';
-
-  return (
-    <div
-      style={{ ...style, padding: '8px 12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', backgroundColor: isHeader ? '#f9fafb' : 'white', fontWeight: isHeader ? 600 : 400, fontSize: '14px', display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-      title={String(cellValue)}
-    >
-      {String(cellValue)}
-    </div>
-  );
-};
-
-// =====================================================
-// Editable Cell (no hooks in render!)
-// =====================================================
-interface EditableCellProps {
-  cellValue: unknown;
-  rowIndex: number;
-  columnKey: string;
-  stats?: ColumnStats;
-  onCommit: (rowIndex: number, columnKey: string, value: string) => void;
-}
-
-const EditableCell: React.FC<EditableCellProps> = React.memo(({ cellValue, rowIndex, columnKey, stats, onCommit }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(String(cellValue ?? ''));
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => { if (isEditing) inputRef.current?.focus(); }, [isEditing]);
-  useEffect(() => { setEditValue(String(cellValue ?? '')); }, [cellValue]);
-
-  const commit = useCallback(() => { onCommit(rowIndex, columnKey, editValue); setIsEditing(false); }, [rowIndex, columnKey, editValue, onCommit]);
-  const cancel = useCallback(() => { setEditValue(String(cellValue ?? '')); setIsEditing(false); }, [cellValue]);
-
-  if (isEditing) {
-    return (
-      <div className="px-2 py-1">
-        <input ref={inputRef} type="text" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }} className="w-full px-2 py-1 text-sm border border-theme-300 rounded focus:outline-none focus:ring-1 focus:ring-theme-500" />
-      </div>
-    );
-  }
-  return (
-    <div className="px-6 py-4 text-sm cursor-pointer hover:bg-gray-50 transition-colors min-h-[44px] flex items-center text-gray-700" title={String(cellValue ?? '')} onClick={() => setIsEditing(true)} style={{ fontFamily: stats?.type === 'number' ? 'Monaco, Consolas, monospace' : 'inherit', wordBreak: 'break-word' }}>
-      <span className="truncate">{String(cellValue ?? '')}</span>
-    </div>
-  );
-});
 
 // =====================================================
 // Main Component
@@ -196,8 +124,6 @@ interface TableBlock { headers: string[]; headersDisplay: string[]; rows: CSVRow
 
 interface AdvancedCSVPreviewProps {
   typeOverride?: 'csv' | 'xlsx';
-  virtualizationThreshold?: number; // default 1000
-  showColumnLetters?: boolean; // show A/B/C next to header names
 }
 
 const ensureUniqueHeaders = (headers: string[]) => {
@@ -229,26 +155,11 @@ const findHeaderIndex = (segment: any[][]): number => {
   return bestIdx;
 };
 
-const AdvancedCSVPreview: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride, virtualizationThreshold = 1000, showColumnLetters = true }) => {
-  const { activeFile, setTabDirty } = usePreviewStore();
-  const [viewMode, setViewMode] = useState<'table' | 'virtual' | 'analytics'>('table');
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState('');
-  const deferredGlobalFilter = useDeferredValue(globalFilter);
-  const [pageSize, setPageSize] = useState(50);
-  const [editableData, setEditableData] = useState<CSVRow[]>([]);
-
+const Analysis: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride }) => {
+  const { activeFile } = usePreviewStore();
   // Multi-table blocks parsed from sheet
   const [blocks, setBlocks] = useState<TableBlock[]>([]);
   const [blockIdx, setBlockIdx] = useState(0);
-
-  // Column widths from xlsx !cols (optional)
-  const [initialColWidths, setInitialColWidths] = useState<number[]>([]);
-  
-  // Grid virtualization width management
-  const gridContainerRef = useRef<HTMLDivElement | null>(null);
-  const [gridWidth, setGridWidth] = useState(800);
 
   // =============================
   // Parsing with merged-cells & multi-table (vertical) handling
@@ -365,130 +276,10 @@ const AdvancedCSVPreview: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride, v
 
   const activeBlock = blocks[blockIdx] || { headers: [], headersDisplay: [], rows: [], colWidths: [] };
 
-  // Initialize editableData when block changes
-  useEffect(() => { setEditableData(activeBlock.rows); setInitialColWidths(activeBlock.colWidths); }, [activeBlock]);
-  
-  // Measure grid container width for virtualization
-  useEffect(() => {
-    const measureWidth = () => {
-      if (gridContainerRef.current) {
-        setGridWidth(gridContainerRef.current.offsetWidth);
-      }
-    };
-    
-    measureWidth();
-    const resizeObserver = new ResizeObserver(measureWidth);
-    
-    if (gridContainerRef.current) {
-      resizeObserver.observe(gridContainerRef.current);
-    }
-    
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
-
-  const onCommitCell = useCallback((rowIndex: number, columnKey: string, value: string) => {
-    setEditableData((prev) => {
-      const next = [...prev];
-      const row = { ...(next[rowIndex] ?? {}) } as CSVRow;
-      row[columnKey] = value;
-      next[rowIndex] = row;
-      return next;
-    });
-    if (activeFile && setTabDirty) setTabDirty(activeFile.id, true);
-  }, [activeFile, setTabDirty]);
-
-  const tableColumns = useMemo<ColumnDef<CSVRow, unknown>[]>(() => {
-    const headers = activeBlock.headers;
-    const labels = activeBlock.headersDisplay;
-    return headers.map((columnKey, idx) => ({
-      accessorKey: columnKey,
-      size: initialColWidths[idx] ?? pickColumnWidth(undefined, (labels[idx] ?? columnKey).length),
-      header: ({ header }) => (
-        <div className="flex items-center gap-2 min-w-0 w-full">
-          <span className="font-medium text-xs text-gray-500 uppercase tracking-wider flex-1 min-w-0" title={labels[idx] ?? columnKey}>
-            {showColumnLetters && (
-              <span className="mr-2 inline-flex items-center justify-center rounded bg-gray-200 text-gray-700 px-1.5 py-0.5 text-[10px] font-semibold" title={`Column ${getExcelColumnName(idx)}`}>
-                {getExcelColumnName(idx)}
-              </span>
-            )}
-            {(labels[idx] ?? columnKey).length > 20 ? `${String(labels[idx] ?? columnKey).substring(0, 17)}...` : String(labels[idx] ?? columnKey)}
-          </span>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => header.column.toggleSorting()} className="p-1 hover:bg-gray-100 rounded transition-colors" title="Sort column">
-              {header.column.getIsSorted() === 'asc' ? <span className="text-theme-600">↑</span> : header.column.getIsSorted() === 'desc' ? <span className="text-theme-600">↓</span> : <MoreHorizontal className="w-3 h-3 text-gray-400" />}
-            </button>
-          </div>
-        </div>
-      ),
-      cell: ({ getValue, row }) => (
-        <EditableCell cellValue={getValue()} rowIndex={row.index} columnKey={columnKey} onCommit={onCommitCell} />
-      ),
-      filterFn: (row, columnId, filterValue): boolean => {
-        const v = row.getValue<string | number | null>(columnId);
-        if (v == null) return false;
-        return String(v).toLowerCase().includes(String(filterValue ?? '').toLowerCase());
-      },
-    }));
-  }, [activeBlock, initialColWidths, onCommitCell, showColumnLetters]);
-
-  const table = useReactTable({
-    data: editableData.length ? editableData : activeBlock.rows,
-    columns: tableColumns,
-    state: { sorting, columnFilters, globalFilter: deferredGlobalFilter, pagination: { pageIndex: 0, pageSize } },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    globalFilterFn: (row, _colId, filterValue) => {
-      if (!filterValue) return true;
-      const fv = String(filterValue).toLowerCase();
-      // Search across current active block's headers
-      return activeBlock.headers.some((h) => {
-        const v = row.getValue(h);
-        return v != null && String(v).toLowerCase().includes(fv);
-      });
-    },
-  });
-
-  const exportToCSV = useCallback(() => {
-    const rows = table.getFilteredRowModel().rows.map((r) => r.original as CSVRow);
-    const toExport = rows.length ? rows : editableData.length ? editableData : activeBlock.rows;
-    const headers = activeBlock.headers;
-
-    const safe = (val: unknown) => {
-      const s = val == null ? '' : String(val);
-      const needsWrap = /[",\n]/.test(s);
-      const escaped = s.replace(/"/g, '""');
-      return needsWrap ? `"${escaped}"` : escaped;
-    };
-
-    const header = headers.map((c) => safe(c)).join(',');
-    const body = toExport.map((row) => headers.map((col) => safe((row as CSVRow)[col])).join(',')).join('\n');
-    const csv = `${header}\n${body}`;
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${activeFile?.name || 'data'}_edited.csv`; a.click(); URL.revokeObjectURL(url);
-  }, [table, editableData, activeBlock, activeFile?.name]);
-
-  const saveChanges = useCallback(async () => {
-    if (!activeFile) return;
-    try {
-      const updated = JSON.stringify(editableData);
-      await usePreviewStore.getState().updateActiveFileContent(updated);
-      if (setTabDirty) setTabDirty(activeFile.id, false);
-      console.log('Changes saved');
-    } catch (e) { console.error('Failed to save changes:', e); }
-  }, [activeFile, editableData, setTabDirty]);
 
   // Analytics view (computed on current active block)
   const renderAnalytics = () => {
-    const analytics = CSVAnalyzer.analyzeData(editableData.length ? editableData : activeBlock.rows);
+    const analytics = CSVAnalyzer.analyzeData(activeBlock.rows);
     return (
       <div className="p-6 bg-white rounded-lg">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -531,7 +322,6 @@ const AdvancedCSVPreview: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride, v
     );
   }
 
-  const useVirtual = viewMode === 'virtual' && (activeBlock.rows?.length ?? 0) > virtualizationThreshold;
 
   return (
     <div className="h-full flex flex-col bg-white">
@@ -563,108 +353,17 @@ const AdvancedCSVPreview: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride, v
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex bg-gray-200 rounded-lg p-1">
-                {(['table', 'virtual', 'analytics'] as const).map((mode) => (
-                  <button key={mode} onClick={() => setViewMode(mode)} className={`px-3 py-1 text-sm rounded transition-colors capitalize ${viewMode===mode?'bg-white text-gray-900 shadow-sm':'text-gray-600 hover:text-gray-900'}`}>{mode}</button>
-                ))}
-              </div>
-              {editableData.length > 0 && (
-                <button onClick={saveChanges} className="flex items-center gap-2 px-3 py-1 bg-theme-600 text-white rounded-md hover:bg-theme-700 text-sm transition-colors" title="Save changes"><Save className="w-4 h-4" />Save</button>
-              )}
-              <button onClick={exportToCSV} className="flex items-center gap-2 px-3 py-1 bg-theme-600 text-white rounded-md hover:bg-theme-700 text-sm transition-colors"><Download className="w-4 h-4" />Export</button>
-            </div>
           </div>
         </div>
       </div>
 
       <div className="mt-4 flex-grow flex flex-col overflow-hidden">
         <div className="bg-white rounded-lg shadow-sm overflow-hidden flex flex-col h-full">
-          <div className="border-b flex-shrink-0">
-            <div className="flex">
-              {(['table', 'virtual', 'analytics'] as const).map((mode) => (
-                <button key={mode} onClick={() => setViewMode(mode)} className={`py-3 px-6 font-medium text-sm capitalize ${viewMode===mode?'border-b-2 border-theme-600 text-theme-700':'text-gray-500 hover:text-gray-700'}`}>{mode}</button>
-              ))}
-            </div>
-          </div>
-
-          {(viewMode === 'table' || viewMode === 'virtual') && (
-            <div className="px-4 py-3 border-b bg-gray-50 flex-shrink-0">
-              <div className="flex items-center gap-2 max-w-md">
-                <Search className="w-4 h-4 text-gray-400" />
-                <input type="text" placeholder="Search across all columns..." value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-theme-500" />
-                {globalFilter && (<button onClick={() => setGlobalFilter('')} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">Clear</button>)}
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'analytics' ? (
-            renderAnalytics()
-          ) : useVirtual ? (
-            <div ref={gridContainerRef} className="w-full">
-              <Grid 
-                columnCount={activeBlock.headers.length} 
-                columnWidth={150} 
-                width={gridWidth}
-                height={400} 
-                rowCount={(activeBlock.rows?.length ?? 0) + 1} 
-                rowHeight={40} 
-                itemData={{ rows: activeBlock.rows, columns: activeBlock.headers }} 
-                className="border-t"
-              >
-                {VirtualCell}
-              </Grid>
-            </div>
-          ) : (
-            <div className="overflow-auto flex-1">
-              <div className="min-w-full">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    {table.getHeaderGroups().map((hg) => (
-                      <tr key={hg.id}>
-                        {hg.headers.map((header) => (
-                          <th key={header.id} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" style={{ minWidth: `${Math.max(header.getSize(), 120)}px`, maxWidth: `${Math.max(header.getSize(), 380)}px` }}>
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </th>
-                        ))}
-                      </tr>
-                    ))}
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {table.getRowModel().rows.map((row) => (
-                      <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="whitespace-nowrap overflow-hidden text-ellipsis" style={{ minWidth: `${Math.max(cell.column.getSize(), 120)}px`, maxWidth: `${Math.max(cell.column.getSize(), 380)}px` }}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'table' && (
-            <div className="px-4 py-3 border-t flex justify-between items-center flex-shrink-0">
-              <div className="flex items-center gap-2"><span className="text-sm text-gray-500">Rows per page:</span>
-                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-theme-500">
-                  {[25, 50, 100, 500].map((size) => (<option key={size} value={size}>{size}</option>))}
-                </select>
-              </div>
-              <div className="text-sm text-gray-500">Showing {table.getState().pagination.pageIndex * pageSize + 1} to {Math.min((table.getState().pagination.pageIndex + 1) * pageSize, table.getFilteredRowModel().rows.length)} of {table.getFilteredRowModel().rows.length} rows</div>
-              <div className="flex gap-2">
-                <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className={`px-3 py-1 border rounded-md text-sm ${!table.getCanPreviousPage() ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Previous</button>
-                <span className="flex items-center px-2 text-sm text-gray-700">{table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}</span>
-                <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className={`px-3 py-1 border rounded-md text-sm ${!table.getCanNextPage() ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Next</button>
-              </div>
-            </div>
-          )}
+          {renderAnalytics()}
         </div>
       </div>
     </div>
   );
 };
 
-export default AdvancedCSVPreview;
+export default Analysis;

@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
   CheckCircle2,
-  Library,
+  FolderClock,
   TreePine,
   Settings2,
   Network,
@@ -46,7 +46,7 @@ interface MiniSidebarProps {
 
 /** 功能区（顶部/中部） */
 const PRIMARY_ITEMS: MiniSidebarItem[] = [
-  // { id: 'library', icon: Library, title: 'Library' },
+  // { id: 'library', icon: FolderClock, title: 'Library' },
   // { id: 'knowledge-forest', icon: TreePine, title: 'Knowledge Forest' },
   // { id: 'tools', icon: Network, title: 'Tools' },
 ];

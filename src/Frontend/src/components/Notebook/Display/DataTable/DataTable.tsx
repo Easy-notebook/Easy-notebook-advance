@@ -140,7 +140,7 @@ interface OfficeStyleCSVPreviewProps {
   showFormulaBar?: boolean;
 }
 
-const OfficeStyleCSVPreview: React.FC<OfficeStyleCSVPreviewProps> = ({
+const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   typeOverride, showFormulaBar = true
 }) => {
   const { activeFile, setTabDirty } = usePreviewStore();
@@ -924,4 +924,4 @@ const OfficeStyleCSVPreview: React.FC<OfficeStyleCSVPreviewProps> = ({
   );
 };
 
-export default OfficeStyleCSVPreview;
+export default DataTable;

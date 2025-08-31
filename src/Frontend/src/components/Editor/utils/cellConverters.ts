@@ -35,7 +35,7 @@ export function convertCellsToHtml(cells: Cell[]) {
     if (cell.type === 'code' || cell.type === 'hybrid') {
       // code和Hybrid cell转换为可执行代码块，确保包含正确的ID和位置信息
       if (DEBUG) console.log(`转换代码块 ${index}: ID=${cell.id}, type=${cell.type}`);
-      return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}"></div>`
+      return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}" data-is-generating="${(cell as any).metadata?.isGenerating === true}"></div>`
     } else if (cell.type === 'markdown') {
       // markdown cell转换为HTML
       return convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter)
@@ -71,6 +71,10 @@ export function convertCellsToHtml(cells: Cell[]) {
       // 使用附件节点渲染，保持与Jupyter一致的卡片UI，并传入真实 cellId
       return `<div data-type="file-attachment" data-cell-id="${cell.id}" data-markdown="[${label}](${href})"></div>`;
 
+    } else if (cell.type === 'raw') {
+      // raw cell：原样存储文本，不作为markdown解释
+      if (DEBUG) console.log(`转换Raw单元格 ${index}: ID=${cell.id}`);
+      return `<div data-type="raw-block" data-cell-id="${cell.id}" data-content="${encodeURIComponent(cell.content || '')}"></div>`
     }
 
     return ''
@@ -286,8 +290,23 @@ export function convertEditorStateToCells(editor: any): Cell[] {
           content: codeContent,
           outputs: outputsParsed,
           enableEdit: attrs.enableEdit !== false,
+          metadata: { ...(attrs.metadata || {}), isGenerating: attrs.isGenerating === true },
           ...(attrs.originalType !== 'markdown' && { language: attrs.language || 'python' })
         } as any);
+      } else if (node.type === 'rawBlock') {
+        // 处理Raw块
+        flushMarkdownContent();
+        const attrs = node.attrs || {};
+        const cellId = attrs.cellId || generateCellId();
+        let txt = attrs.content || '';
+        try { txt = decodeURIComponent(txt); } catch {}
+        newCells.push({
+          id: cellId,
+          type: 'raw',
+          content: txt,
+          outputs: [],
+          enableEdit: true,
+        } as any)
       } else if (node.type === 'thinkingCell') {
         // 处理AI思考单元格
         flushMarkdownContent()
@@ -485,6 +504,7 @@ function convertHtmlToCells_fallback(editor: any) {
           content: '',
           outputs: [],
           enableEdit: true,
+          metadata: { isGenerating: (el.getAttribute('data-is-generating') === 'true') }
         } as any)
       } else if (el.getAttribute('data-type') === 'latex-block') {
         // 处理LaTeX节点
@@ -570,6 +590,20 @@ function convertHtmlToCells_fallback(editor: any) {
             generationParams
           }
         })
+      } else if (el.getAttribute('data-type') === 'raw-block') {
+        // 处理raw块
+        flushMarkdownContent()
+        const cellId = el.getAttribute('data-cell-id') || generateCellId()
+        const rawEncoded = el.getAttribute('data-content') || ''
+        let rawText = ''
+        try { rawText = decodeURIComponent(rawEncoded) } catch { rawText = rawEncoded }
+        newCells.push({
+          id: cellId,
+          type: 'raw',
+          content: rawText,
+          outputs: [],
+          enableEdit: true,
+        } as any)
       } else if (el.tagName && el.tagName.toLowerCase() === 'table') {
         // 处理表格节点
         if (DEBUG) console.log('发现表格节点:', node);

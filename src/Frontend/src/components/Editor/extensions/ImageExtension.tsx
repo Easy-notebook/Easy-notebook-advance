@@ -2,14 +2,14 @@ import { Node, mergeAttributes, RawCommands } from '@tiptap/core'
 import { InputRule } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import React, { useState, useRef, useEffect } from 'react'
-import { Upload, X, Edit3, Loader2, Maximize2 } from 'lucide-react'
+import { Upload, X, Edit3, Loader2 } from 'lucide-react'
+import { Image } from 'antd'
 import useStore from '../../../store/notebookStore'
 
 const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
   const [isEditing, setIsEditing] = useState(false)
   const [tempMarkdown, setTempMarkdown] = useState('')
   const [imageError, setImageError] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const textareaRef = useRef<HTMLInputElement>(null)
   
@@ -76,35 +76,44 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
   }, [isFocused, isEditing])
   
   // 当store中的内容变化时，同步到node属性和临时编辑状态
-  useEffect(() => {    
+  useEffect(() => {
+    // 仅当 store 中存在有效的内容且与当前 attrs 不一致时才写回，避免在撤销后覆盖历史内容
     if (cellContent) {
       const parsed = parseMarkdown(cellContent)
       if (parsed.isValid) {
-        // 同步到tiptap node属性
-        updateAttributes({
+        const nextAttrs = {
           markdown: cellContent,
           src: parsed.src,
           alt: parsed.alt,
           title: parsed.alt,
           cellId: cellId
-        })
+        }
+        const changed = (
+          node.attrs?.markdown !== nextAttrs.markdown ||
+          node.attrs?.src !== nextAttrs.src ||
+          node.attrs?.alt !== nextAttrs.alt ||
+          node.attrs?.title !== nextAttrs.title ||
+          node.attrs?.cellId !== nextAttrs.cellId
+        )
+        if (changed) {
+          updateAttributes(nextAttrs)
+        }
       }
       // 同步临时编辑内容
-      if (!isEditing) {
+      if (!isEditing && tempMarkdown !== cellContent) {
         setTempMarkdown(cellContent)
       }
     }
-  }, [cellContent, cellId, isEditing])
+  }, [cellContent, cellId, isEditing, node.attrs?.markdown, node.attrs?.src, node.attrs?.alt, node.attrs?.title, tempMarkdown])
 
   // 初始化
   useEffect(() => {
+    // 初始化时，如果节点已有内容，则仅同步到本地临时状态；避免用占位符覆盖撤销恢复的图片
     if (currentContent) {
-      setTempMarkdown(currentContent)
-    } else {
-      setTempMarkdown('![]()')
-      setIsEditing(true) // 新节点默认进入编辑模式
+      if (tempMarkdown !== currentContent) setTempMarkdown(currentContent)
     }
-  }, [cellId, currentContent])
+    // 不再默认进入编辑模式，除非显式触发
+  }, [cellId, currentContent, tempMarkdown])
 
   // 开始编辑 - 只在创建模式下允许，且不是生成完成的内容，且必须处于聚焦状态
   const startEditing = () => {
@@ -171,18 +180,6 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
     setImageError(false)
   }
 
-  // 打开模态框
-  const openModal = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isEditing) {
-      setIsModalOpen(true);
-    }
-  };
-
-  // 关闭模态框
-  const closeModal = () => {
-    setIsModalOpen(false);
-  };
 
   // Timer effect for generation progress
   useEffect(() => {
@@ -361,12 +358,13 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
                     Your browser does not support video playback
                   </video>
                 ) : (
-                  <img
+                  <Image
                     src={tempPreviewData.src}
                     alt={tempPreviewData.alt}
                     onError={handleImageError}
                     onLoad={handleImageLoad}
                     className="max-w-full h-auto rounded-lg shadow-sm"
+                    preview={false}
                   />
                 )}
                 
@@ -409,25 +407,17 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
                     Your browser does not support video playback
                   </video>
                 ) : (
-                  <>
-                    <img
-                      src={previewData.src}
-                      alt={previewData.alt}
-                      title={previewData.alt}
-                      onError={handleImageError}
-                      onLoad={handleImageLoad}
-                      onClick={viewMode === "create" ? openModal : undefined}
-                      className={`max-w-full h-auto rounded-lg shadow-sm ${
-                        viewMode === "create" ? "cursor-pointer hover:opacity-90 transition-opacity" : ""
-                      }`}
-                    />
-                    {/* Magnify button - only show in create mode */}
-                    {viewMode === "create" && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1">
-                        <Maximize2 size={16} className="text-white" />
-                      </div>
-                    )}
-                  </>
+                  <Image
+                    src={previewData.src}
+                    alt={previewData.alt}
+                    title={previewData.alt}
+                    onError={handleImageError}
+                    onLoad={handleImageLoad}
+                    className="max-w-full h-auto rounded-lg shadow-sm"
+                    preview={viewMode === "create" ? {
+                      mask: <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1 flex items-center justify-center text-white text-sm">Click to View</div>
+                    } : false}
+                  />
                 )}
                 
                 {imageError && (
@@ -496,33 +486,6 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
         )}
       </NodeViewWrapper>
 
-      {/* Full-screen modal */}
-      {isModalOpen && previewData.isValid && previewData.src && !previewData.isVideo && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
-          onClick={closeModal}
-        >
-          <div className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center">
-            <img
-              src={previewData.src}
-              alt={previewData.alt}
-              className="max-w-full max-h-full object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <button
-              onClick={closeModal}
-              className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
-            >
-              <X size={24} />
-            </button>
-            {previewData.alt && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-center bg-black bg-opacity-50 px-4 py-2 rounded">
-                {previewData.alt}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </>
   )
 }

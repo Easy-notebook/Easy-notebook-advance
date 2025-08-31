@@ -120,7 +120,7 @@ const WorkflowVisualization: React.FC<{ className?: string }> = ({ className = '
   }
 
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div className={`${className}`}>
       <header className="pb-4 border-b">
         <h2 className="text-2xl font-extrabold text-gray-800">Workflow Plan</h2>
         <p className="text-md text-gray-600 mt-1">
@@ -128,7 +128,7 @@ const WorkflowVisualization: React.FC<{ className?: string }> = ({ className = '
         </p>
       </header>
 
-      <div className="space-y-4">
+      <div className="mb-4 mt-0">
         {workflowTemplate.stages.map((stage, index) => (
           <StageCard key={stage.id} stage={stage} stageIndex={index} fsmContext={augmentedFsmContext} />
         ))}

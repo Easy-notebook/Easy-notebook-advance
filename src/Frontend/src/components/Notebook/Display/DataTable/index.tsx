@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import AdvancedCSVPreview from './AdvancedCSVPreview';
-import OfficeStyleCSVPreview from './OfficeStyleCSVPreview';
+import Analysis from './Analysis';
+import DataTable from './DataTable';
 import { FileSpreadsheet, BarChart3} from 'lucide-react';
 
 interface CSVPreviewWrapperProps {
@@ -42,7 +42,7 @@ const CSVPreviewWrapper: React.FC<CSVPreviewWrapperProps> = (props) => {
               title="Office-style spreadsheet view with Excel-like interface"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              Edit mode
+              Data
             </button>
             <button
               onClick={() => handleViewModeChange('advanced')}
@@ -56,7 +56,7 @@ const CSVPreviewWrapper: React.FC<CSVPreviewWrapperProps> = (props) => {
               title="Advanced view with analytics, virtual scrolling, and multi-table support"
             >
               <BarChart3 className="w-4 h-4" />
-              Advanced Features
+              Analysis
             </button>
           </div>
         </div>
@@ -65,9 +65,9 @@ const CSVPreviewWrapper: React.FC<CSVPreviewWrapperProps> = (props) => {
       {/* Content Area */}
       <div className="flex-1 overflow-hidden">
         {viewMode === 'office' ? (
-          <OfficeStyleCSVPreview {...props} />
+          <DataTable {...props} />
         ) : (
-          <AdvancedCSVPreview {...props} />
+          <Analysis {...props} />
         )}
       </div>
     </div>

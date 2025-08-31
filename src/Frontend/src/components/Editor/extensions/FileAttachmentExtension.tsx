@@ -32,16 +32,21 @@ const FileAttachmentView: React.FC<any> = ({ node, updateAttributes, deleteNode 
 
   // 仅当在 store 中找到匹配时，写回稳定的 cellId，避免覆盖其它 cell
   useEffect(() => {
+    // 仅当存在匹配的 store cell 且与当前 attrs 不一致时才写回，避免撤销后覆盖历史值
     if (matchedCell) {
-      updateAttributes({
+      const nextAttrs = {
         cellId: matchedCell.id,
         markdown: matchedCell.content || '',
-      });
-    } else {
-      // 至少保持 markdown 一致，便于后续解析
-      updateAttributes({ markdown: node?.attrs?.markdown || '' });
+      }
+      const changed = (
+        node?.attrs?.cellId !== nextAttrs.cellId ||
+        node?.attrs?.markdown !== nextAttrs.markdown
+      )
+      if (changed) {
+        updateAttributes(nextAttrs);
+      }
     }
-  }, [matchedCell?.id, matchedCell?.content, node?.attrs?.markdown]);
+  }, [matchedCell?.id, matchedCell?.content, node?.attrs?.markdown, node?.attrs?.cellId]);
 
   return (
     <NodeViewWrapper>

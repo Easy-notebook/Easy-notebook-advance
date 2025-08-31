@@ -57,6 +57,20 @@ export const CodeBlockExtension = Node.create({
           'data-enable-edit': String(attributes.enableEdit),
         }),
       },
+      originalType: {
+        default: 'code',
+        parseHTML: element => element.getAttribute('data-original-type') || 'code',
+        renderHTML: attributes => ({
+          'data-original-type': attributes.originalType || 'code',
+        }),
+      },
+      isGenerating: {
+        default: false,
+        parseHTML: element => element.getAttribute('data-is-generating') === 'true',
+        renderHTML: attributes => ({
+          'data-is-generating': String(!!attributes.isGenerating),
+        }),
+      },
     }
   },
 
@@ -78,6 +92,7 @@ export const CodeBlockExtension = Node.create({
         'data-cell-id': node.attrs.cellId,
         'data-outputs': JSON.stringify(node.attrs.outputs || []),
         'data-enable-edit': String(node.attrs.enableEdit),
+        'data-is-generating': String(!!node.attrs.isGenerating),
       }),
     ]
   },
@@ -386,11 +401,11 @@ const CodeBlockView = ({
   // CodeCell的内容变化只在store中管理，不同步回tiptap节点
 
   // 根据cell类型决定使用哪个组件
-  const CellComponent = virtualCell.type === 'Hybrid' ? HybridCell : CodeCell;
+  const CellComponent = virtualCell.type === 'hybrid' ? HybridCell : CodeCell;
   
   return (
-    <NodeViewWrapper 
-      className="executable-code-block-wrapper my-4"
+    <NodeViewWrapper
+      className="executable-code-block-wrapper my-4 relative"
       data-cell-id={cellId}
     >
       {/* 根据cell类型动态选择组件 */}
@@ -403,6 +418,14 @@ const CodeBlockView = ({
         finished_thinking={false}
         thinkingText="finished thinking"
       />
+      {((virtualCell && (virtualCell as any).metadata?.isGenerating) || false) && (
+        <div className="absolute inset-0 bg-white/60 flex items-center justify-center rounded-lg z-10">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <span className="animate-spin inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full" />
+            <span>Generating code...</span>
+          </div>
+        </div>
+      )}
     </NodeViewWrapper>
   )
 }
