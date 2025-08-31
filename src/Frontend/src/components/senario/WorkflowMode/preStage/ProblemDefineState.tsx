@@ -1,4 +1,4 @@
-import ResizablePanel from '../UI/ResizableSplitPanel';
+import { Splitter } from 'antd';
 import React, {
     useState,
     useEffect,
@@ -453,24 +453,13 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
  */
 const ProblemDefineState: FC<ProblemDefineProps> = ({ confirmProblem }) => {
     return (
-        <ResizablePanel
-            defaultSize={0}
-            minSize={0}
-            maxSize={2000}
-            resizePanel="right"
-            orientation="vertical"
-            dragEnabled={true}
-            accentColor="#e11d48"
-            style={{
-                height: '100%',
-                width: '100%',
-                overflow: 'hidden',
-            }}
-        >
-            <div className="flex items-center justify-center w-full h-full">
-                <ProblemDefineWorkload confirmProblem={confirmProblem} />
-            </div>
-        </ResizablePanel>
+        <Splitter>
+            <Splitter.Panel defaultSize={'100%'} resizable={false}>
+                <div className="flex items-center justify-center w-full h-full">
+                    <ProblemDefineWorkload confirmProblem={confirmProblem} />
+                </div>
+            </Splitter.Panel>
+        </Splitter>
     );
 };
 

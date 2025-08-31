@@ -96,6 +96,9 @@ const MiniSidebar = memo(function MiniSidebar({
       className={[
         'w-16 h-full',
         'flex flex-col',
+        'bg-white',
+        'border-black',
+        'border-r',
       ].join(' ')}
     >
       <div className="h-12 flex items-center justify-center shrink-0 mt-2">
@@ -117,7 +120,6 @@ const MiniSidebar = memo(function MiniSidebar({
                 <div 
                   className="absolute inset-0 bg-white rounded-l-3xl"
                   style={{
-                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06), inset 0 -2px 4px rgba(0,0,0,0.06), inset 2px 0 4px rgba(0,0,0,0.06)',
                     border: '1px solid rgba(0,0,0,0.04)',
                     borderRight: 'none'
                   }}
@@ -147,8 +149,8 @@ const MiniSidebar = memo(function MiniSidebar({
                   <div 
                     className="absolute inset-0 bg-white rounded-l-3xl"
                     style={{
-                      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06), inset 0 -2px 4px rgba(0,0,0,0.06), inset 2px 0 4px rgba(0,0,0,0.06)',
-                      border: '1px solid rgba(0,0,0,0.04)',
+                      // boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06), inset 0 -2px 4px rgba(0,0,0,0.06), inset 2px 0 4px rgba(0,0,0,0.06)',
+                      // border: '1px solid rgba(0,0,0,0.04)',
                       borderRight: 'none'
                     }}
                   />
@@ -230,7 +232,7 @@ const MiniSidebar = memo(function MiniSidebar({
       </div>
 
       {/* 底部固定：仅纵向渲染底部项（默认只有 Settings），避免横向排布 */}
-      <div className="py-3 border-t border-gray-200 shrink-0">
+      <div className="py-3 shrink-0">
         <ul className="space-y-1">
           {BOTTOM_ITEMS.map((item) => {
             const Icon = item.icon;

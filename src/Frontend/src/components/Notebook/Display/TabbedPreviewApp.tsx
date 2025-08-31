@@ -53,7 +53,7 @@ const TabbedPreviewApp: React.FC = () => {
         <div className="flex items-center justify-center h-full">
           <div className="text-center text-gray-400">
             <div className="text-lg mb-2">No file selected</div>
-            <div className="text-sm">Select a file from the file explorer to preview it here</div>
+            <div className="text-sm">Switch to notebook view or select a file from the file explorer</div>
           </div>
         </div>
       );
@@ -199,7 +199,7 @@ const TabbedPreviewApp: React.FC = () => {
     <div className="w-full h-full flex flex-col bg-gray-50">
       {/* Tab controls */}
       {activeFile && (
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-100">
+        <div className="flex items-center">
           {/* HTML 预览/源码切换 */}
           {activeFile?.type === 'html' && (
             <div className="flex items-center bg-gray-200 rounded p-1" role="tablist" aria-label="HTML view switch">

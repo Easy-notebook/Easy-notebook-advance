@@ -589,13 +589,17 @@ const NotebookApp = () => {
     currentPhaseId
   ]);
 
+  const {
+    activeFile  
+  } = usePreviewStore();
+
   return (
-    <div className="h-screen flex">
+    <div className="h-screen flex border-r border-black">
       <SettingsPage />
       {(
         <div className="flex">
           <div
-            className="transition-all duration-500 ease-in-out relative"
+            className="transition-all duration-500 ease-in-out relative border-r border-black"
             style={{ width: isCollapsed ? '48px' : `${leftSidebarWidth}px` }}
           >
             <OutlineSidebar
@@ -621,7 +625,7 @@ const NotebookApp = () => {
         </div>
       )}
       {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="flex-1 flex flex-col overflow-hidden relative m-0 p-0">
         <CommandInput
           onClick={() => setShowCommandInput(true)}
         />
@@ -646,11 +650,11 @@ const NotebookApp = () => {
         />
 
         {/* GlobalTabList - 全局文件标签列表 */}
-        <GlobalTabList />
+        <GlobalTabList/>
 
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
           {/* PreviewApp - 文件预览 */}
-          <div className={`${isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
+          <div className={`${isShowingFileExplorer && activeFile ? 'block' : 'hidden'} w-full h-full`}>
             <TabbedPreviewApp />
           </div>
 
@@ -660,7 +664,7 @@ const NotebookApp = () => {
           </div>
 
           {/* MainContent - 主笔记本内容 */}
-          <div className={`${!isShowingFileExplorer && currentView === 'notebook' ? 'block' : 'hidden'} w-full h-full`}>
+          <div className={`${!isShowingFileExplorer && currentView === 'notebook' || !activeFile ? 'block' : 'hidden'} w-full h-full`}>
             <MainContent
               cells={cells}
               viewMode={viewMode}
@@ -697,7 +701,7 @@ const NotebookApp = () => {
 
       {/* 右侧边栏 */}
       {isRightSidebarCollapsed && (
-        <div className="flex">
+        <div className="flex border-l border-black">
           <div
             className="w-px bg-gray-300 hover:bg-theme-500 cursor-col-resize transition-colors duration-150 relative group"
             onMouseDown={handleRightResize}

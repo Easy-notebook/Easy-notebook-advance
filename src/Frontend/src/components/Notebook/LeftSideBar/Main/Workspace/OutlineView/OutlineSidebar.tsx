@@ -170,7 +170,7 @@ const OutlineSidebar = ({
   return (
     <div className="flex h-full">
       {/* MiniSidebar - 固定宽度 */}
-      <div className="w-17 shrink-0">
+      <div className="w-17 shrink-0 bg-white">
         <MiniSidebar
           phases={allPhases}
           currentPhaseId={currentPhaseId}
@@ -206,13 +206,13 @@ const OutlineSidebar = ({
           {/* 中间内容：根据 activeTab 切换显示 */}
           <SidebarContent>
             {activeTab === 'file' ? (
-              // 文件视图：使用 FileTree 组件
-              <div className="flex-1 h-full w-full relative">
+              // 文件视图：使用 FileTree 组件，简化容器支持换行
+              <div className="py-0">
                 <FileTree notebookId={notebookId || ''} projectName={projectName} />
               </div>
             ) : activeTab === 'agents' ? (
-              // Agent视图：显示AI代理列表
-              <div className="flex-1 h-full w-full relative">
+              // Agent视图：显示AI代理列表，简化容器支持换行
+              <div className="py-0">
                 <AgentList
                   isCollapsed={false}
                   onAgentSelect={handleAgentSelect}

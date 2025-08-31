@@ -7,6 +7,7 @@ import WorkflowPanel from './WorkflowPanel';
 import { findCellsByStep } from '../../../utils/markdownParser';
 import useStore from '../../../store/notebookStore';
 import PreviewApp from '../Display/PreviewApp';
+import { Splitter } from 'antd';
 
 interface MainContentProps {
   cells: any[];
@@ -115,12 +116,19 @@ const MainContent: React.FC<MainContentProps> = ({
     return <DetachedCellView />;
   }
 
-  // 如果有独立窗口且是分屏模式，渲染分屏布局
+  // 如果有独立窗口且是分屏模式，渲染分屏布局（改用 Antd Splitter）
   if (detachedCellId && !isDetachedCellFullscreen) {
     return (
-      <ResizableSplit
-        renderLeft={() => (
-          <>
+      <div className="w-full h-full">
+        <Splitter onResizeEnd={(sizes) => {
+          // 将左侧面板宽度百分比持久化（与旧逻辑兼容）
+          try {
+            const total = sizes.reduce((a, b) => a + b, 0);
+            const leftPercent = (sizes[0] / total) * 100;
+            localStorage.setItem('notebook_split_left_width', String(Math.min(80, Math.max(20, leftPercent))));
+          } catch {}
+        }}>
+          <Splitter.Panel defaultSize={'50%'} min={'20%'} max={'80%'}>
             {shouldShowDSLCUI ? (
               <div className="w-full h-full" style={{ zIndex: 1 }}>
                 <DSLCPipeline onAddCell={handleAddCell} />
@@ -137,18 +145,18 @@ const MainContent: React.FC<MainContentProps> = ({
             ) : (
               <div style={{ zIndex: 10 }}>{renderOtherModes()}</div>
             )}
-          </>
-        )}
-        renderRight={() => (
-          detachedCell?.type === 'link' ? (
-            <div className="w-full h-full">
-              <PreviewApp />
-            </div>
-          ) : (
-            <DetachedCellView />
-          )
-        )}
-      />
+          </Splitter.Panel>
+          <Splitter.Panel>
+            {detachedCell?.type === 'link' ? (
+              <div className="w-full h-full">
+                <PreviewApp />
+              </div>
+            ) : (
+              <DetachedCellView />
+            )}
+          </Splitter.Panel>
+        </Splitter>
+      </div>
     );
   }
 

@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo } from 'react';
 import usePreviewStore, { FileType } from '../../../store/previewStore';
 import useStore from '../../../store/notebookStore';
+import { Tabs } from 'antd';
 import {
-  X,
   FileText,
   Image as ImageIcon,
   File as FileIcon,
@@ -47,66 +47,6 @@ const getFileTabIcon = (type: FileType | 'notebook') => {
   }
 };
 
-// ---------- Tab ----------
-interface TabProps {
-  tab: FileTab;
-  onSelect: (id: string) => void;
-  onClose: (id: string) => void;
-  isClosable?: boolean;
-}
-
-const Tab: React.FC<TabProps> = ({ tab, onSelect, onClose, isClosable = true }) => {
-  const handleClose = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.stopPropagation();
-      onClose(tab.id);
-    },
-    [onClose, tab.id]
-  );
-
-  // 当前notebook tab永远不可关闭
-  const canClose = isClosable && !tab.isCurrentNotebook;
-
-  return (
-    <div
-      className={`
-        group flex items-center gap-2 px-3 py-2 border-r border-gray-200
-        transition-colors duration-200 min-w-0 max-w-48 cursor-pointer
-        ${tab.isActive
-          ? 'bg-white border-b-2 border-b-theme-500 text-gray-900'
-          : 'bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-900'}
-        ${tab.isCurrentNotebook ? 'border-l-2 border-l-theme-400' : ''}
-      `}
-      onClick={() => onSelect(tab.id)}
-      title={tab.name}
-      role="tab"
-      aria-selected={tab.isActive}
-      aria-current={tab.isActive ? 'page' : undefined}
-    >
-      {getFileTabIcon(tab.type)}
-      <span className={`truncate text-sm ${
-        tab.isCurrentNotebook 
-          ? 'font-bold text-theme-800' 
-          : 'font-medium'
-      }`}>
-        {tab.name}
-        {tab.isDirty && <span className="text-orange-500 ml-1" aria-label="Unsaved changes">*</span>}
-      </span>
-      {canClose && (
-        <div
-          className="ml-1 p-0.5 hover:bg-gray-200 rounded cursor-pointer"
-          onClick={handleClose}
-          aria-label={`Close ${tab.name}`}
-          title="Close"
-          role="button"
-        >
-          <X className="w-3 h-3" />
-        </div>
-      )}
-    </div>
-  );
-};
-
 // ---------- Main Component ----------
 const GlobalTabList: React.FC = () => {
   // Global stores
@@ -124,8 +64,9 @@ const GlobalTabList: React.FC = () => {
   const tabs = useMemo<FileTab[]>(
     () => {
       // 构建notebook tab的名称，与左侧文件树保持一致
-      const projectName = notebookTitle || (tasks && tasks.length > 0 ? tasks[0].title : '');
-      const notebookName = projectName ? `${projectName}.easynb` : 'Current Notebook';
+      // const projectName = notebookTitle || (tasks && tasks.length > 0 ? tasks[0].title : '');
+      // const notebookName = projectName ? `${projectName}.easynb` : 'Current Notebook';
+      const notebookName = "Notebook"
       
       const notebookTab: FileTab = {
         id: 'current-notebook',
@@ -187,6 +128,24 @@ const GlobalTabList: React.FC = () => {
     usePreviewStore.getState().closePreviewFile(tabId);
   }, []);
 
+  // 先计算所有的 Hook，然后再决定是否渲染
+  const activeKey = useMemo(() => (
+    previewMode === 'file' ? (activeFile?.id ?? 'current-notebook') : 'current-notebook'
+  ), [previewMode, activeFile?.id]);
+
+  const items = useMemo(() => tabs.map(t => ({
+    key: t.id,
+    label: (
+      <div className="flex items-center gap-2 min-w-0 max-w-48">
+        {getFileTabIcon(t.type)}
+        <span className={`truncate text-sm ${t.isCurrentNotebook ? 'font-bold text-theme-800' : 'font-medium'}`}>
+          {t.name}{t.isDirty ? <span className="text-orange-500 ml-1" aria-label="Unsaved changes">*</span> : null}
+        </span>
+      </div>
+    ),
+    closable: !t.isCurrentNotebook && tabs.length > 1,
+  })), [tabs]);
+
   // 只有在有文件tabs或者不在默认状态时才显示tab列表
   const shouldShowTabs = tabs.length > 1 || previewMode === 'file';
 
@@ -195,19 +154,18 @@ const GlobalTabList: React.FC = () => {
   }
 
   return (
-    <div className="flex items-center bg-gray-100 border-b border-gray-200 min-h-[40px]">
-      <div className="flex flex-1 overflow-x-auto">
-        {tabs.map((tab) => (
-          <Tab
-            key={tab.id}
-            tab={tab}
-            onSelect={handleTabSelect}
-            onClose={handleTabClose}
-            isClosable={tabs.length > 1 && !tab.isCurrentNotebook}
-          />
-        ))}
-      </div>
-    </div>
+      <Tabs
+        type="editable-card"
+        className="bg-white mb-0 mt-0 p-0"
+        style={{ margin: '0px !important' }}
+        hideAdd
+        items={items}
+        activeKey={activeKey}
+        onChange={(k) => handleTabSelect(k)}
+        onEdit={(targetKey, action) => {
+          if (action === 'remove') handleTabClose(targetKey as string);
+        }}
+      />
   );
 };
 

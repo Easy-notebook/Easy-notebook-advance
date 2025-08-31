@@ -30,7 +30,7 @@ export const SHARED_STYLES = {
   container: {
     base: 'relative h-full flex flex-col bg-white border-r border-slate-200/60 shadow-sm',
     header: 'h-14 flex items-center justify-between px-4 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-sm',
-    content: 'flex-1 h-full overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300/50 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60'
+    content: 'flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300/50 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60'
   },
 
   // Obsidian风格Tab样式

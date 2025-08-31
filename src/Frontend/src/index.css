@@ -8,7 +8,7 @@
 
 * {
     /* font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; */
-    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
     line-height: 1.4;
     font-size: 12px;
     text-align: left;
@@ -2004,3 +2004,8 @@ vds-cleaning-report {
 .text-theme-700 { color: #15803d; }
 .text-theme-800 { color: #166534; }
 .text-theme-900 { color: #14532d; }
+
+/* 移除 Ant Design Tabs 导航栏的 margin-bottom */
+.ant-tabs-nav {
+    margin-bottom: 0 !important;
+}
