@@ -41,7 +41,7 @@ The project employs a completely **stateless** backend design, representing a si
 
 - **MDP (Markov Decision Process) as Structural Support**: The backend workflow is designed around the MDP model, breaking complex data analysis tasks into discrete state transition processes.
 - **Context Passing Instead of State Persistence**: Each request carries complete context, with the backend maintaining no session state, ensuring high availability and horizontal scalability.
-- **Action-Context Pattern**: The `StepTemplate` class implements an action template system that abstracts each interaction step as a series of actions, passing context to the frontend.
+- **Action-Context Pattern**: The `Action` class implements an action template system that abstracts each interaction step as a series of actions, passing context to the frontend.
 
 ```python
 def _get_context(self) -> Dict[str, Any]:

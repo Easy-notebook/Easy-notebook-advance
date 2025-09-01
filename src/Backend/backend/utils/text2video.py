@@ -1,5 +1,6 @@
 import requests
 import time
+import asyncio
 from .logger import ModernLogger
 
 class Text2VideoAPI(ModernLogger):
@@ -49,6 +50,29 @@ class Text2VideoAPI(ModernLogger):
         return response.json()
 
 
+
+    async def generate_video_async(self, prompt: str):
+        """异步启动视频生成任务，立即返回任务ID"""
+        gen_response = self.generate_video(prompt)
+        gen_id = gen_response.get("id") if gen_response else None
+        if gen_id:
+            self.info(f"异步视频生成任务已启动，ID: {gen_id}")
+        return gen_id
+
+    async def check_generation_status(self, gen_id: str):
+        """检查生成状态，非阻塞"""
+        try:
+            # 使用asyncio.to_thread避免阻塞事件循环
+            response_data = await asyncio.to_thread(self.get_video, gen_id)
+            if response_data:
+                status = response_data.get("status")
+                video_url = response_data.get("video", {}).get("url") if response_data.get("video") else None
+                self.info(f"生成状态检查 - ID: {gen_id}, Status: {status}")
+                return status, video_url
+            return None, None
+        except Exception as e:
+            self.error(f"检查生成状态时出错: {e}")
+            return "error", None
 
     def generate_video_and_get_result(self, prompt: str):
         # Running video generation and getting a task id

@@ -22,7 +22,7 @@ class PCSAgent(BaseAgent):
         )
         super().__init__(
             name="PCS Evaluation Agent",
-            model=llm if llm else "gpt-4o-mini",
+            model=llm if llm else "gpt-5-mini",
             system_prompt=system_message
         )
         self.context_description = context_description

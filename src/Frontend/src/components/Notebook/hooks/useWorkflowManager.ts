@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
-import { usePipelineStore } from '../../senario/DSLCanalysis/store/pipelineController';
-import { useWorkflowStateMachine } from '../../senario/DSLCanalysis/store/workflowStateMachine';
+import { usePipelineStore } from '../../Senario/Workflow/store/pipelineController';
+import { useWorkflowStateMachine } from '../../Senario/Workflow/store/workflowStateMachine';
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
 
 /**
@@ -59,7 +59,13 @@ export const useWorkflowManager = (
     setShowWorkflowConfirm(false);
     setPendingWorkflowUpdate(null);
   }
-  }, [setWorkflowUpdated, incrementWorkflowUpdateCount, setShowWorkflowConfirm, setPendingWorkflowUpdate, setPendingStepCompletion]);
+  }, [
+    setWorkflowUpdated, 
+    incrementWorkflowUpdateCount, 
+    setShowWorkflowConfirm, 
+    setPendingWorkflowUpdate, 
+    setPendingStepCompletion
+  ]);
 
   const handleRejectWorkflowUpdate = useCallback(() => {
     console.log('Workflow update rejected by user');

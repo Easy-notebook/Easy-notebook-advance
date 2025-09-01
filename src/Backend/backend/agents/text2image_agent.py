@@ -12,7 +12,7 @@ class Text2ImageAgent(BaseAgentTemplate):
                 operation: Dict[str, Any] = None,
                 api_key: str = None, 
                 base_url: str = None, 
-                engine: str = "gpt-4o-mini", 
+                engine: str = "gpt-5-mini", 
                 role: str = "You are a video generation AI agent.") -> None:
         super().__init__(operation, api_key, base_url, engine, role)
         self.text2image_client = Text2ImageAPI()

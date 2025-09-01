@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from app.api.endpoints import planner_router
+from app.endpoints.API import router
 from app.utils.logger import ModernLogger
 
 # 配置日志
@@ -20,7 +20,7 @@ app.add_middleware(
 )
 
 # 注册路由
-app.include_router(planner_router, prefix="/v1", tags=["planner"])
+app.include_router(router, prefix="/v1", tags=["planner"])
 
 @app.get("/v2/health")
 async def health_check():

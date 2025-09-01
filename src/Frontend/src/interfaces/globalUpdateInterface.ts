@@ -1,6 +1,6 @@
 // src/interfaces/globalUpdateInterface.ts
-
 import useStore from '../store/notebookStore';
+import type { Cell as StoreCell, CellType as StoreCellType, ViewMode as StoreViewMode } from '../store/notebookStore';
 import { useAIAgentStore } from '../store/AIAgentStore';
 import useCodeStore from '../store/codeStore';
 import { sendCurrentCellExecuteCodeResult, sendCurrentCellExecuteCodeError_should_debug } from '../store/autoActions';
@@ -22,18 +22,13 @@ import {
     createAIGeneratingTextAction
 } from '../store/actionCreators';
 
-// Type definitions for global update interface
-type CellType = 'code' | 'markdown' | 'hybrid' | 'Hybrid';
-type ViewMode = 'complete' | 'onlyCode' | 'onlyOutput';
-type CodeCellMode = 'complete' | 'onlyCode' | 'onlyOutput';
+// Type definitions for global update interface (align with store types)
+type CellType = StoreCellType; // 'code' | 'markdown' | 'hybrid' | 'image' | 'thinking'
+type ViewMode = StoreViewMode; // 'step' | 'demo' | 'create'
+// Note: Keep type for documentation; currently unused
+// type CodeCellMode = 'complete' | 'onlyCode' | 'onlyOutput';
 
-interface Cell {
-  id: string;
-  type: CellType;
-  content: string;
-  description?: string;
-  outputs?: any[];
-}
+type Cell = Partial<StoreCell>;
 
 interface GlobalUpdateInterface {
   // Notebook Store Methods
@@ -64,7 +59,6 @@ interface GlobalUpdateInterface {
   addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
   runSingleCell: (cellId: string) => void;
   runCurrentCodeCell: () => Promise<void>;
-  setCodeCellMode: (cellId: string, mode: CodeCellMode) => void;
   setCurrentCellMode_onlyCode: () => void;
   setCurrentCellMode_onlyOutput: () => void;
   setCurrentCellMode_complete: () => void;
@@ -77,7 +71,7 @@ interface GlobalUpdateInterface {
   // AI Agent Store Methods
   initStreamingAnswer: (QId: string) => void;
   addContentToAnswer: (QId: string, content: string) => void;
-  finishStreamingAnswer: (QId: string) => void;
+  finishStreamingAnswer: (QId: string, response?: string) => void;
   
   // AI Action Methods
   createUserAskQuestion: (content: string, relatedQAIds?: string[], cellId?: string | null) => void;
@@ -92,7 +86,7 @@ interface GlobalUpdateInterface {
   createAICriticalThinking: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, onProcess?: boolean) => void;
   createAIReplyingQuestion: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, onProcess?: boolean) => void;
   createAIFixingCode: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, onProcess?: boolean) => void;
-  createSystemEvent: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, viewMode?: ViewMode) => void;
+  createSystemEvent: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null) => void;
   createAIGeneratingCode: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, onProcess?: boolean) => void;
   createAIGeneratingText: (content: string, result?: string, relatedQAIds?: string[], cellId?: string | null, onProcess?: boolean) => void;
   
@@ -107,12 +101,10 @@ interface GlobalUpdateInterface {
 const globalUpdateInterface: GlobalUpdateInterface = {
     // Notebook Store Methods
     setNotebookId: (id: string) => useStore.getState().setNotebookId(id),
-    addCell: (newCell: Cell, index?: number) => useStore.getState().addCell(newCell, index),
+    addCell: (newCell: Cell, index?: number) => useStore.getState().addCell(newCell as Partial<StoreCell>, index),
     deleteCell: (cellId: string) => useStore.getState().deleteCell(cellId),
     updateCell: (cellId: string, newContent: string) => {
-        console.log('🔄 globalUpdateInterface.updateCell called:', { cellId, contentLength: newContent?.length, contentPreview: newContent?.substring(0, 50) });
         const result = useStore.getState().updateCell(cellId, newContent);
-        console.log('✅ globalUpdateInterface.updateCell completed');
         return result;
     },
     updateCellOutputs: (cellId: string, outputs: any[]) => useStore.getState().updateCellOutputs(cellId, outputs),
@@ -141,8 +133,11 @@ const globalUpdateInterface: GlobalUpdateInterface = {
 
     runSingleCell: (cellId: string) => useStore.getState().runSingleCell(cellId),
     runCurrentCodeCell: async () => {
-        if (useStore.getState().getCurrentCellType() === 'Hybrid') {
-            await useStore.getState().convertToCodeCell(useStore.getState().getCurrentCellId());
+        if (useStore.getState().getCurrentCellType() === 'hybrid') {
+            const currentId = useStore.getState().getCurrentCellId();
+            if (currentId) {
+                await useStore.getState().convertToCodeCell(currentId);
+            }
         }
         await useStore.getState().runCurrentCodeCell();
         if (useStore.getState().checkCurrentCodeCellOutputsIsError()) {
@@ -153,7 +148,6 @@ const globalUpdateInterface: GlobalUpdateInterface = {
         }
     },
 
-    setCodeCellMode: (cellId: string, mode: CodeCellMode) => useCodeStore.getState().setCodeCellMode(cellId, mode),
     setCurrentCellMode_onlyCode: () => useCodeStore.getState().setCurrentCellMode_onlyCode(),
     setCurrentCellMode_onlyOutput: () => useCodeStore.getState().setCurrentCellMode_onlyOutput(),
     setCurrentCellMode_complete: () => useCodeStore.getState().setCurrentCellMode_complete(),
@@ -168,7 +162,7 @@ const globalUpdateInterface: GlobalUpdateInterface = {
     // AI Agent Store Methods
     initStreamingAnswer: (QId: string) => useAIAgentStore.getState().initStreamingAnswer(QId),
     addContentToAnswer: (QId: string, content: string) => useAIAgentStore.getState().addContentToAnswer(QId, content),
-    finishStreamingAnswer: (QId: string) => useAIAgentStore.getState().finishStreamingAnswer(QId),
+    finishStreamingAnswer: (QId: string, response?: string) => useAIAgentStore.getState().finishStreamingAnswer(QId, response),
 
 
     /**
@@ -328,8 +322,8 @@ const globalUpdateInterface: GlobalUpdateInterface = {
      * @param {string[]} relatedQAIds - 相关的 QA IDs
      * @param {string|null} cellId - 相关的 Cell ID
      */
-    createSystemEvent: (content: string, result: string = '', relatedQAIds: string[] = [], cellId: string | null = useStore.getState().getCurrentCellId(), viewMode: ViewMode = 'create') => {
-        const action = createSystemEventAction(content, result, relatedQAIds, cellId, viewMode);
+    createSystemEvent: (content: string, result: string = '', relatedQAIds: string[] = [], cellId: string | null = useStore.getState().getCurrentCellId()) => {
+        const action = createSystemEventAction(content, result, relatedQAIds, cellId);
         useAIAgentStore.getState().addAction(action);
     },
 

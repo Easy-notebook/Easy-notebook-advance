@@ -126,8 +126,8 @@ class CommandAgent(BaseAgentTemplate):
     ) -> AsyncGenerator[str, None]:
         """处理OpenAI API流式响应"""
         try:
-            # 创建异步流
-            stream = await self.client.chat.completions.create(
+            # 创建流（OpenAI Python SDK 返回同步 Stream 对象，不需要 await）
+            stream = self.client.chat.completions.create(
                 model=self.engine,
                 messages=messages,
                 stream=True,
@@ -138,7 +138,8 @@ class CommandAgent(BaseAgentTemplate):
             generated_code = ""
             last_flush_time = asyncio.get_event_loop().time()
             
-            async for chunk in stream:
+            # Use regular for loop, not async for
+            for chunk in stream:
                 if not chunk.choices:
                     continue
                     
@@ -171,6 +172,9 @@ class CommandAgent(BaseAgentTemplate):
                     
                     # 添加小延迟避免阻塞
                     await asyncio.sleep(0.01)
+
+                # Allow other coroutines to run
+                await asyncio.sleep(0.001)
             
             # 发送剩余的缓冲区内容
             if buffer:

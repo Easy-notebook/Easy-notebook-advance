@@ -15,7 +15,7 @@ class DataCleaningAndEDA_Agent(BaseAgent):
         
         super().__init__(
             name="Data Cleaning and EDA",
-            model=llm if llm else "gpt-4o-mini",
+            model=llm if llm else "gpt-5-mini",
             system_prompt=system_message_content,
         )
         self.context_description = context_description

@@ -1,16 +1,15 @@
 import { useEffect, useCallback, memo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
+import { StorageManager } from '@Storage/index';
 import CodeCell from '../Editor/Cells/CodeCell';
 import MarkdownCell from '../Editor/Cells/MarkdownCell';
 import HybridCell from '../Editor/Cells/HybridCell';
 import ImageCell from '../Editor/Cells/ImageCell';
 import AIThinkingCell from '../Editor/Cells/AIThinkingCell';
-import OutlineSidebarOrig from './LeftSideBar/OutlineSidebar';
+import LinkCell from '../Editor/Cells/LinkCell';
+import OutlineSidebarOrig from './LeftSideBar/Main/Workspace/OutlineView/OutlineSidebar';
 import StepNavigation from './MainContainer/StepNavigation';
-
-
-
 import ErrorAlert from '../UI/ErrorAlert';
 import useStore from '../../store/notebookStore';
 import { findCellsByStep } from '../../utils/markdownParser';
@@ -23,8 +22,9 @@ import { useAIAgentStore } from '../../store/AIAgentStore';
 import usePreviewStore from '../../store/previewStore';
 import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
 import useSettingsStore from '../../store/settingsStore';
-import SettingsPage from '../senario/settingState';
-import PreviewApp from './Display/PreviewApp';
+import SettingsPage from '../Senario/settingState';
+import TabbedPreviewApp from './Display/TabbedPreviewApp';
+import GlobalTabList from './Display/GlobalTabList';
 import Header from './MainContainer/Header';
 import MainContent from './MainContainer/MainContent';
 import WorkflowControl from './MainContainer/WorkflowControl';
@@ -38,18 +38,17 @@ const AIAgentSidebar: any = AIAgentSidebarOrig;
 const CommandInput: any = CommandInputOrig;
 
 
-
 // Main NotebookApp component
 const NotebookApp = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
-  
+
   // Panel width states
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('leftSidebarWidth');
     return saved ? parseInt(saved) : 384; // w-96 = 384px
   });
-  
+
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('rightSidebarWidth');
     return saved ? parseInt(saved) : 384; // w-96 = 384px
@@ -57,8 +56,8 @@ const NotebookApp = () => {
 
   const [currentView, setCurrentView] = useState<'notebook' | 'agent'>('notebook');
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
-  
-  
+
+
   const {
     notebookId,
     cells,
@@ -96,14 +95,14 @@ const NotebookApp = () => {
 
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  
+
   // Optimized resize handlers
   const handleLeftResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = leftSidebarWidth;
     let animationId: number | null = null;
-    
+
     const handleMouseMove = (e: MouseEvent) => {
       if (animationId) cancelAnimationFrame(animationId);
       animationId = requestAnimationFrame(() => {
@@ -111,7 +110,7 @@ const NotebookApp = () => {
         setLeftSidebarWidth(newWidth);
       });
     };
-    
+
     const handleMouseUp = () => {
       if (animationId) cancelAnimationFrame(animationId);
       document.removeEventListener('mousemove', handleMouseMove);
@@ -122,18 +121,18 @@ const NotebookApp = () => {
         localStorage.setItem('leftSidebarWidth', leftSidebarWidth.toString());
       });
     };
-    
+
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, [leftSidebarWidth]);
-  
+
   const handleRightResize = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = rightSidebarWidth;
     let animationId: number | null = null;
-    
+
     const handleMouseMove = (e: MouseEvent) => {
       if (animationId) cancelAnimationFrame(animationId);
       animationId = requestAnimationFrame(() => {
@@ -141,7 +140,7 @@ const NotebookApp = () => {
         setRightSidebarWidth(newWidth);
       });
     };
-    
+
     const handleMouseUp = () => {
       if (animationId) cancelAnimationFrame(animationId);
       document.removeEventListener('mousemove', handleMouseMove);
@@ -152,7 +151,7 @@ const NotebookApp = () => {
         localStorage.setItem('rightSidebarWidth', rightSidebarWidth.toString());
       });
     };
-    
+
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
@@ -163,9 +162,9 @@ const NotebookApp = () => {
   const { handleImport, initializeNotebook } = ImportNotebook4JsonOrJupyter();
 
   const settingstore = useSettingsStore();
-  
+
   // WorkflowControl store for global state management
-  const { 
+  const {
     setContinueButtonText,
     setIsGenerating,
     setIsCompleted,
@@ -417,6 +416,7 @@ const NotebookApp = () => {
 
     switch (cell.type) {
       case 'Hybrid':
+      case 'hybrid':
         return <HybridCell key={cell.id} {...props} />;
       case 'code':
         return <CodeCell key={cell.id} {...codeProps} />;
@@ -426,6 +426,8 @@ const NotebookApp = () => {
         return <ImageCell key={cell.id} {...props} />;
       case 'thinking':
         return <AIThinkingCell key={cell.id} {...props} />;
+      case 'link':
+        return <LinkCell key={cell.id} {...props} />;
       default:
         return null;
     }
@@ -502,12 +504,12 @@ const NotebookApp = () => {
 
   // WorkflowControl state management based on view mode
   useEffect(() => {
-    console.log('NotebookApp: WorkflowControl state update', { 
-      viewMode, 
-      isExecuting, 
-      currentPhaseId 
+    console.log('NotebookApp: WorkflowControl state update', {
+      viewMode,
+      isExecuting,
+      currentPhaseId
     });
-    
+
     if (viewMode === 'demo' || viewMode === 'create') {
       setContinueButtonText('Continue to Next Stage');
       // Clear handlers to let workflow state machine control them
@@ -522,13 +524,13 @@ const NotebookApp = () => {
       setIsGenerating(isExecuting);
       // In non-DSLC modes, consider it completed when not executing
       setIsCompleted(!isExecuting);
-      
+
       // Provide basic handlers for non-DSLC modes
       setOnTerminate(() => {
         console.log('Basic terminate handler called');
         // Could stop any running operations here
       });
-      
+
       setOnContinue(() => {
         console.log('Basic continue handler called');
         // Could implement basic workflow continuation here
@@ -571,7 +573,7 @@ const NotebookApp = () => {
         e.preventDefault();
         handleModeChange(viewMode === 'create' ? 'step' : 'create'); // 切换模式
       }
-      
+
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -588,30 +590,49 @@ const NotebookApp = () => {
     currentPhaseId
   ]);
 
+  const {
+    activeFile  
+  } = usePreviewStore();
+
+  // Initialize storage system on app start
+  useEffect(() => {
+    const initializeStorage = async () => {
+      try {
+        console.log('Initializing storage system...');
+        await StorageManager.initialize();
+        console.log('Storage system initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize storage system:', error);
+        // Don't throw - app can still work without perfect storage
+      }
+    };
+
+    initializeStorage();
+  }, []);
+
   return (
-    <div className="h-screen flex">
+    <div className="h-screen flex border-r border-black">
       <SettingsPage />
-      {/* 左侧边栏 */}
-      {!(cells.length === 0) && (
+      {(
         <div className="flex">
-          <div 
-            className="transition-all duration-500 ease-in-out relative"
+          <div
+            className="transition-all duration-500 ease-in-out relative border-r border-black"
             style={{ width: isCollapsed ? '48px' : `${leftSidebarWidth}px` }}
           >
-        <OutlineSidebar
-          tasks={tasks}
-          currentPhaseId={currentPhaseId}
-          currentStepId={currentStepIndex !== null ? tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.steps[currentStepIndex]?.id : null}
-          isCollapsed={isCollapsed}
-          onPhaseSelect={handlePhaseSelect}
-          onAgentSelect={handleAgentSelect}
-          viewMode={viewMode}
-          currentRunningPhaseId={currentRunningPhaseId}
-          allowPagination={allowPagination} // 传递翻页权限设置
-        />
+            <OutlineSidebar
+              tasks={tasks}
+              currentPhaseId={currentPhaseId}
+              currentStepId={currentStepIndex !== null ? tasks.flatMap(task => task.phases).find(p => p.id === currentPhaseId)?.steps[currentStepIndex]?.id : null}
+              isCollapsed={isCollapsed}
+              onPhaseSelect={handlePhaseSelect}
+              onAgentSelect={handleAgentSelect}
+              viewMode={viewMode}
+              currentRunningPhaseId={currentRunningPhaseId}
+              allowPagination={allowPagination}
+            />
           </div>
           {!isCollapsed && (
-            <div 
+            <div
               className="w-px bg-gray-300 hover:bg-thme-500 cursor-col-resize transition-colors duration-150 relative group"
               onMouseDown={handleLeftResize}
             >
@@ -621,7 +642,7 @@ const NotebookApp = () => {
         </div>
       )}
       {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      <div className="flex-1 flex flex-col overflow-hidden relative m-0 p-0">
         <CommandInput
           onClick={() => setShowCommandInput(true)}
         />
@@ -644,19 +665,23 @@ const NotebookApp = () => {
           onOpenSettings={settingstore.openSettings}
           fileInputRef={fileInputRef}
         />
+
+        {/* GlobalTabList - 全局文件标签列表 */}
+        <GlobalTabList/>
+
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
           {/* PreviewApp - 文件预览 */}
-          <div className={`${isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
-            <PreviewApp />
+          <div className={`${isShowingFileExplorer && activeFile ? 'block' : 'hidden'} w-full h-full`}>
+            <TabbedPreviewApp />
           </div>
-          
+
           {/* AgentDetail - Agent详情视图 */}
           <div className={`${currentView === 'agent' && selectedAgentType && !isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
             {selectedAgentType && <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} />}
           </div>
-          
+
           {/* MainContent - 主笔记本内容 */}
-          <div className={`${!isShowingFileExplorer && currentView === 'notebook' ? 'block' : 'hidden'} w-full h-full`}>
+          <div className={`${!isShowingFileExplorer && currentView === 'notebook' || !activeFile ? 'block' : 'hidden'} w-full h-full`}>
             <MainContent
               cells={cells}
               viewMode={viewMode}
@@ -693,14 +718,14 @@ const NotebookApp = () => {
 
       {/* 右侧边栏 */}
       {isRightSidebarCollapsed && (
-        <div className="flex">
-          <div 
+        <div className="flex border-l border-black">
+          <div
             className="w-px bg-gray-300 hover:bg-theme-500 cursor-col-resize transition-colors duration-150 relative group"
             onMouseDown={handleRightResize}
           >
             <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-theme-100/50" />
           </div>
-          <div 
+          <div
             className="transition-all duration-500 ease-in-out opacity-100 overflow-hidden flex-shrink-0"
             style={{ width: `${rightSidebarWidth}px` }}
           >
@@ -712,11 +737,11 @@ const NotebookApp = () => {
           </div>
         </div>
       )}
-      
+
       {/* WorkflowPanel moved to MainContainer */}
-      
+
       {/* WorkflowControl - 固定在右下角，在所有模式下都显示 */}
-      {<WorkflowControl fallbackViewMode={viewMode} /> }
+      {<WorkflowControl fallbackViewMode={viewMode} />}
     </div>
   );
 };

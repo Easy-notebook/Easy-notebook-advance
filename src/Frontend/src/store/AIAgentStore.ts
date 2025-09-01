@@ -35,6 +35,24 @@ export interface QAItem {
     resolved: boolean;
     onProcess: boolean;
     relatedActionIds?: string[];
+    // Optional fields used by UI components
+    viewMode?: string;
+    cellId?: string;
+    // Assistant metadata
+    agent?: string;
+    model?: string;
+    agentType?: string;
+    // Tool calls metadata (loosely typed to support various providers)
+    toolCalls?: Array<{
+        type?: string;
+        name?: string;
+        content?: string;
+        arguments?: string;
+        agent?: string;
+    }>;
+    // Thinking timing
+    thinkingStartAtMs?: number;
+    thinkingEndAtMs?: number;
 }
 
 // Action 项接口
@@ -51,7 +69,7 @@ export interface ActionItem {
 }
 
 // 视图类型
-export type ViewType = 'script' | 'qa';
+export type ViewType = 'script' | 'qa' | 'todo' | 'debug';
 
 // Store 状态接口
 export interface AIAgentState {
@@ -91,7 +109,15 @@ export interface AIAgentActions {
     // 流式回答相关
     initStreamingAnswer: (qaId: string) => void;
     addContentToAnswer: (qaId: string, content: string) => void;
-    finishStreamingAnswer: (qaId: string) => void;
+    finishStreamingAnswer: (qaId: string, response?: string) => void;
+    // Tool call logging for QA
+    addToolCallToQA: (qaId: string, toolCall: {
+        type?: string;
+        name?: string;
+        content?: string;
+        arguments?: string;
+        agent?: string;
+    }) => void;
 }
 
 // 完整的 Store 类型
@@ -121,7 +147,7 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
         // 验证 relatedQAIds 是否为数组
         if (!Array.isArray(action.relatedQAIds)) {
             console.warn(
-                `addAction: expected relatedQAIds to be an array for action ID "${action.id}", but received ${typeof action.relatedQAIds}. Defaulting to an empty array.`
+                `addAction: expected relatedQAIds to be an array, but received ${typeof action.relatedQAIds}. Defaulting to an empty array.`
             );
             action.relatedQAIds = [];
         }
@@ -217,6 +243,7 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
                 type: 'assistant',
                 resolved: false,
                 onProcess: true,
+                thinkingStartAtMs: Date.now(),
             };
 
             // 4. 组装新的 qaList
@@ -243,22 +270,36 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
     },
 
     // 完成回答
-    finishStreamingAnswer: (qaId: string) => {
+    finishStreamingAnswer: (qaId: string, response?: string) => {
         set((state) => ({
             qaList: state.qaList.map((qa) => {
                 if (qa.id === qaId) {
                     return {
                         ...qa,
+                        // 如果没有在流式过程中追加内容，则在结束时写入最终响应
+                        content: response !== undefined && response !== null && qa.content === '' ? response : qa.content,
                         resolved: true,
                         onProcess: false,
+                        thinkingEndAtMs: Date.now(),
                     };
                 }
-                // 如果是刚才插入的新 QA (id = 原id-[0])
                 if (qa.id === `${qaId}-[0]`) {
                     return {
                         ...qa,
                         resolved: true,
                     };
+                }
+                return qa;
+            })
+        }));
+    },
+
+    addToolCallToQA: (qaId: string, toolCall) => {
+        set((state) => ({
+            qaList: state.qaList.map((qa) => {
+                if (qa.id === qaId) {
+                    const existing = Array.isArray(qa.toolCalls) ? qa.toolCalls : [];
+                    return { ...qa, toolCalls: [ ...existing, toolCall ] };
                 }
                 return qa;
             })

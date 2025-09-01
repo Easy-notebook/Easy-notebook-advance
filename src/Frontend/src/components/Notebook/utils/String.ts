@@ -51,3 +51,18 @@ export function extractSectionTitle(identifier: string): string {
     }
     return core.join(' ');
 }
+
+export function filterSectionStageText(text: string): string {
+    if (!text || typeof text !== 'string') return text;
+    
+    // 移除各种可能的 section 和 stage 模式（不区分大小写）
+    // 支持格式：section1, section 1, section_1, section-1, Section1, SECTION1 等
+    return text
+      .replace(/section[\s_-]*\d+/gi, '')
+      .replace(/stage[\s_-]*\d+/gi, '')
+      .replace(/第?\s*\d+\s*章节?/gi, '') // 中文章节
+      .replace(/第?\s*\d+\s*阶段/gi, '') // 中文阶段
+      .replace(/^\s*[-:：]\s*/g, '') // 移除开头的分隔符
+      .replace(/\s+/g, ' ') // 将多个空格替换为单个空格
+      .trim(); // 去除首尾空格
+  };

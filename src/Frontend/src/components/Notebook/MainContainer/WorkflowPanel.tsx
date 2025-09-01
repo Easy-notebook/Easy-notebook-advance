@@ -3,14 +3,15 @@ import { CheckCircle, AlertCircle, X } from 'lucide-react';
 
 // Primary state stores for the component
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
-import { useWorkflowStateMachine, EVENTS } from '../../senario/DSLCanalysis/store/workflowStateMachine';
-import { usePipelineStore } from '../../senario/DSLCanalysis/store/usePipelineStore';
+import { useWorkflowStateMachine, EVENTS } from '../../Senario/Workflow/store/workflowStateMachine';
+import { usePipelineStore } from '../../Senario/Workflow/store/usePipelineStore';
 import { extractSectionTitle} from '../utils/String';
+import WorkflowErrorBoundary from './WorkflowErrorBoundary';
 
 // ----------------------
 // Type Definitions
 // ----------------------
-import { WorkflowStage, WorkflowTemplate } from '../../senario/DSLCanalysis/store/workflowStateMachine';
+import { WorkflowStage, WorkflowTemplate } from '../../Senario/Workflow/store/workflowStateMachine';
 
 type Stage = WorkflowStage;
 interface PendingWorkflowUpdate { workflowTemplate?: WorkflowTemplate };
@@ -98,11 +99,23 @@ const UpdateConfirmationDialog: React.FC<UpdateConfirmationDialogProps> = ({ onC
  * It purely reflects the state from the FSM and pipeline.
  */
 const WorkflowNavigator: React.FC<WorkflowNavigatorProps> = ({ stages, currentStageId, currentStepId }) => {
-  const currentStage = useMemo(() => stages.find(s => s.id === currentStageId), [stages, currentStageId]);
-  const currentStageIndex = useMemo(() => stages.findIndex(s => s.id === currentStageId), [stages, currentStageId]);
-  const currentStepIndex = useMemo(() => currentStage?.steps.findIndex(st => st.id === currentStepId) ?? -1, [currentStage, currentStepId]);
+  const currentStage = useMemo(() => {
+    if (!stages || !Array.isArray(stages) || !currentStageId) return null;
+    return stages.find(s => s.id === currentStageId);
+  }, [stages, currentStageId]);
 
-  if (!currentStage) return null;
+  const currentStageIndex = useMemo(() => {
+    if (!stages || !Array.isArray(stages) || !currentStageId) return -1;
+    return stages.findIndex(s => s.id === currentStageId);
+  }, [stages, currentStageId]);
+
+  const currentStepIndex = useMemo(() => {
+    if (!currentStage?.steps || !Array.isArray(currentStage.steps) || !currentStepId) return -1;
+    return currentStage.steps.findIndex(st => st.id === currentStepId);
+  }, [currentStage, currentStepId]);
+
+  // 防护：如果没有有效的stages或currentStage，不渲染
+  if (!stages || !Array.isArray(stages) || !currentStage) return null;
 
   return (
     <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b">
@@ -173,7 +186,15 @@ const WorkflowPanel: React.FC = () => {
 
   // Memoize derived data to prevent unnecessary re-renders
   const navigatorData = useMemo(() => {
-    if (!workflowTemplate) return null;
+    // 增强的空值检查
+    if (!workflowTemplate?.stages ||
+        !Array.isArray(workflowTemplate.stages) ||
+        workflowTemplate.stages.length === 0 ||
+        !fsmContext.currentStageId ||
+        !fsmContext.currentStepId) {
+      return null;
+    }
+
     return {
       stages: workflowTemplate.stages,
       currentStageId: fsmContext.currentStageId,
@@ -182,7 +203,7 @@ const WorkflowPanel: React.FC = () => {
   }, [workflowTemplate, fsmContext]);
 
   return (
-    <>
+    <WorkflowErrorBoundary>
       {/* Render the confirmation dialog when needed */}
       {showWorkflowConfirm && (
         <UpdateConfirmationDialog
@@ -200,7 +221,7 @@ const WorkflowPanel: React.FC = () => {
           currentStepId={navigatorData.currentStepId}
         />
       )}
-    </>
+    </WorkflowErrorBoundary>
   );
 };
 

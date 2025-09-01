@@ -21,6 +21,9 @@ const ImportNotebook4JsonOrJupyter = () => {
         setError,
     } = useStore();
 
+    // 获取 set 函数用于直接设置 store 状态
+    const set = useStore.setState;
+
     const { toast } = useToast();
 
     const initializeNotebook = useCallback(async () => {
@@ -112,7 +115,23 @@ const ImportNotebook4JsonOrJupyter = () => {
             throw new Error('Invalid Notebook format: Missing cells array');
         }
 
-        clearCells(); 
+        // 检查导入的内容是否包含标题
+        const hasTitle = importedData.cells.some((cell: Cell) => {
+            if (cell.type === 'markdown') {
+                const content = cell.content.trim();
+                return content.startsWith('#');
+            }
+            return false;
+        });
+
+        // 如果导入的内容包含标题，则完全清空；否则保留默认标题
+        if (hasTitle) {
+            // 完全清空，不创建默认标题
+            set({ cells: [], tasks: [], currentRunningPhaseId: null });
+        } else {
+            clearCells(); // 创建默认标题
+        }
+
         await initializeNotebook();
 
         const titleStack: number[] = []; // 初始化标题堆栈
@@ -164,7 +183,22 @@ const ImportNotebook4JsonOrJupyter = () => {
             throw new Error('Invalid Jupyter Notebook format: Missing cells array');
         }
 
-        clearCells(); // 清除现有单元格
+        // 检查导入的内容是否包含标题
+        const hasTitle = jupyterData.cells.some((cell: JupyterCell) => {
+            if (cell.cell_type === 'markdown') {
+                const content = Array.isArray(cell.source) ? cell.source.join('') : cell.source;
+                return content.trim().startsWith('#');
+            }
+            return false;
+        });
+
+        // 如果导入的内容包含标题，则完全清空；否则保留默认标题
+        if (hasTitle) {
+            // 完全清空，不创建默认标题
+            set({ cells: [], tasks: [], currentRunningPhaseId: null });
+        } else {
+            clearCells(); // 创建默认标题
+        }
 
         // 处理 notebook_id，根据 Jupyter 元数据或其他字段设置
         if (jupyterData.metadata && jupyterData.metadata.name) {

@@ -17,7 +17,7 @@ class PredictionAndInferenceAgent(BaseAgent):
 
         super().__init__(
             name="Prediction and Inference",
-            model=llm if llm else "gpt-4o-mini",
+            model=llm if llm else "gpt-5-mini",
             system_prompt=system_message_content
         )
         self.info("PredictionAndInferenceAgent initialized")

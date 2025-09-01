@@ -11,8 +11,8 @@ from app.models.planner import (
     GenerateResponse,
 )
 from app.utils.helpers import get_chapter_or_abort, validate_section_id, create_streaming_response
-from app.actions import get_sequence_generator
-from app.actions import general_response
+from app.stages import get_sequence_generator
+from app.stages import general_response
 from app.utils.logger import ModernLogger
 
 logger = ModernLogger("planner", level="info")

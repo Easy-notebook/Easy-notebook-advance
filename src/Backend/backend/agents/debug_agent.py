@@ -249,7 +249,8 @@ print("hello")  # FIXED: Added parentheses for Python 3 syntax
     ) -> AsyncGenerator[str, None]:
         """处理OpenAI API流式响应"""
         try:
-            stream = await self.client.chat.completions.create(
+            # Note: OpenAI SDK create() is synchronous, returns a Stream object
+            stream = self.client.chat.completions.create(
                 model=self.engine,
                 messages=messages,
                 stream=True,
@@ -259,8 +260,9 @@ print("hello")  # FIXED: Added parentheses for Python 3 syntax
             index = 0
             generated_analysis = ""
             last_flush_time = asyncio.get_event_loop().time()
-            
-            async for chunk in stream:
+
+            # Use regular for loop, not async for
+            for chunk in stream:
                 if not chunk.choices:
                     continue
                     
@@ -288,6 +290,9 @@ print("hello")  # FIXED: Added parentheses for Python 3 syntax
                     })
                     
                     await asyncio.sleep(0.01)
+
+                # Allow other coroutines to run
+                await asyncio.sleep(0.001)
             
             # 发送剩余的缓冲区内容
             if buffer:

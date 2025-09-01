@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
+import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import { tags } from '@lezer/highlight';
 import { Trash2, Eye } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -149,6 +151,37 @@ const MarkdownTableHead: React.FC<MarkdownTableHeadProps> = ({ children, ...prop
   </th>
 );
 
+// Markdown syntax highlighting theme to match current design
+const markdownHighlighting = HighlightStyle.define([
+  // { tag: tags.heading1, fontSize: '1.8rem', fontWeight: '700', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading2, fontSize: '1.3rem', fontWeight: '600', color: '#fff', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading3, fontSize: '1.2rem', fontWeight: '600', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading4, fontSize: '1.1rem', fontWeight: '500', color: 'transparent', background: 'linear-gradient(to right, #41B883, #3490DC, #6574CD)' },
+  // { tag: tags.heading5, fontSize: '1rem', fontWeight: '400', color: '#35495E' },
+  // { tag: tags.heading6, fontSize: '0.9rem', fontWeight: '400', color: '#35495E', fontStyle: 'italic' },
+  { tag: tags.strong, fontWeight: '700', color: '#41B883' },
+  { tag: tags.emphasis, fontStyle: 'italic', color: '#41B883' },
+  { tag: tags.link, color: '#41B883', textDecoration: 'none', borderBottom: '1.5px solid #41B883' },
+  { tag: tags.monospace, 
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', 
+    fontSize: '0.875rem', 
+    backgroundColor: 'rgba(65, 184, 131, 0.05)', 
+    color: '#41B883',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '0.375rem',
+    fontWeight: '500'
+  },
+  { tag: tags.quote, 
+    borderLeft: '4px solid #41B883', 
+    backgroundColor: 'rgba(65, 184, 131, 0.05)', 
+    color: '#35495E', 
+    fontStyle: 'italic',
+    padding: '0.5rem 1rem',
+    margin: '1.5rem 0'
+  },
+  { tag: tags.list, color: '#41B883', fontWeight: 'bold' },
+]);
+
 const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleStyle = false }) => {
   const {
     addCell,
@@ -177,6 +210,75 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
     tr: MarkdownTableRow,
     td: MarkdownTableCell,
     th: MarkdownTableHead,
+    a: ({ href = '', children, ...props }: any) => (
+      <a
+        {...props}
+        href={href}
+        onClick={(e) => {
+          if (!href) return;
+          e.preventDefault();
+          // Delegate to LinkCell-like split preview
+          import('../../../store/previewStore').then(async (mod) => {
+            const usePreviewStore = (mod as any).default;
+            const useNotebookStore = (await import('../../../store/notebookStore')).default as any;
+            const notebookId = useNotebookStore.getState().notebookId;
+            if (!notebookId) return;
+            const { Backend_BASE_URL } = await import('../../../config/base_url');
+
+            // Normalize file path similar to LinkCell
+            const base = (Backend_BASE_URL as any)?.replace(/\/$/, '');
+            let filePath: string | null = null;
+            try {
+              const pattern = new RegExp(`^${base}/download_file/${notebookId}/(.+)$`);
+              const m = href.match(pattern);
+              if (m && m[1]) filePath = decodeURIComponent(m[1]);
+            } catch {}
+            if (!filePath) {
+              const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)');
+              if (relPattern.test(href)) {
+                filePath = href.replace(new RegExp('^\\./'), '');
+              } else if (!new RegExp('^[a-z]+://', 'i').test(href) && href.indexOf('/') === -1) {
+                filePath = href;
+              }
+            }
+
+            if (!filePath) {
+              // External link fallback
+              window.open(href, '_blank', 'noopener,noreferrer');
+              return;
+            }
+
+            try {
+              const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
+              await usePreviewStore.getState().previewFile(notebookId, filePath, {
+                file: fileObj,
+              } as any);
+              if (usePreviewStore.getState().previewMode !== 'file') {
+                usePreviewStore.getState().changePreviewMode();
+              }
+            } catch (err: any) {
+              console.error('Markdown link split preview failed:', err);
+              // 兜底：如果 .assets 下不存在，则尝试 notebook 根目录同名文件
+              try {
+                const baseName = (filePath || href).split('/').pop() || '';
+                if (baseName && baseName !== filePath) {
+                  const fileObj2 = { name: baseName, path: baseName, type: 'file' } as any;
+                  await usePreviewStore.getState().previewFile(notebookId, baseName, { file: fileObj2 } as any);
+                  if (usePreviewStore.getState().previewMode !== 'file') {
+                    usePreviewStore.getState().changePreviewMode();
+                  }
+                  return;
+                }
+              } catch (e) {
+                console.error('Fallback to root failed:', e);
+              }
+            }
+          });
+        }}
+      >
+        {children}
+      </a>
+    ),
   }), []) as any;
 
   // 双击切换编辑模式
@@ -364,28 +466,33 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                   onCreateEditor={handleCreateEditor}
                   value={cell.content}
                   height="auto"
-                  extensions={[markdown(), EditorView.lineWrapping]}
+                  extensions={[markdown(), EditorView.lineWrapping, syntaxHighlighting(markdownHighlighting)]}
                   onChange={handleChange}
-                  className="border rounded text-lg bg-transparent"
-                  style={{
-                    fontSize: '20px',
-                    lineHeight: '2.0',
-                    width: '100%',
-                    border: 'none',
-                    boxShadow: 'none',
-                    backgroundColor: 'transparent',
-                    padding: '0',
-                  }}
-                  // 通过 className + 全局样式覆盖 CodeMirror 样式，避免 React style 警告
+                  className="markdown-editor-codemirror"
+                  // 通过全局 CSS 类控制样式，避免内联样式冲突
                   theme={EditorView.theme({
                     '&': {
                       border: 'none !important',
                       boxShadow: 'none !important',
                       backgroundColor: 'transparent !important',
                       padding: 0,
+                      fontSize: '1rem',
+                      lineHeight: '1.6',
                     },
                     '.cm-scroller': {
                       backgroundColor: 'transparent !important',
+                      padding: 0,
+                    },
+                    '.cm-content': {
+                      padding: 0,
+                      minHeight: 'auto',
+                    },
+                    '.cm-focused': {
+                      outline: 'none !important',
+                    },
+                    '.cm-editor': {
+                      fontSize: '1rem !important',
+                      lineHeight: '1.6 !important',
                     },
                   })}
                   onKeyDown={handleKeyDown}

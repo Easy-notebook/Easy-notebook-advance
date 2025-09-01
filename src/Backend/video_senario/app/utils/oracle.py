@@ -14,7 +14,7 @@ class Oracle(ParallelProcessor):
     # enum for model names
     SUPPORTED_MODELS = {
         "doubao-1-5-lite-32k-250115": 32768,
-        "gpt-4o-mini": 128000,
+        "gpt-5-mini": 128000,
         "gpt-4o": 128000,
         "o4-mini": 200000,
     }

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from app.core.config import llm, ProblemDefinitionAndDataCollectionAgent
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 
 async def generate_data_loading_and_hypothesis_proposal_step_3(
     step: Dict[str, Any], 
@@ -12,7 +12,7 @@ async def generate_data_loading_and_hypothesis_proposal_step_3(
     # 初始化场景内agent（如果需要）
     problem_definition_agent = ProblemDefinitionAndDataCollectionAgent(llm=llm)
     
-    step_template = StepTemplate(step, state)
+    step_template = Action(step, state)
     
     
     # 分支1：待办事项为空

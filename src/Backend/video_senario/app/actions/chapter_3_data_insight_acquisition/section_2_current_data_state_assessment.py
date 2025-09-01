@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 
 async def generate_exploratory_data_sequence_step1(
     step: Dict[str, Any], 
@@ -9,7 +9,7 @@ async def generate_exploratory_data_sequence_step1(
     state = state or {}
         
     # 初始化场景内agent（如果需要）
-    step_template = StepTemplate(step, state)
+    step_template = Action(step, state)
     csv_file_path = step_template.get_variable("csv_file_path")
     
     # 分支1：待办事项为空

@@ -50,6 +50,39 @@ const DEFAULT_ICONS: IconType[] = [
 ];
 
 /**
+ * 更新 cells 的 phaseId 以确保与 tasks 中的 phase ID 一致
+ * @param cells - 单元格数组
+ * @param tasks - 任务数组
+ */
+export function updateCellsPhaseId(cells: Cell[], tasks: Task[]): void {
+    if (!cells || cells.length === 0 || !tasks || tasks.length === 0) return;
+
+    // 为每个 phase 的范围内所有 cell 统一写入 phaseId
+    tasks.forEach(task => {
+        task.phases.forEach(phase => {
+            const phaseId = phase.id;
+            // 遍历该 phase 下的所有 steps（包含 intro step），按 startIndex..endIndex 覆盖 phaseId
+            (phase.steps || []).forEach(step => {
+                const start = typeof step.startIndex === 'number' ? step.startIndex : null;
+                const end = typeof step.endIndex === 'number' ? step.endIndex : null;
+                if (start !== null && end !== null) {
+                    for (let i = start; i <= end && i < cells.length; i++) {
+                        const cell = cells[i];
+                        if (!cell) continue;
+                        const prev = (cell as any).phaseId;
+                        (cell as any).phaseId = phaseId;
+                        if (prev !== phaseId) {
+                            // 仅在调试需要时打印
+                            // console.log('🔄 覆盖cell.phaseId:', { index: i, cellId: cell.id, phaseId });
+                        }
+                    }
+                }
+            });
+        });
+    });
+}
+
+/**
  * 解析 Markdown 单元格并构建任务、阶段和步骤的结构。
  * @param cells - 单元格数组
  * @returns 解析后的任务数组
@@ -134,18 +167,20 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
                 // End any current steps or intro steps
                 endcurrentStep(index);
                 endCurrentIntroStep(index);
-                
+
                 const taskTitle: string = h1Match[1].trim();
                 currentTask = createTask(taskTitle, tasks.length);
                 tasks.push(currentTask);
-                
+
                 // Create project intro phase
                 const introPhase: Phase = createPhase(taskTitle, cell.id, Book);
                 const introStep: Step = createStep(taskTitle, 0, introPhase.id);
                 introStep.startIndex = index;
                 introPhase.steps.push(introStep);
                 introPhase.currentIntroStep = introStep;
-                
+
+
+
                 currentTask.phases.push(introPhase);
                 currentTask.introPhase = introPhase;
                 currentPhase = introPhase;
@@ -157,11 +192,13 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
                 // End any current steps or intro steps
                 endcurrentStep(index);
                 endCurrentIntroStep(index);
-                
+
                 const phaseTitle: string = h2Match[1].trim();
                 currentPhase = createPhase(phaseTitle, cell.id);
                 currentTask.phases.push(currentPhase);
-                
+
+
+
                 // Create stage intro step
                 const introStep: Step = createStep('Stage Intro & Input', 0, currentPhase.id);
                 introStep.startIndex = index;

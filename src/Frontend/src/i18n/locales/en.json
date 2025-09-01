@@ -102,7 +102,7 @@
     }
   },
   "emptyState": {
-    "title": "VDSAgents",
+    "title": "What can I help you with?",
     "commandPlaceholder": "Type a command...",
     "questionPlaceholder": "Ask anything about data science...",
     "commandMode": "Command mode",
@@ -174,9 +174,10 @@
     "youSelectedDefault": "You selected your analysis"
   },
   "rightSideBar": {
+    "thinking": "is thinking...",
     "noWorkflowPlan": "No workflow plan available",
     "history": "History",
-    "chat": "Chat",
+    "chat": "Request",
     "workflow": "Tasks",
     "noContent": "No content available",
     "collapseDetails": "Collapse Details",

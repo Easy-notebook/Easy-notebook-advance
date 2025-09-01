@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from app.core.config import llm, DataCleaningAndEDA_Agent
-from app.models.StepTemplate import StepTemplate
+from app.models.Action import Action
 
 async def generate_data_cleaning_sequence_step1(
     step: Dict[str, Any], 
@@ -9,7 +9,7 @@ async def generate_data_cleaning_sequence_step1(
 ) -> Dict[str, Any]:
     state = state or {}
         
-    step_template = StepTemplate(step, state)
+    step_template = Action(step, state)
     problem_description = step_template.get_variable("problem_description")
     context_description = step_template.get_variable("context_description")
     unit_check = step_template.get_variable("unit_check")

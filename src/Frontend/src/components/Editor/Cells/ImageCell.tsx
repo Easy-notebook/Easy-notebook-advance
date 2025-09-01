@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Trash2, Eye, Edit3, Maximize2, X, Loader2 } from 'lucide-react';
+import { Trash2, Eye, Edit3, X, Loader2 } from 'lucide-react';
+import { Image, ImageProps } from 'antd';
 import useStore from '../../../store/notebookStore';
 
 interface Cell {
@@ -53,7 +54,6 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
 
   const [imageError, setImageError] = useState(false);
   const [tempContent, setTempContent] = useState(cell.content);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
 
   // 从 cell 的 metadata 中解析生成状态
@@ -261,7 +261,14 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
           {previewData.isVideo ? (
             <video src={previewData.src} controls className="max-w-full h-auto rounded-lg shadow-sm" onError={() => setImageError(true)} onLoadedData={() => setImageError(false)}>您的浏览器不支持视频播放</video>
           ) : (
-            <img src={previewData.src} alt={previewData.alt} className="max-w-full h-auto rounded-lg shadow-sm" onError={() => setImageError(true)} onLoad={() => setImageError(false)} />
+            <Image
+              src={previewData.src}
+              alt={previewData.alt}
+              className="max-w-full h-auto rounded-lg shadow-sm"
+              preview={false}
+              onError={() => setImageError(true)}
+              onLoad={() => setImageError(false)}
+            />
           )}
           {imageError && <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">⚠️ 加载失败: {previewData.src}</div>}
           {previewData.alt && !imageError && <div className="mt-2 text-sm text-center italic">{previewData.alt}</div>}
@@ -281,12 +288,17 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
           {(imageData.isVideo || (cell.metadata?.generationType === 'video')) ? (
             <video src={imageData.src} controls title={imageData.alt} className="max-w-full h-auto rounded-lg shadow-sm" onError={() => setImageError(true)} onLoadedData={() => setImageError(false)}>您的浏览器不支持视频播放</video>
           ) : (
-            <>
-              <img src={imageData.src} alt={imageData.alt} title={imageData.alt} onClick={() => setIsModalOpen(true)} className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-opacity" onError={() => setImageError(true)} onLoad={() => setImageError(false)} />
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1">
-                <Maximize2 size={16} className="text-white" />
-              </div>
-            </>
+            <Image
+              src={imageData.src}
+              alt={imageData.alt}
+              title={imageData.alt}
+              className="max-w-full h-auto rounded-lg shadow-sm"
+              preview={{
+                mask: <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1 flex items-center justify-center text-white text-sm">Click to View</div>
+              }}
+              onError={() => setImageError(true)}
+              onLoad={() => setImageError(false)}
+            />
           )}
           {imageError && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg">
@@ -336,16 +348,6 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
         </div>
       </div>
 
-      {/* 全屏模态框 */}
-      {isModalOpen && imageData.isValid && imageData.src && !imageData.isVideo && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" onClick={() => setIsModalOpen(false)}>
-          <div className="relative max-w-[90vw] max-h-[90vh]">
-            <img src={imageData.src} alt={imageData.alt} className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-white hover:text-gray-300"><X size={24} /></button>
-            {imageData.alt && <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-center bg-black bg-opacity-50 px-4 py-2 rounded">{imageData.alt}</div>}
-          </div>
-        </div>
-      )}
     </>
   );
 };

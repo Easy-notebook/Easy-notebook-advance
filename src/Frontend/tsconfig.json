@@ -26,11 +26,15 @@
       "@/*": ["./src/*"],
       "@Editor/*": ["./src/components/Editor/*"],
       "@Notebook/*": ["./src/components/Notebook/*"],
+      "@LeftSidebar/*": ["./src/components/Notebook/LeftSideBar/*"],
       "@Store/*": ["./src/store/*"],
       "@Services/*": ["./src/services/*"],
       "@Utils/*": ["./src/utils/*"],
       "@Config/*": ["./src/config/*"],
-      "@Types/*": ["./src/types/*"]
+      "@Types/*": ["./src/types/*"],
+      "@WorkflowMode/*": ["src/components/Senario/Workflow/*"],
+      "@BasicMode/*": ["src/components/Senario/View/*"],
+      "@Storage/*": ["./src/storage/*"]
     }
   },
   "include": ["src"],

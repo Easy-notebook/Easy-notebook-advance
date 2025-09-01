@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional
 from app.core.config import SHOT_TYPES
 from app.utils.helpers import generate_step_actions
 
-class StepTemplate:
+class Action:
     def __init__(self, step: Dict[str, Any], state: Dict[str, Any]):
         self.step = step
         self.state = state.copy()  # 复制上下文，避免直接修改传入的对象

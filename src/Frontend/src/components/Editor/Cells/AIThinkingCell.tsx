@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, ExternalLink, Minimize2 } from 'lucide-react';
+import { Trash2, ExternalLink, Minimize2, ChevronDown, ChevronRight, Brain } from 'lucide-react';
 import useStore from '../../../store/notebookStore';
 
 interface AIThinkingCellProps {
@@ -20,6 +20,7 @@ const AIThinkingCell: React.FC<AIThinkingCellProps> = ({
     onDelete, 
     isInDetachedView = false 
 }) => {
+    const [isExpanded, setIsExpanded] = useState(false); // 默认收起状态
     const [seconds, setSeconds] = useState(0);
     const [rotation, setRotation] = useState(0);
     const [opacity, setOpacity] = useState(1);
@@ -179,10 +180,84 @@ const AIThinkingCell: React.FC<AIThinkingCellProps> = ({
         return renderCompactMode();
     }
 
+    // 收起状态的渲染
+    if (!isExpanded && !isInDetachedView) {
+        return (
+            <div
+                data-cell-id={cell.id}
+                className="thinking-cell-container bg-white/90 shadow-sm rounded-lg backdrop-blur-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200"
+                onMouseEnter={() => setShowToolbar(true)}
+                onMouseLeave={() => setShowToolbar(false)}
+            >
+                <div 
+                    className="flex items-center gap-2 p-3 cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+                    onClick={() => setIsExpanded(true)}
+                >
+                    {/* 展开图标 */}
+                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 chevron-icon" />
+                    
+                    {/* AI 图标 */}
+                    <div className="flex-shrink-0">
+                        <Brain className="w-4 h-4 text-green-500" />
+                    </div>
+                    
+                    {/* 思考状态文本 */}
+                    <div className="flex items-center gap-2 flex-1">
+                        <span className="text-sm font-medium text-gray-700">
+                            {customText || `${agentName} Thinking`}
+                        </span>
+                        
+                        {/* 动态旋转的加载指示器 */}
+                        <div className="w-4 h-4 relative">
+                            <div
+                                className="absolute inset-0 border-2 rounded-full border-transparent"
+                                style={{
+                                    borderLeftColor: '#41B883',
+                                    borderTopColor: '#3490DC',
+                                    transform: `rotate(${rotation}deg)`
+                                }}
+                            />
+                        </div>
+                        
+                        {/* 时间显示 */}
+                        <span className="text-xs text-gray-500">{seconds}s</span>
+                        
+                        {/* 动态省略号 */}
+                        <span className="text-sm text-gray-500">
+                            {'.'.repeat(1 + (seconds % 3))}
+                        </span>
+                        
+                        {/* 如果有动态文本数组，显示提示 */}
+                        {textArray && textArray.length > 1 && (
+                            <span className="text-xs text-gray-400 ml-2">
+                                ({textArray.length} states)
+                            </span>
+                        )}
+                    </div>
+                    
+                    {/* 工具栏 */}
+                    {showToolbar && (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            {onDelete && (
+                                <button
+                                    onClick={() => onDelete(cell.id)}
+                                    className="p-1.5 hover:bg-red-100 rounded text-red-600 transition-colors"
+                                    title="Delete cell"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             data-cell-id={cell.id}
-            className={`thinking-cell-container ${
+            className={`thinking-cell-container expanded ${
                 isInDetachedView 
                     ? 'bg-white h-full' 
                     : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm'
@@ -193,6 +268,13 @@ const AIThinkingCell: React.FC<AIThinkingCellProps> = ({
             {/* Toolbar */}
             {showToolbar && !isInDetachedView && (
                 <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200 p-1 z-20">
+                    <button
+                        onClick={() => setIsExpanded(false)}
+                        className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
+                        title="Collapse"
+                    >
+                        <ChevronDown className="w-4 h-4" />
+                    </button>
                     {!isDetached && (
                         <button
                             onClick={() => setDetachedCellId(cell.id)}

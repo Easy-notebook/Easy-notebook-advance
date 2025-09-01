@@ -1,39 +1,47 @@
 import os
 import json
+import asyncio
 from typing import AsyncGenerator, List, Dict, Any, Tuple
 from abc import ABC, abstractmethod
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from utils.oracle import Oracle
+from utils.parser import StreamingTemplateParser
 
 load_dotenv()
 
-class BaseAgentTemplate(ABC):
+class BaseAgentTemplate(ABC,Oracle,StreamingTemplateParser):
     """
     基础Agent模板类，定义Agent的通用结构和接口，支持记忆功能
     """
     
-    def __init__(self, 
+    def __init__(self,
                  operation: Dict[str, Any] = None,
                  api_key: str = None,
                  base_url: str = None,
-                 engine: str = "gpt-4o",
+                #  engine: str = "gpt-5-mini",
+                engine: str = "doubao-1-5-pro-256k-250115",
                  role: str = "You are AI Agent behind easyremote notebook.") -> None:
         """
         初始化Agent模板
         """
+        Oracle.__init__(self, model=engine, apikey=api_key, base_url=base_url)
+        StreamingTemplateParser.__init__(self)
         self.operation = operation or {}
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
         self.base_url = base_url or os.getenv('BASE_URL')
-        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
         self.engine = engine
         self.role = role
         self.messages: List[Dict[str, str]] = []
         self.payload = self.operation.get("payload", {})
         self.status = "pending"
-        
+
         # 解析记忆和上下文
         self.agent_memory = self._parse_agent_memory()
         self.current_context = self._parse_current_context()
+
+        # 流式输出相关
+        self._accumulated_content = ""
+        self._current_qid = None
         
     def _get_payload_value(self, key: str, default=None):
         """获取payload中的值"""
@@ -201,13 +209,194 @@ class BaseAgentTemplate(ABC):
             "type": response_type,
             "data": data
         }) + "\n"
-        
+    
+    async def stream_response(self, query: str) -> AsyncGenerator[str, None]:
+        """
+        流式响应方法 - 将LLM的XML输出解析为前端JSON格式
+        Args:
+            query (str): 用户查询内容
+        Yields:
+            str: 前端可识别的JSON格式数据
+        """
+        try:
+            # 构建系统消息
+            messages = self._build_system_messages()
+            
+            print(f"[DEBUG] Starting stream response for query: {query[:50]}...")
+            
+            # 使用Oracle的异步流式方法获取LLM输出
+            chunk_count = 0
+            async for chunk in self.query_stream_async(
+                prompt_sys=messages[0]["content"], 
+                prompt_user=query
+            ):
+                chunk_count += 1
+                print(f"[DEBUG] Received chunk {chunk_count}: '{chunk[:30]}...'")
+                
+                # 检查错误
+                if chunk.startswith("ASYNC_STREAM_ERROR:"):
+                    yield json.dumps({
+                        "type": "error",
+                        "payload": {"error": chunk}
+                    }) + "\n"
+                    continue
+                
+                # 使用StreamingTemplateParser解析XML标签
+                actions = self.parse_chunk(chunk)
+                
+                # 输出解析后的actions
+                for action in actions:
+                    print(f"[DEBUG] Parser output: {action}")
+                    yield json.dumps(action) + "\n"
+            
+            print(f"[DEBUG] Stream completed, processed {chunk_count} chunks")
+            
+            # 处理剩余的缓存内容
+            final_actions = self.finalize()
+            for action in final_actions:
+                yield json.dumps(action) + "\n"
+                
+        except Exception as e:
+            print(f"[DEBUG] Stream error: {str(e)}")
+            yield json.dumps({
+                "type": "error", 
+                "payload": {"error": f"Stream response error: {str(e)}"}
+            }) + "\n"
+
     @abstractmethod
     async def process(self) -> AsyncGenerator[str, None]:
         """抽象方法：处理Agent逻辑"""
         pass
-        
+
     @abstractmethod
     def validate_operation(self) -> bool:
         """抽象方法：验证操作参数"""
         pass
+
+    def answer(self, question:str) -> str:
+        response = self.model.query(self.system_prompt, question)
+        self.debug(f"Response: {response}")
+        
+        # Handle dict response format from Oracle
+        if isinstance(response, dict):
+            answer = response.get("answer", "")
+            if answer.startswith('QUERY_FAILED:'):
+                self.error(f"Query failed for model {self.model_name} with error: {answer}")
+            self.debug(f"Question: {question}")
+            self.debug(f"Response: {answer}")
+            return answer
+        else:
+            # Handle string response (backward compatibility)
+            if response.startswith('QUERY_FAILED:'):
+                self.error(f"Query failed for model {self.model_name} with error: {response}")
+            self.debug(f"Question: {question}")
+            self.debug(f"Response: {response}")
+            return response
+    
+    def answer_multiple(self, questions:List[str]) -> List[str]:
+        responses = self.model.query_all(self.system_prompt, questions)
+        return responses
+    
+    def _parse_json(self, response):
+        """Parse JSON data from LLM response with multiple fallback strategies"""
+        self.info(f"Parsing JSON from response: {response}")
+        
+        # Strategy 1: Try standard markdown code block format
+        code_match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
+        if code_match:
+            try:
+                json_str = code_match.group(1).strip()
+                return json.loads(json_str)
+            except json.JSONDecodeError as e:
+                self.error(f"JSON decode error in markdown block: {e}")
+        
+        # Strategy 2: Try without markdown formatting (direct JSON)
+        try:
+            # Remove potential markdown artifacts and whitespace
+            cleaned_response = response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]
+            if cleaned_response.endswith('```'):
+                cleaned_response = cleaned_response[:-3]
+            cleaned_response = cleaned_response.strip()
+            
+            return json.loads(cleaned_response)
+        except json.JSONDecodeError:
+            self.error(f"JSON decode error in markdown block: {e}")
+        
+        # Strategy 3: Extract JSON-like content using regex
+        json_pattern = r'\{.*\}'
+        json_match = re.search(json_pattern, response, re.DOTALL)
+        if json_match:
+            try:
+                json_str = json_match.group(0)
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                self.error(f"JSON decode error in regex: {e}")
+        
+        # All strategies failed
+        self.error(f"Failed to parse JSON from response using all strategies. Response: {response[:500]}...")
+        return None
+    
+    def _parse_code(self, response):
+        code_match = re.search(r"```python\n(.*)\n```", response, re.DOTALL)
+        if code_match:
+            return code_match.group(1).strip()
+        self.error(f"Failed to parse code from response: {response}")
+        return response
+    
+    def coding(self, question:str) -> str:
+        response = self.answer(question)
+        if response.startswith('QUERY_FAILED:'):
+            response = self.answer(question)
+        return self._parse_code(response)
+    
+    def analyzing(self, question:str) -> str:
+        max_retries = 3
+        for attempt in range(max_retries):
+            response = self.answer(question)
+            
+            # If query failed, try again
+            if response.startswith('QUERY_FAILED:'):
+                self.warning(f"Query failed on attempt {attempt + 1}: {response}")
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    self.error(f"All {max_retries} query attempts failed")
+                    raise ValueError(f"Model query failed after {max_retries} attempts: {response}")
+            
+            # Try to parse JSON response
+            parsed_result = self._parse_json(response)
+            if parsed_result is not None:
+                return parsed_result
+            
+            # If JSON parsing failed, log and retry
+            self.warning(f"JSON parsing failed on attempt {attempt + 1}")
+            if attempt < max_retries - 1:
+                continue
+        
+        # All attempts failed
+        self.error(f"JSON parsing failed completely after {max_retries} attempts for question: {question[:100]}...")
+        raise ValueError(f"Failed to parse JSON response from LLM after {max_retries} attempts")
+    
+    def code_multiple(self, questions:List[str]) -> List[str]:
+        responses = self.model.query_all(self.system_prompt, questions)
+        multiple_code = []
+        for response in responses:
+            if response.startswith('QUERY_FAILED:'):
+                response = self.answer(response)
+            multiple_code.append(self._parse_code(response))
+        return multiple_code
+    
+    def analyze_multiple(self, questions:List[str]) -> List[str]:
+        responses = self.model.query_all(self.system_prompt, questions)
+        multiple_analyze = []
+        for response in responses:
+            if response.startswith('QUERY_FAILED:'):
+                response = self.answer(response)
+            parsed_result = self._parse_json(response)
+            if parsed_result is None:
+                self.error(f"JSON parsing failed in batch analysis")
+                raise ValueError("Failed to parse JSON response in batch analysis")
+            multiple_analyze.append(parsed_result)
+        return multiple_analyze

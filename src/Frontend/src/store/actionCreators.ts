@@ -36,16 +36,16 @@ export interface BaseActionParams {
 const createAction = (
     type: EventType,
     content: string,
-    relatedQAIds: string[] = [],
+    relatedQAIds: string[] | string = [],
     cellId: string | null = null,
     result: string = '',
     onProcess: boolean = false
 ): ActionItem => {
+    // Accept string or array; normalize to array
     if (!Array.isArray(relatedQAIds)) {
-        console.warn(
-            `createAction: expected relatedQAIds to be an array, but received ${typeof relatedQAIds}. Defaulting to an empty array.`
-        );
-        relatedQAIds = [];
+        relatedQAIds = typeof relatedQAIds === 'string' && relatedQAIds.length > 0
+            ? [relatedQAIds]
+            : [];
     }
 
     return {

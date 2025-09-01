@@ -1,8 +1,12 @@
 import React, { useState, useEffect, memo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { AgentMemoryService, AgentType } from '../../services/agentMemoryService';
 import useStore from '../../store/notebookStore';
+import {
+  StatusDot,
+  SidebarButton,
+  RunningIndicator,
+  TaskCounter
+} from '../Notebook/LeftSideBar/shared/components';
 
 interface AgentListProps {
   isCollapsed: boolean;
@@ -24,84 +28,35 @@ const AGENT_GROUPS = [
   // 未来将添加 DSLC 组
 ];
 
-// 复用outline的StatusStyles
-const StatusStyles = {
-  colors: {
-    completed: 'text-theme-600 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
-    'in-progress': 'text-theme-800 bg-white/20 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]',
-    pending: 'text-black bg-white/10 backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)]'
-  },
-  steps: {
-    completed: 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
-    'in-progress': 'bg-theme-800 shadow-[0_2px_4px_rgba(0,0,0,0.1)]',
-    pending: 'bg-gray-300/50 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]'
-  }
-};
+// 使用共享的状态样式
 
-const RunningIndicator = memo(() => (
-  <div className="flex items-center">
-    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></div>
-    <span className="text-xs text-green-600">Running</span>
-  </div>
-));
-
-const TaskCount = memo(({ count }) => (
-  <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-    {count}
-  </span>
-));
-
-const AgentItem = memo(({ 
-  agent, 
-  isActive, 
-  hasMemory, 
+const AgentItem = memo(({
+  agent,
+  isActive,
+  hasMemory,
   isRunning,
   taskCount,
-  onClick 
+  onClick
 }) => {
   return (
-    <button
+    <SidebarButton
+      isActive={isActive}
       onClick={onClick}
-      className={`
-        w-full flex items-center gap-2 px-2 py-1.5 rounded-lg
-        transition-all duration-300 text-sm tracking-wide relative
-        backdrop-blur-sm
-        ${isActive
-          ? 'bg-white/10 text-theme-700 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]'
-          : 'hover:bg-white/5 text-gray-700'}
-      `}
+      className="text-sm tracking-wide"
+      size="sm"
     >
-      <div className={`
-        w-3 h-3 rounded-full flex-shrink-0
-        ${hasMemory ? StatusStyles.steps['in-progress'] : StatusStyles.steps['pending']}
-      `} />
-      
+      <StatusDot
+        status={hasMemory ? 'in-progress' : 'pending'}
+        size="sm"
+      />
+
       <span className="font-normal flex-1 text-left">{agent.title}</span>
-      
+
       {isRunning && <RunningIndicator />}
-      {!isRunning && hasMemory && taskCount > 0 && <TaskCount count={taskCount} />}
-      
-      {isActive && (
-        <ArrowRight size={14} className="ml-1 text-theme-600" />
-      )}
-    </button>
+      {!isRunning && hasMemory && taskCount > 0 && <TaskCounter count={taskCount} />}
+    </SidebarButton>
   );
 });
-
-const formatLastActive = (timestamp: Date | null) => {
-  if (!timestamp) return 'Never';
-  
-  const now = new Date();
-  const diff = now.getTime() - timestamp.getTime();
-  const minutes = Math.floor(diff / (1000 * 60));
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
-};
 
 const AgentList: React.FC<AgentListProps> = ({ 
   isCollapsed, 
@@ -109,7 +64,6 @@ const AgentList: React.FC<AgentListProps> = ({
   selectedAgentType,
   runningAgents = new Set()
 }) => {
-  const { t } = useTranslation();
   const { notebookId } = useStore();
   const [agentMemories, setAgentMemories] = useState<Record<AgentType, any>>({} as Record<AgentType, any>);
 

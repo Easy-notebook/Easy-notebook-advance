@@ -1,8 +1,16 @@
 from typing import Dict, Any, List, Optional
 
 class WorkflowManager:
-    # 定义可用章节和对应的actions
+    # 定义默认工作流入口点
+    DEFAULT_WORKFLOW_ENTRY = {
+        "chapter_id": "chapter_0_planning",
+        "section_id": "section_1_design_workflow",
+        "description": "智能工作流规划 - 所有数据科学项目的起始点"
+    }
+
+    # 定义可用章节和对应的actions - 增强版数据科学工作流
     AVAILABLE_CHAPTERS = {
+        # 保持向后兼容性 - 旧的章节名称
         "chapter_0_planning": {
             "name": "Workflow Planning",
             "description": "PCS agent designs customized workflow based on user goals using existence first principles",
@@ -10,46 +18,57 @@ class WorkflowManager:
                 "section_1_design_workflow"
             ]
         },
+        # 新的增强章节
+        "chapter_0_problem_formulation_planning": {
+            "name": "Problem Formulation & Planning",
+            "description": "Collaborative problem definition with domain experts and comprehensive project planning",
+            "sections": [
+                "section_1_design_workflow",
+                "section_2_problem_definition_refinement",
+                "section_3_success_criteria_establishment",
+                "section_4_resource_constraint_analysis"
+            ]
+        },
         "chapter_1_data_existence_establishment": {
             "name": "Data Existence Establishment",
-            "description": "Establish variable definitions, observation units, and PCS hypothesis",
+            "description": "Systematic data discovery, structure analysis, and relevance assessment",
             "sections": [
-                "section_1_workflow_initialization",
-                "section_2_data_structure_discovery",
-                # Prioritize early deliverable: heatmap + irrelevant variable removal
-                "section_5_variable_relevance_assessment",
+                "section_1_data_existence_initialization",  # 重命名避免重复
+                "section_2_agent_driven_data_discovery",    # 新的Agent驱动数据发现
+                "section_2_data_structure_discovery",       # 保留原有步骤
                 "section_3_variable_semantic_analysis",
                 "section_4_observation_unit_identification",
+                "section_5_variable_relevance_assessment",
                 "section_6_pcs_hypothesis_generation"
             ]
         },
         "chapter_2_data_integrity_assurance": {
             "name": "Data Integrity Assurance",
-            "description": "Ensure dataset is clean, complete, and structurally valid",
+            "description": "Comprehensive data cleaning, validation, and quality assurance",
             "sections": [
-                "section_1_workflow_initialization",
+                "section_1_data_integrity_initialization",  # 重命名避免重复
                 "section_2_dimensional_integrity_validation",
-                "section_3_value_validity_assurance", 
+                "section_3_value_validity_assurance",
                 "section_4_completeness_integrity_restoration",
                 "section_5_comprehensive_integrity_verification"
             ]
         },
         "chapter_3_data_insight_acquisition": {
             "name": "Data Insight Acquisition",
-            "description": "Extract EDA summaries and build structured data understanding",
+            "description": "Deep data exploration, pattern discovery, and insight generation",
             "sections": [
-                "section_1_workflow_initialization",
+                "section_1_data_insight_initialization",  # 重命名避免重复
                 "section_2_current_data_state_assessment",
                 "section_3_targeted_inquiry_generation",
-                "section_4_analytical_insight_extraction", 
+                "section_4_analytical_insight_extraction",
                 "section_5_comprehensive_insight_consolidation"
             ]
         },
         "chapter_4_methodology_strategy_formulation": {
             "name": "Methodology Strategy Formulation",
-            "description": "Design feature engineering, modeling methods, and training strategies",
+            "description": "Comprehensive modeling strategy including algorithm selection and validation design",
             "sections": [
-                "section_1_workflow_initialization", 
+                "section_1_workflow_initialization",  # 保持现有文件名
                 "section_2_feature_and_model_method_proposal",
                 "section_3_training_evaluation_strategy_development",
                 "section_4_methodology_strategy_consolidation"
@@ -57,9 +76,9 @@ class WorkflowManager:
         },
         "chapter_5_model_implementation_execution": {
             "name": "Model Implementation Execution",
-            "description": "Execute model training and generate intermediate results",
+            "description": "Model training, optimization, and performance evaluation",
             "sections": [
-                "section_1_workflow_initialization",
+                "section_1_workflow_initialization",  # 保持现有文件名
                 "section_2_feature_engineering_integration",
                 "section_3_modeling_method_integration",
                 "section_4_model_training_execution"
@@ -67,22 +86,30 @@ class WorkflowManager:
         },
         "chapter_6_stability_validation": {
             "name": "Stability Validation",
-            "description": "Validate robustness and generalizability under varied conditions",
+            "description": "Comprehensive stability testing and robustness validation",
             "sections": [
-                "section_1_workflow_initialization",
-                "section_2_multi_variation_evaluation_execution", 
+                "section_1_workflow_initialization",  # 保持现有文件名
+                "section_2_multi_variation_evaluation_execution",
                 "section_3_stability_analysis_consolidation"
             ]
         },
         "chapter_7_results_evaluation_confirmation": {
             "name": "Results Evaluation Confirmation",
-            "description": "Confirm effectiveness through final DCLS report and recommendations",
+            "description": "Final evaluation, reporting, and actionable recommendations",
             "sections": [
-                "section_1_workflow_initialization",
+                "section_1_workflow_initialization",  # 保持现有文件名
                 "section_2_test_dataset_generation_validation",
                 "section_3_final_dcls_report_generation"
             ]
+        },
+        "general_behavior": {
+            "name": "General Behavior",
+            "description": "General behavior for the project",
+            "sections": [
+                "section_1_workflow_initialization",  # 保持现有文件名
+            ]
         }
+        
     }
     
     @classmethod
@@ -258,6 +285,86 @@ class WorkflowManager:
             }
         }
     
+    @classmethod
+    def get_default_entry_point(cls, user_context: Dict[str, Any] = None) -> Dict[str, str]:
+        """
+        根据用户上下文确定默认工作流入口点
+
+        Args:
+            user_context: 用户上下文信息，包含目标、数据文件等
+
+        Returns:
+            包含 chapter_id 和 section_id 的字典
+        """
+        if not user_context:
+            return cls.DEFAULT_WORKFLOW_ENTRY
+
+        # 如果用户已经有明确的数据文件，可以跳过规划直接开始数据分析
+        if user_context.get("csv_file_path") and user_context.get("target_variable"):
+            return {
+                "chapter_id": "chapter_1_data_existence_establishment",
+                "section_id": "section_1_workflow_initialization",
+                "description": "数据存在性建立 - 直接开始数据分析"
+            }
+
+        # 如果用户只有目标描述，需要先进行智能规划
+        if user_context.get("user_goal"):
+            return cls.DEFAULT_WORKFLOW_ENTRY
+
+        # 默认从规划开始
+        return cls.DEFAULT_WORKFLOW_ENTRY
+
+    @classmethod
+    def get_next_logical_step(cls, current_chapter_id: str, current_section_id: str,
+                             completion_status: Dict[str, Any] = None) -> Optional[Dict[str, str]]:
+        """
+        获取下一个逻辑步骤
+
+        Args:
+            current_chapter_id: 当前章节ID
+            current_section_id: 当前步骤ID
+            completion_status: 当前步骤的完成状态
+
+        Returns:
+            下一个步骤的信息，如果没有则返回None
+        """
+        current_chapter = cls.AVAILABLE_CHAPTERS.get(current_chapter_id)
+        if not current_chapter:
+            return None
+
+        sections = current_chapter["sections"]
+        try:
+            current_index = sections.index(current_section_id)
+
+            # 检查当前章节是否还有下一个步骤
+            if current_index + 1 < len(sections):
+                next_section = sections[current_index + 1]
+                return {
+                    "chapter_id": current_chapter_id,
+                    "section_id": next_section,
+                    "description": f"继续当前章节的下一步: {next_section}"
+                }
+            else:
+                # 当前章节完成，移动到下一个章节
+                chapter_ids = list(cls.AVAILABLE_CHAPTERS.keys())
+                try:
+                    current_chapter_index = chapter_ids.index(current_chapter_id)
+                    if current_chapter_index + 1 < len(chapter_ids):
+                        next_chapter_id = chapter_ids[current_chapter_index + 1]
+                        next_chapter = cls.AVAILABLE_CHAPTERS[next_chapter_id]
+                        first_section = next_chapter["sections"][0]
+                        return {
+                            "chapter_id": next_chapter_id,
+                            "section_id": first_section,
+                            "description": f"开始下一章节: {next_chapter['name']}"
+                        }
+                except ValueError:
+                    pass
+        except ValueError:
+            pass
+
+        return None
+
     @classmethod
     def execute_workflow_step(cls, chapter_id: str, section_id: str) -> Dict[str, Any]:
         """
