@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useMemo, useState, useCallback } from 'react';
-import { usePipelineStore } from '../../Senario/WorkflowMode/store/usePipelineStore'; 
-import { useWorkflowStateMachine } from '../../Senario/WorkflowMode/store/workflowStateMachine';
+import { usePipelineStore } from '../../Senario/Workflow/store/usePipelineStore'; 
+import { useWorkflowStateMachine } from '../../Senario/Workflow/store/workflowStateMachine';
 import { extractSectionTitle } from '../utils/String';
 import {
     CheckCircle, Circle, ChevronDown, ChevronUp, ArrowRight

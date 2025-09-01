@@ -426,10 +426,14 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   const switchToNotebookMode = useCallback(() => {
     const ps: any = usePreviewStore.getState();
-    if (typeof ps?.switchToNotebook === 'function') ps.switchToNotebook();
-    else if (typeof ps?.setPreviewMode === 'function') ps.setPreviewMode('notebook');
-    else if (ps?.previewMode === 'file' && typeof ps?.changePreviewMode === 'function') ps.changePreviewMode();
-  }, []);
+    if (typeof ps?.switchToNotebook === 'function' && notebookId) {
+      ps.switchToNotebook(notebookId);
+    } else if (typeof ps?.setPreviewMode === 'function') {
+      ps.setPreviewMode('notebook');
+    } else if (ps?.previewMode === 'file' && typeof ps?.changePreviewMode === 'function') {
+      ps.changePreviewMode();
+    }
+  }, [notebookId]);
 
   const gapClass = widthTier === 'narrow' ? 'gap-1.5' : 'gap-2';
   const showActions = widthTier !== 'narrow';

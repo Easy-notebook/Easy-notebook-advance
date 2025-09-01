@@ -57,12 +57,21 @@ const GlobalTabList: React.FC = () => {
     currentPreviewFiles,
     activeFile,
     isTabDirty,
-    previewMode
+    previewMode,
+    getCurrentNotebookId
   } = usePreviewStore();
 
   // --- Memos ---
   const tabs = useMemo<FileTab[]>(
     () => {
+      // Get current notebook ID
+      const currentNotebookId = getCurrentNotebookId();
+      
+      // If no notebook is active, don't show any tabs
+      if (!currentNotebookId) {
+        return [];
+      }
+      
       // 构建notebook tab的名称，与左侧文件树保持一致
       // const projectName = notebookTitle || (tasks && tasks.length > 0 ? tasks[0].title : '');
       // const notebookName = projectName ? `${projectName}.easynb` : 'Current Notebook';
@@ -77,7 +86,12 @@ const GlobalTabList: React.FC = () => {
         isCurrentNotebook: true
       };
       
-      const fileTabs = currentPreviewFiles.map((file) => ({
+      // Filter files to only show those belonging to current notebook
+      const filteredFiles = currentPreviewFiles.filter(file => 
+        file.id.startsWith(`${currentNotebookId}::`)
+      );
+      
+      const fileTabs = filteredFiles.map((file) => ({
         id: file.id,
         name: file.name,
         type: file.type,
@@ -87,7 +101,7 @@ const GlobalTabList: React.FC = () => {
       
       return [notebookTab, ...fileTabs];
     },
-    [currentPreviewFiles, activeFile?.id, isTabDirty, notebookTitle, tasks, previewMode]
+    [currentPreviewFiles, activeFile?.id, isTabDirty, notebookTitle, tasks, previewMode, getCurrentNotebookId]
   );
 
   // --- Actions ---
@@ -146,8 +160,12 @@ const GlobalTabList: React.FC = () => {
     closable: !t.isCurrentNotebook && tabs.length > 1,
   })), [tabs]);
 
-  // 只有在有文件tabs或者不在默认状态时才显示tab列表
-  const shouldShowTabs = tabs.length > 1 || previewMode === 'file';
+  // 只有当有实际文件tabs时才显示tab列表（不仅仅是notebook tab）
+  const currentNotebookId = getCurrentNotebookId();
+  const fileTabs = tabs.filter(tab => !tab.isCurrentNotebook);
+  
+  // 如果没有当前notebook或者只有notebook主文件没有其他文件，则隐藏tablist
+  const shouldShowTabs = currentNotebookId && fileTabs.length > 0;
 
   if (!shouldShowTabs) {
     return null;

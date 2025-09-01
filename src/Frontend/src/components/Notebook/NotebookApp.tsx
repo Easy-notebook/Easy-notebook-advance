@@ -1,6 +1,7 @@
 import { useEffect, useCallback, memo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
+import { StorageManager } from '@Storage/index';
 import CodeCell from '../Editor/Cells/CodeCell';
 import MarkdownCell from '../Editor/Cells/MarkdownCell';
 import HybridCell from '../Editor/Cells/HybridCell';
@@ -592,6 +593,22 @@ const NotebookApp = () => {
   const {
     activeFile  
   } = usePreviewStore();
+
+  // Initialize storage system on app start
+  useEffect(() => {
+    const initializeStorage = async () => {
+      try {
+        console.log('Initializing storage system...');
+        await StorageManager.initialize();
+        console.log('Storage system initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize storage system:', error);
+        // Don't throw - app can still work without perfect storage
+      }
+    };
+
+    initializeStorage();
+  }, []);
 
   return (
     <div className="h-screen flex border-r border-black">

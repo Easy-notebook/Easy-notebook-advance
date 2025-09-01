@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
-import { usePipelineStore } from '../../Senario/WorkflowMode/store/pipelineController';
-import { useWorkflowStateMachine } from '../../Senario/WorkflowMode/store/workflowStateMachine';
+import { usePipelineStore } from '../../Senario/Workflow/store/pipelineController';
+import { useWorkflowStateMachine } from '../../Senario/Workflow/store/workflowStateMachine';
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
 
 /**

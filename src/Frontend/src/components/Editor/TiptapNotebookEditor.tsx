@@ -62,10 +62,10 @@ const DEBUG = false;
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(
   ({ className = "text-2xl font-bold leading-relaxed", placeholder = "Untitled", readOnly = false }, ref) => {
 
-  const {
-    cells,
-    setCells,
-  } = useStore()
+  // Safe destructuring with fallback values
+  const storeData = useStore()
+  const cells = storeData?.cells ?? []
+  const setCells = storeData?.setCells ?? (() => {})
 
   const editorRef = useRef<Editor | null>(null)
   const [currentEditor, setCurrentEditor] = useState<Editor | null>(null)
@@ -83,46 +83,52 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           key: new PluginKey('cursorStyle'),
           view(editorView) {
             const updateCursorStyle = () => {
-              const { state } = editorView
-              const { selection } = state
-              const { from } = selection
+              try {
+                const state = editorView?.state
+                if (!state) return
+                const selection = state.selection
+                if (!selection) return
+                const from = selection.from
 
-              // 获取当前位置的节点
-              const $pos = state.doc.resolve(from)
-              const node = $pos.parent
+                // 获取当前位置的节点
+                const $pos = state.doc.resolve(from)
+                const node = $pos.parent
 
-              // 根据节点类型设置游标颜色
-              let caretColor = '#1f2937' // 默认颜色
+                // 根据节点类型设置游标颜色
+                let caretColor = '#1f2937' // 默认颜色
 
-              if (node.type.name === 'heading') {
-                const level = node.attrs.level
-                switch (level) {
-                  case 1:
-                    caretColor = '#3b82f6' // 蓝色 - H1/默认标题
-                    break
-                  case 2:
-                    caretColor = '#059669' // 绿色 - H2
-                    break
-                  case 3:
-                    caretColor = '#dc2626' // 红色 - H3
-                    break
-                  default:
-                    caretColor = '#7c3aed' // 紫色 - H4-H6
+                if (node.type.name === 'heading') {
+                  const level = node.attrs.level
+                  switch (level) {
+                    case 1:
+                      caretColor = '#3b82f6' // 蓝色 - H1/默认标题
+                      break
+                    case 2:
+                      caretColor = '#059669' // 绿色 - H2
+                      break
+                    case 3:
+                      caretColor = '#dc2626' // 红色 - H3
+                      break
+                    default:
+                      caretColor = '#7c3aed' // 紫色 - H4-H6
+                  }
+                } else if (node.type.name === 'listItem') {
+                  caretColor = '#f59e0b' // 橙色 - 列表项
+                } else if (node.type.name === 'blockquote') {
+                  caretColor = '#6b7280' // 灰色 - 引用
+                } else if (node.type.name === 'codeBlock') {
+                  caretColor = '#ef4444' // 红色 - 代码块
+                } else if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                  caretColor = '#8b5cf6' // 紫色 - 表格
                 }
-              } else if (node.type.name === 'listItem') {
-                caretColor = '#f59e0b' // 橙色 - 列表项
-              } else if (node.type.name === 'blockquote') {
-                caretColor = '#6b7280' // 灰色 - 引用
-              } else if (node.type.name === 'codeBlock') {
-                caretColor = '#ef4444' // 红色 - 代码块
-              } else if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
-                caretColor = '#8b5cf6' // 紫色 - 表格
-              }
 
-              // 应用样式到编辑器
-              const editorElement = editorView.dom
-              if (editorElement) {
-                editorElement.style.caretColor = caretColor
+                // 应用样式到编辑器
+                const editorElement = editorView.dom
+                if (editorElement) {
+                  editorElement.style.caretColor = caretColor
+                }
+              } catch (error) {
+                // Ignore cursor style errors silently
               }
             }
 
@@ -146,16 +152,23 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         new Plugin({
           key: new PluginKey('trailingParagraph'),
           appendTransaction: (_transactions, _oldState, newState) => {
-            const { doc, tr, schema } = newState
-            const last = doc.lastChild
-            const paragraph = schema.nodes.paragraph
-            if (!paragraph) return null
-            if (!last || last.type !== paragraph) {
-              const insertPos = doc.content.size
-              const nextTr = tr.insert(insertPos, paragraph.create())
-              return nextTr
+            try {
+              const doc = newState?.doc
+              const tr = newState?.tr
+              const schema = newState?.schema
+              if (!doc || !tr || !schema) return null
+              const last = doc.lastChild
+              const paragraph = schema.nodes.paragraph
+              if (!paragraph) return null
+              if (!last || last.type !== paragraph) {
+                const insertPos = doc.content.size
+                const nextTr = tr.insert(insertPos, paragraph.create())
+                return nextTr
+              }
+              return null
+            } catch (error) {
+              return null
             }
-            return null
           },
         }),
       ]
@@ -172,8 +185,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           props: {
             handleClick(view, pos, _event) {
               try {
-                const { state } = view
-                const { doc, schema } = state
+                const state = view?.state
+                if (!state) return false
+                const doc = state.doc
+                const schema = state.schema
                 const paragraph = schema.nodes.paragraph
                 if (!paragraph) return false
                 // 如果点击位置在文档末尾或之后
@@ -239,32 +254,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   // 同步超时计时器
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 初始化lastCellsRef
-  useEffect(() => {
-    lastCellsRef.current = cells
-  }, [])
-
-  // 清理定时器和编辑器资源
-  useEffect(() => {
-    return () => {
-      // 清理定时器
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current)
-      }
-      // 清理编辑器
-      if (editorRef.current) {
-        editorRef.current.destroy()
-        editorRef.current = null
-      }
-      // nothing to cleanup for slashCommands
-    }
-  }, [])
-
-  // Helper functions moved to utils/markdownConverters.ts
-
-  // convertMarkdownToHtml function moved to utils/markdownConverters.ts
-
-  // convertCellsToHtml function moved to utils/cellConverters.ts
+  const lastInsertedCodeCellIdRef = useRef<string | null>(null)
 
   // 初始内容 - 只在组件首次挂载时计算一次，避免与useEffect重复设置
   const initialContent = useMemo(() => {
@@ -279,12 +269,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     return content
   }, []) // 空依赖数组，只在组件挂载时计算一次
 
-  // Unused functions removed to clean up the code
-
-  // 移除复杂的表格扩展，使用简化版本
-
-  const lastInsertedCodeCellIdRef = useRef<string | null>(null)
-
+  // Move useEditor before useEffects that depend on editor
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -379,21 +364,64 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     content: initialContent,
     editable: !readOnly,
 
-    onCreate: ({ editor }) => {
-      editorRef.current = editor;
-      setCurrentEditor(editor);
+    onCreate: (params) => {
+      try {
+        const editor = params?.editor;
+        if (editor) {
+          editorRef.current = editor;
+          setCurrentEditor(editor);
+        }
+      } catch (error) {
+        console.warn('TipTap onCreate error:', error);
+      }
     },
 
-    onTransaction: ({ editor, transaction }) => {
+    onDestroy: (params) => {
       try {
+        // Force final sync when editor is destroyed
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+          syncTimeoutRef.current = null;
+        }
+        
+        // Safely attempt to sync state one last time
+        const editor = params?.editor;
+        if (editor && typeof convertEditorStateToCells === 'function') {
+          const newCells = convertEditorStateToCells(editor);
+          if (newCells && setCells && typeof setCells === 'function' && cells) {
+            if (JSON.stringify(newCells) !== JSON.stringify(cells)) {
+              console.log('📝 TipTap onDestroy: Final force sync for auto-save');
+              setCells(newCells);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('TipTap onDestroy error (safe to ignore during unmount):', error);
+      }
+    },
+
+    onTransaction: (params) => {
+      try {
+        const editor = params?.editor;
+        const transaction = params?.transaction;
+        if (!editor || !transaction) return;
+        
         const isCodeBlockInputRule = transaction?.getMeta('codeBlockInputRule');
         if (isCodeBlockInputRule) {
           const newCodeCellId = transaction?.getMeta('newCodeCellId');
           // Update store selection so CodeCell can autoFocus
-          const { setCurrentCell, setEditingCellId } = useStore.getState();
-          if (newCodeCellId && setCurrentCell) {
-            setCurrentCell(newCodeCellId);
-            setEditingCellId(newCodeCellId);
+          try {
+            const storeState = useStore.getState();
+            if (storeState?.setCurrentCell) {
+              const setCurrentCell = storeState.setCurrentCell;
+              const setEditingCellId = storeState.setEditingCellId;
+              if (newCodeCellId && setCurrentCell) {
+                setCurrentCell(newCodeCellId);
+                setEditingCellId?.(newCodeCellId);
+              }
+            }
+          } catch (storeError) {
+            console.warn('Store access failed in onTransaction:', storeError);
           }
           lastInsertedCodeCellIdRef.current = newCodeCellId || null;
           setTimeout(() => {
@@ -403,11 +431,15 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             }
           }, 60);
         }
-      } catch {}
+      } catch (error) {
+        console.warn('TipTap onTransaction error:', error);
+      }
     },
 
-    onUpdate: ({ editor }) => {
-      if (isInternalUpdate.current) return
+    onUpdate: (params) => {
+      try {
+        const editor = params?.editor;
+        if (!editor || isInternalUpdate.current) return
       // Check for code block input rule meta
       const isCodeBlockInputRule = false; // transaction?.getMeta('codeBlockInputRule')
       if (isCodeBlockInputRule) {
@@ -422,10 +454,18 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         setCells(parsedCells);
 
         // 设置当前活跃 cell 为新代码块
-        const { setCurrentCell, setEditingCellId } = useStore.getState();
-        if (newCodeCellId && setCurrentCell) {
-          setCurrentCell(newCodeCellId);
-          setEditingCellId(newCodeCellId);
+        try {
+          const storeState = useStore.getState();
+          if (storeState?.setCurrentCell) {
+            const setCurrentCell = storeState.setCurrentCell;
+            const setEditingCellId = storeState.setEditingCellId;
+            if (newCodeCellId && setCurrentCell) {
+              setCurrentCell(newCodeCellId);
+              setEditingCellId?.(newCodeCellId);
+            }
+          }
+        } catch (storeError) {
+          console.warn('Store access failed in onUpdate:', storeError);
         }
 
         setTimeout(() => {
@@ -449,8 +489,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         return
       }
 
-      // 统一防抖时间
-      const debounceTime = 150
+      // 减少防抖时间，提高实时保存响应速度
+      const debounceTime = 50
 
       // 使用防抖延迟同步，避免频繁更新
       if (syncTimeoutRef.current) {
@@ -487,8 +527,15 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           }
 
           // 智能合并：保持现有代码块完整性，只更新markdown内容
-          const storeState = useStore.getState();
-          const currentCells = storeState.cells;
+          let currentCells = cells; // fallback to current cells
+          try {
+            const storeState = useStore.getState();
+            if (storeState?.cells) {
+              currentCells = storeState.cells;
+            }
+          } catch (storeError) {
+            console.warn('Store access failed in merging cells:', storeError);
+          }
           const mergedCells: Cell[] = newCells.map((newCell, index) => {
             if (newCell.type === 'code') {
               // For code cells always keep existing store data
@@ -531,15 +578,50 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         } else if (markdownDiffs.length > 0) {
           // 仅 Markdown 内容变更，无结构变化
           isInternalUpdate.current = true;
-          const storeStateNow = useStore.getState();
-          markdownDiffs.forEach(({ id, content }) => {
-            storeStateNow.updateCell(id, content);
-          });
+          try {
+            const storeStateNow = useStore.getState();
+            if (storeStateNow?.updateCell) {
+              markdownDiffs.forEach(({ id, content }) => {
+                storeStateNow.updateCell(id, content);
+              });
+            }
+          } catch (storeError) {
+            console.warn('Store access failed in updating markdown:', storeError);
+          }
           setTimeout(() => {
             isInternalUpdate.current = false;
           }, 10);
         }
       }, debounceTime)
+      } catch (error) {
+        console.warn('TipTap onUpdate error:', error);
+      }
+    },
+
+    onBlur: (params) => {
+      try {
+        const editor = params?.editor;
+        if (!editor) return;
+        
+        // Force immediate sync when editor loses focus
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+          syncTimeoutRef.current = null;
+        }
+        
+        // Immediately sync state to ensure auto-save triggers
+        const newCells = convertEditorStateToCells(editor);
+        if (JSON.stringify(newCells) !== JSON.stringify(cells)) {
+          console.log('📝 TipTap onBlur: Force syncing state for immediate auto-save');
+          isInternalUpdate.current = true;
+          setCells(newCells);
+          setTimeout(() => {
+            isInternalUpdate.current = false;
+          }, 10);
+        }
+      } catch (error) {
+        console.warn('TipTap onBlur error:', error);
+      }
     },
 
     editorProps: {
@@ -561,6 +643,96 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
     immediatelyRender: false,
   })
+
+  // 初始化lastCellsRef
+  useEffect(() => {
+    lastCellsRef.current = cells
+  }, [])
+
+  // 页面卸载时强制保存
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Clear any pending debounced updates
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = null;
+      }
+      
+      // Force immediate final save if editor exists and has unsaved changes
+      // Add comprehensive safety checks to prevent uninitialized variable access
+      if (editor && 
+          isInternalUpdate?.current !== undefined && 
+          typeof isInternalUpdate.current === 'boolean' && 
+          !isInternalUpdate.current) {
+        try {
+          const finalCells = convertEditorStateToCells(editor);
+          if (finalCells && JSON.stringify(finalCells) !== JSON.stringify(cells)) {
+            console.log('📝 Page unload: Emergency sync for auto-save');
+            setCells(finalCells);
+            
+            // Force immediate auto-save instead of queueing
+            try {
+              const storeState = useStore.getState();
+              if (storeState?.notebookId) {
+                const notebookId = storeState.notebookId;
+                const notebookTitle = storeState.notebookTitle;
+                const tasks = storeState.tasks;
+                import('../../services/notebookAutoSave').then(({ default: NotebookAutoSave }) => {
+                  NotebookAutoSave.saveNow({
+                    notebookId,
+                    notebookTitle: notebookTitle || 'Untitled',
+                    cells: finalCells,
+                    tasks: tasks || [],
+                    timestamp: Date.now()
+                  }).catch(console.error);
+                });
+              }
+            } catch (storeError) {
+              console.warn('Store access failed during beforeunload (safe to ignore):', storeError);
+            }
+          }
+        } catch (error) {
+          console.warn('Error during beforeunload save:', error);
+        }
+      }
+    };
+
+    // Add listener only after isInternalUpdate is properly initialized
+    const timer = setTimeout(() => {
+      if (isInternalUpdate.current !== undefined) {
+        window.addEventListener('beforeunload', handleBeforeUnload);
+      }
+    }, 100); // Small delay to ensure initialization
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [editor, cells, setCells])
+
+  // 清理定时器和编辑器资源
+  useEffect(() => {
+    return () => {
+      // 清理定时器
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current)
+      }
+      // 清理编辑器
+      if (editorRef.current) {
+        editorRef.current.destroy()
+        editorRef.current = null
+      }
+      // nothing to cleanup for slashCommands
+    }
+  }, [])
+
+  // Helper functions moved to utils/markdownConverters.ts
+
+  // convertMarkdownToHtml function moved to utils/markdownConverters.ts
+
+  // convertCellsToHtml function moved to utils/cellConverters.ts
+
+  // The editor and initialContent are now defined earlier to prevent initialization errors
 
   // 暴露编辑器API - 针对混合笔记本的增强API
   useImperativeHandle(ref, () => ({
@@ -788,8 +960,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     ]).then(async ([nbMod, pvMod, _svcMod, cfgMod]) => {
       const useNotebookStore = (nbMod as any).default;
       const usePreviewStore = (pvMod as any).default;
-      // const { notebookApiIntegration } = svcMod as any;
-      const { Backend_BASE_URL } = cfgMod as any;
+      // const notebookApiIntegration = svcMod?.notebookApiIntegration;
+      const Backend_BASE_URL = cfgMod?.Backend_BASE_URL;
 
       const notebookId = useNotebookStore.getState().notebookId;
       if (!notebookId) return;
@@ -817,13 +989,18 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       }
 
       try {
+        // Use the new split preview system - bypasses tab validation
         const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
-        await usePreviewStore.getState().previewFile(notebookId, filePath, {
+        await usePreviewStore.getState().previewFileInSplit(notebookId, filePath, {
           file: fileObj,
         } as any);
+        
+        // Switch to file preview mode if currently in notebook mode
         if (usePreviewStore.getState().previewMode !== 'file') {
           usePreviewStore.getState().changePreviewMode();
         }
+        
+        console.log('🔀 Split preview opened for file:', filePath);
       } catch (err: any) {
         if (DEBUG) console.error('TipTap link split preview failed:', err);
         // 兜底：如果 .assets 下不存在，则尝试 notebook 根目录同名文件
@@ -831,10 +1008,12 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           const baseName = (filePath || href).split('/').pop() || '';
           if (baseName && baseName !== filePath) {
             const fileObj2 = { name: baseName, path: baseName, type: 'file' } as any;
-            await usePreviewStore.getState().previewFile(notebookId, baseName, { file: fileObj2 } as any);
+            await usePreviewStore.getState().previewFileInSplit(notebookId, baseName, { file: fileObj2 } as any);
+            
             if (usePreviewStore.getState().previewMode !== 'file') {
               usePreviewStore.getState().changePreviewMode();
             }
+            console.log('🔀 Split preview opened for fallback file:', baseName);
             return;
           }
         } catch (e) {

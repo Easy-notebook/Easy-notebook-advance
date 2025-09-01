@@ -6,6 +6,7 @@ import { parseMarkdownCells, findCellsByPhase, findCellsByStep, updateCellsPhase
 import { v4 as uuidv4 } from 'uuid';
 import { showToast } from '../components/UI/Toast';
 import { produce } from 'immer';
+import notebookAutoSaveInstance, { NotebookAutoSave } from '../services/notebookAutoSave';
 
 import useCodeStore from './codeStore';
 
@@ -228,6 +229,11 @@ export interface NotebookStoreActions {
     setDetachedCellId: (cellId: string | null) => void;
     getDetachedCell: () => Cell | null;
     toggleDetachedCellFullscreen: () => void;
+
+    // 自动保存管理
+    triggerAutoSave: () => void;
+    loadFromDatabase: (notebookId: string) => Promise<boolean>;
+    saveNow: () => Promise<void>;
 }
 
 /**
@@ -1317,7 +1323,184 @@ const useStore = create(
     toggleDetachedCellFullscreen: () => set((state) => ({ 
       isDetachedCellFullscreen: !state.isDetachedCellFullscreen 
     })),
+
+    // 自动保存功能
+    triggerAutoSave: () => {
+      const state = get();
+      if (!state.notebookId) {
+        return;
+      }
+
+      notebookAutoSaveInstance.queueSave({
+        notebookId: state.notebookId,
+        notebookTitle: state.notebookTitle,
+        cells: state.cells,
+        tasks: state.tasks,
+        timestamp: Date.now()
+      });
+    },
+
+    loadFromDatabase: async (notebookId: string): Promise<boolean> => {
+      try {
+        console.log(`Loading notebook ${notebookId} from database...`);
+        
+        const result = await NotebookAutoSave.loadNotebook(notebookId);
+        if (!result) {
+          console.log(`Notebook ${notebookId} not found in database`);
+          return false;
+        }
+
+        const { notebookTitle, cells, tasks } = result;
+        console.log(`📖 Loaded data:`, { 
+          title: notebookTitle, 
+          cellsCount: cells.length, 
+          tasksCount: tasks.length 
+        });
+
+        // 基于导入文件的思路，完整设置notebook状态
+        // 1. 清空当前状态 (类似导入时的处理)
+        set({ 
+          cells: [], 
+          tasks: [], 
+          currentRunningPhaseId: null,
+          currentPhaseId: null,
+          currentStepIndex: 0,
+          error: null
+        });
+
+        // 2. 设置基本信息
+        set({
+          notebookId,
+          notebookTitle,
+          viewMode: 'create', // 重置视图模式
+        });
+
+        // 3. 逐个添加cells (类似导入文件中的处理)
+        if (cells && cells.length > 0) {
+          // 直接设置所有cells，确保保持原有的ID和结构
+          set({ cells: [...cells] });
+          console.log(`📝 Set ${cells.length} cells to store`);
+        } else {
+          // 如果没有cells，创建默认标题cell
+          const defaultCell = {
+            id: `title-${Date.now()}`,
+            type: 'markdown' as const,
+            content: `# ${notebookTitle}`,
+            outputs: [],
+            enableEdit: true,
+          };
+          set({ cells: [defaultCell] });
+          console.log(`📝 Created default title cell`);
+        }
+
+        // 4. 设置tasks和其他状态
+        if (tasks && tasks.length > 0) {
+          set({ 
+            tasks,
+            currentPhaseId: tasks[0]?.phases?.[0]?.id || null,
+          });
+        }
+
+        // 5. 设置当前cell
+        const finalCells = get().cells;
+        if (finalCells.length > 0) {
+          set({ currentCellId: finalCells[0].id });
+        }
+
+        console.log(`✅ Successfully loaded notebook ${notebookId} with ${finalCells.length} cells`);
+        
+        showToast({
+          message: `已加载笔记本: ${notebookTitle}`,
+          type: 'success',
+        });
+
+        return true;
+      } catch (error) {
+        console.error(`Failed to load notebook ${notebookId}:`, error);
+        
+        showToast({
+          message: `加载笔记本失败: ${error}`,
+          type: 'error',
+        });
+
+        return false;
+      }
+    },
+
+    saveNow: async (): Promise<void> => {
+      const state = get();
+      if (!state.notebookId) {
+        return;
+      }
+
+      try {
+        await notebookAutoSaveInstance.saveNow({
+          notebookId: state.notebookId,
+          notebookTitle: state.notebookTitle,
+          cells: state.cells,
+          tasks: state.tasks,
+          timestamp: Date.now()
+        });
+
+        showToast({
+          message: '笔记本已保存',
+          type: 'success',
+        });
+      } catch (error) {
+        console.error('Failed to save notebook:', error);
+        
+        showToast({
+          message: `保存失败: ${error}`,
+          type: 'error',
+        });
+      }
+    },
   }))
+);
+
+// 设置自动保存订阅
+useStore.subscribe(
+  (state) => ({
+    notebookId: state.notebookId,
+    notebookTitle: state.notebookTitle,
+    cells: state.cells,
+    tasks: state.tasks
+  }),
+  async (current, previous) => {
+    // 只有在notebook存在且内容发生实际变化时才触发保存
+    if (!current.notebookId) return;
+    
+    // 初次加载时不触发保存
+    if (!previous.notebookId && current.notebookId) return;
+    
+    // 检查是否有实际内容变化
+    const hasChanges = 
+      current.notebookTitle !== previous.notebookTitle ||
+      current.cells.length !== previous.cells.length ||
+      current.tasks.length !== previous.tasks.length ||
+      JSON.stringify(current.cells) !== JSON.stringify(previous.cells) ||
+      JSON.stringify(current.tasks) !== JSON.stringify(previous.tasks);
+    
+    if (hasChanges) {
+      console.log('📝 Notebook content changed, triggering auto-save...');
+      
+      // Initialize auto-save service if needed
+      try {
+        await notebookAutoSaveInstance.initialize();
+        
+        // Queue the save with current state
+        notebookAutoSaveInstance.queueSave({
+          notebookId: current.notebookId,
+          notebookTitle: current.notebookTitle,
+          cells: current.cells,
+          tasks: current.tasks,
+          timestamp: Date.now()
+        });
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    }
+  }
 );
 
 export default useStore;

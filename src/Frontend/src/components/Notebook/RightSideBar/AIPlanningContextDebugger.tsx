@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
-import { useAIPlanningContextStore } from '../../Senario/WorkflowMode/store/aiPlanningContext';
-import { useWorkflowStateMachine } from '../../Senario/WorkflowMode/store/workflowStateMachine';
+import { useAIPlanningContextStore } from '../../Senario/Workflow/store/aiPlanningContext';
+import { useWorkflowStateMachine } from '../../Senario/Workflow/store/workflowStateMachine';
 import { 
   Brain, 
   ChevronDown, 

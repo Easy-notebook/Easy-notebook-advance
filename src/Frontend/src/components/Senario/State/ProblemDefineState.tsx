@@ -11,10 +11,10 @@ import {
     Sparkles,
     PlusCircle,
 } from 'lucide-react';
-import { useAIPlanningContextStore } from '../store/aiPlanningContext';
-import usePreStageStore from '../store/preStageStore';
+import { useAIPlanningContextStore } from '@/components/Senario/Workflow/store/aiPlanningContext';
+import usePreStageStore from '@/components/Senario/Workflow/store/preStageStore';
 // @ts-ignore
-import { generalResponse } from '../services/StageGeneralFunction';
+import { generalResponse } from '@/components/Senario/Workflow/services/StageGeneralFunction';
 
 // ─────────── 类型定义 (Type Definitions) ───────────
 

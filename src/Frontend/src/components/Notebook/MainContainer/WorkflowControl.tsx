@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FaRedo, FaPlay, FaPause } from 'react-icons/fa';
-import { usePipelineStore } from '../../Senario/WorkflowMode/store/usePipelineStore';
-import { useAIPlanningContextStore } from '../../Senario/WorkflowMode/store/aiPlanningContext';
-import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS, WorkflowState } from '../../Senario/WorkflowMode/store/workflowStateMachine';
-import usePreStageStore from '../../Senario/WorkflowMode/store/preStageStore';
+import { usePipelineStore } from '../../Senario/Workflow/store/usePipelineStore';
+import { useAIPlanningContextStore } from '../../Senario/Workflow/store/aiPlanningContext';
+import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS, WorkflowState } from '../../Senario/Workflow/store/workflowStateMachine';
+import usePreStageStore from '../../Senario/Workflow/store/preStageStore';
 import './WorkflowErrorCollector'; // Initialize error collector
 import { extractSectionTitle} from '../utils/String';
 

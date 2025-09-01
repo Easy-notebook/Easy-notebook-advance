@@ -2,24 +2,25 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { notebookApiIntegration } from '../services/notebookServices';
-
-// Optimized IndexedDB setup - force recreation
-const DB_NAME = 'easyremote-file-cache-v3';
-const DB_VERSION = 1;
-const FILE_STORE = 'files';
-
-/**
- * 文件类型
- */
-export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx' | 'react' | 'doc' | 'docx';
+import { 
+  FileCache, 
+  initializeStorage,
+  type FileObject as StorageFileObject,
+  type FileType,
+  type ActivePreviewMode,
+  getFileType,
+  getActivePreviewMode,
+  getMimeType,
+  SplitPreviewCache
+} from '../storage';
 
 /**
  * 预览模式类型
  */
 export type PreviewMode = 'notebook' | 'file';
 
-// Active preview renderer mode for the current file
-export type ActivePreviewMode = 'default' | 'csv' | 'jsx' | 'html' | 'image' | 'pdf' | 'text' | 'doc' | 'docx' | null;
+// Re-export types from storage module
+export type { FileType, ActivePreviewMode } from '../storage';
 
 /**
  * 文件元数据接口
@@ -29,23 +30,8 @@ export interface FileMetadata {
     lastModified?: string | number;
 }
 
-/**
- * 优化后的文件对象接口
- */
-export interface FileObject {
-    id: string;  // `${notebookId}::${filePath}`
-    notebookId: string;
-    path: string;
-    name: string;
-    content: string;
-    type: FileType;
-    lastModified: string;
-    size: number;
-    // 缓存管理字段
-    cachedAt: number;
-    accessCount: number;
-    lastAccessed: number;
-}
+// Re-export FileObject from storage module
+export type FileObject = StorageFileObject;
 
 /**
  * 预览文件接口（简化版）
@@ -78,6 +64,14 @@ export interface PreviewStoreState {
     dirtyMap: Record<string, boolean>; // fileId -> dirty flag
     isLoading: boolean;
     error: string | null;
+    
+    // Current notebook tracking
+    currentNotebookId: string | null; // Currently active notebook ID
+    
+    // Split preview state - independent from tab system
+    activeSplitFile: FileObject | null; // Currently active split preview file
+    activeSplitMode: ActivePreviewMode; // Renderer mode for split preview
+    isSplitLoading: boolean; // Loading state for split preview
 }
 
 /**
@@ -101,6 +95,17 @@ export interface PreviewStoreActions {
     updateActiveFileContent: (content: string) => Promise<FileObject | null>;
     setTabDirty: (fileId: string, value: boolean) => void;
     isTabDirty: (fileId: string) => boolean;
+    
+    // Notebook-based tab loading
+    loadNotebookTabs: (notebookId: string) => Promise<void>;
+    switchToNotebook: (notebookId: string) => Promise<void>;
+    getCurrentNotebookId: () => string | null;
+    getTabsByNotebook: (notebookId: string) => PreviewFile[];
+    
+    // Split preview actions - independent from tab system
+    previewFileInSplit: (notebookId: string, filePath: string, fileMetadata?: FileMetadata) => Promise<FileObject | undefined>;
+    closeSplitPreview: () => void;
+    getActiveSplitFile: () => FileObject | null;
 }
 
 /**
@@ -108,389 +113,6 @@ export interface PreviewStoreActions {
  */
 export type PreviewStore = PreviewStoreState & PreviewStoreActions;
 
-// Optimized IndexedDB with connection pool
-class IndexedDBPool {
-    private static instance: IDBDatabase | null = null;
-    private static initPromise: Promise<IDBDatabase> | null = null;
-    
-    static async getDB(): Promise<IDBDatabase> {
-        if (this.instance && this.instance.version === DB_VERSION) {
-            return this.instance;
-        }
-        
-        if (!this.initPromise) {
-            this.initPromise = this.initializeDB();
-        }
-        
-        return this.initPromise;
-    }
-    
-    private static async initializeDB(): Promise<IDBDatabase> {
-        // First, clear old databases if they exist
-        try {
-            const oldDBNames = ['easyremote-file-cache', 'easyremote-file-cache-v2'];
-            for (const oldName of oldDBNames) {
-                try {
-                    await new Promise<void>((resolve) => {
-                        const deleteReq = indexedDB.deleteDatabase(oldName);
-                        deleteReq.onsuccess = () => resolve();
-                        deleteReq.onerror = () => resolve(); // Continue even if delete fails
-                        deleteReq.onblocked = () => resolve();
-                        setTimeout(() => resolve(), 1000); // Timeout after 1s
-                    });
-                } catch (e) {
-                    // Ignore errors when deleting old databases
-                }
-            }
-        } catch (e) {
-            console.warn('Could not clean old databases:', e);
-        }
-
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-            
-            // 超时处理
-            const timeout = setTimeout(() => {
-                reject(new Error('IndexedDB initialization timeout'));
-            }, 10000); // Increased timeout for first-time setup
-            
-            request.onupgradeneeded = (event) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-                
-                if (!db.objectStoreNames.contains(FILE_STORE)) {
-                    const store = db.createObjectStore(FILE_STORE, { keyPath: 'id' });
-                    
-                    // 优化的索引设计
-                    store.createIndex('notebookPath', ['notebookId', 'path'], { unique: true });
-                    store.createIndex('notebook', 'notebookId', { unique: false });
-                    store.createIndex('lastAccessed', 'lastAccessed', { unique: false });
-                    store.createIndex('cachedAt', 'cachedAt', { unique: false });
-                    store.createIndex('type', 'type', { unique: false });
-                }
-            };
-            
-            request.onsuccess = () => {
-                clearTimeout(timeout);
-                this.instance = request.result;
-                
-                // 监听数据库关闭事件
-                this.instance.onclose = () => {
-                    this.instance = null;
-                    this.initPromise = null;
-                };
-                
-                resolve(this.instance);
-            };
-            
-            request.onerror = () => {
-                clearTimeout(timeout);
-                this.initPromise = null;
-                reject(request.error);
-            };
-        });
-    }
-    
-    static close() {
-        if (this.instance) {
-            this.instance.close();
-            this.instance = null;
-            this.initPromise = null;
-        }
-    }
-}
-
-// 缓存管理常量
-const MAX_CACHE_SIZE = 100;
-const MAX_CACHE_AGE = 24 * 60 * 60 * 1000; // 24小时
-
-// 更新文件访问统计
-const updateFileAccessStats = async (file: FileObject): Promise<void> => {
-    try {
-        const db = await IndexedDBPool.getDB();
-        
-        const updatedFile: FileObject = {
-            ...file,
-            accessCount: file.accessCount + 1,
-            lastAccessed: Date.now()
-        };
-        
-        const transaction = db.transaction([FILE_STORE], 'readwrite');
-        const store = transaction.objectStore(FILE_STORE);
-        store.put(updatedFile);
-        
-        // 异步操作，不等待完成
-    } catch (error) {
-        console.error('updateFileAccessStats error:', error);
-    }
-};
-
-// LRU缓存清理机制
-const cleanupCacheIfNeeded = async (): Promise<void> => {
-    try {
-        const db = await IndexedDBPool.getDB();
-        
-        return new Promise<void>((resolve) => {
-            const transaction = db.transaction([FILE_STORE], 'readwrite');
-            const store = transaction.objectStore(FILE_STORE);
-            
-            // 1. 清理过期文件
-            const ageIndex = store.index('cachedAt');
-            const cutoffTime = Date.now() - MAX_CACHE_AGE;
-            const ageRange = IDBKeyRange.upperBound(cutoffTime);
-            const ageRequest = ageIndex.openCursor(ageRange);
-            
-            ageRequest.onsuccess = (event) => {
-                const cursor = (event.target as IDBRequest).result;
-                if (cursor) {
-                    cursor.delete();
-                    cursor.continue();
-                }
-            };
-            
-            // 2. 如果文件数量超过限制，删除最少访问的文件
-            const countRequest = store.count();
-            countRequest.onsuccess = () => {
-                if (countRequest.result > MAX_CACHE_SIZE) {
-                    const accessIndex = store.index('lastAccessed');
-                    const accessRequest = accessIndex.openCursor();
-                    let deleteCount = countRequest.result - MAX_CACHE_SIZE;
-                    
-                    accessRequest.onsuccess = (event) => {
-                        const cursor = (event.target as IDBRequest).result;
-                        if (cursor && deleteCount > 0) {
-                            cursor.delete();
-                            deleteCount--;
-                            cursor.continue();
-                        }
-                    };
-                }
-            };
-            
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = () => resolve(); // 清理失败不影响主流程
-        });
-    } catch (error) {
-        console.error('cleanupCacheIfNeeded error:', error);
-    }
-};
-
-// 优化的文件保存
-const saveFileToCache = async (fileData: Omit<FileObject, 'cachedAt' | 'accessCount' | 'lastAccessed'>): Promise<boolean> => {
-    try {
-        const db = await IndexedDBPool.getDB();
-        
-        const file: FileObject = {
-            ...fileData,
-            id: `${fileData.notebookId}::${fileData.path}`,
-            cachedAt: Date.now(),
-            accessCount: 1,
-            lastAccessed: Date.now()
-        };
-        
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([FILE_STORE], 'readwrite');
-            const store = transaction.objectStore(FILE_STORE);
-            const request = store.put(file);
-            
-            transaction.oncomplete = () => {
-                // 异步执行缓存清理，不阻塞主流程
-                cleanupCacheIfNeeded().catch(console.error);
-                resolve(true);
-            };
-            
-            transaction.onerror = () => reject(transaction.error);
-            transaction.onabort = () => reject(new Error('Transaction aborted'));
-            
-            // 事务超时
-            setTimeout(() => {
-                try {
-                    transaction.abort();
-                    reject(new Error('Save operation timeout'));
-                } catch (e) {
-                    // Transaction may already be complete
-                }
-            }, 5000);
-        });
-    } catch (error) {
-        console.error('Error saving file to cache:', error);
-        return false;
-    }
-};
-
-// 优化的文件获取 - 使用复合索引直接查询
-const getFileFromCache = async (notebookId: string, filePath: string): Promise<FileObject | null> => {
-    const timeoutPromise = new Promise<null>((resolve) => 
-        setTimeout(() => resolve(null), 3000) // 3秒超时
-    );
-    
-    const queryPromise = (async (): Promise<FileObject | null> => {
-        try {
-            const db = await IndexedDBPool.getDB();
-            
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction([FILE_STORE], 'readonly');
-                const store = transaction.objectStore(FILE_STORE);
-                const index = store.index('notebookPath');
-                
-                // 使用复合索引直接查询，避免内存过滤
-                const request = index.get([notebookId, filePath]);
-                
-                request.onsuccess = () => {
-                    const file = request.result as FileObject | undefined;
-                    if (file) {
-                        // 更新访问统计
-                        updateFileAccessStats(file).catch(console.error);
-                    }
-                    resolve(file || null);
-                };
-                
-                request.onerror = () => reject(request.error);
-                
-                // 事务超时处理
-                transaction.onerror = () => reject(new Error('Transaction failed'));
-                transaction.onabort = () => reject(new Error('Transaction aborted'));
-            });
-        } catch (error) {
-            console.error('getFileFromCache error:', error);
-            return null;
-        }
-    })();
-    
-    // 使用 Promise.race 实现超时
-    return Promise.race([queryPromise, timeoutPromise]);
-};
-
-// 优化的文件删除
-const deleteFileFromCache = async (notebookId: string, filePath: string): Promise<boolean> => {
-    try {
-        const fileId = `${notebookId}::${filePath}`;
-        const db = await IndexedDBPool.getDB();
-        
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([FILE_STORE], 'readwrite');
-            const store = transaction.objectStore(FILE_STORE);
-            const request = store.delete(fileId);
-
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-            
-            // 超时处理
-            setTimeout(() => {
-                reject(new Error('Delete operation timeout'));
-            }, 3000);
-        });
-    } catch (error) {
-        console.error('Error deleting file from cache:', error);
-        return false;
-    }
-};
-
-// 优化的notebook文件获取
-const getFilesForNotebook = async (notebookId: string): Promise<FileObject[]> => {
-    try {
-        const db = await IndexedDBPool.getDB();
-        
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([FILE_STORE], 'readonly');
-            const store = transaction.objectStore(FILE_STORE);
-            const index = store.index('notebook');
-            const request = index.getAll(notebookId);
-            
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
-            
-            // 超时处理
-            setTimeout(() => {
-                reject(new Error('Query timeout'));
-            }, 5000);
-        });
-    } catch (error) {
-        console.error('getFilesForNotebook error:', error);
-        return [];
-    }
-};
-
-// 优化的notebook缓存清理
-const clearCacheForNotebook = async (notebookId: string): Promise<boolean> => {
-    try {
-        const db = await IndexedDBPool.getDB();
-        
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([FILE_STORE], 'readwrite');
-            const store = transaction.objectStore(FILE_STORE);
-            const index = store.index('notebook');
-            const request = index.openCursor(notebookId);
-            
-            request.onsuccess = (event) => {
-                const cursor = (event.target as IDBRequest).result;
-                if (cursor) {
-                    cursor.delete();
-                    cursor.continue();
-                } else {
-                    resolve(true);
-                }
-            };
-            
-            request.onerror = () => reject(request.error);
-            
-            // 超时处理
-            setTimeout(() => {
-                reject(new Error('Clear operation timeout'));
-            }, 10000);
-        });
-    } catch (error) {
-        console.error('Error clearing cache for notebook:', error);
-        return false;
-    }
-};
-
-// Determine file type from extension
-const getFileType = (filePath: string): FileType => {
-    const fileExt = filePath.split('.').pop()?.toLowerCase();
-
-    // Image files
-    if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(`.${fileExt}`)) {
-        return 'image';
-    }
-
-    // CSV files
-    if (fileExt === 'csv') {
-        return 'csv';
-    }
-
-    // Excel files
-    if (fileExt === 'xlsx' || fileExt === 'xls') {
-        return 'xlsx';
-    }
-
-    // PDF files
-    if (fileExt === 'pdf') {
-        return 'pdf';
-    }
-
-    // DOC/DOCX files
-    if (fileExt === 'doc' || fileExt === 'docx') {
-        return 'docx';
-    }
-
-    // HTML files
-    if (fileExt === 'html' || fileExt === 'htm') {
-        return 'html';
-    }
-
-    // React/JSX files
-    if (fileExt === 'jsx' || fileExt === 'tsx') {
-        return 'jsx';
-    }
-
-    // Other text files
-    if (['.txt', '.md', '.json', '.js', '.py', '.css'].includes(`.${fileExt}`)) {
-        return 'text';
-    }
-
-    // Default
-    return 'text';
-};
 
 // Create the store
 const usePreviewStore = create<PreviewStore>()(
@@ -503,6 +125,14 @@ const usePreviewStore = create<PreviewStore>()(
             dirtyMap: {},
             isLoading: false,
             error: null,
+            
+            // Current notebook tracking
+            currentNotebookId: null, // Currently active notebook ID
+            
+            // Split preview initial state
+            activeSplitFile: null,
+            activeSplitMode: null,
+            isSplitLoading: false,
 
             changePreviewMode: () => {
                 if (get().previewMode === 'notebook') {
@@ -513,11 +143,51 @@ const usePreviewStore = create<PreviewStore>()(
             },
 
             // Initialize the store
-            init: () => {
-                IndexedDBPool.getDB().catch(error => {
-                    console.error('Failed to initialize IndexedDB:', error);
+            init: async () => {
+                try {
+                    await initializeStorage();
+                    
+                    // Restore notebooks from cache after page refresh
+                    const cachedNotebooks = await FileCache.getAllNotebooks();
+                    console.log(`Restored ${cachedNotebooks.length} notebooks from cache:`, cachedNotebooks);
+                    
+                    // If there's only one cached notebook or a most recently accessed one,
+                    // we could potentially restore it as the active notebook
+                    if (cachedNotebooks.length > 0) {
+                        // Sort by last accessed time to get the most recent
+                        const mostRecentNotebook = cachedNotebooks.sort((a, b) => 
+                            b.lastAccessedAt - a.lastAccessedAt
+                        )[0];
+                        
+                        console.log(`Most recent notebook: ${mostRecentNotebook.id} (${mostRecentNotebook.name})`);
+                        
+                        // Import and update notebook store with the most recent notebook
+                        const { default: useNotebookStore } = await import('./notebookStore');
+                        useNotebookStore.getState().setNotebookId(mostRecentNotebook.id);
+                        useNotebookStore.getState().setNotebookTitle(mostRecentNotebook.name || `Notebook ${mostRecentNotebook.id.slice(0, 8)}`);
+                        
+                        // Also set the current notebook ID in preview store
+                        set({ currentNotebookId: mostRecentNotebook.id });
+                        
+                        console.log(`Restored notebook context: ${mostRecentNotebook.id}`);
+                        
+                        // Also restore cached files for this notebook
+                        try {
+                            const cachedFiles = await FileCache.getFilesForNotebook(mostRecentNotebook.id);
+                            console.log(`Restored ${cachedFiles.length} cached files for notebook ${mostRecentNotebook.id}`);
+                            
+                            // You can set these in preview state if needed
+                            // set({ currentPreviewFiles: cachedFiles.map(file => ({...file})) });
+                            
+                        } catch (fileError) {
+                            console.warn('Failed to restore cached files:', fileError);
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to initialize storage:', error);
                     set({ error: 'Failed to initialize file cache database' });
-                });
+                }
             },
 
             // Clear error
@@ -542,20 +212,14 @@ const usePreviewStore = create<PreviewStore>()(
                 const fileId = `${notebookId}::${filePath}`;
 
                 // Check if file exists in cache with optimized query
-                const cachedFile = await getFileFromCache(notebookId, filePath);
+                const cachedFile = await FileCache.getFile(notebookId, filePath);
                 const lastModifiedBackend = fileMetadata.lastModified || null;
                 let file = fileMetadata.file;
                 if (!file) {
                     // Create a safe placeholder File when not provided (derive name from path)
                     try {
                         const baseName = filePath.split('/').pop() || filePath;
-                        const ext = baseName.split('.').pop()?.toLowerCase() || '';
-                        const mime = ext === 'svg' ? 'image/svg+xml'
-                            : ['png','jpg','jpeg','gif','webp'].includes(ext) ? (ext === 'jpg' ? 'image/jpeg' : `image/${ext}`)
-                            : ext === 'pdf' ? 'application/pdf'
-                            : ['html','htm'].includes(ext) ? 'text/html'
-                            : ['txt','md','json','js','py','css','csv'].includes(ext) ? 'text/plain'
-                            : 'application/octet-stream';
+                        const mime = getMimeType(filePath);
                         file = new File([''], baseName, { type: mime, lastModified: Date.now() });
                     } catch (e) {
                         console.warn('Failed to create placeholder File:', e);
@@ -656,7 +320,7 @@ const usePreviewStore = create<PreviewStore>()(
                         };
 
                         // Save to optimized IndexedDB
-                        await saveFileToCache(fileObjectData);
+                        await FileCache.saveFile(fileObjectData);
                         
                         // Create full file object for state
                         const fileObject: FileObject = {
@@ -667,15 +331,7 @@ const usePreviewStore = create<PreviewStore>()(
                         };
 
                         // Set as active file and renderer mode
-                        const activeMode: ActivePreviewMode = (
-                            fileType === 'csv' ? 'csv' :
-                            fileType === 'jsx' ? 'jsx' :
-                            fileType === 'html' ? 'html' :
-                            fileType === 'image' ? 'image' :
-                            fileType === 'pdf' ? 'pdf' :
-                            fileType === 'docx' ? 'docx' :
-                            'text'
-                        );
+                        const activeMode = getActivePreviewMode(fileType);
                         set({
                             activeFile: fileObject,
                             activePreviewMode: activeMode,
@@ -712,38 +368,48 @@ const usePreviewStore = create<PreviewStore>()(
                         const msg = (e && e.message) ? String(e.message) : '';
                         console.log('previewFile: fetch error -', { msg, filePath });
                         
-                        // Fallback: if .assets path not found, try basename at notebook root
-                        const baseName = filePath.split('/').pop() || filePath;
                         const isNotFound = /not\s*found/i.test(msg) || /404/.test(msg);
                         
-                        if (isNotFound && baseName !== filePath) {
-                            console.log('previewFile: trying fallback to basename -', baseName);
-                            return await get().previewFile(notebookId, baseName, fileMetadata);
+                        // If it's a 404 error, don't create tabs for missing files
+                        if (isNotFound) {
+                            console.warn(`File not found: ${filePath} - will not create tab`);
+                            set({ isLoading: false, error: null }); // Clear error, don't show to user
+                            return undefined; // Return undefined instead of throwing
                         }
                         
-                        // Try URL encoding the file path
-                        if (isNotFound && filePath.includes(' ')) {
-                            console.log('previewFile: trying URL encoded path');
-                            const encodedPath = filePath.split('/').map(part => encodeURIComponent(part)).join('/');
-                            if (encodedPath !== filePath) {
-                                return await get().previewFile(notebookId, encodedPath, fileMetadata);
+                        // For non-404 errors, try fallbacks
+                        const baseName = filePath.split('/').pop() || filePath;
+                        
+                        if (baseName !== filePath) {
+                            console.log('previewFile: trying fallback to basename -', baseName);
+                            try {
+                                return await get().previewFile(notebookId, baseName, fileMetadata);
+                            } catch (fallbackError) {
+                                console.warn('Basename fallback also failed:', fallbackError);
                             }
                         }
                         
-                        set({ isLoading: false, error: `Failed to load file: ${msg}` });
-                        throw e;
+                        // Try URL encoding the file path
+                        if (filePath.includes(' ')) {
+                            console.log('previewFile: trying URL encoded path');
+                            const encodedPath = filePath.split('/').map(part => encodeURIComponent(part)).join('/');
+                            if (encodedPath !== filePath) {
+                                try {
+                                    return await get().previewFile(notebookId, encodedPath, fileMetadata);
+                                } catch (encodingError) {
+                                    console.warn('URL encoding fallback also failed:', encodingError);
+                                }
+                            }
+                        }
+                        
+                        // All fallbacks failed, don't create a tab
+                        set({ isLoading: false, error: null }); // Clear error, don't show to user
+                        console.warn(`All attempts to load file failed: ${filePath} - no tab will be created`);
+                        return undefined; // Return undefined instead of throwing
                     }
                 } else {
                     // File found in cache
-                    const cachedMode: ActivePreviewMode = (
-                        cachedFile.type === 'csv' ? 'csv' :
-                        cachedFile.type === 'jsx' ? 'jsx' :
-                        cachedFile.type === 'html' ? 'html' :
-                        cachedFile.type === 'image' ? 'image' :
-                        cachedFile.type === 'pdf' ? 'pdf' :
-                        cachedFile.type === 'docx' ? 'docx' :
-                        'text'
-                    );
+                    const cachedMode = getActivePreviewMode(cachedFile.type as FileType);
                     set({
                         activeFile: cachedFile,
                         activePreviewMode: cachedMode,
@@ -822,6 +488,8 @@ const usePreviewStore = create<PreviewStore>()(
             // Load a file by its ID
             loadFileById: async (fileId: string): Promise<FileObject | null> => {
                 try {
+                    console.log(`Loading file by ID: ${fileId}`);
+                    
                     const separatorIndex = fileId.indexOf('::');
                     if (separatorIndex === -1) {
                         console.error('Invalid fileId format:', fileId);
@@ -830,25 +498,18 @@ const usePreviewStore = create<PreviewStore>()(
                     const notebookId = fileId.substring(0, separatorIndex);
                     const filePath = fileId.substring(separatorIndex + 2);
 
-                    const cachedFile = await getFileFromCache(notebookId, filePath);
+                    // Validate extracted values
+                    if (!notebookId || !filePath) {
+                        console.error('Invalid fileId components:', { fileId, notebookId, filePath });
+                        return null;
+                    }
+
+                    // Check cache first
+                    const cachedFile = await FileCache.getFile(notebookId, filePath);
                     if (cachedFile) {
+                        console.log(`Found file in cache: ${filePath}`);
                         // Set active preview mode based on file type
-                        let previewMode: ActivePreviewMode = 'default';
-                        if (cachedFile.type === 'csv') {
-                            previewMode = 'csv';
-                        } else if (cachedFile.type === 'jsx' || cachedFile.type === 'react') {
-                            previewMode = 'jsx';
-                        } else if (cachedFile.type === 'html') {
-                            previewMode = 'html';
-                        } else if (cachedFile.type === 'image') {
-                            previewMode = 'image';
-                        } else if (cachedFile.type === 'pdf') {
-                            previewMode = 'pdf';
-                        } else if (cachedFile.type === 'docx') {
-                            previewMode = 'docx';
-                        } else if (cachedFile.type === 'text') {
-                            previewMode = 'text';
-                        }
+                        const previewMode = getActivePreviewMode(cachedFile.type as FileType);
 
                         set({
                             activeFile: cachedFile,
@@ -857,13 +518,38 @@ const usePreviewStore = create<PreviewStore>()(
                         return cachedFile;
                     }
 
-                    // Fallback: not in cache, fetch it and set active
+                    // Try to fetch from server, but handle errors gracefully
                     try {
+                        console.log(`Attempting to fetch file from server: ${filePath}`);
                         const fetched = await get().previewFile(notebookId, filePath);
-                        return fetched || null;
-                    } catch (e) {
-                        console.warn('loadFileById fallback failed', e);
-                        return null;
+                        if (fetched) {
+                            console.log(`✅ Successfully fetched and loaded file: ${filePath}`);
+                            return fetched;
+                        } else {
+                            console.warn(`File fetch returned undefined: ${filePath}`);
+                            return null;
+                        }
+                    } catch (e: any) {
+                        const msg = e?.message || String(e);
+                        const isNotFound = /not\s*found/i.test(msg) || /404/.test(msg);
+                        
+                        if (isNotFound) {
+                            console.warn(`File not found on server: ${filePath} - this is normal for missing files`);
+                            
+                            // Remove this tab from the preview files list since the file doesn't exist
+                            const { currentPreviewFiles } = get();
+                            const updatedFiles = currentPreviewFiles.filter(f => f.id !== fileId);
+                            
+                            set({
+                                currentPreviewFiles: updatedFiles,
+                                error: null // Don't show error to user for missing files
+                            });
+                            
+                            return null;
+                        } else {
+                            console.error(`Error loading file ${filePath}:`, e);
+                            return null;
+                        }
                     }
                 } catch (error) {
                     console.error('Error loading file by ID:', error);
@@ -874,7 +560,7 @@ const usePreviewStore = create<PreviewStore>()(
             // Delete a file from cache
             deleteFileFromCache: async (notebookId: string, filePath: string): Promise<boolean> => {
                 try {
-                    await deleteFileFromCache(notebookId, filePath);
+                    await FileCache.deleteFile(notebookId, filePath);
 
                     // Update state if needed
                     const fileId = `${notebookId}-${filePath}`;
@@ -896,7 +582,7 @@ const usePreviewStore = create<PreviewStore>()(
             // Clear all files for a notebook
             clearCacheForNotebook: async (notebookId: string): Promise<boolean> => {
                 try {
-                    await clearCacheForNotebook(notebookId);
+                    await FileCache.clearNotebookCache(notebookId);
 
                     // Update state
                     const { currentPreviewFiles } = get();
@@ -907,22 +593,9 @@ const usePreviewStore = create<PreviewStore>()(
                     // Handle active file and preview mode setting
                     if (updatedFiles.length > 0) {
                         const activeFile = await get().loadFileById(updatedFiles[0].id);
-                        let activePreviewMode: ActivePreviewMode = 'default';
-                        if (activeFile?.type === 'csv') {
-                            activePreviewMode = 'csv';
-                        } else if (activeFile?.type === 'jsx' || activeFile?.type === 'react') {
-                            activePreviewMode = 'jsx';
-                        } else if (activeFile?.type === 'html') {
-                            activePreviewMode = 'html';
-                        } else if (activeFile?.type === 'image') {
-                            activePreviewMode = 'image';
-                        } else if (activeFile?.type === 'pdf') {
-                            activePreviewMode = 'pdf';
-                        } else if (activeFile?.type === 'docx') {
-                            activePreviewMode = 'docx';
-                        } else if (activeFile?.type === 'text') {
-                            activePreviewMode = 'text';
-                        }
+                        const activePreviewMode = activeFile 
+                            ? getActivePreviewMode(activeFile.type as FileType) 
+                            : 'default';
 
                         set({
                             currentPreviewFiles: updatedFiles,
@@ -968,7 +641,18 @@ const usePreviewStore = create<PreviewStore>()(
                 if (!file) return null;
 
                 const updated: FileObject = { ...file, content };
-                await saveFileToCache(updated);
+                
+                // Transform to match FileCache.saveFile expected format
+                const cacheData = {
+                    notebookId: updated.notebookId,
+                    filePath: updated.path,
+                    fileName: updated.name,
+                    content: updated.content,
+                    lastModified: updated.lastModified,
+                    size: updated.size
+                };
+                
+                await FileCache.saveFile(cacheData);
                 set({ activeFile: updated });
                 return updated;
             },
@@ -979,6 +663,312 @@ const usePreviewStore = create<PreviewStore>()(
 
             isTabDirty: (fileId: string): boolean => {
                 return !!get().dirtyMap[fileId];
+            },
+
+            // Load tabs for a specific notebook
+            loadNotebookTabs: async (notebookId: string): Promise<void> => {
+                try {
+                    console.log(`📁 Loading tabs for notebook ${notebookId}...`);
+                    
+                    set({ isLoading: true, error: null });
+                    
+                    // 🔍 Get current state to check if we're switching notebooks
+                    const currentState = get();
+                    const currentNotebookId = currentState.getCurrentNotebookId();
+                    
+                    if (currentNotebookId && currentNotebookId !== notebookId) {
+                        console.log(`📝 Switching from notebook ${currentNotebookId} to ${notebookId}`);
+                        // Clear all tabs when switching notebooks
+                        set({ 
+                            currentPreviewFiles: [], 
+                            activeFile: null,
+                            activePreviewMode: null 
+                        });
+                    } else if (currentNotebookId === notebookId) {
+                        console.log(`📋 Already on notebook ${notebookId}, refreshing tabs`);
+                    }
+                    
+                    // 📂 Get files from storage (only for current notebook)
+                    let files: any[] = [];
+                    try {
+                        const { FileORM } = await import('../storage');
+                        const fileResults = await FileORM.getFilesForNotebook(notebookId, false); // Don't load content for tabs
+                        
+                        // 🔍 Filter out notebook main files and invalid files
+                        const filteredResults = fileResults.filter(result => {
+                            const filePath = result.metadata.filePath;
+                            const fileName = result.metadata.fileName;
+                            
+                            // Skip notebook main files (they shouldn't be tabs)
+                            if (filePath.startsWith('notebook_') && filePath.endsWith('.json')) {
+                                console.log(`📋 Skipping notebook main file: ${fileName}`);
+                                return false;
+                            }
+                            
+                            // Skip .easynb files (they are notebook files, not separate tabs)
+                            if (fileName.endsWith('.easynb')) {
+                                console.log(`📋 Skipping .easynb file: ${fileName}`);
+                                return false;
+                            }
+                            
+                            return true;
+                        });
+                        
+                        files = filteredResults.map(result => ({
+                            id: `${notebookId}::${result.metadata.filePath}`,
+                            path: result.metadata.filePath,
+                            name: result.metadata.fileName,
+                            type: result.metadata.fileType,
+                            lastModified: result.metadata.lastModified,
+                            size: result.metadata.size,
+                            notebookId: result.metadata.notebookId,
+                            exists: true
+                        }));
+                        
+                        console.log(`📂 Found ${files.length} valid files for tabs (filtered from ${fileResults.length} total)`);
+                    } catch (storageError) {
+                        console.warn('📂 Storage system failed:', storageError);
+                        files = [];
+                    }
+                    
+                    // 🏷️ Convert to PreviewFile format with additional validation
+                    const { validateFileForTab } = await import('../utils/fileValidation');
+                    
+                    const previewFiles: PreviewFile[] = files
+                        .filter(file => {
+                            const validation = validateFileForTab(file.path || '', file.name || '', '');
+                            
+                            if (!validation.isValid) {
+                                console.log(`🚫 Skipping invalid file: ${file.name} - ${validation.reason}`);
+                                return false;
+                            }
+                            
+                            return true;
+                        })
+                        .map(file => ({
+                            id: file.id || `${notebookId}::${file.path}`,
+                            path: file.path,
+                            name: file.name,
+                            type: getFileType(file.path || file.name) as FileType
+                        }));
+                    
+                    console.log(`✅ Processed ${previewFiles.length} valid preview files for tabs`);
+                    
+                    // 🎯 Only set tabs for current notebook (no auto-active file)
+                    set({
+                        currentPreviewFiles: previewFiles,
+                        activeFile: null, // Don't auto-activate any file
+                        activePreviewMode: null,
+                        isLoading: false
+                    });
+                    
+                    console.log(`✅ Loaded ${previewFiles.length} tabs for notebook ${notebookId} (safe mode)`);
+                } catch (error) {
+                    console.error(`Failed to load tabs for notebook ${notebookId}:`, error);
+                    set({ 
+                        error: `Failed to load notebook tabs: ${error}`,
+                        isLoading: false 
+                    });
+                }
+            },
+
+            // Switch to a different notebook and load its tabs
+            switchToNotebook: async (notebookId: string): Promise<void> => {
+                try {
+                    console.log(`Switching to notebook ${notebookId}...`);
+                    
+                    // Update notebook store
+                    const { default: useNotebookStore } = await import('./notebookStore');
+                    const notebookStore = useNotebookStore.getState();
+                    
+                    // Load notebook content from database
+                    const loaded = await notebookStore.loadFromDatabase(notebookId);
+                    if (!loaded) {
+                        console.warn(`Could not load notebook ${notebookId} from database`);
+                    }
+                    
+                    // Set current notebook ID and load tabs
+                    set({ currentNotebookId: notebookId });
+                    await get().loadNotebookTabs(notebookId);
+                    
+                    console.log(`✅ Switched to notebook ${notebookId}`);
+                } catch (error) {
+                    console.error(`Failed to switch to notebook ${notebookId}:`, error);
+                    set({ error: `Failed to switch notebook: ${error}` });
+                }
+            },
+
+            // Get current notebook ID
+            getCurrentNotebookId: (): string | null => {
+                return get().currentNotebookId;
+            },
+
+            // Get tabs filtered by notebook ID
+            getTabsByNotebook: (notebookId: string): PreviewFile[] => {
+                const { currentPreviewFiles } = get();
+                return currentPreviewFiles.filter(file => 
+                    file.id.startsWith(`${notebookId}::`)
+                );
+            },
+            
+            // Split preview methods - independent from tab system
+            previewFileInSplit: async (notebookId: string, filePath: string, fileMetadata: FileMetadata = {} as FileMetadata): Promise<FileObject | undefined> => {
+                set({ isSplitLoading: true, error: null });
+                
+                console.log(`🔀 Split preview: Loading ${filePath} from notebook ${notebookId}`);
+                
+                try {
+                    // Generate a unique ID for the file
+                    const fileId = `${notebookId}::${filePath}`;
+                    
+                    // Check if file exists in split preview cache (independent from tabs)
+                    const cachedFile = await SplitPreviewCache.getFile(notebookId, filePath);
+                    const lastModifiedBackend = fileMetadata.lastModified || null;
+                    
+                    let file = fileMetadata.file;
+                    if (!file) {
+                        // Create a safe placeholder File when not provided
+                        try {
+                            const baseName = filePath.split('/').pop() || filePath;
+                            const mime = getMimeType(filePath);
+                            file = new File([''], baseName, { type: mime, lastModified: Date.now() });
+                        } catch (e) {
+                            console.warn('Failed to create placeholder File for split preview:', e);
+                        }
+                    }
+                    
+                    if (!file) {
+                        set({ error: 'File not found for split preview', isSplitLoading: false });
+                        return;
+                    }
+                    
+                    // Determine if we need to fetch from backend
+                    const needsFetch = !cachedFile || (lastModifiedBackend && cachedFile.lastModified !== lastModifiedBackend);
+                    
+                    let fileObject: FileObject;
+                    
+                    if (needsFetch) {
+                        console.log(`🌐 Split preview: Fetching ${filePath} from backend`);
+                        
+                        // Get file from backend
+                        const response: FileApiResponse = await notebookApiIntegration.getFile(notebookId, filePath);
+                        
+                        if (!response || response.error) {
+                            throw new Error(response?.error || 'Failed to fetch file for split preview');
+                        }
+                        
+                        // Process file content based on type (similar to regular preview)
+                        let content = response.content || '';
+                        const fileType = getFileType(filePath);
+                        
+                        if (fileType === 'image') {
+                            if (typeof content === 'string' && content.startsWith('data:')) {
+                                // Already in correct format
+                            } else {
+                                const fileExt = filePath.split('.').pop()?.toLowerCase();
+                                content = response.dataUrl || `data:image/${fileExt};base64,${content}`;
+                            }
+                        } else if (fileType === 'pdf') {
+                            if (typeof content === 'string' && content.startsWith('data:')) {
+                                // Already data URL
+                            } else {
+                                const dataUrl = content ? `data:application/pdf;base64,${content}` : '';
+                                let assetsUrl = '';
+                                try {
+                                    const base = window.Backend_BASE_URL ? window.Backend_BASE_URL.replace(/\/$/, '') : '';
+                                    const name = filePath.split('/').pop() || filePath;
+                                    assetsUrl = `${base}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
+                                } catch {}
+                                content = dataUrl || assetsUrl;
+                            }
+                        } else if (fileType === 'docx') {
+                            if (typeof content === 'string' && content.startsWith('data:')) {
+                                // Already data URL format
+                            } else if (content) {
+                                const fileExt = filePath.split('.').pop()?.toLowerCase();
+                                const mimeType = fileExt === 'doc' ? 
+                                    'application/msword' : 
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                                content = `data:${mimeType};base64,${content}`;
+                            }
+                        }
+                        
+                        // Create file object
+                        fileObject = {
+                            id: fileId,
+                            name: file.name,
+                            path: filePath,
+                            content,
+                            type: fileType,
+                            size: file.size,
+                            lastModified: new Date(lastModifiedBackend || Date.now()).toISOString(),
+                            metadata: {
+                                file,
+                                lastModified: lastModifiedBackend
+                            }
+                        };
+                        
+                        // Cache the file for future use in split preview cache (independent from tabs)
+                        await SplitPreviewCache.saveFile(notebookId, filePath, {
+                            name: fileObject.name,
+                            content: fileObject.content,
+                            type: fileObject.type,
+                            size: fileObject.size,
+                            lastModified: fileObject.lastModified,
+                            metadata: fileObject.metadata
+                        });
+                        
+                    } else {
+                        console.log(`💾 Split preview: Using cached ${filePath}`);
+                        // Convert SplitFileData to FileObject format
+                        fileObject = {
+                            id: cachedFile.id,
+                            name: cachedFile.fileName,
+                            path: cachedFile.filePath,
+                            content: cachedFile.content,
+                            type: cachedFile.type,
+                            size: cachedFile.size,
+                            lastModified: cachedFile.lastModified,
+                            metadata: cachedFile.metadata
+                        };
+                    }
+                    
+                    // Set split preview state
+                    const splitMode = getActivePreviewMode(fileObject.type as FileType);
+                    set({
+                        activeSplitFile: fileObject,
+                        activeSplitMode: splitMode,
+                        isSplitLoading: false,
+                        error: null
+                    });
+                    
+                    console.log(`✅ Split preview loaded: ${filePath}`);
+                    return fileObject;
+                    
+                } catch (error) {
+                    console.error(`❌ Split preview failed for ${filePath}:`, error);
+                    set({ 
+                        isSplitLoading: false, 
+                        error: `Failed to load file in split preview: ${error}`,
+                        activeSplitFile: null,
+                        activeSplitMode: null
+                    });
+                    return undefined;
+                }
+            },
+            
+            closeSplitPreview: () => {
+                console.log('🔀 Closing split preview');
+                set({
+                    activeSplitFile: null,
+                    activeSplitMode: null,
+                    isSplitLoading: false,
+                    error: null
+                });
+            },
+            
+            getActiveSplitFile: (): FileObject | null => {
+                return get().activeSplitFile;
             },
 
         }),

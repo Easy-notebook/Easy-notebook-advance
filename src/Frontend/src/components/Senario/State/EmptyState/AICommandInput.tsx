@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
-  Plus,
   SendHorizontal,
   FileText,
   X,
@@ -11,30 +10,9 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
-// ------- Type Definitions -------
-interface UploadFile {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-  file: File;
-}
-
-interface AICommandInputProps {
-  files: UploadFile[];
-  setFiles: React.Dispatch<React.SetStateAction<UploadFile[]>>;
-}
-
-interface VDSQuestion {
-  problem_name: string;
-  problem_description: string;
-}
-// ---------------------------------
-
-import { usePipelineStore, PIPELINE_STAGES } from '@WorkflowMode/store/usePipelineStore';
-import usePreStageStore from '@WorkflowMode/store/preStageStore';
-import { generalResponse } from '@WorkflowMode/services/StageGeneralFunction';
+import { usePipelineStore, PIPELINE_STAGES } from '@/components/Senario/Workflow/store/usePipelineStore';
+import usePreStageStore from '@/components/Senario/Workflow/store/preStageStore';
+import { generalResponse } from '@/components/Senario/Workflow/services/StageGeneralFunction';
 import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
@@ -42,18 +20,10 @@ import useOperatorStore from '@Store/operatorStore';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
 import useCodeStore from '@Store/codeStore';
 import { notebookApiIntegration } from '@Services/notebookServices';
-import { useAIPlanningContextStore } from '@WorkflowMode/store/aiPlanningContext';
+import { useAIPlanningContextStore } from '@/components/Senario/Workflow/store/aiPlanningContext';
 
-// 扩展 window，避免 TS 报错
-declare global {
-  interface Window {
-    changeTypingText?: (newText: string) => void;
-  }
-}
+import { UploadFile, AICommandInputProps, VDSQuestion } from './types';
 
-/**
- * AI 和文件上传交互组件
- */
 const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const { t, i18n } = useTranslation();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -63,7 +33,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isVDSMode, setIsVDSMode] = useState(false);
 
-  // const defaultPresetQuestions: VDSQuestion[] = useMemo(() => [], []);
   const defaultPresetQuestions = useMemo(() => [
     {
       problem_name: "代码解释与优化",
@@ -389,13 +358,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           hover:shadow-md
         `}
       >
-        {/* 左侧图标 */}
-        {/* <div className="absolute left-0 top-7 -translate-y-1/2 px-3">
-          <Sparkles className={`w-5 h-5 transition-all duration-300 transform ${
-            isFocused ? 'text-theme-600 animate-pulse scale-110' : 'text-theme-500'
-          }`} />
-        </div> */}
-
         <button
           type="button"
           onClick={onFileUpload}
@@ -558,376 +520,4 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   );
 };
 
-// TypingTitle 组件
-const TypingTitle: React.FC = () => {
-  const { t } = useTranslation();
-  const [text, setText] = useState('');
-  const [isTypingDone, setIsTypingDone] = useState(false);
-  const [showCursor, setShowCursor] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const typingSpeed = 35;
-  const deletingSpeed = 20;
-
-  const startTyping = useCallback((fullText: string) => {
-    setIsDeleting(false);
-    let index = 0;
-    const interval = window.setInterval(() => {
-      setText(fullText.slice(0, index + 1));
-      index++;
-      if (index === fullText.length) {
-        window.clearInterval(interval);
-        setIsTypingDone(true);
-        setTimeout(() => setShowCursor(false), 2000);
-      }
-    }, typingSpeed);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const deleteText = useCallback((onComplete: () => void) => {
-    setIsDeleting(true);
-    setIsTypingDone(false);
-    setShowCursor(true);
-    let index = text.length;
-    const interval = window.setInterval(() => {
-      setText(prev => prev.slice(0, index - 1));
-      index--;
-      if (index === 0) {
-        window.clearInterval(interval);
-        onComplete();
-      }
-    }, deletingSpeed);
-    return () => window.clearInterval(interval);
-  }, [text.length]);
-
-  const changeText = useCallback((newText: string) => {
-    deleteText(() => {
-      startTyping(newText);
-    });
-  }, [deleteText, startTyping]);
-
-  useEffect(() => {
-    const cleanup = startTyping(t('emptyState.title'));
-    return () => cleanup();
-  }, [startTyping, t]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.changeTypingText = changeText;
-      return () => { delete window.changeTypingText; };
-    }
-    return;
-  }, [changeText]);
-
-  return (
-    <div className="relative">
-      <style>{`
-        @keyframes typing-cursor {
-          0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.9; }
-          50% { transform: scaleY(0.7) scaleX(1.2); opacity: 0.7; }
-        }
-        @keyframes done-cursor {
-          0%, 49% { opacity: 1; }
-          50%, 100% { opacity: 0; }
-        }
-        @keyframes deleting-cursor {
-          0%, 100% { transform: scaleY(1) scaleX(1); opacity: 1; }
-          50% { transform: scaleY(0.7) scaleX(1.2); opacity: 0.7; }
-        }
-        .cursor-typing { background: #f3f4f6; animation: typing-cursor ${typingSpeed * 2}ms ease-in-out infinite; }
-        .cursor-done { background: #f3f4f6; animation: done-cursor 1.2s steps(1) infinite; }
-        .cursor-deleting { background: #f3f4f6; animation: deleting-cursor ${deletingSpeed * 2}ms ease-in-out infinite; }
-        .title-container { display: inline; position: relative; }
-        .cursor { display: inline-block; position: relative; vertical-align: text-top; margin-left: 3px; margin-top: 5px; }
-      `}</style>
-      <div className="title-container">
-        <span className="text-4xl font-bold mb-4 leading-tight theme-grad-text">
-          {text}
-          {showCursor && (
-            <div
-              className={`cursor w-1 h-8 rounded-sm inline-block ${
-                isDeleting ? 'cursor-deleting' : (isTypingDone ? 'cursor-done' : 'cursor-typing')
-              }`}
-            />
-          )}
-        </span>
-      </div>
-    </div>
-  );
-};
-
-const Header: React.FC = () => (
-  <div className="text-center mb-8 flex flex-col items-center justify-center">
-    <TypingTitle />
-  </div>
-);
-
-/**
- * EmptyState 主组件
- */
-type AddCellFn = ((type: 'markdown' | 'code') => void) | (() => void);
-
-interface EmptyStateProps {
-  onAddCell: AddCellFn;
-  onFileUpload?: () => void;
-}
-
-function isTypedAddCell(fn: AddCellFn): fn is (type: 'markdown' | 'code') => void {
-  // 依据函数参数长度判断是否需要传参
-  return fn.length >= 1;
-}
-
-const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
-  const [files, setFiles] = useState<UploadFile[]>([]);
-  const [swipeDistance, setSwipeDistance] = useState(0);
-  const [isCreatingNotebook, setIsCreatingNotebook] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // 上滑手势相关
-  const touchStartY = useRef<number | null>(null);
-  const isSwipeInProgress = useRef(false);
-
-  // 鼠标长按相关
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressActiveRef = useRef(false);
-  const lastTriggerAtRef = useRef<number>(0);
-
-  // 滚轮累计（下滑触发）
-  const wheelDownAccumRef = useRef<number>(0);
-
-  const safeTrigger = useCallback(async () => {
-    const now = Date.now();
-    if (now - lastTriggerAtRef.current < 1000) return; // 触发节流
-    lastTriggerAtRef.current = now;
-    await createNewNotebook();
-  }, []);
-
-  // 创建新的 notebook
-  const createNewNotebook = useCallback(async () => {
-    if (isCreatingNotebook) return;
-    setIsCreatingNotebook(true);
-    try {
-      const newNotebookId = await notebookApiIntegration.initializeNotebook();
-      useStore.getState().setNotebookId(newNotebookId);
-      useCodeStore.getState().setKernelReady(true);
-
-      // 默认插入一个 markdown 单元
-      if (isTypedAddCell(onAddCell)) {
-        onAddCell('markdown');
-      } 
-    } catch (error) {
-      console.error('Failed to create new notebook:', error);
-      alert('Failed to create new notebook. Please try again.');
-    } finally {
-      setIsCreatingNotebook(false);
-      // 重置滚轮累计，避免下一次轻微滚动立即触发
-      wheelDownAccumRef.current = 0;
-    }
-  }, [isCreatingNotebook, onAddCell]);
-
-  // 触摸开始
-  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (isCreatingNotebook || isSwipeInProgress.current) return;
-    const touch = e.touches[0];
-    touchStartY.current = touch.clientY;
-    setSwipeDistance(0);
-  }, [isCreatingNotebook]);
-
-  // 触摸移动（上滑）
-  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (isCreatingNotebook || !touchStartY.current || isSwipeInProgress.current) return;
-    const touch = e.touches[0];
-    const deltaY = touch.clientY - touchStartY.current;
-    if (deltaY < 0) {
-      const distance = Math.min(Math.abs(deltaY), 120);
-      setSwipeDistance(distance);
-    }
-  }, [isCreatingNotebook]);
-
-  // 触摸结束
-  const handleTouchEnd = useCallback(() => {
-    if (isCreatingNotebook || isSwipeInProgress.current) return;
-    const threshold = 80;
-    if (swipeDistance > threshold) {
-      isSwipeInProgress.current = true;
-      void safeTrigger();
-    }
-    touchStartY.current = null;
-    setSwipeDistance(0);
-    window.setTimeout(() => { isSwipeInProgress.current = false; }, 300);
-  }, [swipeDistance, safeTrigger, isCreatingNotebook]);
-
-  // 鼠标长按 + 上滑
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (isCreatingNotebook || isSwipeInProgress.current) return;
-    if (e.button !== 0) return; // 仅左键
-
-    touchStartY.current = e.clientY;
-    setSwipeDistance(0);
-    longPressActiveRef.current = false;
-
-    // 300ms 认定为“长按”
-    longPressTimerRef.current = window.setTimeout(() => {
-      longPressActiveRef.current = true;
-    }, 300);
-
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!touchStartY.current || isSwipeInProgress.current) return;
-      // 未达到长按不计算上滑
-      if (!longPressActiveRef.current) return;
-
-      const deltaY = event.clientY - touchStartY.current;
-      if (deltaY < 0) {
-        const distance = Math.min(Math.abs(deltaY), 120);
-        setSwipeDistance(distance);
-      }
-    };
-
-    const handleMouseUp = () => {
-      if (longPressTimerRef.current) {
-        window.clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
-      const threshold = 80;
-      if (longPressActiveRef.current && swipeDistance > threshold && !isSwipeInProgress.current) {
-        isSwipeInProgress.current = true;
-        void safeTrigger();
-      }
-
-      touchStartY.current = null;
-      setSwipeDistance(0);
-      longPressActiveRef.current = false;
-
-      window.setTimeout(() => { isSwipeInProgress.current = false; }, 300);
-
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [swipeDistance, safeTrigger, isCreatingNotebook]);
-
-  // 滚轮下滑触发
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (isCreatingNotebook) return;
-    // 下滑 deltaY > 0，累计距离
-    if (e.deltaY > 0) {
-      wheelDownAccumRef.current += e.deltaY;
-      // 设定一个合理阈值（屏幕上滚动约半屏）
-      const WHEEL_THRESHOLD = 220;
-      if (wheelDownAccumRef.current >= WHEEL_THRESHOLD) {
-        wheelDownAccumRef.current = 0;
-        void safeTrigger();
-      }
-    } else {
-      // 上滑时稍微衰减，避免误触
-      wheelDownAccumRef.current = Math.max(0, wheelDownAccumRef.current + e.deltaY); // e.deltaY < 0
-    }
-  }, [safeTrigger, isCreatingNotebook]);
-
-  // 底部浮动提示点击触发
-  const handleBottomHintClick = useCallback(() => {
-    if (!isCreatingNotebook) {
-      void safeTrigger();
-    }
-  }, [safeTrigger, isCreatingNotebook]);
-
-  // 添加自定义样式
-  const customStyles = `
-    @keyframes fade-in {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes slide-in {
-      from { opacity: 0; transform: translateX(-20px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-    @keyframes swipe-up {
-      from { transform: translateY(10px); opacity: 0.8; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    .animate-fade-in {
-      animation: fade-in 0.4s ease-out;
-    }
-    .animate-slide-in {
-      animation: slide-in 0.5s ease-out;
-    }
-    .animate-swipe-up {
-      animation: swipe-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-  `;
-
-  return (
-    <>
-      <style>{customStyles}</style>
-      <div
-        ref={containerRef}
-        className="relative flex flex-col items-center justify-start overflow-hidden"
-        style={{ 
-          height: 'calc(100vh - 96px)',
-          paddingTop: 'calc((100vh - 96px) * 0.35)',
-          transform: `translateY(${-swipeDistance * 0.4}px)`,
-          transition: swipeDistance === 0 ? 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
-        }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onWheel={handleWheel}
-    >
-      {/* 上滑提示和创建动画（可点击触发） */}
-      {(swipeDistance > 0 || isCreatingNotebook) && (
-        <button
-          type="button"
-          onClick={handleBottomHintClick}
-          className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-center transition-all duration-400 ease-out cursor-pointer select-none hover:scale-105 active:scale-95"
-          style={{
-            height: `${Math.max(swipeDistance, isCreatingNotebook ? 120 : 0)}px`,
-            opacity: swipeDistance > 20 || isCreatingNotebook ? 1 : swipeDistance / 20
-          }}
-          aria-live="polite"
-          aria-label="Create a new Notebook"
-        >
-          {!isCreatingNotebook ? (
-            <>
-              <div
-                className="w-8 h-8 border-2 border-theme-600 rounded-full flex items-center justify-center transition-all duration-300 ease-out mb-2 animate-swipe-up"
-                style={{
-                  transform: `scale(${Math.min(swipeDistance / 70, 1.3)}) rotate(${swipeDistance * 2}deg)`,
-                  backgroundColor: swipeDistance > 60 ? '#3b82f6' : 'transparent',
-                  boxShadow: swipeDistance > 40 ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
-                }}
-              >
-                <PlusCircle
-                  className={`w-4 h-4 transition-colors duration-200 ${
-                    swipeDistance > 60 ? 'text-white' : 'text-theme-600'
-                  }`}
-                />
-              </div>
-              <div className="text-theme-600 text-sm font-medium animate-fade-in transition-all duration-300">
-                {swipeDistance > 60 ? '✨ 松开或点击创建新的 Notebook' : '👆 上滑 / 点击创建新的 Notebook（滚轮下滑也可触发）'}
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center">
-              <div className="w-8 h-8 border-2 border-theme-600 rounded-full animate-spin border-t-transparent mb-2" />
-              <div className="text-theme-600 text-sm">正在创建新的 Notebook...</div>
-            </div>
-          )}
-        </button>
-      )}
-
-      <div className="w-full max-w-4xl mx-auto px-4 py-6 text-center transform transition-all duration-500 ease-out animate-swipe-up"
-           style={{ 
-             transform: `translateY(${-Math.min(swipeDistance * 0.2, 20)}px)`,
-             marginTop: '0'
-           }}>
-        <Header />
-        <AICommandInput files={files} setFiles={setFiles} />
-      </div>
-      </div>
-    </>
-  );
-};
-
-export default EmptyState;
+export default AICommandInput;
