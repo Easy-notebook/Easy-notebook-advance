@@ -2,12 +2,10 @@
 // Notebook ORM for managing notebook entities and relationships
 
 import { IndexedDBManager, DB_CONFIG } from './database';
-import { 
-  NotebookEntity, 
-  FileMetadataEntity, 
+import {
+  NotebookEntity,
+  FileMetadataEntity,
   NotebookActivityEntity,
-  StorageConfigEntity,
-  DEFAULT_STORAGE_CONFIG
 } from './schema';
 
 /**
@@ -19,44 +17,49 @@ export class NotebookORM {
    */
   static async saveNotebook(notebookData: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>): Promise<NotebookEntity> {
     const db = await IndexedDBManager.getDB();
-    
+
     const now = Date.now();
-    const notebook: NotebookEntity = {
-      ...notebookData,
-      createdAt: notebookData.createdAt ?? now,
-      updatedAt: now
-    };
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
-      
-      const request = store.put(notebook);
-      
-      request.onsuccess = () => {
-        // Log activity
-        this.logActivity(notebook.id, 'open').catch(console.error);
-        resolve(notebook);
+
+      // Preserve createdAt if notebook already exists
+      const getReq = store.get(notebookData.id);
+      getReq.onsuccess = () => {
+        const existing = getReq.result as NotebookEntity | undefined;
+        const notebook: NotebookEntity = {
+          ...notebookData,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now
+        };
+
+        const putReq = store.put(notebook);
+        putReq.onsuccess = () => {
+          // Log activity
+          this.logActivity(notebook.id, 'open').catch(console.error);
+          resolve(notebook);
+        };
+        putReq.onerror = () => reject(putReq.error);
       };
-      
-      request.onerror = () => reject(request.error);
-      
+      getReq.onerror = () => reject(getReq.error);
+
       setTimeout(() => reject(new Error('Save notebook timeout')), 5000);
     });
   }
-  
+
   /**
    * Get notebook by ID
    */
   static async getNotebook(notebookId: string): Promise<NotebookEntity | null> {
     const db = await IndexedDBManager.getDB();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
-      
+
       const request = store.get(notebookId);
-      
+
       request.onsuccess = () => {
         const notebook = request.result as NotebookEntity | undefined;
         if (notebook) {
@@ -65,13 +68,13 @@ export class NotebookORM {
         }
         resolve(notebook || null);
       };
-      
+
       request.onerror = () => reject(request.error);
-      
+
       setTimeout(() => reject(new Error('Get notebook timeout')), 3000);
     });
   }
-  
+
   /**
    * Get all notebooks with optional filtering and sorting
    */
@@ -82,23 +85,23 @@ export class NotebookORM {
   } = {}): Promise<NotebookEntity[]> {
     const db = await IndexedDBManager.getDB();
     const { orderBy = 'lastAccessedAt', limit, offset = 0 } = options;
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
-      
+
       let request: IDBRequest;
-      
+
       if (orderBy === 'lastAccessedAt' || orderBy === 'updatedAt' || orderBy === 'accessCount') {
         const index = store.index(orderBy);
         request = index.openCursor(null, 'prev'); // Descending order
       } else {
         request = store.openCursor();
       }
-      
+
       const notebooks: NotebookEntity[] = [];
       let currentOffset = 0;
-      
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
@@ -115,25 +118,25 @@ export class NotebookORM {
           resolve(notebooks);
         }
       };
-      
+
       request.onerror = () => reject(request.error);
-      
+
       setTimeout(() => reject(new Error('Get notebooks timeout')), 5000);
     });
   }
-  
+
   /**
    * Update notebook access statistics
    */
   static async updateNotebookAccess(notebookId: string): Promise<void> {
     const db = await IndexedDBManager.getDB();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
-      
+
       const getRequest = store.get(notebookId);
-      
+
       getRequest.onsuccess = () => {
         const notebook = getRequest.result as NotebookEntity | undefined;
         if (notebook) {
@@ -142,7 +145,7 @@ export class NotebookORM {
             lastAccessedAt: Date.now(),
             accessCount: notebook.accessCount + 1
           };
-          
+
           const putRequest = store.put(updatedNotebook);
           putRequest.onsuccess = () => resolve();
           putRequest.onerror = () => reject(putRequest.error);
@@ -150,19 +153,19 @@ export class NotebookORM {
           resolve(); // Notebook doesn't exist, ignore
         }
       };
-      
+
       getRequest.onerror = () => reject(getRequest.error);
-      
+
       setTimeout(() => reject(new Error('Update access timeout')), 3000);
     });
   }
-  
+
   /**
    * Delete notebook and all associated data
    */
   static async deleteNotebook(notebookId: string): Promise<boolean> {
     const db = await IndexedDBManager.getDB();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([
         DB_CONFIG.STORES.NOTEBOOKS,
@@ -170,69 +173,72 @@ export class NotebookORM {
         DB_CONFIG.STORES.FILES_CONTENT,
         DB_CONFIG.STORES.ACTIVITIES
       ], 'readwrite');
-      
+
       let operationsCompleted = 0;
       const totalOperations = 4;
-      
+
       const checkCompletion = () => {
         operationsCompleted++;
         if (operationsCompleted === totalOperations) {
           resolve(true);
         }
       };
-      
-      // Delete notebook
+
+      // Delete notebook record
       const notebooksStore = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
       const deleteNotebookReq = notebooksStore.delete(notebookId);
       deleteNotebookReq.onsuccess = checkCompletion;
       deleteNotebookReq.onerror = () => reject(deleteNotebookReq.error);
-      
-      // Delete file metadata
+
+      // Collect file IDs for this notebook first
       const filesMetaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const metaIndex = filesMetaStore.index('notebookId');
-      const deleteMetaReq = metaIndex.openCursor(notebookId);
-      deleteMetaReq.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
-        if (cursor) {
-          cursor.delete();
-          cursor.continue();
-        } else {
-          checkCompletion();
-        }
-      };
-      deleteMetaReq.onerror = () => reject(deleteMetaReq.error);
-      
-      // Delete file content (need to get file IDs first)
-      const getFileIdsReq = metaIndex.openCursor(notebookId);
+      const collectReq = metaIndex.openCursor(notebookId);
       const fileIds: string[] = [];
-      getFileIdsReq.onsuccess = (event) => {
+      collectReq.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
-          fileIds.push((cursor.value as FileMetadataEntity).id);
+          const meta = cursor.value as FileMetadataEntity;
+          fileIds.push(meta.id);
           cursor.continue();
         } else {
-          // Delete content for all file IDs
+          // Delete file contents
           const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
-          let deletedCount = 0;
           if (fileIds.length === 0) {
-            checkCompletion();
+            checkCompletion(); // No content to delete
+            checkCompletion(); // No metadata to delete
             return;
           }
-          
-          fileIds.forEach(fileId => {
-            const deleteContentReq = contentStore.delete(fileId);
-            deleteContentReq.onsuccess = () => {
-              deletedCount++;
-              if (deletedCount === fileIds.length) {
+
+          let contentDeleted = 0;
+          let metaDeleted = 0;
+
+          fileIds.forEach((fileId) => {
+            const delContent = contentStore.delete(fileId);
+            delContent.onsuccess = () => {
+              contentDeleted++;
+              if (contentDeleted === fileIds.length) {
                 checkCompletion();
               }
             };
-            deleteContentReq.onerror = () => reject(deleteContentReq.error);
+            delContent.onerror = () => reject(delContent.error);
+          });
+
+          // Delete file metadata by id
+          fileIds.forEach((fileId) => {
+            const delMeta = filesMetaStore.delete(fileId);
+            delMeta.onsuccess = () => {
+              metaDeleted++;
+              if (metaDeleted === fileIds.length) {
+                checkCompletion();
+              }
+            };
+            delMeta.onerror = () => reject(delMeta.error);
           });
         }
       };
-      getFileIdsReq.onerror = () => reject(getFileIdsReq.error);
-      
+      collectReq.onerror = () => reject(collectReq.error);
+
       // Delete activities
       const activitiesStore = transaction.objectStore(DB_CONFIG.STORES.ACTIVITIES);
       const activitiesIndex = activitiesStore.index('notebookId');
@@ -247,13 +253,13 @@ export class NotebookORM {
         }
       };
       deleteActivitiesReq.onerror = () => reject(deleteActivitiesReq.error);
-      
+
       transaction.onerror = () => reject(transaction.error);
-      
+
       setTimeout(() => reject(new Error('Delete notebook timeout')), 10000);
     });
   }
-  
+
   /**
    * Get notebook statistics including file count and total size
    */
@@ -264,23 +270,23 @@ export class NotebookORM {
     activities: NotebookActivityEntity[];
   }> {
     const db = await IndexedDBManager.getDB();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([
         DB_CONFIG.STORES.FILES_METADATA,
         DB_CONFIG.STORES.ACTIVITIES
       ], 'readonly');
-      
+
       let fileCount = 0;
       let totalSize = 0;
       let lastActivity = 0;
       const activities: NotebookActivityEntity[] = [];
-      
+
       // Get file statistics
       const filesMetaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const metaIndex = filesMetaStore.index('notebookId');
       const filesReq = metaIndex.openCursor(notebookId);
-      
+
       filesReq.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
@@ -293,7 +299,7 @@ export class NotebookORM {
           const activitiesStore = transaction.objectStore(DB_CONFIG.STORES.ACTIVITIES);
           const activitiesIndex = activitiesStore.index('notebookId');
           const activitiesReq = activitiesIndex.openCursor(notebookId);
-          
+
           activitiesReq.onsuccess = (actEvent) => {
             const actCursor = (actEvent.target as IDBRequest).result;
             if (actCursor) {
@@ -310,29 +316,29 @@ export class NotebookORM {
               });
             }
           };
-          
+
           activitiesReq.onerror = () => reject(activitiesReq.error);
         }
       };
-      
+
       filesReq.onerror = () => reject(filesReq.error);
-      
+
       setTimeout(() => reject(new Error('Get notebook stats timeout')), 5000);
     });
   }
-  
+
   /**
    * Log notebook activity
    */
   static async logActivity(
-    notebookId: string, 
+    notebookId: string,
     activityType: 'open' | 'close' | 'file_access' | 'file_create' | 'file_delete',
     filePath?: string,
     metadata?: Record<string, any>
   ): Promise<void> {
     const db = await IndexedDBManager.getDB();
     const timestamp = Date.now();
-    
+
     const activity: NotebookActivityEntity = {
       id: `${notebookId}::${timestamp}`,
       notebookId,
@@ -341,37 +347,37 @@ export class NotebookORM {
       timestamp,
       metadata
     };
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.ACTIVITIES], 'readwrite');
       const store = transaction.objectStore(DB_CONFIG.STORES.ACTIVITIES);
-      
+
       const request = store.put(activity);
-      
+
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
-      
+
       setTimeout(() => resolve(), 1000); // Don't block on activity logging
     });
   }
-  
+
   /**
    * Get inactive notebooks for cleanup
    */
   static async getInactiveNotebooks(retentionPeriod: number): Promise<NotebookEntity[]> {
     const db = await IndexedDBManager.getDB();
     const cutoffTime = Date.now() - retentionPeriod;
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
       const index = store.index('lastAccessedAt');
-      
+
       const range = IDBKeyRange.upperBound(cutoffTime);
       const request = index.openCursor(range);
-      
+
       const inactiveNotebooks: NotebookEntity[] = [];
-      
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
@@ -381,10 +387,83 @@ export class NotebookORM {
           resolve(inactiveNotebooks);
         }
       };
-      
+
       request.onerror = () => reject(request.error);
-      
+
       setTimeout(() => reject(new Error('Get inactive notebooks timeout')), 5000);
     });
   }
+  /**
+   * Adjust notebook's fileCount and totalSize by deltas
+   */
+  static async adjustNotebookStats(notebookId: string, deltaFileCount: number, deltaBytes: number): Promise<void> {
+    const db = await IndexedDBManager.getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite');
+      const store = tx.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
+      const getReq = store.get(notebookId);
+      getReq.onsuccess = () => {
+        const nb = getReq.result as NotebookEntity | undefined;
+        if (!nb) { resolve(); return; }
+        const updated: NotebookEntity = {
+          ...nb,
+          fileCount: Math.max(0, (nb.fileCount || 0) + (deltaFileCount || 0)),
+          totalSize: Math.max(0, (nb.totalSize || 0) + (deltaBytes || 0)),
+          updatedAt: Date.now()
+        };
+        const putReq = store.put(updated);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      };
+      getReq.onerror = () => reject(getReq.error);
+      setTimeout(() => resolve(), 3000);
+    });
+  }
+
+  /**
+   * Recalculate notebook statistics from file metadata
+   */
+  static async recalcNotebookStats(notebookId: string): Promise<void> {
+    const db = await IndexedDBManager.getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([
+        DB_CONFIG.STORES.NOTEBOOKS,
+        DB_CONFIG.STORES.FILES_METADATA
+      ], 'readwrite');
+      const nbStore = tx.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
+      const metaStore = tx.objectStore(DB_CONFIG.STORES.FILES_METADATA);
+      const index = metaStore.index('notebookId');
+      let fileCount = 0;
+      let totalSize = 0;
+      const cursorReq = index.openCursor(notebookId);
+      cursorReq.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          const meta = cursor.value as FileMetadataEntity;
+          fileCount++;
+          totalSize += meta.size || 0;
+          cursor.continue();
+        } else {
+          const getNbReq = nbStore.get(notebookId);
+          getNbReq.onsuccess = () => {
+            const nb = getNbReq.result as NotebookEntity | undefined;
+            if (!nb) { resolve(); return; }
+            const updated: NotebookEntity = {
+              ...nb,
+              fileCount,
+              totalSize,
+              updatedAt: Date.now()
+            };
+            const putReq = nbStore.put(updated);
+            putReq.onsuccess = () => resolve();
+            putReq.onerror = () => reject(putReq.error);
+          };
+          getNbReq.onerror = () => reject(getNbReq.error);
+        }
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+      setTimeout(() => resolve(), 8000);
+    });
+  }
+
 }

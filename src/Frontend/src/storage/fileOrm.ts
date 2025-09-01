@@ -92,43 +92,66 @@ export class FileORM {
       const metaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
       
-      // Save metadata
-      const metaRequest = metaStore.put(metadata);
-      
-      metaRequest.onsuccess = () => {
-        // Save content only if not a large file
-        if (!isLargeFile) {
-          const content: FileContentEntity = {
-            fileId,
-            content: config.compressionEnabled ? this.compressContent(fileData.content) : fileData.content,
-            compressed: config.compressionEnabled,
-            encoding: this.detectEncoding(fileData.content)
-          };
-          
-          const contentRequest = contentStore.put(content);
-          
-          contentRequest.onsuccess = () => {
-            // Log activity and resolve
-            NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath)
-              .catch(console.error);
+      // Check if file already exists to compute notebook deltas
+      const getExistingReq = metaStore.get(fileId);
+      getExistingReq.onsuccess = () => {
+        const existing = getExistingReq.result as FileMetadataEntity | undefined;
+        const deltaFileCount = existing ? 0 : 1;
+        const deltaBytes = metadata.size - (existing?.size || 0);
+
+        // Save metadata
+        const metaRequest = metaStore.put(metadata);
+
+        metaRequest.onsuccess = () => {
+          // Save content only if not a large file
+          if (!isLargeFile) {
+            const content: FileContentEntity = {
+              fileId,
+              content: config.compressionEnabled ? this.compressContent(fileData.content) : fileData.content,
+              compressed: config.compressionEnabled,
+              encoding: this.detectEncoding(fileData.content)
+            };
+
+            const contentRequest = contentStore.put(content);
+
+            contentRequest.onsuccess = () => {
+              console.log('💾 FileORM: Successfully saved content for', {
+                fileId,
+                notebookId: fileData.notebookId,
+                filePath: fileData.filePath,
+                contentSize: fileData.content.length,
+                compressed: config.compressionEnabled,
+                storageType: metadata.storageType,
+                hasLocalContent: metadata.hasLocalContent
+              });
+              
+              // Log activity and resolve
+              NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath)
+                .catch(console.error);
+              // Adjust notebook stats
+              NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes).catch(console.error);
+              resolve(metadata);
+            };
+
+            contentRequest.onerror = () => reject(contentRequest.error);
+          } else {
+            // Large file - only metadata is saved
+            NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath, {
+              isLargeFile: true,
+              remoteUrl: fileData.remoteUrl
+            }).catch(console.error);
+            // Adjust notebook stats
+            NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes).catch(console.error);
             resolve(metadata);
-          };
-          
-          contentRequest.onerror = () => reject(contentRequest.error);
-        } else {
-          // Large file - only metadata is saved
-          NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath, {
-            isLargeFile: true,
-            remoteUrl: fileData.remoteUrl
-          }).catch(console.error);
-          resolve(metadata);
-        }
+          }
+        };
+
+        metaRequest.onerror = () => reject(metaRequest.error);
       };
-      
-      metaRequest.onerror = () => reject(metaRequest.error);
-      
+      getExistingReq.onerror = () => reject(getExistingReq.error);
+
       transaction.onerror = () => reject(transaction.error);
-      
+
       setTimeout(() => reject(new Error('Save file timeout')), 10000);
     });
   }
@@ -173,8 +196,9 @@ export class FileORM {
         
         const updateRequest = metaStore.put(updatedMetadata);
         updateRequest.onsuccess = () => {
-          // Log activity
+          // Log activity and update notebook access
           NotebookORM.logActivity(notebookId, 'file_access', filePath).catch(console.error);
+          NotebookORM.updateNotebookAccess(notebookId).catch(console.error);
         };
         updateRequest.onerror = () => console.error('Failed to update file access stats');
         
@@ -186,10 +210,22 @@ export class FileORM {
           contentRequest.onsuccess = () => {
             const contentEntity = contentRequest.result as FileContentEntity | undefined;
             
+            console.log('📖 FileORM: Retrieved content for', {
+              fileId: metadata.id,
+              found: !!contentEntity,
+              compressed: contentEntity?.compressed,
+              rawContentSize: contentEntity?.content?.length || 0,
+              encoding: contentEntity?.encoding
+            });
+            
             const result: FileResult = {
               metadata: updatedMetadata,
               content: contentEntity ? this.decompressContent(contentEntity.content, contentEntity.compressed) : undefined
             };
+            
+            if (result.content) {
+              console.log('📖 FileORM: Decompressed content size:', result.content.length);
+            }
             
             resolve(result);
           };
@@ -221,7 +257,9 @@ export class FileORM {
    */
   static async getFilesForNotebook(notebookId: string, includeContent: boolean = false): Promise<FileResult[]> {
     const db = await IndexedDBManager.getDB();
-    
+    // Update notebook access on listing files
+    NotebookORM.updateNotebookAccess(notebookId).catch(console.error);
+
     return new Promise((resolve, reject) => {
       const storeNames = includeContent 
         ? [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT]
@@ -301,27 +339,39 @@ export class FileORM {
       
       const metaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
-      
-      // Delete metadata
-      const metaRequest = metaStore.delete(fileId);
-      
-      metaRequest.onsuccess = () => {
-        // Delete content
-        const contentRequest = contentStore.delete(fileId);
-        
-        contentRequest.onsuccess = () => {
-          NotebookORM.logActivity(notebookId, 'file_delete', filePath).catch(console.error);
+
+      // First get existing metadata to compute deltas
+      const getMetaReq = metaStore.get(fileId);
+      getMetaReq.onsuccess = () => {
+        const existing = getMetaReq.result as FileMetadataEntity | undefined;
+        if (!existing) {
+          // Nothing to delete
           resolve(true);
+          return;
+        }
+        const size = existing.size || 0;
+
+        // Delete metadata
+        const metaRequest = metaStore.delete(fileId);
+
+        metaRequest.onsuccess = () => {
+          // Delete content
+          const contentRequest = contentStore.delete(fileId);
+
+          const finalize = () => {
+            NotebookORM.logActivity(notebookId, 'file_delete', filePath).catch(console.error);
+            // Adjust notebook stats
+            NotebookORM.adjustNotebookStats(notebookId, -1, -size).catch(console.error);
+            resolve(true);
+          };
+
+          contentRequest.onsuccess = finalize;
+          contentRequest.onerror = finalize; // Content might not exist (large file)
         };
-        
-        contentRequest.onerror = () => {
-          // Content might not exist (large file), still consider deletion successful
-          NotebookORM.logActivity(notebookId, 'file_delete', filePath).catch(console.error);
-          resolve(true);
-        };
+
+        metaRequest.onerror = () => reject(metaRequest.error);
       };
-      
-      metaRequest.onerror = () => reject(metaRequest.error);
+      getMetaReq.onerror = () => reject(getMetaReq.error);
       
       setTimeout(() => reject(new Error('Delete file timeout')), 5000);
     });
@@ -366,7 +416,7 @@ export class FileORM {
         
         // Save updated metadata
         const metaUpdateRequest = metaStore.put(updatedMetadata);
-        
+
         metaUpdateRequest.onsuccess = () => {
           // Save content
           const contentEntity: FileContentEntity = {
@@ -375,10 +425,15 @@ export class FileORM {
             compressed: this.defaultConfig.compressionEnabled,
             encoding: this.detectEncoding(content)
           };
-          
+
           const contentRequest = contentStore.put(contentEntity);
-          
-          contentRequest.onsuccess = () => resolve(true);
+
+          contentRequest.onsuccess = () => {
+            // Adjust notebook stats for size change only
+            const deltaBytes = (updatedMetadata.size || 0) - (metadata.size || 0);
+            NotebookORM.adjustNotebookStats(notebookId, 0, deltaBytes).catch(console.error);
+            resolve(true);
+          };
           contentRequest.onerror = () => reject(contentRequest.error);
         };
         

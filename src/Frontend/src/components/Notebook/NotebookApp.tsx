@@ -31,6 +31,10 @@ import WorkflowControl from './MainContainer/WorkflowControl';
 import { useWorkflowControlStore } from './store/workflowControlStore';
 import AgentDetail from '../Agents/AgentDetail';
 import { AgentType } from '../../services/agentMemoryService';
+import EmptyState from '../Senario/State/EmptyState/EmptyState';
+import LibraryState from '../Senario/State/LibraryState/LibraryState';
+import { useRouteSync } from '../../hooks/useRouteSync';
+import useRouteStore from '../../store/routeStore';
 
 // Cast components to any to relax prop type constraints
 const OutlineSidebar: any = OutlineSidebarOrig;
@@ -42,6 +46,10 @@ const CommandInput: any = CommandInputOrig;
 const NotebookApp = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
+
+  // 路由同步
+  const { currentView: routeView } = useRouteSync();
+  const { navigateToWorkspace, navigateToLibrary, navigateToEmpty } = useRouteStore();
 
   // Panel width states
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
@@ -89,6 +97,8 @@ const NotebookApp = () => {
     deleteCell,
     updateCell,
     setViewMode,
+    setNotebookId,
+    setNotebookTitle,
   } = useStore();
 
   const { setShowCommandInput } = useAIAgentStore();
@@ -347,6 +357,89 @@ const NotebookApp = () => {
     setCurrentView('notebook');
     setSelectedAgentType(null);
   }, []);
+
+  // EmptyState 和 LibraryState 处理函数
+  const handleEmptyStateAddCell = useCallback(async (type: 'markdown' | 'code') => {
+    try {
+      let currentNotebookId = notebookId;
+      
+      // 如果没有 notebook，先创建一个
+      if (!currentNotebookId) {
+        await initializeNotebook();
+        // 获取刚创建的 notebook ID
+        currentNotebookId = useStore.getState().notebookId;
+      }
+
+      const newCell = {
+        id: uuidv4(),
+        type: type,
+        content: '',
+        outputs: [],
+        enableEdit: true,
+        phaseId: currentRunningPhaseId || null
+      };
+
+      addCell(newCell);
+      setLastAddedCellId(newCell.id);
+
+      // 创建新 notebook 后导航到工作区
+      if (currentNotebookId) {
+        console.log(`EmptyState: Creating cell and navigating to workspace ${currentNotebookId}`);
+        navigateToWorkspace(currentNotebookId);
+      } else {
+        console.error('Failed to get notebook ID after initialization');
+      }
+
+      toast({
+        message: t('toast.cellAdded', { type: t(`cellTypes.${type}`) }),
+        type: 'success',
+      } as any);
+    } catch (err) {
+      console.error('Error adding cell:', err);
+      setError('Failed to add cell. Please try again.');
+      toast({
+        message: (err as Error).message || t('toast.error'),
+        type: 'error',
+      } as any);
+    }
+  }, [initializeNotebook, notebookId, currentRunningPhaseId, addCell, setLastAddedCellId, setError, toast, t, navigateToWorkspace]);
+
+  const handleLibrarySelectNotebook = useCallback(async (notebookId: string, notebookTitle: string) => {
+    try {
+      setNotebookId(notebookId);
+      setNotebookTitle(notebookTitle);
+      
+      // 导航到工作区
+      navigateToWorkspace(notebookId);
+      
+      toast({
+        message: t('toast.notebookSelected', `Notebook "${notebookTitle}" selected`),
+        type: 'success',
+      } as any);
+    } catch (err) {
+      console.error('Error selecting notebook:', err);
+      toast({
+        message: (err as Error).message || t('toast.error'),
+        type: 'error',
+      } as any);
+    }
+  }, [setNotebookId, setNotebookTitle, navigateToWorkspace, toast, t]);
+
+  const handleLibraryBack = useCallback(() => {
+    // 从 Library 返回到 EmptyState
+    navigateToEmpty();
+  }, [navigateToEmpty]);
+
+  // 监听 notebookId 变化，当在 EmptyState 创建新 notebook 时自动导航
+  useEffect(() => {
+    if (routeView === 'empty' && notebookId && cells.length > 0) {
+      console.log(`EmptyState: Detected new notebook ${notebookId} with cells, auto-navigating to workspace`);
+      // 延迟一点导航，让 store 状态完全更新
+      setTimeout(() => {
+        navigateToWorkspace(notebookId);
+      }, 100);
+    }
+  }, [routeView, notebookId, cells.length, navigateToWorkspace]);
 
   // Export handlers
   const handleExportJson = useCallback(async () => {
@@ -670,6 +763,19 @@ const NotebookApp = () => {
         <GlobalTabList/>
 
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
+          {/* EmptyState - 主页/空状态 */}
+          <div className={`${routeView === 'empty' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
+            <EmptyState onAddCell={handleEmptyStateAddCell} />
+          </div>
+
+          {/* LibraryState - 库页面 */}
+          <div className={`${routeView === 'library' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
+            <LibraryState 
+              onSelectNotebook={handleLibrarySelectNotebook}
+              onBack={handleLibraryBack}
+            />
+          </div>
+
           {/* PreviewApp - 文件预览 */}
           <div className={`${isShowingFileExplorer && activeFile ? 'block' : 'hidden'} w-full h-full`}>
             <TabbedPreviewApp />
@@ -681,7 +787,7 @@ const NotebookApp = () => {
           </div>
 
           {/* MainContent - 主笔记本内容 */}
-          <div className={`${!isShowingFileExplorer && currentView === 'notebook' || !activeFile ? 'block' : 'hidden'} w-full h-full`}>
+          <div className={`${routeView === 'workspace' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
             <MainContent
               cells={cells}
               viewMode={viewMode}

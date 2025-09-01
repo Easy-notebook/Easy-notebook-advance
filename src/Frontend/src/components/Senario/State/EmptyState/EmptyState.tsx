@@ -5,10 +5,10 @@ import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
 import { notebookApiIntegration } from '@Services/notebookServices';
 
-import LibraryState from '../LibraryState';
 import AICommandInput from './AICommandInput';
 import Header from './Header';
 import { UploadFile, AddCellFn, EmptyStateProps } from './types';
+import { navigateToLibrary } from '../../../../utils/navigation';
 
 function isTypedAddCell(fn: AddCellFn): fn is (type: 'markdown' | 'code') => void {
   return fn.length >= 1;
@@ -351,17 +351,13 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
     document.addEventListener('mouseup', handleMouseUp);
   }, [swipeDistance, safeTrigger, isCreatingNotebook]);
 
-  if (showLibraryState) {
-    return (
-      <LibraryState
-        onBack={() => setShowLibraryState(false)}
-        onSelectNotebook={(id) => {
-          setShowLibraryState(false);
-          log('📒 Selected notebook', id);
-        }}
-      />
-    );
-  }
+  // 处理 Library 导航
+  useEffect(() => {
+    if (showLibraryState) {
+      navigateToLibrary();
+      setShowLibraryState(false);
+    }
+  }, [showLibraryState]);
 
   return (
     <div

@@ -427,14 +427,27 @@ const useStore = create(
       ),
 
     setCells: (cells: Cell[]) => {
+      console.log('📝 setCells called with:', {
+        cellsCount: cells.length,
+        cellTypes: cells.map(c => ({ id: c.id, type: c.type, contentLength: c.content?.length || 0 })),
+        stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n')
+      });
+      
       let processedCells = cells.map((cell) => ({
         ...cell,
         content: typeof cell.content === 'string' ? cell.content : String(cell.content || ''),
         outputs: serializeOutput(cell.outputs || []),
       }));
       
+      console.log('📝 Processed cells:', {
+        originalCount: cells.length,
+        processedCount: processedCells.length,
+        processedTypes: processedCells.map(c => ({ id: c.id, type: c.type, contentLength: c.content?.length || 0 }))
+      });
+      
       // 只有在完全没有cells时才添加默认标题
       if (processedCells.length === 0) {
+        console.log('📝 Adding default title cell because cells array is empty');
         const titleCell: Cell = {
           id: uuidv4(),
           type: 'markdown',
@@ -446,10 +459,20 @@ const useStore = create(
           metadata: { isDefaultTitle: true }
         };
         processedCells.unshift(titleCell as any);
+        console.log('📝 Added default title cell:', { id: titleCell.id, content: titleCell.content });
+      } else {
+        console.log('📝 Cells not empty, keeping existing cells');
       }
       
       const tasks = parseMarkdownCells(processedCells as any);
       updateCellsPhaseId(processedCells as any, tasks);
+      
+      console.log('📝 setCells final update:', {
+        finalCellsCount: processedCells.length,
+        finalTasksCount: tasks.length,
+        finalCells: processedCells.map(c => ({ id: c.id, type: c.type, content: c.content?.substring(0, 50) + '...' }))
+      });
+      
       set({ cells: processedCells, tasks });
     },
 
@@ -1337,6 +1360,8 @@ const useStore = create(
         cells: state.cells,
         tasks: state.tasks,
         timestamp: Date.now()
+      }).catch(error => {
+        console.error('Failed to queue save:', error);
       });
     },
 
@@ -1489,7 +1514,7 @@ useStore.subscribe(
         await notebookAutoSaveInstance.initialize();
         
         // Queue the save with current state
-        notebookAutoSaveInstance.queueSave({
+        await notebookAutoSaveInstance.queueSave({
           notebookId: current.notebookId,
           notebookTitle: current.notebookTitle,
           cells: current.cells,

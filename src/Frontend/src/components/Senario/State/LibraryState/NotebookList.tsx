@@ -18,6 +18,7 @@ const NotebookList: React.FC<NotebookListProps & {
   onSelectNotebook,
   onToggleStar,
   onDeleteNotebook,
+  onExportNotebook,
 }) => {
   // Separate starred and regular notebooks
   const { starredNotebooks, regularNotebooks } = useMemo(() => {
@@ -76,6 +77,7 @@ const NotebookList: React.FC<NotebookListProps & {
                 onSelect={onSelectNotebook}
                 onToggleStar={onToggleStar}
                 onDelete={onDeleteNotebook}
+                onExport={onExportNotebook}
               />
             ))}
           </div>
@@ -98,6 +100,7 @@ const NotebookList: React.FC<NotebookListProps & {
                 onSelect={onSelectNotebook}
                 onToggleStar={onToggleStar}
                 onDelete={onDeleteNotebook}
+                onExport={onExportNotebook}
               />
             ))}
           </div>

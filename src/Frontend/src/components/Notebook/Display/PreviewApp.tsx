@@ -1,4 +1,5 @@
 import usePreviewStore, { FileType } from '../../../store/previewStore';
+import useStore from '../../../store/notebookStore';
 import { useEffect, useCallback, useState } from 'react';
 import CSVPreviewWrapper from './DataTable';
 import ImageDisplay from './ImageView/ImageDisplay';
@@ -10,35 +11,56 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Monitor, Code } from 'lucide-react';
 
 const PreviewApp: React.FC = () => {
-    // Get preview mode from store
-    const { previewMode, currentPreviewFiles, activeFile, setTabDirty } = usePreviewStore();
+    // Check if we're in split view mode (detached cell)
+    const { detachedCellId } = useStore();
+    const isInSplitView = !!detachedCellId;
+    
+    // Get appropriate state based on mode
+    const { 
+        previewMode, 
+        currentPreviewFiles, 
+        activeFile, 
+        activeSplitFile, 
+        setTabDirty 
+    } = usePreviewStore();
+    
+    // Use split file if in split view, otherwise use regular active file
+    const currentFile = isInSplitView ? activeSplitFile : activeFile;
+    
+    // Debug information
+    console.log(`PreviewApp: isInSplitView=${isInSplitView}, currentFile=${currentFile?.name || 'null'}, activeSplitFile=${activeSplitFile?.name || 'null'}, activeFile=${activeFile?.name || 'null'}`);
     
     // Local state for HTML source view
     const [showSource, setShowSource] = useState(false);
-    // Log debug info
+    // Log debug info - only for main preview mode, not split view
     useEffect(() => {
-        if (previewMode === 'file' && !activeFile && currentPreviewFiles.length > 0) {
+        if (!isInSplitView && previewMode === 'file' && !activeFile && currentPreviewFiles.length > 0) {
             const firstId = currentPreviewFiles[0].id;
             console.log('PreviewApp: auto-loading first tab', firstId);
             usePreviewStore.getState().loadFileById(firstId);
         }
-    }, [previewMode, activeFile, currentPreviewFiles]);
+    }, [isInSplitView, previewMode, activeFile, currentPreviewFiles]);
 
     // Reset showSource when switching away from HTML files
     useEffect(() => {
-        if (activeFile?.type !== 'html' && showSource) {
+        if (currentFile?.type !== 'html' && showSource) {
             setShowSource(false);
         }
-    }, [activeFile?.type, showSource]);
+    }, [currentFile?.type, showSource]);
 
     // Render file content (similar to TabbedPreviewApp but without tabs)
     const renderFileContent = useCallback(() => {
-        if (!activeFile) {
+        if (!currentFile) {
             return (
                 <div className="flex items-center justify-center h-full">
                     <div className="text-center text-gray-400">
                         <div className="text-lg mb-2">No file selected</div>
-                        <div className="text-sm">Select a file from the file explorer to preview it here</div>
+                        <div className="text-sm">
+                            {isInSplitView ? 
+                                "No file loaded in split view" : 
+                                "Select a file from the file explorer to preview it here"
+                            }
+                        </div>
                     </div>
                 </div>
             );
@@ -46,13 +68,13 @@ const PreviewApp: React.FC = () => {
 
         // Handle Excel and DOCX files that might be misidentified
         const isExcelName = 
-            activeFile.name.toLowerCase().endsWith('.xlsx') || 
-            activeFile.name.toLowerCase().endsWith('.xls');
+            currentFile.name.toLowerCase().endsWith('.xlsx') || 
+            currentFile.name.toLowerCase().endsWith('.xls');
         const isDocxName = 
-            activeFile.name.toLowerCase().endsWith('.docx') || 
-            activeFile.name.toLowerCase().endsWith('.doc');
+            currentFile.name.toLowerCase().endsWith('.docx') || 
+            currentFile.name.toLowerCase().endsWith('.doc');
         
-        let effectiveType: FileType = activeFile.type;
+        let effectiveType: FileType = currentFile.type;
         if (isExcelName) {
             effectiveType = 'xlsx';
         } else if (isDocxName) {
@@ -71,26 +93,26 @@ const PreviewApp: React.FC = () => {
             case 'image':
                 return (
                     <ImageDisplay
-                        imageData={activeFile.content}
+                        imageData={currentFile.content}
                         showDetails
                         showControls
                         imageInitialHeight="50vh"
-                        fileName={activeFile.name}
-                        lastModified={activeFile.lastModified}
+                        fileName={currentFile.name}
+                        lastModified={currentFile.lastModified}
                     />
                 );
 
             case 'pdf':
-                return <PDFDisplay dataUrl={activeFile.content} fileName={activeFile.name} />;
+                return <PDFDisplay dataUrl={currentFile.content} fileName={currentFile.name} />;
 
             case 'docx':
             case 'doc':
                 return (
                     <DocDisplay
-                        fileName={activeFile.name}
-                        fileContent={activeFile.content}
+                        fileName={currentFile.name}
+                        fileContent={currentFile.content}
                         onContentChange={async (newContent: string) => {
-                            setTabDirty(activeFile.id, true);
+                            setTabDirty(currentFile.id, true);
                             await usePreviewStore.getState().updateActiveFileContent(newContent);
                         }}
                         showControls
@@ -101,11 +123,11 @@ const PreviewApp: React.FC = () => {
             case 'react':
                 return (
                     <ReactLiveSandbox
-                        code={activeFile.content}
-                        fileName={activeFile.name}
+                        code={currentFile.content}
+                        fileName={currentFile.name}
                         language="jsx"
                         onCodeChange={async (newCode: string) => {
-                            setTabDirty(activeFile.id, true);
+                            setTabDirty(currentFile.id, true);
                             await usePreviewStore.getState().updateActiveFileContent(newCode);
                         }}
                     />
@@ -116,7 +138,7 @@ const PreviewApp: React.FC = () => {
                     <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 shadow-sm">
                         {/* HTML controls */}
                         <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b border-gray-200">
-                            <h3 className="text-sm font-medium text-gray-700">{activeFile.name}</h3>
+                            <h3 className="text-sm font-medium text-gray-700">{currentFile.name}</h3>
                             <div className="flex items-center bg-gray-200 rounded p-1">
                                 <button
                                     type="button"
@@ -161,7 +183,7 @@ const PreviewApp: React.FC = () => {
                                             wrapLines
                                             wrapLongLines
                                         >
-                                            {activeFile.content}
+                                            {currentFile.content}
                                         </SyntaxHighlighter>
                                     </div>
                                     <div className="absolute top-2 right-2 z-10">
@@ -169,10 +191,10 @@ const PreviewApp: React.FC = () => {
                                             type="button"
                                             onClick={async () => {
                                                 try {
-                                                    await navigator.clipboard.writeText(activeFile.content);
+                                                    await navigator.clipboard.writeText(currentFile.content);
                                                 } catch {
                                                     const ta = document.createElement('textarea');
-                                                    ta.value = activeFile.content;
+                                                    ta.value = currentFile.content;
                                                     document.body.appendChild(ta);
                                                     ta.select();
                                                     document.execCommand('copy');
@@ -190,8 +212,8 @@ const PreviewApp: React.FC = () => {
                                 <div className="flex-1 p-4 bg-white rounded-b-lg overflow-hidden">
                                     <div className="h-full w-full bg-white border border-gray-200 rounded overflow-hidden">
                                         <iframe
-                                            title={activeFile.name}
-                                            srcDoc={activeFile.content}
+                                            title={currentFile.name}
+                                            srcDoc={currentFile.content}
                                             className="w-full h-full border-0"
                                             sandbox="allow-same-origin allow-forms allow-scripts"
                                         />
@@ -207,12 +229,12 @@ const PreviewApp: React.FC = () => {
                     <div className="flex items-center justify-center h-full">
                         <div className="text-center text-gray-400">
                             <div className="text-lg mb-2">Unsupported file type</div>
-                            <div className="text-sm">Cannot preview {activeFile.name}</div>
+                            <div className="text-sm">Cannot preview {currentFile.name}</div>
                         </div>
                     </div>
                 );
         }
-    }, [activeFile, setTabDirty, showSource]);
+    }, [currentFile, setTabDirty, showSource, isInSplitView]);
 
     return (
         <div className='w-full h-full flex flex-col'>

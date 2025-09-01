@@ -29,12 +29,14 @@ export const useNotebooks = () => {
           orderBy: 'lastAccessedAt',
         });
         console.log(`Loaded ${allNotebooks.length} notebooks from new storage system`);
+        console.log('Raw notebooks data:', allNotebooks.map(nb => ({ id: nb.id, name: nb.name })));
       } catch (error) {
         console.warn('New storage system failed, trying legacy system:', error);
         // Fallback to legacy system
         try {
           allNotebooks = await FileCache.getAllNotebooks();
           console.log(`Loaded ${allNotebooks.length} notebooks from legacy system`);
+          console.log('Legacy notebooks data:', allNotebooks.map(nb => ({ id: nb.id, name: nb.name })));
         } catch (legacyError) {
           console.error('Both storage systems failed:', legacyError);
           setNotebooks([]);
@@ -48,12 +50,46 @@ export const useNotebooks = () => {
         return;
       }
 
+      // Check for duplicate IDs and fix them
+      const seenIds = new Set<string>();
+      const duplicateIds: string[] = [];
+      
+      allNotebooks.forEach(notebook => {
+        if (seenIds.has(notebook.id)) {
+          duplicateIds.push(notebook.id);
+        } else {
+          seenIds.add(notebook.id);
+        }
+      });
+      
+      if (duplicateIds.length > 0) {
+        console.warn('Found duplicate notebook IDs:', duplicateIds);
+        // Generate unique IDs for duplicates
+        allNotebooks = allNotebooks.map((notebook, index) => {
+          const existingCount = allNotebooks.slice(0, index).filter(n => n.id === notebook.id).length;
+          if (existingCount > 0) {
+            // This is a duplicate, generate a new ID
+            const newId = `${notebook.id}_dup_${existingCount}`;
+            console.log(`Renaming duplicate notebook ${notebook.id} to ${newId}`);
+            return { ...notebook, id: newId };
+          }
+          return notebook;
+        });
+      }
+
       // Enrich notebooks with additional data
       const enrichedNotebooks = await Promise.all(
         allNotebooks.map(async (notebook) => {
           try {
-            let lastOpenedFiles = [];
+            console.log(`Processing notebook:`, {
+              id: notebook.id,
+              name: notebook.name,
+              originalId: notebook.id?.slice(0, 8)
+            });
             
+            let lastOpenedFiles: string[] = [];
+            let displayName: string | undefined = notebook.name;
+
             // Try new storage system first for files
             try {
               const files = await FileORM.getFilesForNotebook(notebook.id, false);
@@ -73,8 +109,109 @@ export const useNotebooks = () => {
               }
             }
 
+            // Try to read main notebook file for accurate title
+            try {
+              const main = await FileORM.getFile(notebook.id, `notebook_${notebook.id}.json`);
+              const raw = main?.content;
+              if (raw) {
+                let text = '';
+                if (typeof raw === 'string') text = raw;
+                else if (raw instanceof Blob) text = await raw.text();
+                // Some storage stacks may have been saved as base64; try to decode if JSON.parse fails later
+                let data: any = null;
+                try {
+                  data = JSON.parse(text);
+                } catch {
+                  // try base64 decoding
+                  try {
+                    const decoded = atob(text);
+                    data = JSON.parse(decoded);
+                  } catch {}
+                }
+                if (data) {
+                  console.log(`Raw notebook data structure for ${notebook.id}:`, {
+                    keys: Object.keys(data),
+                    title: data.title,
+                    notebook_title: data.notebook_title,
+                    notebookTitle: data.notebookTitle,
+                    meta: data.meta,
+                    cells: data.cells ? `Array(${data.cells.length})` : 'undefined',
+                    firstCell: data.cells?.[0] ? {
+                      type: data.cells[0].cell_type || data.cells[0].cellType,
+                      keys: Object.keys(data.cells[0]),
+                      source: data.cells[0].source || data.cells[0].content,
+                      sourcePreview: typeof (data.cells[0].source || data.cells[0].content) === 'string' 
+                        ? (data.cells[0].source || data.cells[0].content).substring(0, 100) 
+                        : data.cells[0].source || data.cells[0].content
+                    } : 'no cells',
+                    allCellsPreview: data.cells ? data.cells.slice(0, 3).map((cell, idx) => ({
+                      index: idx,
+                      type: cell.cell_type || cell.cellType,
+                      sourcePreview: typeof (cell.source || cell.content) === 'string' 
+                        ? (cell.source || cell.content).substring(0, 50) 
+                        : cell.source || cell.content
+                    })) : 'no cells'
+                  });
+                  
+                  // Skip the corrupted title field and extract from cells directly
+                  let extractedTitle = '';
+                  
+                  // Try to extract from cells (notebook structure) first
+                  if (data.cells && Array.isArray(data.cells)) {
+                    // Look for first cell with markdown content containing h1
+                    for (const cell of data.cells) {
+                      if (cell.cell_type === 'markdown' || cell.cellType === 'markdown') {
+                        const source = cell.source || cell.content || '';
+                        const sourceText = Array.isArray(source) ? source.join('') : source;
+                        
+                        // Extract h1 from markdown (# Title or ## Title etc)
+                        const h1Match = sourceText.match(/^#\s+(.+)$/m);
+                        if (h1Match) {
+                          extractedTitle = h1Match[1].trim();
+                          break;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // If still no title, try to extract from first text cell
+                  if (!extractedTitle && data.cells && Array.isArray(data.cells)) {
+                    for (const cell of data.cells) {
+                      const source = cell.source || cell.content || '';
+                      const sourceText = Array.isArray(source) ? source.join('') : source;
+                      if (sourceText && sourceText.trim()) {
+                        // Take first non-empty line, limit to 50 characters
+                        const firstLine = sourceText.trim().split('\n')[0];
+                        if (firstLine) {
+                          extractedTitle = firstLine.replace(/^#+\s*/, '').trim().substring(0, 50);
+                          break;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // If still no title found, use fallback but make it unique per notebook
+                  if (!extractedTitle) {
+                    // Use notebook-specific fallback based on unique ID
+                    extractedTitle = `Notebook ${notebook.id.slice(0, 8)}`;
+                  }
+                  
+                  if (extractedTitle && typeof extractedTitle === 'string') {
+                    displayName = extractedTitle;
+                    console.log(`Extracted title for ${notebook.id}:`, extractedTitle);
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn(`Failed to parse notebook content for ${notebook.id}:`, e);
+            }
+
+            const finalName = displayName || notebook.name || `Notebook ${notebook.id?.slice(0, 8) || 'Unknown'}`;
+            console.log(`Final processed notebook:`, { id: notebook.id, finalName, originalName: notebook.name, displayName });
+            
             return {
               ...notebook,
+              name: finalName,
               lastOpenedFiles,
               isStarred: false, // TODO: Implement starring functionality
             } as CachedNotebook;
@@ -82,6 +219,7 @@ export const useNotebooks = () => {
             console.warn(`Failed to process notebook ${notebook.id}:`, err);
             return {
               ...notebook,
+              name: notebook.name || `Notebook ${notebook.id?.slice(0, 8) || 'Unknown'}`,
               lastOpenedFiles: [],
               isStarred: false,
             } as CachedNotebook;
@@ -107,20 +245,44 @@ export const useNotebooks = () => {
 
   const deleteNotebook = useCallback(async (notebookId: string) => {
     try {
+      console.log(`🗑️ Starting deletion of notebook ${notebookId}`);
+      
       // Try new storage system first
       try {
         await NotebookORM.deleteNotebook(notebookId);
+        console.log(`✅ Successfully deleted notebook ${notebookId} from new storage system`);
+        
+        // Update state immediately for better UX
         setNotebooks((prev) => prev.filter((n) => n.id !== notebookId));
+        
+        // Clear any cached data related to this notebook
+        try {
+          const { default: usePreviewStore } = await import('@Store/previewStore');
+          const previewStore = usePreviewStore.getState();
+          if (previewStore.getCurrentNotebookId() === notebookId) {
+            previewStore.set?.({ 
+              currentPreviewFiles: [], 
+              activeFile: null, 
+              activePreviewMode: null 
+            });
+            console.log(`🧹 Cleared preview store for deleted notebook ${notebookId}`);
+          }
+        } catch (previewError) {
+          console.warn('Failed to clear preview store:', previewError);
+        }
+        
         return true;
       } catch (newSystemError) {
         console.warn('New storage system delete failed, trying legacy:', newSystemError);
         // Fallback to legacy system
         await FileCache.clearNotebookCache(notebookId);
+        console.log(`✅ Successfully deleted notebook ${notebookId} from legacy system`);
+        
         setNotebooks((prev) => prev.filter((n) => n.id !== notebookId));
         return true;
       }
     } catch (error) {
-      console.error('Failed to delete notebook:', error);
+      console.error(`❌ Failed to delete notebook ${notebookId}:`, error);
       return false;
     }
   }, []);
@@ -134,6 +296,72 @@ export const useNotebooks = () => {
     // TODO: Persist starring to storage
   }, []);
 
+  const batchDeleteNotebooks = useCallback(async (notebookIds: string[]) => {
+    console.log(`🗑️ Starting batch deletion of ${notebookIds.length} notebooks`);
+    
+    const results = await Promise.allSettled(
+      notebookIds.map(id => deleteNotebook(id))
+    );
+    
+    const successful = results.filter(result => 
+      result.status === 'fulfilled' && result.value === true
+    ).length;
+    
+    console.log(`✅ Batch delete completed: ${successful}/${notebookIds.length} successful`);
+    return { successful, total: notebookIds.length };
+  }, [deleteNotebook]);
+
+  const exportNotebook = useCallback(async (notebookId: string) => {
+    try {
+      console.log(`📤 Exporting notebook ${notebookId}`);
+      
+      const notebook = notebooks.find(n => n.id === notebookId);
+      if (!notebook) {
+        throw new Error('Notebook not found');
+      }
+
+      const main = await FileORM.getFile(notebookId, `notebook_${notebookId}.json`);
+      if (!main?.content) {
+        throw new Error('Notebook content not found');
+      }
+
+      const title = notebook.name || `Notebook ${notebookId.slice(0,8)}`;
+      const blob = new Blob([main.content as string], { 
+        type: 'application/json;charset=utf-8' 
+      });
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title}.easynb`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      
+      console.log(`✅ Successfully exported notebook: ${title}.easynb`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Failed to export notebook ${notebookId}:`, error);
+      throw error;
+    }
+  }, [notebooks]);
+
+  const batchExportNotebooks = useCallback(async (notebookIds: string[]) => {
+    console.log(`📤 Starting batch export of ${notebookIds.length} notebooks`);
+    
+    const results = await Promise.allSettled(
+      notebookIds.map(id => exportNotebook(id))
+    );
+    
+    const successful = results.filter(result => 
+      result.status === 'fulfilled' && result.value === true
+    ).length;
+    
+    console.log(`✅ Batch export completed: ${successful}/${notebookIds.length} successful`);
+    return { successful, total: notebookIds.length };
+  }, [exportNotebook]);
+
   // Load notebooks on mount
   useEffect(() => {
     loadNotebooks();
@@ -146,6 +374,9 @@ export const useNotebooks = () => {
     loadNotebooks,
     refreshNotebooks,
     deleteNotebook,
+    batchDeleteNotebooks,
+    exportNotebook,
+    batchExportNotebooks,
     toggleStar,
   };
 };
