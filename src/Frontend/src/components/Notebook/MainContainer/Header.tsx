@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Upload, BarChartHorizontalBig, TerminalSquare } from 'lucide-react';
+import { Play, Upload, BarChartHorizontalBig, TerminalSquare, ArrowLeft, Home } from 'lucide-react';
 import ModeToggle from './ModeToggle';
 import ExportToFile from '../FunctionBar/ExportToFile';
+import { navigateToLibrary, navigateToHome, isWorkspaceRoute } from '../../../utils/navigation';
 
 interface HeaderProps {
   viewMode: string;
@@ -44,6 +45,26 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <header className="h-14 flex items-center justify-between px-4 bg-white">
       <div className="flex items-center gap-3">
+        {isWorkspaceRoute() && (
+          <>
+            <button
+              onClick={navigateToHome}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium hover:bg-slate-100/80 rounded-md transition-all duration-200 text-slate-700 hover:text-slate-800"
+              title={t('navigation.backToHome', 'Back to Home')}
+            >
+              <Home size={16} />
+              <span className="hidden sm:inline">{t('navigation.home', 'Home')}</span>
+            </button>
+            <button
+              onClick={navigateToLibrary}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium hover:bg-slate-100/80 rounded-md transition-all duration-200 text-slate-700 hover:text-slate-800"
+              title={t('navigation.backToLibrary', 'Back to Library')}
+            >
+              <ArrowLeft size={16} />
+              <span className="hidden sm:inline">{t('navigation.library', 'Library')}</span>
+            </button>
+          </>
+        )}
         <ModeToggle viewMode={viewMode} onModeChange={onModeChange} />
       </div>
 

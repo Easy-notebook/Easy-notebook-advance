@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { BarChart3, PieChart, TrendingUp, MoreHorizontal } from 'lucide-react';
-import usePreviewStore from '../../../../store/previewStore';
+import usePreviewStore from '@Store/previewStore';
+import useStore from '@Store/notebookStore';
 
 // =====================================================
 // Utilities & Types
@@ -156,7 +157,12 @@ const findHeaderIndex = (segment: any[][]): number => {
 };
 
 const Analysis: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride }) => {
-  const { activeFile } = usePreviewStore();
+  const { activeFile, activeSplitFile } = usePreviewStore();
+  const { detachedCellId } = useStore();
+  
+  // Check if we're in split view mode (detached cell)
+  const isInSplitView = !!detachedCellId;
+  const currentFile = isInSplitView ? activeSplitFile : activeFile;
   // Multi-table blocks parsed from sheet
   const [blocks, setBlocks] = useState<TableBlock[]>([]);
   const [blockIdx, setBlockIdx] = useState(0);
@@ -165,8 +171,8 @@ const Analysis: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride }) => {
   // Parsing with merged-cells & multi-table (vertical) handling
   // =============================
   const parsed = useMemo(() => {
-    const fileType = typeOverride || activeFile?.type;
-    const content = activeFile?.content ?? '';
+    const fileType = typeOverride || currentFile?.type;
+    const content = currentFile?.content ?? '';
     const empty = { blocks: [] as TableBlock[] };
     if (!content || (fileType !== 'csv' && fileType !== 'xlsx')) return empty;
 
@@ -266,7 +272,7 @@ const Analysis: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride }) => {
       console.error('Failed to parse input file:', e);
       return empty;
     }
-  }, [activeFile, typeOverride]);
+  }, [currentFile, typeOverride]);
 
   // Bind parsed blocks to state (avoid setState in useMemo during render)
   useEffect(() => {
@@ -315,8 +321,8 @@ const Analysis: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride }) => {
     );
   };
 
-  const fileType = typeOverride || activeFile?.type;
-  if (!activeFile || (fileType !== 'csv' && fileType !== 'xlsx')) {
+  const fileType = typeOverride || currentFile?.type;
+  if (!currentFile || (fileType !== 'csv' && fileType !== 'xlsx')) {
     return (
       <div className="flex items-center justify-center h-full"><div className="text-center text-gray-400"><div className="text-lg mb-2">No CSV/Excel file selected</div><div className="text-sm">Select a CSV or Excel file to preview</div></div></div>
     );
@@ -331,7 +337,7 @@ const Analysis: React.FC<AdvancedCSVPreviewProps> = ({ typeOverride }) => {
             <div className="flex items-center gap-4">
               <table className="w-auto"><tbody><tr>
                 <td className="pr-6 align-middle"><span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Filename</span></td>
-                <td className="pr-6 text-sm font-medium align-middle">{activeFile.name}</td>
+                <td className="pr-6 text-sm font-medium align-middle">{currentFile.name}</td>
                 {activeBlock && (<>
                   <td className="pr-6 align-middle"><span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">Rows</span></td>
                   <td className="pr-6 text-sm font-medium align-middle">{(activeBlock.rows?.length ?? 0).toLocaleString()}</td>

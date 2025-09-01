@@ -22,7 +22,8 @@ import {
   SortAsc,
   SortDesc,
 } from 'lucide-react';
-import usePreviewStore from '../../../../store/previewStore';
+import usePreviewStore from '@Store/previewStore';
+import useStore from '@Store/notebookStore';
 
 // =====================================================
 // Types & Interfaces
@@ -143,7 +144,12 @@ interface OfficeStyleCSVPreviewProps {
 const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   typeOverride, showFormulaBar = true
 }) => {
-  const { activeFile, setTabDirty } = usePreviewStore();
+  const { activeFile, activeSplitFile, setTabDirty } = usePreviewStore();
+  const { detachedCellId } = useStore();
+  
+  // Check if we're in split view mode (detached cell)
+  const isInSplitView = !!detachedCellId;
+  const currentFile = isInSplitView ? activeSplitFile : activeFile;
   const [data, setData] = useState<CSVRow[]>([]);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -164,8 +170,8 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
 
   // ============== 解析 CSV/XLSX ==============
   useEffect(() => {
-    const fileType = typeOverride || activeFile?.type;
-    const content = activeFile?.content ?? '';
+    const fileType = typeOverride || currentFile?.type;
+    const content = currentFile?.content ?? '';
 
     if (!content || (fileType !== 'csv' && fileType !== 'xlsx')) {
       setData([]); setColumns([]); setSheetMerges([]); setStyleMap({});
@@ -446,7 +452,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setData([]); setColumns([]);
       setSheetMerges([]); setStyleMap({});
     }
-  }, [activeFile, typeOverride, columnWidths]);
+  }, [currentFile, typeOverride, columnWidths]);
 
   // ============== 合并单元格映射（关键新增） ==============
   // 使用数据区坐标（rowIndex/colIndex）
@@ -570,7 +576,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
           const newData = [...data];
           newData[row][columns[col].key] = '';
           setData(newData);
-          if (setTabDirty && activeFile) setTabDirty(activeFile.id, true);
+          if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
           return;
         }
       }
@@ -585,7 +591,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, data, columns, selection, setTabDirty, activeFile]);
+  }, [activeCell, editingCell, data, columns, selection, setTabDirty, currentFile]);
 
   // ============== 复制/粘贴（原样保留） ==============
   const handleCopy = useCallback(() => {
@@ -623,11 +629,11 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         });
       });
       setData(newData);
-      if (setTabDirty && activeFile) setTabDirty(activeFile.id, true);
+      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     } catch (err) {
       console.error('Failed to paste:', err);
     }
-  }, [activeCell, data, columns, setTabDirty, activeFile]);
+  }, [activeCell, data, columns, setTabDirty, currentFile]);
 
   // ============== 导出/保存（原样保留） ==============
   const handleExport = useCallback(() => {
@@ -640,25 +646,25 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url; link.download = `${activeFile?.name || 'export'}.csv`; link.click();
+    link.href = url; link.download = `${currentFile?.name || 'export'}.csv`; link.click();
     URL.revokeObjectURL(url);
-  }, [data, columns, activeFile]);
+  }, [data, columns, currentFile]);
 
   const handleSave = useCallback(async () => {
-    if (!activeFile) return;
+    if (!currentFile) return;
     try {
       const csvContent = [
         columns.map(col => col.displayName).join(','),
         ...data.map(row => columns.map(col => String(row[col.key] ?? '')).join(','))
       ].join('\n');
       await usePreviewStore.getState().updateActiveFileContent(csvContent);
-      if (setTabDirty) setTabDirty(activeFile.id, false);
+      if (setTabDirty) setTabDirty(currentFile.id, false);
     } catch (err) {
       console.error('Failed to save:', err);
     }
-  }, [activeFile, data, columns, setTabDirty]);
+  }, [currentFile, data, columns, setTabDirty]);
 
-  if (!activeFile || (activeFile.type !== 'csv' && activeFile.type !== 'xlsx' && !typeOverride)) {
+  if (!currentFile || (currentFile.type !== 'csv' && currentFile.type !== 'xlsx' && !typeOverride)) {
     return (
       <div className="flex items-center justify-center h-full bg-gray-50">
         <div className="text-center">
@@ -681,7 +687,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
           <div className="h-6 w-px bg-gray-300" />
           <div className="flex items-center gap-2 ml-auto">
             <Home className="w-4 h-4 text-gray-500" />
-            <span className="text-sm text-gray-600">{activeFile.name}</span>
+            <span className="text-sm text-gray-600">{currentFile.name}</span>
           </div>
         </div>
       </div>
@@ -829,7 +835,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                               newData[rowIndex][columns[colIndex].key] = editValue;
                               setData(newData);
                               setEditingCell(null);
-                              if (setTabDirty && activeFile) setTabDirty(activeFile.id, true);
+                              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
@@ -883,7 +889,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
               const newData = [...data];
               newData[activeCell.row][columns[activeCell.col].key] = '';
               setData(newData);
-              if (setTabDirty && activeFile) setTabDirty(activeFile.id, true);
+              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
             }
             setContextMenu(null);
           }}
@@ -894,7 +900,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
               columns.forEach(col => { newRow[col.key] = ''; });
               newData.splice(activeCell.row, 0, newRow);
               setData(newData);
-              if (setTabDirty && activeFile) setTabDirty(activeFile.id, true);
+              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
             }
             setContextMenu(null);
           }}
@@ -905,7 +911,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
               columns.forEach(col => { newRow[col.key] = ''; });
               newData.splice(activeCell.row + 1, 0, newRow);
               setData(newData);
-              if (setTabDirty && activeFile) setTabDirty(activeFile.id, true);
+              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
             }
             setContextMenu(null);
           }}
@@ -914,7 +920,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
               const newData = [...data];
               newData.splice(activeCell.row, 1);
               setData(newData);
-              if (setTabDirty && activeFile) setTabDirty(activeFile.id, true);
+              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
             }
             setContextMenu(null);
           }}

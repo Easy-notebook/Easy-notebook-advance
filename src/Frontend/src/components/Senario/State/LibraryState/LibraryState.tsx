@@ -3,7 +3,7 @@
 
 import React, { useRef, useCallback, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 import useNotebookStore from '@Store/notebookStore';
 import { NotebookORM } from '@Storage/index';
 import LibraryHeader from './LibraryHeader';
@@ -41,6 +41,9 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
     refreshing,
     refreshNotebooks,
     deleteNotebook,
+    batchDeleteNotebooks,
+    exportNotebook,
+    batchExportNotebooks,
     toggleStar,
   } = useNotebooks();
 
@@ -99,7 +102,7 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
             console.warn('Failed to update notebook access statistics:', error);
           }
           
-          onSelectNotebook?.(notebookId);
+          onSelectNotebook?.(notebookId, notebook.name || `Notebook ${notebook.id.slice(0, 8)}`);
         } catch (error) {
           console.error(`Failed to load notebook ${notebookId}:`, error);
           
@@ -109,7 +112,7 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
           store.setNotebookTitle(notebook.name || `Notebook ${notebook.id.slice(0, 8)}`);
           store.clearCells();
           
-          onSelectNotebook?.(notebookId);
+          onSelectNotebook?.(notebookId, notebook.name || `Notebook ${notebook.id.slice(0, 8)}`);
         }
       }
     },
@@ -123,12 +126,30 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
 
   const handleDeleteConfirm = useCallback(async () => {
     if (selectedNotebook) {
-      const success = await deleteNotebook(selectedNotebook);
-      if (success) {
-        closeDeleteModal();
+      try {
+        const success = await deleteNotebook(selectedNotebook);
+        if (success) {
+          message.success('笔记本已成功删除');
+          closeDeleteModal();
+        } else {
+          message.error('删除笔记本失败，请重试');
+        }
+      } catch (error) {
+        console.error('Delete notebook error:', error);
+        message.error('删除笔记本时发生错误');
       }
     }
   }, [selectedNotebook, deleteNotebook, closeDeleteModal]);
+
+  const handleExportNotebook = useCallback(async (notebookId: string) => {
+    try {
+      await exportNotebook(notebookId);
+      message.success('笔记本已成功导出');
+    } catch (error) {
+      console.error('Export notebook error:', error);
+      message.error('导出笔记本失败，请重试');
+    }
+  }, [exportNotebook]);
 
   // Computed values
   const totalSize = useMemo(
@@ -194,6 +215,7 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
           onSelectNotebook={handleSelectNotebook}
           onToggleStar={handleToggleStar}
           onDeleteNotebook={openDeleteModal}
+          onExportNotebook={handleExportNotebook}
         />
       </div>
 

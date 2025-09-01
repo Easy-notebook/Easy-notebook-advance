@@ -322,17 +322,29 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   const handleFileSelect = useCallback(async (file: FileNodeFile) => {
     if (!file) return;
+    
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    
+    // 特殊处理 .easynb 文件 - 应该切换到 notebook 模式
+    if (ext === 'easynb') {
+      console.log(`FileExplorer: Clicked .easynb file: ${file.name}`);
+      
+      // 直接调用统一的切换函数
+      switchToNotebookMode();
+      return;
+    }
+    
+    // 其他文件的处理逻辑
     const ps: any = usePreviewStore.getState();
     if (ps?.previewMode !== 'file' && typeof ps?.setPreviewMode === 'function') ps.setPreviewMode('file');
     else if (ps?.previewMode !== 'file' && typeof ps?.changePreviewMode === 'function') ps.changePreviewMode();
 
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
     const jsxTypes = ['.jsx','.tsx'];
     const allPreviewable = [...PREVIEWABLE_IMAGE_TYPES, ...PREVIEWABLE_TEXT_TYPES, ...PREVIEWABLE_PDF_TYPES, ...PREVIEWABLE_DOC_TYPES, ...jsxTypes];
     const isPreviewable = allPreviewable.includes(`.${ext}`);
     if (isPreviewable) handlePreviewFile(file);
     else toast({ title: 'File Type Not Supported', description: `Cannot preview ${file.name}. .${ext} not supported.`, variant: 'info' });
-  }, [handlePreviewFile, toast]);
+  }, [handlePreviewFile, toast, notebookId]);
 
   /** 选择：目录→切展开；文件→预览 */
   const handleTreeSelect = useCallback((keys: React.Key[], info: { node: FileTreeDataNode }) => {
@@ -426,17 +438,39 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   const switchToNotebookMode = useCallback(() => {
     const ps: any = usePreviewStore.getState();
+    
+    console.log(`FileExplorer: Switching to notebook mode for ${notebookId}`);
+    console.log(`FileExplorer: Current previewMode: ${ps?.previewMode}`);
+    
+    // 1. 导航到workspace路由
+    if (notebookId) {
+      // 动态导入 useRouteStore 避免循环依赖
+      import('@Store/routeStore').then(({ default: useRouteStore }) => {
+        useRouteStore.getState().navigateToWorkspace(notebookId);
+      });
+    }
+    
+    // 2. 切换到notebook (现在会自动设置previewMode和清除activeFile)
     if (typeof ps?.switchToNotebook === 'function' && notebookId) {
       ps.switchToNotebook(notebookId);
-    } else if (typeof ps?.setPreviewMode === 'function') {
-      ps.setPreviewMode('notebook');
-    } else if (ps?.previewMode === 'file' && typeof ps?.changePreviewMode === 'function') {
-      ps.changePreviewMode();
+    } else {
+      // 如果switchToNotebook不存在，手动处理
+      ps.setActiveFile(null);
+      if (ps?.previewMode === 'file' && typeof ps?.changePreviewMode === 'function') {
+        ps.changePreviewMode();
+      }
     }
+    
+    console.log(`FileExplorer: Notebook switch initiated for ${notebookId}`);
   }, [notebookId]);
 
   const gapClass = widthTier === 'narrow' ? 'gap-1.5' : 'gap-2';
   const showActions = widthTier !== 'narrow';
+
+  // 如果没有有效的 notebookId，不应该显示任何文件内容
+  if (!notebookId) {
+    return <div className="text-gray-500 text-sm p-4 text-center">No notebook selected</div>;
+  }
 
   if (isLoading && !files) return <LoadingIndicator text="Loading files..." />;
 
@@ -545,7 +579,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
           />
         </div>
 
-          {(projectName || (tasks && tasks.length > 0)) && (
+          {notebookId && (projectName || (tasks && tasks.length > 0)) && (
             <div
               className={`flex items-center py-2 my-0 mx-4 cursor-pointer text-gray-700 hover:bg-theme-50 transition-all duration-200 px-2 rounded-lg`}
               onClick={switchToNotebookMode}

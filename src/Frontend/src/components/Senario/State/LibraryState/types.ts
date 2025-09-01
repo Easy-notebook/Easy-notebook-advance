@@ -5,7 +5,7 @@ import type { NotebookEntity } from '@Storage/schema';
 
 export interface LibraryStateProps {
   onBack?: () => void;
-  onSelectNotebook?: (notebookId: string) => void;
+  onSelectNotebook?: (notebookId: string, notebookTitle: string) => void;
 }
 
 export interface CachedNotebook extends NotebookEntity {
@@ -22,6 +22,7 @@ export interface NotebookCardProps {
   onSelect: (notebookId: string) => void;
   onToggleStar: (notebookId: string, e: React.MouseEvent) => void;
   onDelete: (notebookId: string) => void;
+  onExport?: (notebookId: string) => void;
 }
 
 export interface NotebookListProps {
@@ -30,6 +31,7 @@ export interface NotebookListProps {
   onSelectNotebook: (notebookId: string) => void;
   onToggleStar: (notebookId: string, e: React.MouseEvent) => void;
   onDeleteNotebook: (notebookId: string) => void;
+  onExportNotebook?: (notebookId: string) => void;
 }
 
 export interface LibraryHeaderProps {
