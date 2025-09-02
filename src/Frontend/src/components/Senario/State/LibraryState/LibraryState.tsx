@@ -2,23 +2,19 @@
 // Main LibraryState component - redesigned with proper storage integration
 
 import React, { useRef, useCallback, useMemo, useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Modal, message } from 'antd';
 import useNotebookStore from '@Store/notebookStore';
 import { NotebookORM } from '@Storage/index';
 import LibraryHeader from './LibraryHeader';
 import NotebookList from './NotebookList';
 import SwipeIndicator from './SwipeIndicator';
-import StorageDebugger from './StorageDebugger';
 import StorageCleanupTool from './StorageCleanupTool';
 import { useSwipeGesture } from './utils';
 import { useNotebooks, useNotebookFiltering, useLibraryState } from './hooks';
 import type { LibraryStateProps } from './types';
 
 const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook }) => {
-  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [showDebugger, setShowDebugger] = useState(false);
   const [showCleanupTool, setShowCleanupTool] = useState(false);
 
   // State management
@@ -167,7 +163,6 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'D') {
         e.preventDefault();
-        setShowDebugger(prev => !prev);
       }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
         e.preventDefault();
@@ -240,9 +235,6 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
           </div>
         )}
       </Modal>
-
-      {/* Storage Debugger - Toggle with Ctrl+Shift+D */}
-      <StorageDebugger visible={showDebugger} />
 
       {/* Storage Cleanup Tool - Toggle with Ctrl+Shift+C */}
       <StorageCleanupTool visible={showCleanupTool} />

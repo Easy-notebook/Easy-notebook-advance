@@ -190,7 +190,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
     // Edit mode when no href is set
     return (
       <div
-        className={`w-full border border-gray-200 rounded-lg bg-white shadow-sm p-4 ${className}`}
+        className={`w-full border border-theme-200 rounded-lg bg-white shadow-sm p-4 ${className}`}
         onFocus={onFocus}
         onBlur={onBlur}
         data-cell-id={cell.id}
@@ -200,7 +200,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
           value={cell.content || ''}
           onChange={handleChange}
           placeholder="输入文件路径或链接 (例如: ./document.pdf, https://example.com)"
-          className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-theme-500 focus:border-transparent"
+          className="w-full border border-theme-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-theme-500 focus:border-transparent"
           autoFocus
         />
       </div>
@@ -234,7 +234,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
   return (
     <div className="flex justify-start">
       <div
-        className={`max-w-md bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}
+        className={`max-w-md bg-white border border-theme-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}
         onFocus={onFocus}
         onBlur={onBlur}
         data-cell-id={cell.id}

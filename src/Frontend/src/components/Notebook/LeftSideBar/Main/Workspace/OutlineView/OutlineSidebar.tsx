@@ -160,7 +160,11 @@ const OutlineSidebar = ({
           else if (itemId === 'knowledge-forest') navigateToLibrary();
           else if (itemId === 'tools') setActiveTab('outline');
           else if (itemId === 'settings') settingstore.openSettings();
-          else if (itemId === 'new-notebook') navigateToHome();
+          else if (itemId === 'new-notebook') {
+            useStore.getState().setNotebookId(null);
+            setActiveTab('outline'); // 重置到默认 tab
+            navigateToHome();
+          }
         }}
         activeItemId={activeTab === 'file' ? 'library' : activeTab === 'agents' ? 'knowledge-forest' : activeTab === 'outline' ? 'tools' : 'library'}
         onExpandClick={toggleCollapse}
@@ -181,7 +185,11 @@ const OutlineSidebar = ({
             if (itemId === 'library') setActiveTab('file');
             else if (itemId === 'knowledge-forest') navigateToLibrary();
             else if (itemId === 'tools') setActiveTab('outline');
-            else if (itemId === 'new-notebook') navigateToHome();
+            else if (itemId === 'new-notebook') {
+              useStore.getState().setNotebookId(null);
+              setActiveTab('outline'); // 重置到默认 tab
+              navigateToHome();
+            }
           }}
           activeItemId={activeTab === 'file' ? 'library' : activeTab === 'agents' ? 'knowledge-forest' : activeTab === 'outline' ? 'tools' : 'library'}
           onExpandClick={toggleCollapse}
