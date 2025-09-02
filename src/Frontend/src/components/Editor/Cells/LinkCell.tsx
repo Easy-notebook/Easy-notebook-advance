@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo} from 'react';
 import { ExternalLink, Trash2, Minimize2, Maximize2, Split } from 'lucide-react';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
@@ -302,7 +302,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
                   openInSplitPreview();
                 }}
                 className="p-1.5 text-gray-500 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
-                title="分屏预览"
+                title="split preview"
                 type="button"
               >
                 <ExternalLink size={16} />
@@ -316,7 +316,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
                     onDelete();
                   }}
                   className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                  title="删除"
+                  title="delete"
                   type="button"
                 >
                   <Trash2 size={16} />
@@ -344,7 +344,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
       {href.startsWith('file://') && (
         <div className="px-3 pb-3">
           <div className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">
-            ⚠️ 浏览器可能限制 file:// 协议，建议使用相对路径
+            ⚠️ Browser may restrict file:// protocol, it is recommended to use relative paths
           </div>
         </div>
       )}

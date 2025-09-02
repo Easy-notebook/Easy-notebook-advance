@@ -1,8 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-const Dialog = ({ open, children }) => {
+interface DialogProps {
+  open: boolean;
+  children: ReactNode;
+}
+
+const Dialog = ({ open, children }: DialogProps) => {
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -12,22 +17,28 @@ const Dialog = ({ open, children }) => {
   );
 };
 
+interface DialogContentProps {
+  children: ReactNode;
+  onClose?: () => void;
+  className?: string;
+}
+
 const DialogContent = ({ 
   children, 
   onClose,
   className = "" 
-}) => {
-  const overlayRef = useRef(null);
+}: DialogContentProps) => {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   
   useEffect(() => {
-    const handleEscape = (e) => {
+    const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose?.();
       }
     };
 
-    const handleClickOutside = (e) => {
-      if (overlayRef.current === e.target) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (overlayRef.current && e.target instanceof Node && overlayRef.current === e.target) {
         onClose?.();
       }
     };
@@ -64,28 +75,33 @@ const DialogContent = ({
   );
 };
 
-const DialogHeader = ({ className = "", ...props }) => (
+interface BasicProps {
+  className?: string;
+  [key: string]: any;
+}
+
+const DialogHeader = ({ className = "", ...props }: BasicProps) => (
   <div
     className={`flex flex-col space-y-1.5 text-left border-b border-gray-200 pb-4 mb-4 ${className}`}
     {...props}
   />
 );
 
-const DialogTitle = ({ className = "", ...props }) => (
+const DialogTitle = ({ className = "", ...props }: BasicProps) => (
   <h3
     className={`text-lg font-semibold leading-none tracking-tight text-theme-800 ${className}`}
     {...props}
   />
 );
 
-const DialogDescription = ({ className = "", ...props }) => (
+const DialogDescription = ({ className = "", ...props }: BasicProps) => (
   <div
     className={`text-sm text-gray-600 ${className}`}
     {...props}
   />
 );
 
-const DialogFooter = ({ className = "", ...props }) => (
+const DialogFooter = ({ className = "", ...props }: BasicProps) => (
   <div
     className={`flex justify-end space-x-2 mt-6 ${className}`}
     {...props}

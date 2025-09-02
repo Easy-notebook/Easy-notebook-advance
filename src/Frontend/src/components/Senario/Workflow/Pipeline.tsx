@@ -109,7 +109,7 @@ const DSLCPipeline: React.FC<DSLCPipelineProps> = ({ onAddCell }) => {
                         stage="EMPTY"
                         currentStage={currentPreStage}
                         isAnimating={isAnimating}
-                        animationDirection={animationDirection}
+                        animationDirection={animationDirection === 'forward' ? 'next' : 'previous'}
                     >
                         <EmptyState 
                             onAddCell={onAddCell}
@@ -126,7 +126,7 @@ const DSLCPipeline: React.FC<DSLCPipelineProps> = ({ onAddCell }) => {
                         stage="PROBLEM_DEFINE"
                         currentStage={currentPreStage}
                         isAnimating={isAnimating}
-                        animationDirection={animationDirection}
+                        animationDirection={animationDirection === 'forward' ? 'next' : 'previous'}
                     >
                         <ProblemDefineState 
                             confirmProblem={handleConfirmProblem}

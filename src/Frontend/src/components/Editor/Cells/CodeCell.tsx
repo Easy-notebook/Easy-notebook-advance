@@ -439,8 +439,6 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                             // 设置导航方向以正确定位光标
                             const targetCodeElement = document.querySelector(`[data-cell-id="${targetCell.id}"]`);
                             if (targetCodeElement) {
-                                const targetCodeCell = (targetCodeElement as any)?.__reactInternalFiber || 
-                                                     (targetCodeElement as any)?._reactInternals;
                                 // 通过 DOM 查找目标 CodeCell 组件并设置导航方向
                                 setTimeout(() => {
                                     // 使用全局事件来传递导航方向信息
