@@ -7,6 +7,7 @@ import {
   FileMetadataEntity,
   NotebookActivityEntity,
 } from './schema';
+import { storageLog, notebookLog } from '../utils/logger';
 
 /**
  * Notebook ORM for CRUD operations and relationship management
@@ -37,7 +38,8 @@ export class NotebookORM {
         const putReq = store.put(notebook);
         putReq.onsuccess = () => {
           // Log activity
-          this.logActivity(notebook.id, 'open').catch(console.error);
+          this.logActivity(notebook.id, 'open').catch(error => 
+            storageLog.error('Failed to log notebook open activity', { error }));
           resolve(notebook);
         };
         putReq.onerror = () => reject(putReq.error);
@@ -64,7 +66,8 @@ export class NotebookORM {
         const notebook = request.result as NotebookEntity | undefined;
         if (notebook) {
           // Update last accessed time
-          this.updateNotebookAccess(notebookId).catch(console.error);
+          this.updateNotebookAccess(notebookId).catch(error => 
+            storageLog.error('Failed to update notebook access time', { error }));
         }
         resolve(notebook || null);
       };
@@ -87,10 +90,13 @@ export class NotebookORM {
     const { orderBy = 'lastAccessedAt', limit, offset = 0 } = options;
 
     return new Promise((resolve, reject) => {
+      storageLog.debug('NotebookORM: Starting getNotebooks', { orderBy, limit, offset });
+      
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
 
       let request: IDBRequest;
+      let timeoutId: NodeJS.Timeout;
 
       if (orderBy === 'lastAccessedAt' || orderBy === 'updatedAt' || orderBy === 'accessCount') {
         const index = store.index(orderBy);
@@ -102,12 +108,22 @@ export class NotebookORM {
       const notebooks: NotebookEntity[] = [];
       let currentOffset = 0;
 
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
           if (currentOffset >= offset) {
             notebooks.push(cursor.value as NotebookEntity);
             if (limit && notebooks.length >= limit) {
+              cleanup();
+              notebookLog.debug('NotebookORM: Successfully retrieved notebooks (limited)', {
+                count: notebooks.length
+              });
               resolve(notebooks);
               return;
             }
@@ -115,13 +131,30 @@ export class NotebookORM {
           currentOffset++;
           cursor.continue();
         } else {
+          cleanup();
+          notebookLog.debug('NotebookORM: Successfully retrieved notebooks (all)', {
+            count: notebooks.length
+          });
           resolve(notebooks);
         }
       };
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        cleanup();
+        storageLog.error('NotebookORM: Database request error', { error: request.error });
+        reject(request.error);
+      };
 
-      setTimeout(() => reject(new Error('Get notebooks timeout')), 5000);
+      transaction.onerror = () => {
+        cleanup();
+        storageLog.error('NotebookORM: Transaction error', { error: transaction.error });
+        reject(transaction.error);
+      };
+
+      timeoutId = setTimeout(() => {
+        storageLog.warn('NotebookORM: Get notebooks operation timed out after 5 seconds');
+        reject(new Error('Get notebooks timeout'));
+      }, 5000);
     });
   }
 

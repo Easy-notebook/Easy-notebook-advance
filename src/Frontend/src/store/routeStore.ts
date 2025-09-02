@@ -2,6 +2,7 @@
 // Route state management for NotebookApp
 
 import { create } from 'zustand';
+import { storeLog, uiLog } from '../utils/logger';
 
 export type AppView = 'empty' | 'library' | 'workspace' | 'agent' | 'file-preview';
 
@@ -21,10 +22,51 @@ export interface RouteState {
   navigateToWorkspace: (notebookId: string) => void;
 }
 
+// 获取初始路由状态，避免总是从 empty 开始
+const getInitialRouteState = () => {
+  const currentPath = window.location.pathname;
+  storeLog.debug('RouteStore: Initializing with path', { currentPath });
+  
+  if (currentPath === '/') {
+    storeLog.debug('RouteStore: Setting initial state to EMPTY');
+    return {
+      currentView: 'empty' as AppView,
+      currentNotebookId: null,
+      currentRoute: '/'
+    };
+  } else if (currentPath === '/FoKn/Library') {
+    storeLog.debug('RouteStore: Setting initial state to LIBRARY');
+    return {
+      currentView: 'library' as AppView,
+      currentNotebookId: null,
+      currentRoute: '/FoKn/Library'
+    };
+  } else if (currentPath.startsWith('/workspace/')) {
+    const notebookId = currentPath.split('/workspace/')[1];
+    storeLog.debug('RouteStore: Setting initial state to WORKSPACE', { notebookId });
+    return {
+      currentView: 'workspace' as AppView,
+      currentNotebookId: notebookId,
+      currentRoute: currentPath
+    };
+  } else {
+    storeLog.warn('RouteStore: Unknown path, defaulting to EMPTY', { currentPath });
+    // 默认情况
+    return {
+      currentView: 'empty' as AppView,
+      currentNotebookId: null,
+      currentRoute: currentPath
+    };
+  }
+};
+
+const initialState = getInitialRouteState();
+storeLog.debug('RouteStore: Final initial state', initialState);
+
 const useRouteStore = create<RouteState>((set, get) => ({
-  currentView: 'empty',
-  currentNotebookId: null,
-  currentRoute: '/',
+  currentView: initialState.currentView,
+  currentNotebookId: initialState.currentNotebookId,
+  currentRoute: initialState.currentRoute,
   
   setView: (view: AppView) => set({ currentView: view }),
   setNotebookId: (id: string | null) => set({ currentNotebookId: id }),

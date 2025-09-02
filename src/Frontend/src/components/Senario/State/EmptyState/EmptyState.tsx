@@ -9,12 +9,13 @@ import AICommandInput from './AICommandInput';
 import Header from './Header';
 import { UploadFile, AddCellFn, EmptyStateProps } from './types';
 import { navigateToLibrary } from '../../../../utils/navigation';
+import { uiLog } from '../../../../utils/logger';
 
 function isTypedAddCell(fn: AddCellFn): fn is (type: 'markdown' | 'code') => void {
   return fn.length >= 1;
 }
 
-const log = (...args: any[]) => console.log('[SWIPE]', ...args);
+// Removed console-based logging - using structured logger instead
 
 // ---- 手势/滚轮参数（改为右滑）----
 const ANGLE_DEG_THRESHOLD = 30;        // 水平 ±30°
@@ -74,7 +75,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
       useStore.getState().setNotebookId(newNotebookId);
       useCodeStore.getState().setKernelReady(true);
       if (isTypedAddCell(onAddCell)) onAddCell('markdown');
-      log('✅ Created notebook:', newNotebookId);
+      uiLog.info('Created notebook successfully', { notebookId: newNotebookId });
     } catch (error) {
       console.error('❌ Failed to create new notebook:', error);
       alert('Failed to create new notebook. Please try again.');
@@ -99,7 +100,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
     setSwipeDistance(0);
     setRightSwipeDistance(0);
 
-    log('👉 Begin', { x, y, edgeSwipeLock: edgeSwipeLock.current });
+    // Begin gesture tracking
   };
 
   const updateGesture = (x: number, y: number) => {
@@ -127,13 +128,13 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
       } else {
         directionLock.current = 'up';
       }
-      log('🔒 Lock', { lock: directionLock.current, dx, dy, angle: angle.toFixed(1) });
+      // Direction locked
     }
 
     if (directionLock.current === 'none') {
       if (vx > RIGHT_VELOCITY_PX_PER_MS || dxAccumRef.current >= RIGHT_LOCK_FALLBACK_DX) {
         directionLock.current = 'right';
-        log('🔒 Fallback lock RIGHT', { vx: vx.toFixed(3), dxAccum: dxAccumRef.current.toFixed(1) });
+        // Fallback lock RIGHT based on velocity
       }
     }
 
@@ -161,18 +162,18 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
     const rightDist = rightSwipeDistance;
     const upDist = swipeDistance;
 
-    log('✋ End', { dir, rightDist, upDist });
+    // Gesture ended
 
     if (dir === 'right' && rightDist > RIGHT_TRIGGER_THRESHOLD) {
       if (!isRightSwipeInProgress.current) {
         isRightSwipeInProgress.current = true;
-        log('✅ Trigger RIGHT → Library');
+        uiLog.info('Right swipe triggered library navigation');
         setShowLibraryState(true);
       }
     } else if (dir === 'up' && upDist > UP_TRIGGER_THRESHOLD) {
       if (!isSwipeInProgress.current) {
         isSwipeInProgress.current = true;
-        log('✅ Trigger UP → Create');
+        uiLog.info('Up swipe triggered notebook creation');
         void safeTrigger();
       }
     }
@@ -270,12 +271,12 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
       setRightSwipeDistance(vis);
       setSwipeDistance(0);
 
-      log('🧭 wheelX-right', { deltaX: e.deltaX.toFixed(1), accum: wheelRightAccumRef.current.toFixed(1) });
+      // Removed excessive horizontal wheel logging
 
       // 触发阈值
       if (wheelRightAccumRef.current >= RIGHT_TRIGGER_THRESHOLD && !isRightSwipeInProgress.current) {
         isRightSwipeInProgress.current = true;
-        log('✅ Trigger RIGHT by wheel (deltaX) → Library');
+        uiLog.info('Horizontal wheel scroll triggered library navigation');
         setShowLibraryState(true);
         // 重置累计与视觉
         wheelRightAccumRef.current = 0;
@@ -297,10 +298,10 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
     // 2) 纵向滚动（保留创建逻辑）
     if (e.deltaY > 0) {
       wheelDownAccumRef.current += e.deltaY;
-      log('🖱 wheel', wheelDownAccumRef.current);
+      // Removed excessive wheel logging
       if (wheelDownAccumRef.current >= WHEEL_DOWN_TRIGGER) {
         wheelDownAccumRef.current = 0;
-        log('✅ Trigger by wheel ↓ (create)');
+        uiLog.info('Vertical wheel scroll triggered notebook creation');
         void safeTrigger();
       }
     } else {
@@ -319,7 +320,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
 
     longPressTimerRef.current = window.setTimeout(() => {
       longPressActiveRef.current = true;
-      log('🕰 long-press active');
+      // Long press detected
     }, 300);
 
     const handleMouseMove = (event: MouseEvent) => {
@@ -336,7 +337,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
       }
       if (longPressActiveRef.current && swipeDistance > UP_TRIGGER_THRESHOLD && !isSwipeInProgress.current) {
         isSwipeInProgress.current = true;
-        log('✅ Trigger by mouse long-press ↑');
+        uiLog.info('Long press triggered notebook creation');
         void safeTrigger();
       }
       touchStartY.current = null;

@@ -11,15 +11,16 @@ import LinkCell from '../Editor/Cells/LinkCell';
 import OutlineSidebarOrig from './LeftSideBar/Main/Workspace/OutlineView/OutlineSidebar';
 import StepNavigation from './MainContainer/StepNavigation';
 import ErrorAlert from '../UI/ErrorAlert';
-import useStore from '../../store/notebookStore';
+import useStore from '@Store/notebookStore';
 import { findCellsByStep } from '../../utils/markdownParser';
 import { createExportHandlers } from '../../utils/exportToFile/exportUtils';
 import { useToast } from '../UI/Toast';
+import { uiLog, notebookLog } from '../../utils/logger';
 import AIAgentSidebarOrig from './RightSideBar/AIAgentSidebar';
-import useOperatorStore from '../../store/operatorStore';
+import useOperatorStore from '@Store/operatorStore';
 import CommandInputOrig from './FunctionBar/AITerminal';
-import { useAIAgentStore } from '../../store/AIAgentStore';
-import usePreviewStore from '../../store/previewStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
+import usePreviewStore from '@Store/previewStore';
 import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
 import useSettingsStore from '../../store/settingsStore';
 import SettingsPage from '../Senario/settingState';
@@ -34,7 +35,7 @@ import { AgentType } from '../../services/agentMemoryService';
 import EmptyState from '../Senario/State/EmptyState/EmptyState';
 import LibraryState from '../Senario/State/LibraryState/LibraryState';
 import { useRouteSync } from '../../hooks/useRouteSync';
-import useRouteStore from '../../store/routeStore';
+import useRouteStore from '@Store/routeStore';
 
 // Cast components to any to relax prop type constraints
 const OutlineSidebar: any = OutlineSidebarOrig;
@@ -47,9 +48,16 @@ const NotebookApp = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  // 路由同步
-  const { currentView: routeView } = useRouteSync();
-  const { navigateToWorkspace, navigateToLibrary, navigateToEmpty } = useRouteStore();
+  // 直接订阅路由状态，避免通过 useRouteSync 的间接订阅导致的渲染延迟
+  const routeStore = useRouteStore();
+  const routeView = routeStore.currentView;
+  const { navigateToWorkspace, navigateToEmpty } = routeStore;
+  
+  // 路由状态调试 (可选)
+  // console.log('NotebookApp render:', { routeView, currentRoute: routeStore.currentRoute });
+  
+  // 路由同步（但不使用其返回的状态）
+  useRouteSync();
 
   // Panel width states
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
@@ -218,7 +226,7 @@ const NotebookApp = () => {
         type: 'success',
       } as any);
     } catch (err) {
-      console.error('Error adding cell:', err);
+      notebookLog.error('Error adding cell', { error: err });
       setError('Failed to add cell. Please try again.');
       toast({
         message: (err as Error).message || t('toast.error'),
@@ -236,7 +244,7 @@ const NotebookApp = () => {
         type: 'success',
       } as any);
     } catch (err) {
-      console.error('Error running all cells:', err);
+      notebookLog.error('Error running all cells', { error: err });
       setError('Failed to run all cells. Please try again.');
       toast({
         message: (err as Error).message || t('toast.error'),
@@ -384,10 +392,10 @@ const NotebookApp = () => {
 
       // 创建新 notebook 后导航到工作区
       if (currentNotebookId) {
-        console.log(`EmptyState: Creating cell and navigating to workspace ${currentNotebookId}`);
+        uiLog.info('EmptyState: Creating cell and navigating to workspace', { notebookId: currentNotebookId });
         navigateToWorkspace(currentNotebookId);
       } else {
-        console.error('Failed to get notebook ID after initialization');
+        uiLog.error('Failed to get notebook ID after initialization');
       }
 
       toast({
@@ -395,7 +403,7 @@ const NotebookApp = () => {
         type: 'success',
       } as any);
     } catch (err) {
-      console.error('Error adding cell:', err);
+      uiLog.error('Error adding cell', { error: err });
       setError('Failed to add cell. Please try again.');
       toast({
         message: (err as Error).message || t('toast.error'),
@@ -417,7 +425,7 @@ const NotebookApp = () => {
         type: 'success',
       } as any);
     } catch (err) {
-      console.error('Error selecting notebook:', err);
+      uiLog.error('Error selecting notebook', { error: err });
       toast({
         message: (err as Error).message || t('toast.error'),
         type: 'error',
@@ -433,7 +441,7 @@ const NotebookApp = () => {
   // 监听 notebookId 变化，当在 EmptyState 创建新 notebook 时自动导航
   useEffect(() => {
     if (routeView === 'empty' && notebookId && cells.length > 0) {
-      console.log(`EmptyState: Detected new notebook ${notebookId} with cells, auto-navigating to workspace`);
+      uiLog.info('EmptyState: Auto-navigating to workspace', { notebookId, cellCount: cells.length });
       // 延迟一点导航，让 store 状态完全更新
       setTimeout(() => {
         navigateToWorkspace(notebookId);
@@ -467,7 +475,7 @@ const NotebookApp = () => {
         type: 'success',
       } as any);
     } catch (err) {
-      console.error('Error exporting notebook:', err);
+      uiLog.error('Error exporting notebook', { error: err });
       toast({
         message: t('toast.exportFailed'),
         type: 'error',
@@ -583,7 +591,7 @@ const NotebookApp = () => {
       if ((e.altKey || e.metaKey) && e.key === '/' && tag !== 'input' && tag !== 'textarea') {
         e.preventDefault();
         setShowCommandInput(true);
-        console.log("show command input");
+        uiLog.debug('Command input shown via keyboard shortcut');
       }
     };
     document.addEventListener('keydown', handleKeyPress);
@@ -592,12 +600,12 @@ const NotebookApp = () => {
 
   // Debug isExecuting state changes
   useEffect(() => {
-    console.log('NotebookApp: isExecuting changed to:', isExecuting);
+    uiLog.debug('Execution state changed', { isExecuting });
   }, [isExecuting]);
 
   // WorkflowControl state management based on view mode
   useEffect(() => {
-    console.log('NotebookApp: WorkflowControl state update', {
+    uiLog.debug('WorkflowControl state update', {
       viewMode,
       isExecuting,
       currentPhaseId
@@ -611,7 +619,7 @@ const NotebookApp = () => {
       setOnCancelCountdown(null);
     } else {
       // In other modes, provide basic state
-      console.log('NotebookApp: Setting non-DSLC mode state');
+      uiLog.debug('Setting non-DSLC mode state');
       setContinueButtonText('Continue Workflow');
       // Set basic state for non-DSLC modes
       setIsGenerating(isExecuting);
@@ -620,12 +628,12 @@ const NotebookApp = () => {
 
       // Provide basic handlers for non-DSLC modes
       setOnTerminate(() => {
-        console.log('Basic terminate handler called');
+        uiLog.debug('Basic terminate handler called');
         // Could stop any running operations here
       });
 
       setOnContinue(() => {
-        console.log('Basic continue handler called');
+        uiLog.debug('Basic continue handler called');
         // Could implement basic workflow continuation here
         if (viewMode === 'step' && currentPhaseId) {
           handleNextPhase();
@@ -691,17 +699,190 @@ const NotebookApp = () => {
   useEffect(() => {
     const initializeStorage = async () => {
       try {
-        console.log('Initializing storage system...');
+        uiLog.info('Initializing storage system');
         await StorageManager.initialize();
-        console.log('Storage system initialized successfully');
+        uiLog.info('Storage system initialized successfully');
       } catch (error) {
-        console.error('Failed to initialize storage system:', error);
+        uiLog.error('Failed to initialize storage system', { error });
         // Don't throw - app can still work without perfect storage
       }
     };
 
     initializeStorage();
   }, []);
+
+  /**
+   * 决定当前应该显示的主要内容组件
+   * 使用优先级顺序来避免条件冲突
+   */
+  const resolveMainContent = useCallback(() => {
+    // Remove verbose debug logging to reduce console noise
+    // uiLog.debug('Main content resolution initiated', {
+    //   routeView,
+    //   isShowingFileExplorer,
+    //   hasActiveFile: !!activeFile,
+    //   currentView,
+    //   selectedAgentType
+    // });
+    
+    // 优先级1: 文件预览 (最高优先级)
+    if (isShowingFileExplorer && activeFile) {
+      // uiLog.debug('Content resolution result', { chosen: 'file-preview' });
+      return { type: 'file-preview', component: <TabbedPreviewApp /> };
+    }
+    
+    // 优先级2: Agent详情视图
+    if (currentView === 'agent' && selectedAgentType) {
+      uiLog.debug('Content resolution result', { chosen: 'agent-detail', agentType: selectedAgentType });
+      return { 
+        type: 'agent-detail', 
+        component: <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} /> 
+      };
+    }
+    
+    // 优先级3: 根据路由视图决定内容
+    // uiLog.debug('Route view processing', { routeView });
+    switch (routeView) {
+      case 'empty':
+        uiLog.debug('Content resolution result', { chosen: 'empty-state', reason: 'route-based' });
+        return { 
+          type: 'empty-state', 
+          component: <EmptyState onAddCell={handleEmptyStateAddCell} /> 
+        };
+      
+      case 'library':
+        uiLog.debug('Content resolution result', { chosen: 'library-state', reason: 'route-based' });
+        return { 
+          type: 'library-state', 
+          component: (
+            <LibraryState 
+              onSelectNotebook={handleLibrarySelectNotebook}
+              onBack={handleLibraryBack}
+            />
+          ) 
+        };
+      
+      case 'workspace':
+        // uiLog.debug('Content resolution result', { chosen: 'main-content', type: 'workspace', reason: 'route-based' });
+        return { 
+          type: 'main-content', 
+          component: (
+            <MainContent
+              cells={cells}
+              viewMode={viewMode}
+              tasks={tasks}
+              currentPhaseId={currentPhaseId}
+              currentStepIndex={currentStepIndex}
+              getCurrentViewCells={getCurrentViewCells}
+              handleAddCell={handleAddCell}
+              renderCell={renderCell}
+              renderStepNavigation={renderStepNavigation}
+              handlePreviousStep={handlePreviousStep}
+              handleNextStep={handleNextStep}
+              handlePreviousPhase={handlePreviousPhase}
+              handleNextPhase={handleNextPhase}
+              isFirstPhase={(() => {
+                const result = findPhaseIndex();
+                return result ? result.phaseIndex === 0 : false;
+              })()}
+              isLastPhase={(() => {
+                const result = findPhaseIndex();
+                return result ? result.phaseIndex === result.task.phases.length - 1 : false;
+              })()}
+            />
+          ) 
+        };
+      
+      default:
+        // 不要盲目默认到 EmptyState，应该根据 URL 决定
+        const currentPath = window.location.pathname;
+        uiLog.debug('Default route case triggered, checking URL directly', { currentPath });
+        
+        if (currentPath === '/') {
+          uiLog.debug('Content resolution result', { chosen: 'empty-state', reason: 'url-fallback', path: '/' });
+          return { 
+            type: 'empty-state', 
+            component: <EmptyState onAddCell={handleEmptyStateAddCell} /> 
+          };
+        } else if (currentPath === '/FoKn/Library') {
+          uiLog.debug('Content resolution result', { chosen: 'library-state', reason: 'url-fallback', path: '/FoKn/Library' });
+          return { 
+            type: 'library-state', 
+            component: (
+              <LibraryState 
+                onSelectNotebook={handleLibrarySelectNotebook}
+                onBack={handleLibraryBack}
+              />
+            ) 
+          };
+        } else if (currentPath.startsWith('/workspace/')) {
+          uiLog.debug('Content resolution result', { chosen: 'main-content', type: 'workspace', reason: 'url-fallback', path: currentPath });
+          return { 
+            type: 'main-content', 
+            component: (
+              <MainContent
+                cells={cells}
+                viewMode={viewMode}
+                tasks={tasks}
+                currentPhaseId={currentPhaseId}
+                currentStepIndex={currentStepIndex}
+                getCurrentViewCells={getCurrentViewCells}
+                handleAddCell={handleAddCell}
+                renderCell={renderCell}
+                renderStepNavigation={renderStepNavigation}
+                handlePreviousStep={handlePreviousStep}
+                handleNextStep={handleNextStep}
+                handlePreviousPhase={handlePreviousPhase}
+                handleNextPhase={handleNextPhase}
+                isFirstPhase={(() => {
+                  const result = findPhaseIndex();
+                  return result ? result.phaseIndex === 0 : false;
+                })()}
+                isLastPhase={(() => {
+                  const result = findPhaseIndex();
+                  return result ? result.phaseIndex === result.task.phases.length - 1 : false;
+                })()}
+              />
+            ) 
+          };
+        } else {
+          uiLog.debug('Content resolution result', { chosen: 'loading', reason: 'unknown-path', path: currentPath });
+          // 对于未知路径，显示加载状态而不是盲目的 EmptyState
+          return { 
+            type: 'loading', 
+            component: (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-gray-500">Loading...</div>
+              </div>
+            )
+          };
+        }
+    }
+  }, [
+    isShowingFileExplorer, 
+    activeFile, 
+    currentView, 
+    selectedAgentType, 
+    routeView,
+    handleEmptyStateAddCell,
+    handleBackToNotebook,
+    handleLibrarySelectNotebook,
+    handleLibraryBack,
+    cells,
+    viewMode,
+    tasks,
+    currentPhaseId,
+    currentStepIndex,
+    getCurrentViewCells,
+    handleAddCell,
+    renderCell,
+    renderStepNavigation,
+    handlePreviousStep,
+    handleNextStep,
+    handlePreviousPhase,
+    handleNextPhase,
+    findPhaseIndex
+  ]);
 
   return (
     <div className="h-screen flex border-r border-black">
@@ -763,54 +944,9 @@ const NotebookApp = () => {
         <GlobalTabList/>
 
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
-          {/* EmptyState - 主页/空状态 */}
-          <div className={`${routeView === 'empty' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <EmptyState onAddCell={handleEmptyStateAddCell} />
-          </div>
-
-          {/* LibraryState - 库页面 */}
-          <div className={`${routeView === 'library' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <LibraryState 
-              onSelectNotebook={handleLibrarySelectNotebook}
-              onBack={handleLibraryBack}
-            />
-          </div>
-
-          {/* PreviewApp - 文件预览 */}
-          <div className={`${isShowingFileExplorer && activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <TabbedPreviewApp />
-          </div>
-
-          {/* AgentDetail - Agent详情视图 */}
-          <div className={`${currentView === 'agent' && selectedAgentType && !isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
-            {selectedAgentType && <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} />}
-          </div>
-
-          {/* MainContent - 主笔记本内容 */}
-          <div className={`${routeView === 'workspace' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <MainContent
-              cells={cells}
-              viewMode={viewMode}
-              tasks={tasks}
-              currentPhaseId={currentPhaseId}
-              currentStepIndex={currentStepIndex}
-              getCurrentViewCells={getCurrentViewCells}
-              handleAddCell={handleAddCell}
-              renderCell={renderCell}
-              renderStepNavigation={renderStepNavigation}
-              handlePreviousStep={handlePreviousStep}
-              handleNextStep={handleNextStep}
-              handlePreviousPhase={handlePreviousPhase}
-              handleNextPhase={handleNextPhase}
-              isFirstPhase={(() => {
-                const result = findPhaseIndex();
-                return result ? result.phaseIndex === 0 : false;
-              })()}
-              isLastPhase={(() => {
-                const result = findPhaseIndex();
-                return result ? result.phaseIndex === result.task.phases.length - 1 : false;
-              })()}
-            />
+          {/* 使用单一解析器函数避免条件冲突，提供清晰的优先级顺序 */}
+          <div className="w-full h-full">
+            {resolveMainContent().component}
           </div>
         </div>
 

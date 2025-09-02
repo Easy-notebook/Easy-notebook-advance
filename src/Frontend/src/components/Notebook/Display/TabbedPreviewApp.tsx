@@ -5,11 +5,14 @@ import ImageDisplay from './ImageView/ImageDisplay';
 import PDFDisplay from './PDFView/PDFDisplay';
 import ReactLiveSandbox from './WebView/ReactLiveSandbox';
 import DocDisplay from './DocView/DocDisplay';
+import CodeDisplay from './CodeView/CodeDisplay';
+import HexDisplay from './HexView/HexDisplay';
 import {
   Code,
   Monitor,
 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import IframeViewer from './WebView/IframeViewer';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 
@@ -59,10 +62,37 @@ const TabbedPreviewApp: React.FC = () => {
       );
     }
 
-    // 兜底矫正：部分 xlsx 可能被误识别为 text/html
+    // 兜底矫正：文件类型可能被误识别
     const isExcelName =
       activeFile.name.toLowerCase().endsWith('.xlsx') || activeFile.name.toLowerCase().endsWith('.xls');
-    const effectiveType: FileType | 'notebook' = isExcelName ? 'xlsx' : activeFile.type;
+    const isDocxName = 
+      activeFile.name.toLowerCase().endsWith('.docx') || activeFile.name.toLowerCase().endsWith('.doc');
+    const isJsName = 
+      activeFile.name.toLowerCase().endsWith('.js') || activeFile.name.toLowerCase().endsWith('.ts') || activeFile.name.toLowerCase().endsWith('.mjs');
+    const isCssName = 
+      activeFile.name.toLowerCase().endsWith('.css') || activeFile.name.toLowerCase().endsWith('.scss') || activeFile.name.toLowerCase().endsWith('.sass');
+    const isMdName = 
+      activeFile.name.toLowerCase().endsWith('.md') || activeFile.name.toLowerCase().endsWith('.markdown');
+    const isPyName = 
+      activeFile.name.toLowerCase().endsWith('.py') || activeFile.name.toLowerCase().endsWith('.pyw');
+    const isJsonName = activeFile.name.toLowerCase().endsWith('.json');
+
+    let effectiveType: FileType | 'notebook' = activeFile.type as FileType;
+    if (isExcelName) {
+      effectiveType = 'xlsx';
+    } else if (isDocxName) {
+      effectiveType = 'docx';
+    } else if (isJsName) {
+      effectiveType = 'javascript';
+    } else if (isCssName) {
+      effectiveType = 'css';
+    } else if (isMdName) {
+      effectiveType = 'markdown';
+    } else if (isPyName) {
+      effectiveType = 'python';
+    } else if (isJsonName) {
+      effectiveType = 'json';
+    }
 
     switch (effectiveType) {
       case 'csv':
@@ -94,6 +124,24 @@ const TabbedPreviewApp: React.FC = () => {
           <DocDisplay
             fileName={activeFile.name}
             fileContent={activeFile.content}
+            onContentChange={async (newContent: string) => {
+              setTabDirty(activeFile.id, true);
+              await usePreviewStore.getState().updateActiveFileContent(newContent);
+            }}
+            showControls
+          />
+        );
+
+      case 'javascript':
+      case 'css':
+      case 'python':
+      case 'json':
+      case 'markdown':
+        return (
+          <CodeDisplay
+            content={activeFile.content}
+            language={effectiveType as string}
+            fileName={activeFile.name}
             onContentChange={async (newContent: string) => {
               setTabDirty(activeFile.id, true);
               await usePreviewStore.getState().updateActiveFileContent(newContent);
@@ -169,12 +217,13 @@ const TabbedPreviewApp: React.FC = () => {
               ) : (
                 <div className="flex-1 p-4 bg-white rounded-b-lg overflow-hidden">
                   <div className="h-full w-full bg-white border border-gray-200 rounded overflow-hidden">
-                    <iframe
-                      title={activeFile.name}
-                      srcDoc={activeFile.content}
+                    {/* Centralized iframe rendering */}
+                    <IframeViewer
+                      notebookId={activeFile?.notebookId}
+                      filePath={activeFile?.path}
+                      htmlContent={activeFile?.content}
+                      title={activeFile?.name}
                       className="w-full h-full border-0"
-                      // 基础 sandbox 提升安全性；根据需要增减权限
-                      sandbox="allow-same-origin allow-forms allow-scripts"
                     />
                   </div>
                 </div>
@@ -183,14 +232,22 @@ const TabbedPreviewApp: React.FC = () => {
           </div>
         );
 
+      case 'hex':
+        return (
+          <HexDisplay
+            content={activeFile.content}
+            fileName={activeFile.name}
+            showControls
+          />
+        );
+
       default:
         return (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-400">
-              <div className="text-lg mb-2">Unsupported file type</div>
-              <div className="text-sm">Cannot preview {activeFile.name}</div>
-            </div>
-          </div>
+          <HexDisplay
+            content={activeFile.content}
+            fileName={activeFile.name}
+            showControls
+          />
         );
     }
   }, [activeFile, setTabDirty, showSource]);

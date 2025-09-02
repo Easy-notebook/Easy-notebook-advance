@@ -1,5 +1,6 @@
 // src/store/AIAgentStore.ts
 import { create } from 'zustand';
+import { agentLog } from '../utils/logger';
 
 // 定义事件类型
 export const EVENT_TYPES = {
@@ -146,9 +147,10 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
     addAction: (action: Omit<ActionItem, 'id' | 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => {
         // 验证 relatedQAIds 是否为数组
         if (!Array.isArray(action.relatedQAIds)) {
-            console.warn(
-                `addAction: expected relatedQAIds to be an array, but received ${typeof action.relatedQAIds}. Defaulting to an empty array.`
-            );
+            agentLog.warn('Invalid relatedQAIds type - defaulting to empty array', { 
+                received: typeof action.relatedQAIds,
+                expected: 'array'
+            });
             action.relatedQAIds = [];
         }
 
@@ -225,7 +227,7 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
             // 1. 找到目标 QA
             const targetIndex = state.qaList.findIndex((qa) => qa.id === qaId);
             if (targetIndex === -1) {
-                console.warn(`initStreamingAnswer: QA with ID "${qaId}" not found.`);
+                agentLog.warn('QA not found for streaming answer initialization', { qaId });
                 return {};
             }
             const targetQA = state.qaList[targetIndex];
