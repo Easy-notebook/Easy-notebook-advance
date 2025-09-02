@@ -1,6 +1,6 @@
 // src/router/AppRouter.tsx
 import React from 'react';
-import { BrowserRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import NotebookApp from '../components/Notebook/NotebookApp';
 
 /**

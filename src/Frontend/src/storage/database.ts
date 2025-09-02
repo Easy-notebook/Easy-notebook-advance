@@ -95,6 +95,11 @@ export class IndexedDBManager {
         const configStore = db.createObjectStore(DB_CONFIG.STORES.CONFIG, { keyPath: 'id' });
         console.log(`Created store: ${DB_CONFIG.STORES.CONFIG}`);
         
+        // Create tab states store
+        const tabStatesStore = db.createObjectStore(DB_CONFIG.STORES.TAB_STATES, { keyPath: 'notebookId' });
+        tabStatesStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
+        console.log(`Created store: ${DB_CONFIG.STORES.TAB_STATES}`);
+        
         console.log('Database upgrade completed successfully');
       };
       

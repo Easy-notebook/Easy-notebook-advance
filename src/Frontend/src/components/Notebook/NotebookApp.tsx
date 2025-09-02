@@ -47,9 +47,16 @@ const NotebookApp = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  // 路由同步
-  const { currentView: routeView } = useRouteSync();
-  const { navigateToWorkspace, navigateToEmpty } = useRouteStore();
+  // 直接订阅路由状态，避免通过 useRouteSync 的间接订阅导致的渲染延迟
+  const routeStore = useRouteStore();
+  const routeView = routeStore.currentView;
+  const { navigateToWorkspace, navigateToEmpty } = routeStore;
+  
+  // 路由状态调试 (可选)
+  // console.log('NotebookApp render:', { routeView, currentRoute: routeStore.currentRoute });
+  
+  // 路由同步（但不使用其返回的状态）
+  useRouteSync();
 
   // Panel width states
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
@@ -703,6 +710,178 @@ const NotebookApp = () => {
     initializeStorage();
   }, []);
 
+  /**
+   * 决定当前应该显示的主要内容组件
+   * 使用优先级顺序来避免条件冲突
+   */
+  const resolveMainContent = useCallback(() => {
+    console.log('🎭 resolveMainContent called with:', {
+      routeView,
+      isShowingFileExplorer,
+      activeFile: !!activeFile,
+      currentView,
+      selectedAgentType
+    });
+    
+    // 优先级1: 文件预览 (最高优先级)
+    if (isShowingFileExplorer && activeFile) {
+      console.log('🎭 → Choosing: file-preview');
+      return { type: 'file-preview', component: <TabbedPreviewApp /> };
+    }
+    
+    // 优先级2: Agent详情视图
+    if (currentView === 'agent' && selectedAgentType) {
+      console.log('🎭 → Choosing: agent-detail');
+      return { 
+        type: 'agent-detail', 
+        component: <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} /> 
+      };
+    }
+    
+    // 优先级3: 根据路由视图决定内容
+    console.log('🎭 → Switching on routeView:', routeView);
+    switch (routeView) {
+      case 'empty':
+        console.log('🎭 → Choosing: empty-state');
+        return { 
+          type: 'empty-state', 
+          component: <EmptyState onAddCell={handleEmptyStateAddCell} /> 
+        };
+      
+      case 'library':
+        console.log('🎭 → Choosing: library-state');
+        return { 
+          type: 'library-state', 
+          component: (
+            <LibraryState 
+              onSelectNotebook={handleLibrarySelectNotebook}
+              onBack={handleLibraryBack}
+            />
+          ) 
+        };
+      
+      case 'workspace':
+        console.log('🎭 → Choosing: main-content (workspace)');
+        return { 
+          type: 'main-content', 
+          component: (
+            <MainContent
+              cells={cells}
+              viewMode={viewMode}
+              tasks={tasks}
+              currentPhaseId={currentPhaseId}
+              currentStepIndex={currentStepIndex}
+              getCurrentViewCells={getCurrentViewCells}
+              handleAddCell={handleAddCell}
+              renderCell={renderCell}
+              renderStepNavigation={renderStepNavigation}
+              handlePreviousStep={handlePreviousStep}
+              handleNextStep={handleNextStep}
+              handlePreviousPhase={handlePreviousPhase}
+              handleNextPhase={handleNextPhase}
+              isFirstPhase={(() => {
+                const result = findPhaseIndex();
+                return result ? result.phaseIndex === 0 : false;
+              })()}
+              isLastPhase={(() => {
+                const result = findPhaseIndex();
+                return result ? result.phaseIndex === result.task.phases.length - 1 : false;
+              })()}
+            />
+          ) 
+        };
+      
+      default:
+        // 不要盲目默认到 EmptyState，应该根据 URL 决定
+        const currentPath = window.location.pathname;
+        console.log('🎭 → Default case triggered, checking URL directly:', currentPath);
+        
+        if (currentPath === '/') {
+          console.log('🎭 → URL shows root, choosing empty-state');
+          return { 
+            type: 'empty-state', 
+            component: <EmptyState onAddCell={handleEmptyStateAddCell} /> 
+          };
+        } else if (currentPath === '/FoKn/Library') {
+          console.log('🎭 → URL shows library, choosing library-state');
+          return { 
+            type: 'library-state', 
+            component: (
+              <LibraryState 
+                onSelectNotebook={handleLibrarySelectNotebook}
+                onBack={handleLibraryBack}
+              />
+            ) 
+          };
+        } else if (currentPath.startsWith('/workspace/')) {
+          console.log('🎭 → URL shows workspace, choosing main-content');
+          return { 
+            type: 'main-content', 
+            component: (
+              <MainContent
+                cells={cells}
+                viewMode={viewMode}
+                tasks={tasks}
+                currentPhaseId={currentPhaseId}
+                currentStepIndex={currentStepIndex}
+                getCurrentViewCells={getCurrentViewCells}
+                handleAddCell={handleAddCell}
+                renderCell={renderCell}
+                renderStepNavigation={renderStepNavigation}
+                handlePreviousStep={handlePreviousStep}
+                handleNextStep={handleNextStep}
+                handlePreviousPhase={handlePreviousPhase}
+                handleNextPhase={handleNextPhase}
+                isFirstPhase={(() => {
+                  const result = findPhaseIndex();
+                  return result ? result.phaseIndex === 0 : false;
+                })()}
+                isLastPhase={(() => {
+                  const result = findPhaseIndex();
+                  return result ? result.phaseIndex === result.task.phases.length - 1 : false;
+                })()}
+              />
+            ) 
+          };
+        } else {
+          console.log('🎭 → Unknown URL path, showing loading or empty state');
+          // 对于未知路径，显示加载状态而不是盲目的 EmptyState
+          return { 
+            type: 'loading', 
+            component: (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-gray-500">Loading...</div>
+              </div>
+            )
+          };
+        }
+    }
+  }, [
+    isShowingFileExplorer, 
+    activeFile, 
+    currentView, 
+    selectedAgentType, 
+    routeView,
+    handleEmptyStateAddCell,
+    handleBackToNotebook,
+    handleLibrarySelectNotebook,
+    handleLibraryBack,
+    cells,
+    viewMode,
+    tasks,
+    currentPhaseId,
+    currentStepIndex,
+    getCurrentViewCells,
+    handleAddCell,
+    renderCell,
+    renderStepNavigation,
+    handlePreviousStep,
+    handleNextStep,
+    handlePreviousPhase,
+    handleNextPhase,
+    findPhaseIndex
+  ]);
+
   return (
     <div className="h-screen flex border-r border-black">
       <SettingsPage />
@@ -763,54 +942,9 @@ const NotebookApp = () => {
         <GlobalTabList/>
 
         <div className="flex-1 overflow-y-auto scroll-smooth border-3 border-theme-200 bg-white w-full h-full">
-          {/* EmptyState - 主页/空状态 */}
-          <div className={`${routeView === 'empty' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <EmptyState onAddCell={handleEmptyStateAddCell} />
-          </div>
-
-          {/* LibraryState - 库页面 */}
-          <div className={`${routeView === 'library' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <LibraryState 
-              onSelectNotebook={handleLibrarySelectNotebook}
-              onBack={handleLibraryBack}
-            />
-          </div>
-
-          {/* PreviewApp - 文件预览 */}
-          <div className={`${isShowingFileExplorer && activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <TabbedPreviewApp />
-          </div>
-
-          {/* AgentDetail - Agent详情视图 */}
-          <div className={`${currentView === 'agent' && selectedAgentType && !isShowingFileExplorer ? 'block' : 'hidden'} w-full h-full`}>
-            {selectedAgentType && <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} />}
-          </div>
-
-          {/* MainContent - 主笔记本内容 */}
-          <div className={`${routeView === 'workspace' && !isShowingFileExplorer && !activeFile ? 'block' : 'hidden'} w-full h-full`}>
-            <MainContent
-              cells={cells}
-              viewMode={viewMode}
-              tasks={tasks}
-              currentPhaseId={currentPhaseId}
-              currentStepIndex={currentStepIndex}
-              getCurrentViewCells={getCurrentViewCells}
-              handleAddCell={handleAddCell}
-              renderCell={renderCell}
-              renderStepNavigation={renderStepNavigation}
-              handlePreviousStep={handlePreviousStep}
-              handleNextStep={handleNextStep}
-              handlePreviousPhase={handlePreviousPhase}
-              handleNextPhase={handleNextPhase}
-              isFirstPhase={(() => {
-                const result = findPhaseIndex();
-                return result ? result.phaseIndex === 0 : false;
-              })()}
-              isLastPhase={(() => {
-                const result = findPhaseIndex();
-                return result ? result.phaseIndex === result.task.phases.length - 1 : false;
-              })()}
-            />
+          {/* 使用单一解析器函数避免条件冲突，提供清晰的优先级顺序 */}
+          <div className="w-full h-full">
+            {resolveMainContent().component}
           </div>
         </div>
 

@@ -18,28 +18,52 @@ export const useNotebooks = () => {
   const loadNotebooks = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('🚀 Starting notebook loading process...');
       
-      // Ensure storage system is initialized
-      await StorageManager.initialize();
+      // Ensure storage system is initialized with timeout
+      try {
+        const initTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Storage initialization timeout')), 8000)
+        );
+        await Promise.race([StorageManager.initialize(), initTimeout]);
+        console.log('✅ Storage manager initialized');
+      } catch (initError) {
+        console.warn('🔄 Storage manager initialization failed, proceeding with fallback:', initError);
+        // Continue anyway, let individual systems handle the failure
+      }
       
       // Try new storage system first
       let allNotebooks = [];
       try {
-        allNotebooks = await NotebookORM.getNotebooks({
-          orderBy: 'lastAccessedAt',
-        });
-        console.log(`Loaded ${allNotebooks.length} notebooks from new storage system`);
+        console.log('📚 Attempting to load notebooks from new storage system...');
+        const notebookTimeout = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('New storage system timeout')), 3000)
+        );
+        allNotebooks = await Promise.race([
+          NotebookORM.getNotebooks({ orderBy: 'lastAccessedAt' }),
+          notebookTimeout
+        ]);
+        console.log(`✅ Loaded ${allNotebooks.length} notebooks from new storage system`);
         console.log('Raw notebooks data:', allNotebooks.map(nb => ({ id: nb.id, name: nb.name })));
       } catch (error) {
-        console.warn('New storage system failed, trying legacy system:', error);
+        console.warn('❌ New storage system failed, trying legacy system:', error);
         // Fallback to legacy system
         try {
-          allNotebooks = await FileCache.getAllNotebooks();
-          console.log(`Loaded ${allNotebooks.length} notebooks from legacy system`);
+          console.log('📚 Attempting to load notebooks from legacy system...');
+          const legacyTimeout = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Legacy storage system timeout')), 2000)
+          );
+          allNotebooks = await Promise.race([
+            FileCache.getAllNotebooks(),
+            legacyTimeout
+          ]);
+          console.log(`✅ Loaded ${allNotebooks.length} notebooks from legacy system`);
           console.log('Legacy notebooks data:', allNotebooks.map(nb => ({ id: nb.id, name: nb.name })));
         } catch (legacyError) {
-          console.error('Both storage systems failed:', legacyError);
+          console.error('❌ Both storage systems failed:', legacyError);
+          console.log('🔄 Proceeding with empty state (this is normal for new users)');
           setNotebooks([]);
+          setLoading(false);
           return;
         }
       }
@@ -47,6 +71,7 @@ export const useNotebooks = () => {
       if (allNotebooks.length === 0) {
         console.log('No notebooks found in storage');
         setNotebooks([]);
+        setLoading(false);
         return;
       }
 

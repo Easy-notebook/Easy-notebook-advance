@@ -71,6 +71,21 @@ export interface NotebookActivityEntity {
 }
 
 /**
+ * Tab state entity - tracks open tabs and active tab per notebook
+ */
+export interface TabStateEntity {
+  notebookId: string; // Primary key
+  tabList: Array<{
+    id: string;
+    path: string;
+    name: string;
+    type: string;
+  }>;
+  activeTabId: string | null;
+  lastUpdated: number;
+}
+
+/**
  * Storage configuration
  */
 export interface StorageConfigEntity {
@@ -92,7 +107,8 @@ export const DB_STORES = {
   FILES_METADATA: 'files_metadata', 
   FILES_CONTENT: 'files_content',
   ACTIVITIES: 'activities',
-  CONFIG: 'config'
+  CONFIG: 'config',
+  TAB_STATES: 'tab_states'
 } as const;
 
 /**
@@ -127,6 +143,11 @@ export const DB_INDEXES = {
     timestamp: 'timestamp',
     notebookTimestamp: ['notebookId', 'timestamp'],
     activityType: 'activityType'
+  },
+  
+  // Tab state indexes
+  TAB_STATES: {
+    lastUpdated: 'lastUpdated'
   }
 } as const;
 

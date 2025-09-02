@@ -87,10 +87,13 @@ export class NotebookORM {
     const { orderBy = 'lastAccessedAt', limit, offset = 0 } = options;
 
     return new Promise((resolve, reject) => {
+      console.log(`NotebookORM: Starting getNotebooks with options:`, { orderBy, limit, offset });
+      
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
 
       let request: IDBRequest;
+      let timeoutId: NodeJS.Timeout;
 
       if (orderBy === 'lastAccessedAt' || orderBy === 'updatedAt' || orderBy === 'accessCount') {
         const index = store.index(orderBy);
@@ -102,12 +105,20 @@ export class NotebookORM {
       const notebooks: NotebookEntity[] = [];
       let currentOffset = 0;
 
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
           if (currentOffset >= offset) {
             notebooks.push(cursor.value as NotebookEntity);
             if (limit && notebooks.length >= limit) {
+              cleanup();
+              console.log(`NotebookORM: Successfully retrieved ${notebooks.length} notebooks (limited)`);
               resolve(notebooks);
               return;
             }
@@ -115,13 +126,28 @@ export class NotebookORM {
           currentOffset++;
           cursor.continue();
         } else {
+          cleanup();
+          console.log(`NotebookORM: Successfully retrieved ${notebooks.length} notebooks (all)`);
           resolve(notebooks);
         }
       };
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        cleanup();
+        console.error('NotebookORM: Database request error:', request.error);
+        reject(request.error);
+      };
 
-      setTimeout(() => reject(new Error('Get notebooks timeout')), 5000);
+      transaction.onerror = () => {
+        cleanup();
+        console.error('NotebookORM: Transaction error:', transaction.error);
+        reject(transaction.error);
+      };
+
+      timeoutId = setTimeout(() => {
+        console.warn('NotebookORM: Get notebooks operation timed out after 5 seconds');
+        reject(new Error('Get notebooks timeout'));
+      }, 5000);
     });
   }
 

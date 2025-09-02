@@ -4,12 +4,12 @@
 /**
  * Supported file types
  */
-export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx' | 'react' | 'doc' | 'docx';
+export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx' | 'react' | 'doc' | 'docx' | 'javascript' | 'css' | 'markdown' | 'json' | 'python' | 'hex';
 
 /**
  * Preview mode mapping for different file types
  */
-export type ActivePreviewMode = 'default' | 'csv' | 'jsx' | 'html' | 'image' | 'pdf' | 'text' | 'doc' | 'docx' | null;
+export type ActivePreviewMode = 'default' | 'csv' | 'jsx' | 'html' | 'image' | 'pdf' | 'text' | 'doc' | 'docx' | 'code' | 'markdown' | 'hex' | null;
 
 /**
  * Determine file type from file extension
@@ -56,13 +56,38 @@ export const getFileType = (filePath: string): FileType => {
     return 'jsx';
   }
 
+  // JavaScript files
+  if (fileExt === 'js' || fileExt === 'ts' || fileExt === 'mjs') {
+    return 'javascript';
+  }
+
+  // CSS files
+  if (fileExt === 'css' || fileExt === 'scss' || fileExt === 'sass' || fileExt === 'less') {
+    return 'css';
+  }
+
+  // Markdown files
+  if (fileExt === 'md' || fileExt === 'markdown') {
+    return 'markdown';
+  }
+
+  // JSON files
+  if (fileExt === 'json') {
+    return 'json';
+  }
+
+  // Python files
+  if (fileExt === 'py' || fileExt === 'pyw') {
+    return 'python';
+  }
+
   // Other text files
-  if (['.txt', '.md', '.json', '.js', '.py', '.css'].includes(`.${fileExt}`)) {
+  if (['.txt', '.log', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'].includes(`.${fileExt}`)) {
     return 'text';
   }
 
-  // Default
-  return 'text';
+  // Default - use hex for unknown binary files
+  return 'hex';
 };
 
 /**
@@ -84,8 +109,17 @@ export const getActivePreviewMode = (fileType: FileType): ActivePreviewMode => {
     case 'docx':
     case 'doc':
       return 'docx';
+    case 'javascript':
+    case 'css':
+    case 'python':
+    case 'json':
+      return 'code';
+    case 'markdown':
+      return 'markdown';
     case 'text':
       return 'text';
+    case 'hex':
+      return 'hex';
     default:
       return 'default';
   }
@@ -108,7 +142,7 @@ export const getMimeType = (filePath: string): string => {
   }
   if (ext === 'pdf') return 'application/pdf';
   if (['html', 'htm'].includes(ext)) return 'text/html';
-  if (['txt', 'md', 'json', 'js', 'py', 'css', 'csv'].includes(ext)) return 'text/plain';
+  if (['txt', 'md', 'json', 'js', 'ts', 'py', 'css', 'csv', 'xml', 'yaml', 'yml'].includes(ext)) return 'text/plain';
   if (ext === 'doc') return 'application/msword';
   if (ext === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   

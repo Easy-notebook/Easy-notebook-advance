@@ -152,7 +152,17 @@ export class FileORM {
 
       transaction.onerror = () => reject(transaction.error);
 
-      setTimeout(() => reject(new Error('Save file timeout')), 10000);
+      // Increase timeout for slower systems
+      const timeoutId = setTimeout(() => {
+        console.warn(`Save file timeout for ${notebookId}/${filePath}`);
+        reject(new Error('Save file timeout - operation took longer than 20 seconds'));
+      }, 20000); // Increased from 10s to 20s
+      
+      // Add timeout cleanup to success/error handlers
+      const originalResolve = resolve;
+      const originalReject = reject;
+      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
+      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
     });
   }
   
@@ -208,6 +218,7 @@ export class FileORM {
           const contentRequest = contentStore.get(metadata.id);
           
           contentRequest.onsuccess = () => {
+            clearTimeout(timeoutId);
             const contentEntity = contentRequest.result as FileContentEntity | undefined;
             
             console.log('📖 FileORM: Retrieved content for', {
@@ -231,6 +242,7 @@ export class FileORM {
           };
           
           contentRequest.onerror = () => {
+            clearTimeout(timeoutId);
             // Content not found locally, mark for remote fetch
             resolve({
               metadata: updatedMetadata,
@@ -238,6 +250,7 @@ export class FileORM {
             });
           };
         } else {
+          clearTimeout(timeoutId);
           // Large file - needs remote fetch
           resolve({
             metadata: updatedMetadata,
@@ -246,9 +259,16 @@ export class FileORM {
         }
       };
       
-      metaRequest.onerror = () => reject(metaRequest.error);
+      metaRequest.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(metaRequest.error);
+      };
       
-      setTimeout(() => reject(new Error('Get file timeout')), 5000);
+      // Increase timeout for slower systems
+      const timeoutId = setTimeout(() => {
+        console.warn(`File retrieval timeout for ${notebookId}/${filePath} - consider optimizing database`);
+        reject(new Error('Get file timeout - operation took longer than 15 seconds'));
+      }, 15000); // Increased from 5s to 15s
     });
   }
   
@@ -314,7 +334,17 @@ export class FileORM {
       
       request.onerror = () => reject(request.error);
       
-      setTimeout(() => reject(new Error('Get files timeout')), 8000);
+      // Increase timeout for slower systems
+      const timeoutId = setTimeout(() => {
+        console.warn(`Get files timeout for notebook ${notebookId}`);
+        reject(new Error('Get files timeout - operation took longer than 20 seconds'));
+      }, 20000); // Increased from 8s to 20s
+      
+      // Add timeout cleanup to success/error handlers
+      const originalResolve = resolve;
+      const originalReject = reject;
+      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
+      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
     });
   }
   
@@ -373,7 +403,17 @@ export class FileORM {
       };
       getMetaReq.onerror = () => reject(getMetaReq.error);
       
-      setTimeout(() => reject(new Error('Delete file timeout')), 5000);
+      // Increase timeout for slower systems
+      const timeoutId = setTimeout(() => {
+        console.warn(`Delete file timeout for ${notebookId}/${filePath}`);
+        reject(new Error('Delete file timeout - operation took longer than 15 seconds'));
+      }, 15000); // Increased from 5s to 15s
+      
+      // Add timeout cleanup to success/error handlers
+      const originalResolve = resolve;
+      const originalReject = reject;
+      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
+      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
     });
   }
   
@@ -442,7 +482,17 @@ export class FileORM {
       
       getRequest.onerror = () => reject(getRequest.error);
       
-      setTimeout(() => reject(new Error('Update file timeout')), 8000);
+      // Increase timeout for slower systems
+      const timeoutId = setTimeout(() => {
+        console.warn(`Update file timeout for ${notebookId}/${filePath}`);
+        reject(new Error('Update file timeout - operation took longer than 20 seconds'));
+      }, 20000); // Increased from 8s to 20s
+      
+      // Add timeout cleanup to success/error handlers
+      const originalResolve = resolve;
+      const originalReject = reject;
+      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
+      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
     });
   }
   
@@ -483,7 +533,17 @@ export class FileORM {
       
       request.onerror = () => reject(request.error);
       
-      setTimeout(() => reject(new Error('Get large files timeout')), 5000);
+      // Increase timeout for slower systems
+      const timeoutId = setTimeout(() => {
+        console.warn(`Get large files timeout for notebook ${notebookId}`);
+        reject(new Error('Get large files timeout - operation took longer than 15 seconds'));
+      }, 15000); // Increased from 5s to 15s
+      
+      // Add timeout cleanup to success/error handlers
+      const originalResolve = resolve;
+      const originalReject = reject;
+      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
+      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
     });
   }
   

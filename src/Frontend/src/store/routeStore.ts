@@ -21,10 +21,51 @@ export interface RouteState {
   navigateToWorkspace: (notebookId: string) => void;
 }
 
+// 获取初始路由状态，避免总是从 empty 开始
+const getInitialRouteState = () => {
+  const currentPath = window.location.pathname;
+  console.log('🚀 RouteStore: Initializing with path:', currentPath);
+  
+  if (currentPath === '/') {
+    console.log('🏠 RouteStore: Setting initial state to EMPTY');
+    return {
+      currentView: 'empty' as AppView,
+      currentNotebookId: null,
+      currentRoute: '/'
+    };
+  } else if (currentPath === '/FoKn/Library') {
+    console.log('📚 RouteStore: Setting initial state to LIBRARY');
+    return {
+      currentView: 'library' as AppView,
+      currentNotebookId: null,
+      currentRoute: '/FoKn/Library'
+    };
+  } else if (currentPath.startsWith('/workspace/')) {
+    const notebookId = currentPath.split('/workspace/')[1];
+    console.log('📓 RouteStore: Setting initial state to WORKSPACE with notebook:', notebookId);
+    return {
+      currentView: 'workspace' as AppView,
+      currentNotebookId: notebookId,
+      currentRoute: currentPath
+    };
+  } else {
+    console.log('❓ RouteStore: Unknown path, defaulting to EMPTY');
+    // 默认情况
+    return {
+      currentView: 'empty' as AppView,
+      currentNotebookId: null,
+      currentRoute: currentPath
+    };
+  }
+};
+
+const initialState = getInitialRouteState();
+console.log('🎯 RouteStore: Final initial state:', initialState);
+
 const useRouteStore = create<RouteState>((set, get) => ({
-  currentView: 'empty',
-  currentNotebookId: null,
-  currentRoute: '/',
+  currentView: initialState.currentView,
+  currentNotebookId: initialState.currentNotebookId,
+  currentRoute: initialState.currentRoute,
   
   setView: (view: AppView) => set({ currentView: view }),
   setNotebookId: (id: string | null) => set({ currentNotebookId: id }),

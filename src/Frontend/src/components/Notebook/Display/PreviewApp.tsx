@@ -6,6 +6,8 @@ import ImageDisplay from './ImageView/ImageDisplay';
 import PDFDisplay from './PDFView/PDFDisplay';
 import ReactLiveSandbox from './WebView/ReactLiveSandbox';
 import DocDisplay from './DocView/DocDisplay';
+import CodeDisplay from './CodeView/CodeDisplay';
+import HexDisplay from './HexView/HexDisplay';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import IframeViewer from './WebView/IframeViewer';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -67,19 +69,44 @@ const PreviewApp: React.FC = () => {
             );
         }
 
-        // Handle Excel and DOCX files that might be misidentified
+        // Handle files that might be misidentified
         const isExcelName = 
             currentFile.name.toLowerCase().endsWith('.xlsx') || 
             currentFile.name.toLowerCase().endsWith('.xls');
         const isDocxName = 
             currentFile.name.toLowerCase().endsWith('.docx') || 
             currentFile.name.toLowerCase().endsWith('.doc');
+        const isJsName = 
+            currentFile.name.toLowerCase().endsWith('.js') || 
+            currentFile.name.toLowerCase().endsWith('.ts') || 
+            currentFile.name.toLowerCase().endsWith('.mjs');
+        const isCssName = 
+            currentFile.name.toLowerCase().endsWith('.css') || 
+            currentFile.name.toLowerCase().endsWith('.scss') || 
+            currentFile.name.toLowerCase().endsWith('.sass');
+        const isMdName = 
+            currentFile.name.toLowerCase().endsWith('.md') || 
+            currentFile.name.toLowerCase().endsWith('.markdown');
+        const isPyName = 
+            currentFile.name.toLowerCase().endsWith('.py') || 
+            currentFile.name.toLowerCase().endsWith('.pyw');
+        const isJsonName = currentFile.name.toLowerCase().endsWith('.json');
         
         let effectiveType: FileType = currentFile.type as FileType;
         if (isExcelName) {
             effectiveType = 'xlsx' as FileType;
         } else if (isDocxName) {
             effectiveType = 'docx' as FileType;
+        } else if (isJsName) {
+            effectiveType = 'javascript' as FileType;
+        } else if (isCssName) {
+            effectiveType = 'css' as FileType;
+        } else if (isMdName) {
+            effectiveType = 'markdown' as FileType;
+        } else if (isPyName) {
+            effectiveType = 'python' as FileType;
+        } else if (isJsonName) {
+            effectiveType = 'json' as FileType;
         }
 
         switch (effectiveType) {
@@ -112,6 +139,24 @@ const PreviewApp: React.FC = () => {
                     <DocDisplay
                         fileName={currentFile.name}
                         fileContent={currentFile.content}
+                        onContentChange={async (newContent: string) => {
+                            setTabDirty(currentFile.id, true);
+                            await usePreviewStore.getState().updateActiveFileContent(newContent);
+                        }}
+                        showControls
+                    />
+                );
+
+            case 'javascript':
+            case 'css':
+            case 'python':
+            case 'json':
+            case 'markdown':
+                return (
+                    <CodeDisplay
+                        content={currentFile.content}
+                        language={effectiveType}
+                        fileName={currentFile.name}
                         onContentChange={async (newContent: string) => {
                             setTabDirty(currentFile.id, true);
                             await usePreviewStore.getState().updateActiveFileContent(newContent);
@@ -227,14 +272,22 @@ const PreviewApp: React.FC = () => {
                     </div>
                 );
 
+            case 'hex':
+                return (
+                    <HexDisplay
+                        content={currentFile.content}
+                        fileName={currentFile.name}
+                        showControls
+                    />
+                );
+
             default:
                 return (
-                    <div className="flex items-center justify-center h-full">
-                        <div className="text-center text-gray-400">
-                            <div className="text-lg mb-2">Unsupported file type</div>
-                            <div className="text-sm">Cannot preview {currentFile.name}</div>
-                        </div>
-                    </div>
+                    <HexDisplay
+                        content={currentFile.content}
+                        fileName={currentFile.name}
+                        showControls
+                    />
                 );
         }
     }, [currentFile, setTabDirty, showSource, isInSplitView]);

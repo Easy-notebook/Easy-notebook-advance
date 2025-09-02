@@ -11,7 +11,8 @@ import {
   getFileType,
   getActivePreviewMode,
   getMimeType,
-  SplitPreviewCache
+  SplitPreviewCache,
+  TabCache
 } from '../storage';
 
 /**
@@ -79,6 +80,7 @@ export interface PreviewStoreState {
  */
 export interface PreviewStoreActions {
     changePreviewMode: () => void;
+    resetToNotebookMode: () => void;
     init: () => void;
     clearError: () => void;
     setCurrentPreviewFiles: (files: PreviewFile[]) => void;
@@ -106,6 +108,10 @@ export interface PreviewStoreActions {
     previewFileInSplit: (notebookId: string, filePath: string, fileMetadata?: FileMetadata) => Promise<FileObject | undefined>;
     closeSplitPreview: () => void;
     getActiveSplitFile: () => FileObject | null;
+
+    // Tab state persistence
+    saveTabState: (notebookId?: string) => Promise<void>;
+    loadTabState: (notebookId: string) => Promise<void>;
 }
 
 /**
@@ -160,6 +166,15 @@ const usePreviewStore = create<PreviewStore>()(
                 } else {
                     set({ previewMode: 'notebook' });
                 }
+            },
+
+            resetToNotebookMode: () => {
+                set({ 
+                    previewMode: 'notebook',
+                    activeFile: null,
+                    activePreviewMode: null,
+                    currentPreviewFiles: []
+                });
             },
 
             // Initialize the store
@@ -389,6 +404,12 @@ const usePreviewStore = create<PreviewStore>()(
                         }
 
                         set({ currentPreviewFiles: updatedFiles });
+                        
+                        // Save updated tab state to storage
+                        get().saveTabState(notebookId).catch(error => {
+                            console.error('Failed to save tab state after adding new file:', error);
+                        });
+                        
                         return fileObject;
                     } catch (e: any) {
                         const msg = (e && e.message) ? String(e.message) : '';
@@ -467,6 +488,12 @@ const usePreviewStore = create<PreviewStore>()(
                     }
 
                     set({ currentPreviewFiles: updatedFiles });
+                    
+                    // Save updated tab state to storage
+                    get().saveTabState(notebookId).catch(error => {
+                        console.error('Failed to save tab state after loading cached file:', error);
+                    });
+                    
                     return cachedFile;
                 }
             },
@@ -475,7 +502,9 @@ const usePreviewStore = create<PreviewStore>()(
 
             // Close a preview file
             closePreviewFile: (fileId: string) => {
-                const { currentPreviewFiles, activeFile, dirtyMap } = get();
+                const { currentPreviewFiles, activeFile, dirtyMap, currentNotebookId } = get();
+
+                console.log(`🗑️ Closing tab: ${fileId}`);
 
                 // Compute next active before removal to preserve adjacency
                 const closedIndex = currentPreviewFiles.findIndex(f => f.id === fileId);
@@ -496,6 +525,13 @@ const usePreviewStore = create<PreviewStore>()(
                                 activeFile: newActiveFile,
                                 dirtyMap: nextDirtyMap
                             });
+                            
+                            // Save updated state to storage
+                            if (currentNotebookId) {
+                                get().saveTabState(currentNotebookId).catch(error => {
+                                    console.error('Failed to save tab state after closing file:', error);
+                                });
+                            }
                         });
                     } else {
                         set({
@@ -504,11 +540,27 @@ const usePreviewStore = create<PreviewStore>()(
                             activePreviewMode: null,
                             dirtyMap: nextDirtyMap
                         });
+                        
+                        // Save updated state to storage
+                        if (currentNotebookId) {
+                            get().saveTabState(currentNotebookId).catch(error => {
+                                console.error('Failed to save tab state after closing last file:', error);
+                            });
+                        }
                     }
                 } else {
                     // Just update the files list
                     set({ currentPreviewFiles: updatedFiles, dirtyMap: nextDirtyMap });
+                    
+                    // Save updated state to storage
+                    if (currentNotebookId) {
+                        get().saveTabState(currentNotebookId).catch(error => {
+                            console.error('Failed to save tab state after closing inactive file:', error);
+                        });
+                    }
                 }
+
+                console.log(`✅ Tab closed. Remaining tabs: ${updatedFiles.length}`);
             },
 
             // Load a file by its ID
@@ -849,6 +901,12 @@ const usePreviewStore = create<PreviewStore>()(
                 try {
                     console.log(`Switching to notebook ${notebookId}...`);
 
+                    // Save current notebook's tab state before switching
+                    const currentNotebookId = get().currentNotebookId;
+                    if (currentNotebookId && currentNotebookId !== notebookId) {
+                        await get().saveTabState(currentNotebookId);
+                    }
+
                     // Update notebook store
                     const { default: useNotebookStore } = await import('./notebookStore');
                     const notebookStore = useNotebookStore.getState();
@@ -859,13 +917,17 @@ const usePreviewStore = create<PreviewStore>()(
                         console.warn(`Could not load notebook ${notebookId} from database`);
                     }
 
-                    // Set current notebook ID, switch to notebook mode, and load tabs
+                    // Set current notebook ID and switch to notebook mode
+                    // 不立即清空tab列表，让loadTabState来处理
                     set({ 
                         currentNotebookId: notebookId,
                         previewMode: 'notebook',  // 确保切换到notebook预览模式
-                        activeFile: null  // 清除活跃文件
+                        activeFile: null,  // 清除活跃文件
+                        activePreviewMode: null
                     });
-                    await get().loadNotebookTabs(notebookId);
+
+                    // Load tabs from saved state or from scratch
+                    await get().loadTabState(notebookId);
 
                     console.log(`✅ Switched to notebook ${notebookId}, previewMode set to notebook`);
                 } catch (error) {
@@ -1049,11 +1111,83 @@ const usePreviewStore = create<PreviewStore>()(
                 return get().activeSplitFile;
             },
 
+            // Save current tab state to storage
+            saveTabState: async (notebookId?: string): Promise<void> => {
+                const state = get();
+                const targetNotebookId = notebookId || state.currentNotebookId;
+                
+                if (!targetNotebookId) {
+                    console.warn('No notebookId provided for saving tab state');
+                    return;
+                }
+
+                try {
+                    const activeTabId = state.activeFile?.id || null;
+                    await TabCache.saveTabState(targetNotebookId, state.currentPreviewFiles, activeTabId);
+                    console.log(`📝 Saved tab state for notebook ${targetNotebookId}: ${state.currentPreviewFiles.length} tabs, active: ${activeTabId}`);
+                } catch (error) {
+                    console.error('Failed to save tab state:', error);
+                }
+            },
+
+            // Load tab state from storage
+            loadTabState: async (notebookId: string): Promise<void> => {
+                try {
+                    const tabState = await TabCache.getTabState(notebookId);
+                    
+                    if (tabState && tabState.tabList.length > 0) {
+                        console.log(`📂 Loading saved tab state for notebook ${notebookId}: ${tabState.tabList.length} tabs`);
+                        
+                        // Set tab list and find active tab
+                        const restoredTabs: PreviewFile[] = tabState.tabList.map(tab => ({
+                            id: tab.id,
+                            path: tab.path,
+                            name: tab.name,
+                            type: tab.type as FileType
+                        }));
+
+                        set({ 
+                            currentPreviewFiles: restoredTabs,
+                            currentNotebookId: notebookId
+                        });
+
+                        // Try to restore active tab
+                        if (tabState.activeTabId) {
+                            try {
+                                const activeFile = await get().loadFileById(tabState.activeTabId);
+                                if (activeFile) {
+                                    const activePreviewMode = getActivePreviewMode(activeFile.type as FileType);
+                                    set({ 
+                                        activeFile,
+                                        activePreviewMode 
+                                    });
+                                }
+                            } catch (error) {
+                                console.warn('Failed to restore active tab:', error);
+                            }
+                        }
+
+                        console.log(`✅ Restored ${restoredTabs.length} tabs for notebook ${notebookId}`);
+                        return;
+                    }
+
+                    console.log(`📂 No saved tab state found for notebook ${notebookId}, loading from scratch`);
+                } catch (error) {
+                    console.error('Failed to load tab state:', error);
+                }
+
+                // Fallback to regular tab loading if no saved state or error
+                await get().loadNotebookTabs(notebookId);
+            },
+
         }),
         {
             name: 'preview-store',
             partialize: (state) => ({
-                currentPreviewFiles: state.currentPreviewFiles
+                currentPreviewFiles: state.currentPreviewFiles,
+                currentNotebookId: state.currentNotebookId,
+                previewMode: state.previewMode,
+                dirtyMap: state.dirtyMap
             })
         }
     )

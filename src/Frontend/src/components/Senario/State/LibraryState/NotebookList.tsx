@@ -1,10 +1,13 @@
 // LibraryState/NotebookList.tsx
 // Notebook list component with sections for starred and recent notebooks
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState, useCallback } from 'react';
 import { Empty, Button, Card, Skeleton } from 'antd';
 import { Star, Calendar, Plus } from 'lucide-react';
 import NotebookCard from './NotebookCard';
+import useStore from '@Store/notebookStore';
+import useCodeStore from '@Store/codeStore';
+import { notebookApiIntegration } from '@Services/notebookServices';
 import type { NotebookListProps, CachedNotebook } from './types';
 
 const NotebookList: React.FC<NotebookListProps & { 
@@ -20,6 +23,8 @@ const NotebookList: React.FC<NotebookListProps & {
   onDeleteNotebook,
   onExportNotebook,
 }) => {
+  const [isCreatingNotebook, setIsCreatingNotebook] = useState(false);
+
   // Separate starred and regular notebooks
   const { starredNotebooks, regularNotebooks } = useMemo(() => {
     return {
@@ -27,6 +32,28 @@ const NotebookList: React.FC<NotebookListProps & {
       regularNotebooks: notebooks.filter((n) => !n.isStarred),
     };
   }, [notebooks]);
+
+  const createNewNotebook = useCallback(async () => {
+    if (isCreatingNotebook) return;
+    setIsCreatingNotebook(true);
+    try {
+      console.log('🚀 Creating new notebook from LibraryState...');
+      const newNotebookId = await notebookApiIntegration.initializeNotebook();
+      useStore.getState().setNotebookId(newNotebookId);
+      useCodeStore.getState().setKernelReady(true);
+      console.log('✅ Created notebook:', newNotebookId);
+      
+      // Navigate to the new notebook
+      if (onSelectNotebook) {
+        onSelectNotebook(newNotebookId);
+      }
+    } catch (error) {
+      console.error('❌ Failed to create new notebook:', error);
+      alert('Failed to create new notebook. Please try again.');
+    } finally {
+      setIsCreatingNotebook(false);
+    }
+  }, [isCreatingNotebook, onSelectNotebook]);
 
   const gridClassName = viewMode === 'grid' 
     ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
@@ -51,8 +78,13 @@ const NotebookList: React.FC<NotebookListProps & {
         description={searchQuery ? '没有匹配到 Notebook' : '还没有任何 Notebook'}
       >
         {!searchQuery && (
-          <Button type="primary" icon={<Plus className="w-4 h-4" />}>
-            新建 Notebook
+          <Button 
+            type="primary" 
+            icon={<Plus className="w-4 h-4" />}
+            loading={isCreatingNotebook}
+            onClick={createNewNotebook}
+          >
+            {isCreatingNotebook ? '正在创建...' : '新建 Notebook'}
           </Button>
         )}
       </Empty>

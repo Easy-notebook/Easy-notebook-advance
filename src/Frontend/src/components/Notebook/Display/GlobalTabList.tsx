@@ -77,7 +77,14 @@ const GlobalTabList: React.FC = () => {
       // 构建notebook tab的名称，与左侧文件树保持一致
       // const projectName = notebookTitle || (tasks && tasks.length > 0 ? tasks[0].title : '');
       // const notebookName = projectName ? `${projectName}.easynb` : 'Current Notebook';
-      const notebookName = "Notebook"
+      const notebookName = "Notebook";
+      
+      console.log('📋 GlobalTabList - Building tabs:', {
+        currentNotebookId,
+        currentPreviewFiles: currentPreviewFiles.length,
+        previewMode,
+        activeFileId: activeFile?.id
+      });
       
       const notebookTab: FileTab = {
         id: 'current-notebook',
