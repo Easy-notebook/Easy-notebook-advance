@@ -805,7 +805,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                 </div>
                                 <div className="relative z-10">
                                     <ReactMarkdown className="text-[15px] leading-relaxed tracking-wide text-gray-800">
-                                        {cell.description || 'no ai description'}
+                                        {(cell.description || 'no ai description').replace(/(?<!\n)\n(?!\n)/g, '  \n')}
                                     </ReactMarkdown>
                                 </div>
                             </div>

@@ -102,7 +102,7 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
     return (
       <div className={className}>
         {cells.map((cell) => (
-          <div key={cell.id} className="mb-4">
+          <div key={cell.id}>
             {renderCell(cell)}
           </div>
         ))}
@@ -127,7 +127,7 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
               key={cell.id}
               cell={cell}
               isActive={activeId === cell.id}
-              className="mb-4"
+className=""
               onAddCell={onAddCell}
               cellIndex={index}
             >

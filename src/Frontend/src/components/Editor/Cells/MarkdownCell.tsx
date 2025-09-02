@@ -202,7 +202,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
   const cellShowButtons = showButtons[cell.id] || false;
   const isDefaultTitle = cell.metadata?.isDefaultTitle === true && !disableDefaultTitleStyle;
   
-  // 优化的 Markdown 组件配置，包含表格支持
+  // 优化的 Markdown 组件配置，包含表格支持和换行处理
   const markdownComponents = useMemo(() => ({
     code: CodeBlock,
     img: MarkdownImage,
@@ -210,6 +210,21 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
     tr: MarkdownTableRow,
     td: MarkdownTableCell,
     th: MarkdownTableHead,
+    // 自定义段落组件，处理换行符
+    p: ({ children, ...props }: any) => {
+      if (typeof children === 'string') {
+        // 将单个换行符转换为 <br> 标签
+        const processedChildren = children.split('\n').reduce((acc: any[], part: string, index: number) => {
+          if (index > 0) {
+            acc.push(<br key={`br-${index}`} />);
+          }
+          acc.push(part);
+          return acc;
+        }, []);
+        return <p {...props}>{processedChildren}</p>;
+      }
+      return <p {...props}>{children}</p>;
+    },
     a: ({ href = '', children, ...props }: any) => (
       <a
         {...props}
@@ -520,7 +535,8 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                     rehypePlugins={[rehypeKatex]}
                     components={markdownComponents}
                   >
-                    {cell.content}
+                    {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符） */}
+                    {cell.content.replace(/(?<!\n)\n(?!\n)/g, '  \n')}
                   </ReactMarkdown>
                 </div>
               )}

@@ -500,7 +500,6 @@ const JupyterNotebookEditor = forwardRef < JupyterNotebookEditorHandle, JupyterN
               onCellsReorder={handleCellsReorder as any}
               onAddCell={handleAddCellForDnD}
               disabled={!isDragEnabled || readOnly}
-              className="space-y-4"
               renderCell={(c: any, isDragging?: boolean) => {
                 const cell = c as Cell;
                 return (
@@ -563,7 +562,7 @@ const JupyterNotebookEditor = forwardRef < JupyterNotebookEditorHandle, JupyterN
           style={{ minHeight: '200px', backgroundColor: 'transparent' }}
         >
           {(cells.length === 0 || !lastIsMarkdown) && (
-            <div className="absolute inset-0 flex items-center justify-center opacity-20 hover:opacity-40 transition-opacity pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center opacity-20">
             </div>
           )}
         </div>
@@ -592,10 +591,6 @@ const JupyterNotebookEditor = forwardRef < JupyterNotebookEditorHandle, JupyterN
           .jupyter-notebook-editor .draggable-cell {
             transition: all 0.2s ease;
             min-height: 40px;
-          }
-          .jupyter-notebook-editor .draggable-cell:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
           }
           .jupyter-notebook-editor .drag-handle {
             opacity: 0;

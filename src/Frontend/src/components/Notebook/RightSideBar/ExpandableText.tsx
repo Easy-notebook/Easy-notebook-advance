@@ -60,7 +60,8 @@ const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) =
             }
           }}
         >
-          {filteredText}
+          {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符） */}
+          {filteredText.replace(/(?<!\n)\n(?!\n)/g, '  \n')}
         </ReactMarkdown>
       </div>
 
