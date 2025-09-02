@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { showToast } from '../components/UI/Toast';
 import { produce } from 'immer';
 import notebookAutoSaveInstance, { NotebookAutoSave } from '../services/notebookAutoSave';
+import { notebookLog, storeLog } from '../utils/logger';
 
 import useCodeStore from './codeStore';
 
@@ -133,6 +134,9 @@ export interface NotebookStoreState {
     // 独立窗口状态
     detachedCellId: string | null;
     isDetachedCellFullscreen: boolean;
+    
+    // 初始化状态
+    isInitialized: boolean;
 }
 
 /**
@@ -351,6 +355,9 @@ const useStore = create(
     // 独立窗口状态
     detachedCellId: null,
     isDetachedCellFullscreen: false,
+    
+    // 初始化状态
+    isInitialized: false,
 
     getCurrentCellId: () => get().currentCellId,
     getCurrentCell: () => {
@@ -427,7 +434,7 @@ const useStore = create(
       ),
 
     setCells: (cells: Cell[]) => {
-      console.log('📝 setCells called with:', {
+      notebookLog.cellOperation('setCells', 'batch', {
         cellsCount: cells.length,
         cellTypes: cells.map(c => ({ id: c.id, type: c.type, contentLength: c.content?.length || 0 })),
         stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n')
@@ -439,7 +446,7 @@ const useStore = create(
         outputs: serializeOutput(cell.outputs || []),
       }));
       
-      console.log('📝 Processed cells:', {
+      notebookLog.info('Processed cells', {
         originalCount: cells.length,
         processedCount: processedCells.length,
         processedTypes: processedCells.map(c => ({ id: c.id, type: c.type, contentLength: c.content?.length || 0 }))
@@ -447,7 +454,7 @@ const useStore = create(
       
       // 只有在完全没有cells时才添加默认标题
       if (processedCells.length === 0) {
-        console.log('📝 Adding default title cell because cells array is empty');
+        notebookLog.cellOperation('create', 'title', { reason: 'empty cells array' });
         const titleCell: Cell = {
           id: uuidv4(),
           type: 'markdown',
@@ -459,27 +466,27 @@ const useStore = create(
           metadata: { isDefaultTitle: true }
         };
         processedCells.unshift(titleCell as any);
-        console.log('📝 Added default title cell:', { id: titleCell.id, content: titleCell.content });
+        notebookLog.cellOperation('create', titleCell.id, { type: 'title', content: titleCell.content });
       } else {
-        console.log('📝 Cells not empty, keeping existing cells');
+        notebookLog.debug('Cells not empty - keeping existing cells');
       }
       
       const tasks = parseMarkdownCells(processedCells as any);
       updateCellsPhaseId(processedCells as any, tasks);
       
-      console.log('📝 setCells final update:', {
+      notebookLog.info('setCells final update', {
         finalCellsCount: processedCells.length,
         finalTasksCount: tasks.length,
         finalCells: processedCells.map(c => ({ id: c.id, type: c.type, content: c.content?.substring(0, 50) + '...' }))
       });
       
-      set({ cells: processedCells, tasks });
+      set({ cells: processedCells, tasks, isInitialized: true });
     },
 
     updateCurrentCellWithContent: (content: string) => {
       const currentCellId = get().currentCellId;
       if (!currentCellId) {
-        console.error('当前没有选中的单元格');
+        notebookLog.error('No selected cell available');
         return;
       }
       get().updateCell(currentCellId, content);
@@ -495,7 +502,7 @@ const useStore = create(
             cell.content.trim().length > 1 // 确保不只是一个#
           );
           
-          console.log('🔍 addCell - 标题检查:', {
+          notebookLog.debug('addCell title check', {
             cellsLength: state.cells.length,
             hasAnyTitleCell,
             newCellType: newCell.type,
@@ -506,7 +513,7 @@ const useStore = create(
           const isNotebookEmpty = state.cells.length === 0;
           const firstCellIsTitle = newCell.type === 'markdown' && typeof newCell.content === 'string' && newCell.content.trim().startsWith('#');
           if (isNotebookEmpty && !firstCellIsTitle) {
-            console.log('✅ 添加默认标题cell');
+            notebookLog.cellOperation('create', 'title', { reason: 'notebook empty, no title cell' });
             const titleCell: Cell = {
               id: uuidv4(),
               type: 'markdown',
@@ -568,7 +575,7 @@ const useStore = create(
             updateCellsPhaseId(state.cells as any, updatedTasks);
             state.tasks = updatedTasks;
           } else {
-            console.log('⏭️ 跳过tasks重新解析（非标题cell）');
+            notebookLog.debug('Skipping tasks re-parsing for non-title cell');
           }
           
           state.currentCellId = cell.id;
@@ -607,7 +614,7 @@ const useStore = create(
       // 判断cell列表是否为空
       produce((state: NotebookStoreState) => {
         if (!title) {
-          console.warn('标题不能为空');
+          notebookLog.warn('Notebook title cannot be empty');
           return;
         }
 
@@ -749,7 +756,7 @@ const useStore = create(
           const [movedCell] = state.cells.splice(fromIndex, 1);
           state.cells.splice(toIndex, 0, movedCell);
           
-          console.log('📱 Store: 移动cell完成', {
+          notebookLog.cellOperation('move', 'batch', {
             from: fromIndex,
             to: toIndex,
             cellId: movedCell.id,
@@ -1016,7 +1023,7 @@ const useStore = create(
         
         return true;
       } else {
-        console.warn('⚠️ 未找到匹配的cell:', uniqueIdentifier);
+        notebookLog.warn('Cell not found', { uniqueIdentifier });
         return false;
       }
     },
@@ -1096,11 +1103,11 @@ const useStore = create(
     checkCurrentCodeCellOutputsIsError: (): boolean => {
       const currentCell = get().getCurrentCell();
       if (!currentCell) {
-        console.warn('No current cell found, cannot check current code cell outputs.');
+        notebookLog.warn('No current cell found - cannot check code cell outputs');
         return false;
       }
       if (currentCell.type !== 'code') {
-        console.warn('Current cell is not a code cell, cannot check current code cell outputs.');
+        notebookLog.warn('Current cell is not a code cell - cannot check outputs');
         return false;
       }
       for (let i = 0; i < (currentCell.outputs?.length || 0); i++) {
@@ -1139,7 +1146,7 @@ const useStore = create(
         const currentCell = state.cells.find((c) => c.id === state.currentCellId);
 
         if (!currentCell) {
-          console.warn('No current cell found, cannot convert current code cell to Hybrid cell.');
+          notebookLog.warn('No current cell found - cannot convert to Hybrid cell');
           return;
         }
 
@@ -1280,7 +1287,7 @@ const useStore = create(
 
       // 确保cells是数组
       if (!Array.isArray(cells)) {
-        console.error('getCurrentViewCells: cells is not an array', cells);
+        notebookLog.error('getCurrentViewCells: cells is not an array', { cells });
         return [];
       }
 
@@ -1351,6 +1358,17 @@ const useStore = create(
     triggerAutoSave: () => {
       const state = get();
       if (!state.notebookId) {
+        storeLog.debug('Auto-save skipped: no notebookId');
+        return;
+      }
+
+      // Skip auto-save if notebook is not fully initialized
+      if (!state.isInitialized) {
+        storeLog.debug('Auto-save skipped: notebook not initialized', {
+          notebookId: state.notebookId,
+          cellsCount: state.cells?.length || 0,
+          isInitialized: state.isInitialized
+        });
         return;
       }
 
@@ -1361,22 +1379,22 @@ const useStore = create(
         tasks: state.tasks,
         timestamp: Date.now()
       }).catch(error => {
-        console.error('Failed to queue save:', error);
+        storeLog.error('Failed to queue save', { error });
       });
     },
 
     loadFromDatabase: async (notebookId: string): Promise<boolean> => {
       try {
-        console.log(`Loading notebook ${notebookId} from database...`);
+        notebookLog.lifecycleEvent('load', notebookId, { source: 'database' });
         
         const result = await NotebookAutoSave.loadNotebook(notebookId);
         if (!result) {
-          console.log(`Notebook ${notebookId} not found in database`);
+          notebookLog.warn('Notebook not found in database', { notebookId });
           return false;
         }
 
         const { notebookTitle, cells, tasks } = result;
-        console.log(`📖 Loaded data:`, { 
+        notebookLog.info('Loaded notebook data', { 
           title: notebookTitle, 
           cellsCount: cells.length, 
           tasksCount: tasks.length 
@@ -1404,7 +1422,7 @@ const useStore = create(
         if (cells && cells.length > 0) {
           // 直接设置所有cells，确保保持原有的ID和结构
           set({ cells: [...cells] });
-          console.log(`📝 Set ${cells.length} cells to store`);
+          notebookLog.cellOperation('setCells', 'batch', { count: cells.length });
         } else {
           // 如果没有cells，创建默认标题cell
           const defaultCell = {
@@ -1415,7 +1433,7 @@ const useStore = create(
             enableEdit: true,
           };
           set({ cells: [defaultCell] });
-          console.log(`📝 Created default title cell`);
+          notebookLog.cellOperation('create', 'title', { reason: 'default creation' });
         }
 
         // 4. 设置tasks和其他状态
@@ -1432,7 +1450,7 @@ const useStore = create(
           set({ currentCellId: finalCells[0].id });
         }
 
-        console.log(`✅ Successfully loaded notebook ${notebookId} with ${finalCells.length} cells`);
+        notebookLog.lifecycleEvent('load', notebookId, { status: 'success', cellCount: finalCells.length });
         
         showToast({
           message: `已加载笔记本: ${notebookTitle}`,
@@ -1441,7 +1459,7 @@ const useStore = create(
 
         return true;
       } catch (error) {
-        console.error(`Failed to load notebook ${notebookId}:`, error);
+        notebookLog.error('Failed to load notebook', { notebookId, error });
         
         showToast({
           message: `加载笔记本失败: ${error}`,
@@ -1472,7 +1490,7 @@ const useStore = create(
           type: 'success',
         });
       } catch (error) {
-        console.error('Failed to save notebook:', error);
+        notebookLog.error('Failed to save notebook', { error });
         
         showToast({
           message: `保存失败: ${error}`,
@@ -1507,7 +1525,7 @@ useStore.subscribe(
       JSON.stringify(current.tasks) !== JSON.stringify(previous.tasks);
     
     if (hasChanges) {
-      console.log('📝 Notebook content changed, triggering auto-save...');
+      notebookLog.info('Notebook content changed - triggering auto-save');
       
       // Initialize auto-save service if needed
       try {
@@ -1522,7 +1540,7 @@ useStore.subscribe(
           timestamp: Date.now()
         });
       } catch (error) {
-        console.error('Auto-save failed:', error);
+        notebookLog.error('Auto-save failed', { error });
       }
     }
   }

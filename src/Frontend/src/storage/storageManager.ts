@@ -6,6 +6,7 @@ import { NotebookORM } from './notebookOrm';
 import { FileORM } from './fileOrm';
 import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG, NotebookEntity } from './schema';
 import { DataMigration } from './migration';
+import { storageLog } from '../utils/logger';
 
 /**
  * Storage cleanup statistics
@@ -36,30 +37,64 @@ export interface StorageStats {
 export class StorageManager {
   private static cleanupInProgress = false;
   private static lastCleanup = 0;
+  private static initializationPromise: Promise<void> | null = null;
+  private static isInitialized: boolean = false;
   
   /**
-   * Initialize storage system
+   * Initialize storage system with singleton protection
    */
   static async initialize(): Promise<void> {
+    // Return immediately if already initialized
+    if (this.isInitialized) {
+      storageLog.debug('Storage system already initialized, skipping');
+      return;
+    }
+    
+    // Return existing promise if initialization is in progress
+    if (this.initializationPromise) {
+      storageLog.debug('Storage initialization in progress, waiting');
+      return this.initializationPromise;
+    }
+    
+    // Create and store the initialization promise
+    this.initializationPromise = this.doInitialize();
+    
     try {
-      console.log('Initializing storage system...');
+      await this.initializationPromise;
+      this.isInitialized = true;
+    } catch (error) {
+      // Reset on failure so we can retry
+      this.initializationPromise = null;
+      throw error;
+    } finally {
+      // Clear the promise once complete (success or failure)
+      this.initializationPromise = null;
+    }
+  }
+  
+  /**
+   * Internal initialization method
+   */
+  private static async doInitialize(): Promise<void> {
+    try {
+      storageLog.info('Initializing storage system');
       await IndexedDBManager.initialize();
-      console.log('IndexedDB initialized successfully');
+      storageLog.persistence('IndexedDB', 'init', { success: true });
       
       // Wait a bit to ensure database is fully ready
       await new Promise(resolve => setTimeout(resolve, 100));
       
       await this.ensureConfig();
-      console.log('Storage configuration initialized');
+      storageLog.info('Storage configuration initialized');
       
       // Check and perform data migration if needed
       await this.checkAndMigrate();
       
       // Schedule periodic cleanup
       this.scheduleCleanup();
-      console.log('Storage system initialization completed');
+      storageLog.info('Storage system initialization completed');
     } catch (error) {
-      console.error('Storage system initialization failed:', error);
+      storageLog.error('Storage system initialization failed', { error });
       throw error;
     }
   }
@@ -77,34 +112,55 @@ export class StorageManager {
           const store = transaction.objectStore(DB_CONFIG.STORES.CONFIG);
           
           const request = store.get('config');
+          let resolved = false;
           
           request.onsuccess = () => {
-            const config = request.result as StorageConfigEntity | undefined;
-            resolve(config || DEFAULT_STORAGE_CONFIG);
+            if (!resolved) {
+              resolved = true;
+              const config = request.result as StorageConfigEntity | undefined;
+              resolve(config || DEFAULT_STORAGE_CONFIG);
+            }
           };
           
           request.onerror = () => {
-            console.warn('Failed to get config from database, using default');
-            resolve(DEFAULT_STORAGE_CONFIG);
+            if (!resolved) {
+              resolved = true;
+              storageLog.warn('Failed to get config from database, using default');
+              resolve(DEFAULT_STORAGE_CONFIG);
+            }
           };
           
           transaction.onerror = () => {
-            console.warn('Config transaction failed, using default');
-            resolve(DEFAULT_STORAGE_CONFIG);
+            if (!resolved) {
+              resolved = true;
+              storageLog.warn('Config transaction failed, using default');
+              resolve(DEFAULT_STORAGE_CONFIG);
+            }
           };
           
-          // Timeout fallback
+          transaction.onabort = () => {
+            if (!resolved) {
+              resolved = true;
+              storageLog.warn('Config transaction aborted, using default');
+              resolve(DEFAULT_STORAGE_CONFIG);
+            }
+          };
+          
+          // Reduced timeout and better error handling
           setTimeout(() => {
-            console.warn('Config get timeout, using default');
-            resolve(DEFAULT_STORAGE_CONFIG);
-          }, 3000);
+            if (!resolved) {
+              resolved = true;
+              storageLog.warn('Config get timeout, using default', { timeout: '1000ms' });
+              resolve(DEFAULT_STORAGE_CONFIG);
+            }
+          }, 1000); // Reduced from 3000ms to 1000ms
         } catch (error) {
-          console.warn('Config transaction creation failed, using default:', error);
+          storageLog.warn('Config transaction creation failed, using default', { error });
           resolve(DEFAULT_STORAGE_CONFIG);
         }
       });
     } catch (error) {
-      console.warn('Failed to get database for config, using default:', error);
+      storageLog.warn('Failed to get database for config, using default', { error });
       return DEFAULT_STORAGE_CONFIG;
     }
   }
@@ -130,31 +186,31 @@ export class StorageManager {
           const request = store.put(updatedConfig);
           
           request.onsuccess = () => {
-            console.log('Storage configuration updated successfully');
+            storageLog.info('Storage configuration updated successfully');
             resolve();
           };
           
           request.onerror = () => {
-            console.error('Failed to update config:', request.error);
+            storageLog.error('Failed to update config', { error: request.error });
             reject(request.error);
           };
           
           transaction.onerror = () => {
-            console.error('Config update transaction failed:', transaction.error);
+            storageLog.error('Config update transaction failed', { error: transaction.error });
             reject(transaction.error);
           };
           
           setTimeout(() => {
-            console.warn('Config update timeout');
+            storageLog.warn('Config update timeout');
             reject(new Error('Update config timeout'));
           }, 5000);
         } catch (error) {
-          console.error('Failed to create config update transaction:', error);
+          storageLog.error('Failed to create config update transaction', { error });
           reject(error);
         }
       });
     } catch (error) {
-      console.error('Failed to get database for config update:', error);
+      storageLog.error('Failed to get database for config update', { error });
       throw error;
     }
   }
@@ -291,12 +347,16 @@ export class StorageManager {
       const deleted = await NotebookORM.deleteNotebook(notebookId);
       
       if (deleted) {
-        console.log(`Cleaned up notebook ${notebookId}: ${files.length} files, ${totalSize} bytes`);
+        storageLog.info('Cleaned up notebook', {
+          notebookId,
+          filesCount: files.length,
+          bytesFreed: totalSize
+        });
       }
       
       return deleted;
     } catch (error) {
-      console.error(`Failed to cleanup notebook ${notebookId}:`, error);
+      storageLog.error('Failed to cleanup notebook', { notebookId, error });
       return false;
     }
   }
@@ -342,7 +402,7 @@ export class StorageManager {
    * Emergency cleanup when storage is full
    */
   static async emergencyCleanup(): Promise<CleanupStats> {
-    console.warn('Performing emergency storage cleanup');
+    storageLog.warn('Performing emergency storage cleanup');
     
     const config = await this.getConfig();
     const stats: CleanupStats = {
@@ -393,12 +453,17 @@ export class StorageManager {
         const timeSinceLastCleanup = Date.now() - (config.lastCleanup || 0);
         
         if (timeSinceLastCleanup >= config.cleanupInterval) {
-          console.log('Performing scheduled storage cleanup');
+          storageLog.info('Performing scheduled storage cleanup');
           const stats = await this.cleanupStorage();
-          console.log('Cleanup completed:', stats);
+          storageLog.info('Cleanup completed', {
+            notebooksDeleted: stats.notebooksDeleted,
+            filesDeleted: stats.filesDeleted,
+            bytesFreed: stats.bytesFreed,
+            duration: stats.duration
+          });
         }
       } catch (error) {
-        console.error('Scheduled cleanup failed:', error);
+        storageLog.error('Scheduled cleanup failed', { error });
       }
     }, checkInterval);
   }
@@ -408,19 +473,19 @@ export class StorageManager {
    */
   private static async ensureConfig(): Promise<void> {
     try {
-      console.log('Checking storage configuration...');
+      storageLog.debug('Checking storage configuration');
       const config = await this.getConfig();
       
       // If config doesn't exist or is default, create it
       if (!config || config === DEFAULT_STORAGE_CONFIG) {
-        console.log('Creating default storage configuration...');
+        storageLog.info('Creating default storage configuration');
         await this.updateConfig(DEFAULT_STORAGE_CONFIG);
-        console.log('Default storage configuration created');
+        storageLog.info('Default storage configuration created');
       } else {
-        console.log('Storage configuration already exists');
+        storageLog.debug('Storage configuration already exists');
       }
     } catch (error) {
-      console.warn('Failed to ensure config, using defaults:', error);
+      storageLog.warn('Failed to ensure config, using defaults', { error });
       // Don't throw - we can continue with default config in memory
     }
   }
@@ -461,29 +526,29 @@ export class StorageManager {
    */
   private static async checkAndMigrate(): Promise<void> {
     try {
-      console.log('Checking if data migration is needed...');
+      storageLog.debug('Checking if data migration is needed');
       const migrationNeeded = await DataMigration.isMigrationNeeded();
       
       if (migrationNeeded) {
-        console.log('Data migration required, starting migration...');
+        storageLog.info('Data migration required, starting migration');
         const stats = await DataMigration.migrate();
         
         if (stats.notebooksMigrated > 0 || stats.filesMigrated > 0) {
-          console.log('Data migration completed successfully:', {
+          storageLog.info('Data migration completed successfully', {
             notebooks: stats.notebooksMigrated,
             files: stats.filesMigrated,
-            duration: `${stats.duration}ms`
+            duration: stats.duration
           });
         }
         
         if (stats.errors.length > 0) {
-          console.warn('Migration completed with errors:', stats.errors);
+          storageLog.warn('Migration completed with errors', { errors: stats.errors });
         }
       } else {
-        console.log('No data migration needed');
+        storageLog.debug('No data migration needed');
       }
     } catch (error) {
-      console.error('Data migration failed:', error);
+      storageLog.error('Data migration failed', { error });
       // Don't throw - we can continue without migration
     }
   }
@@ -493,11 +558,11 @@ export class StorageManager {
    */
   static async forceMigration(): Promise<void> {
     try {
-      console.log('Forcing data migration...');
+      storageLog.info('Forcing data migration');
       const stats = await DataMigration.forceMigration();
-      console.log('Force migration completed:', stats);
+      storageLog.info('Force migration completed', { stats });
     } catch (error) {
-      console.error('Force migration failed:', error);
+      storageLog.error('Force migration failed', { error });
       throw error;
     }
   }

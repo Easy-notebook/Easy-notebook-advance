@@ -6,6 +6,7 @@ import { useLocation } from 'react-router-dom';
 import useRouteStore from '../store/routeStore';
 import useNotebookStore from '../store/notebookStore';
 import usePreviewStore from '../store/previewStore';
+import { uiLog, storeLog } from '../utils/logger';
 
 export const useRouteSync = () => {
   const location = useLocation();
@@ -17,7 +18,7 @@ export const useRouteSync = () => {
   const handleWorkspaceRoute = useCallback(async (view: string, notebookId: string | null) => {
     if (view === 'workspace' && notebookId) {
       try {
-        console.log(`Loading workspace for notebook: ${notebookId}`);
+        uiLog.navigation('workspace', { notebookId });
         
         // 设置当前 notebook ID
         setNotebookId(notebookId);
@@ -25,15 +26,15 @@ export const useRouteSync = () => {
         // 从数据库加载 notebook 数据
         const loadSuccess = await loadFromDatabase(notebookId);
         if (!loadSuccess) {
-          console.warn(`Could not load notebook ${notebookId} from database`);
+          storeLog.warn('Could not load notebook from database', { notebookId });
         }
         
         // 切换预览 store
         await switchToNotebook(notebookId);
         
-        console.log(`Workspace loaded for notebook: ${notebookId}`);
+        uiLog.info('Workspace loaded for notebook', { notebookId });
       } catch (error) {
-        console.error('Failed to load workspace:', error);
+        uiLog.error('Failed to load workspace', { notebookId, error });
       }
     }
   }, [setNotebookId, loadFromDatabase, switchToNotebook]);
@@ -45,7 +46,10 @@ export const useRouteSync = () => {
     
     // 只有当路由真正改变时才更新，避免初始化时不必要的重复设置
     if (routeStore.currentRoute !== currentPath) {
-      console.log('Route changed from', routeStore.currentRoute, 'to:', currentPath);
+      uiLog.navigation('route_change', {
+        from: routeStore.currentRoute,
+        to: currentPath
+      });
       setRoute(currentPath);
     }
     
@@ -53,7 +57,7 @@ export const useRouteSync = () => {
     if (currentPath === '/') {
       const previewStore = usePreviewStore.getState();
       if (previewStore.previewMode === 'file' || previewStore.activeFile) {
-        console.log('Resetting preview state for home route');
+        uiLog.debug('Resetting preview state for home route');
         previewStore.resetToNotebookMode();
       }
     }

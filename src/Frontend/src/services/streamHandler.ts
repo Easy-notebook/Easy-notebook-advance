@@ -2,6 +2,7 @@
 import globalUpdateInterface from '../interfaces/globalUpdateInterface';
 import { AgentMemoryService, AgentType } from './agentMemoryService';
 import useStore from '../store/notebookStore';
+import { agentLog, networkLog, uiLog } from '../utils/logger';
 // 跟踪正在生成的 cells 的映射表
 const generationCellTracker = new Map<string, string>(); // commandId -> cellId
 
@@ -30,7 +31,7 @@ const startVideoGenerationPolling = async (taskId: string, uniqueIdentifier: str
             const notebookId = notebookState.notebookId;
 
             if (!notebookId) {
-                console.error('无法获取notebookId，停止轮询');
+                networkLog.error('Unable to get notebookId - stopping poll', { taskId });
                 clearInterval(pollInterval);
                 activeVideoPolls.delete(taskId);
                 return;
@@ -51,7 +52,7 @@ const startVideoGenerationPolling = async (taskId: string, uniqueIdentifier: str
 
             // 检查是否超时
             if (attempts >= maxAttempts) {
-                console.log('视频生成轮询超时，停止轮询');
+                networkLog.warn('Video generation poll timeout', { taskId, attempts });
                 clearInterval(pollInterval);
                 activeVideoPolls.delete(taskId);
 
@@ -65,19 +66,19 @@ const startVideoGenerationPolling = async (taskId: string, uniqueIdentifier: str
                 });
 
                 if (success) {
-                    console.log('✅ 视频生成超时状态已更新');
+                    agentLog.info('Video generation timeout status updated', { taskId });
                 }
             }
 
         } catch (error) {
-            console.error('视频生成状态轮询出错:', error);
+            networkLog.error('Video generation status poll error', { taskId, error });
             clearInterval(pollInterval);
             activeVideoPolls.delete(taskId);
         }
     }, 10000); // 每10秒轮询一次
 
     activeVideoPolls.set(taskId, pollInterval);
-    console.log('✅ 视频生成状态轮询已启动:', taskId);
+    networkLog.info('Video generation status polling started', { taskId, uniqueIdentifier });
 };
 
 // Normalize incoming cell type to store-supported types
@@ -272,7 +273,7 @@ export const handleStreamResponse = async (
                     const notebookId = notebookState?.notebookId;
 
                     if (notebookId) {
-                        console.log('记录Agent错误:', error);
+                        agentLog.error('Recording agent error', { error });
 
                         // 根据错误类型判断Agent类型（简单启发式方法）
                         let agentType: AgentType = 'general';
@@ -296,7 +297,7 @@ export const handleStreamResponse = async (
                         );
                     }
                 } catch (recordError) {
-                    console.error('记录错误交互时出错:', recordError);
+                    agentLog.error('Failed to record error interaction', { error: recordError });
                 }
             }
             break;
@@ -308,7 +309,7 @@ export const handleStreamResponse = async (
             const commandId = (data.payload as any)?.commandId || (data as any)?.commandId;
             const uniqueIdentifier = (data.payload as any)?.uniqueIdentifier || (data as any)?.uniqueIdentifier;
 
-            console.error('Received error event:', { errorMsg, commandId, uniqueIdentifier });
+            agentLog.error('Received error event', { errorMsg, commandId, uniqueIdentifier });
 
             // Try to attach error to the related generation cell metadata for UI display
             let updated = false;
@@ -363,15 +364,15 @@ export const handleStreamResponse = async (
         }
 
         case 'ok': {
-            console.log('操作成功:', data);
+            agentLog.info('Operation successful', { data });
 
             // 如果是网页生成成功，触发文件列表刷新
             if (data.data?.message?.includes('webpage generated') || data.data?.path?.includes('.sandbox')) {
                 try {
                     window.dispatchEvent(new CustomEvent('refreshFileList'));
-                    console.log('📁 Triggered file list refresh for webpage generation');
+                    uiLog.info('Triggered file list refresh for webpage generation');
                 } catch (refreshError) {
-                    console.warn('Failed to trigger file list refresh:', refreshError);
+                    uiLog.warn('Failed to trigger file list refresh', { error: refreshError });
                 }
             }
             break;
@@ -425,7 +426,7 @@ export const handleStreamResponse = async (
                     // 如果这是一个生成任务且有 commandId，存储映射关系
                     if (newCellId && commandId && metadata?.isGenerating) {
                         generationCellTracker.set(commandId, newCellId);
-                        console.log('存储生成cell映射:', commandId, '->', newCellId);
+                        agentLog.debug('Storing cell mapping', { commandId, cellId: newCellId });
                     }
                 }
             }
@@ -451,7 +452,7 @@ export const handleStreamResponse = async (
         }
 
         case 'addNewContent2CurrentCell': {
-            console.log('添加新的chunk到当前的cell');
+            agentLog.debug('Adding new chunk to current cell');
             const content = data.data?.payload?.content;
             if (content) {
                 // 首选当前编辑单元；如无，则回退到最近一次创建且仍在流式的单元
@@ -471,7 +472,7 @@ export const handleStreamResponse = async (
         }
 
         case 'runCurrentCodeCell': {
-            console.log('执行当前代码cell:', data);
+            agentLog.info('Executing current code cell', { data });
             await globalUpdateInterface.runCurrentCodeCell();
 
             // 记录debug完成（如果这是debug flow的一部分）
@@ -485,7 +486,7 @@ export const handleStreamResponse = async (
                     const currentContext = (debugMemory as any)?.current_context;
 
                     if (currentContext && currentContext.interaction_status === 'in_progress') {
-                        console.log('记录debug完成 - 代码已修复并运行');
+                        agentLog.info('Debug completed - code fixed and executed');
 
                         // 更新debug状态
                         AgentMemoryService.updateCurrentContext(
@@ -514,19 +515,19 @@ export const handleStreamResponse = async (
                     }
                 }
             } catch (error) {
-                console.error('记录debug完成时出错:', error);
+                agentLog.error('Failed to record debug completion', { error });
             }
             break;
         }
 
         case 'setCurrentCellMode_onlyCode': {
-            console.log('设置当前cell模式为只有代码:', data);
+            agentLog.debug('Setting current cell mode to code only', { data });
             await globalUpdateInterface.setCurrentCellMode_onlyCode();
             break;
         }
 
         case 'setCurrentCellMode_onlyOutput': {
-            console.log('设置当前cell模式为只有输出:', data);
+            agentLog.debug('Setting current cell mode to output only', { data });
             await globalUpdateInterface.setCurrentCellMode_onlyOutput();
 
             // 记录代码生成完成
@@ -536,7 +537,7 @@ export const handleStreamResponse = async (
                 const commandId = data.data?.payload?.commandId;
 
                 if (notebookId && commandId) {
-                    console.log('记录代码生成完成 - commandId:', commandId);
+                    agentLog.info('Recording code generation completion', { commandId });
 
                     // 记录成功的代码生成交互
                     AgentMemoryService.recordOperationInteraction(
@@ -552,19 +553,19 @@ export const handleStreamResponse = async (
                     );
                 }
             } catch (error) {
-                console.error('记录代码生成交互时出错:', error);
+                agentLog.error('Failed to record code generation interaction', { error });
             }
             break;
         }
 
         case 'setCurrentCellMode_complete': {
-            console.log('设置当前cell模式为完整:', data);
+            agentLog.debug('Setting current cell mode to full', { data });
             await globalUpdateInterface.setCurrentCellMode_complete();
             break;
         }
 
         case 'initStreamingAnswer': {
-            console.log('初始化流式响应:', data);
+            agentLog.info('Initializing streaming response', { data });
             const qid = data.data?.payload?.QId || data.payload?.QId;
             if (qid !== undefined && qid !== null) {
                 const qidStr = Array.isArray(qid) ? qid[0] : qid.toString();
@@ -578,7 +579,7 @@ export const handleStreamResponse = async (
                     const notebookId = notebookState?.notebookId;
 
                     if (notebookId) {
-                        console.log('记录QA交互开始 - qid:', qidStr);
+                        agentLog.info('Recording QA interaction start', { qid: qidStr });
 
                         // 更新用户意图和当前上下文
                         AgentMemoryService.updateCurrentContext(
@@ -1060,7 +1061,7 @@ export const handleStreamResponse = async (
                         window.dispatchEvent(new CustomEvent('refreshFileList'));
                         console.log('🔗 Triggered file list refresh');
                     } catch (refreshError) {
-                        console.warn('Failed to trigger file list refresh:', refreshError);
+                        uiLog.warn('Failed to trigger file list refresh', { error: refreshError });
                     }
 
                     const contentType = fileType === 'jsx' ? 'React组件' : fileType === 'html' ? '网页' : '文件';

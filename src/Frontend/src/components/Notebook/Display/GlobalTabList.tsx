@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   FileImage
 } from 'lucide-react';
+import { uiLog, fileLog } from '../../../utils/logger';
 
 // ---------- Types ----------
 interface FileTab {
@@ -79,12 +80,7 @@ const GlobalTabList: React.FC = () => {
       // const notebookName = projectName ? `${projectName}.easynb` : 'Current Notebook';
       const notebookName = "Notebook";
       
-      console.log('📋 GlobalTabList - Building tabs:', {
-        currentNotebookId,
-        currentPreviewFiles: currentPreviewFiles.length,
-        previewMode,
-        activeFileId: activeFile?.id
-      });
+      uiLog.componentUpdate('GlobalTabList', ['tabs'], 0);
       
       const notebookTab: FileTab = {
         id: 'current-notebook',
@@ -124,7 +120,7 @@ const GlobalTabList: React.FC = () => {
 
   const handleTabSelect = useCallback(
     (tabId: string) => {
-      console.log(`GlobalTabList: Selecting tab ${tabId}`);
+      uiLog.userInteraction('tab_select', tabId);
       const store = usePreviewStore.getState();
       
       // 如果选择的是当前notebook tab
@@ -132,12 +128,12 @@ const GlobalTabList: React.FC = () => {
         const currentNotebookId = getCurrentNotebookId();
         if (currentNotebookId) {
           // 导航到工作区路由，这会触发完整的 notebook 加载流程
-          console.log(`TabList: Navigating to workspace for notebook ${currentNotebookId}`);
+          uiLog.navigation('workspace', { currentNotebookId });
           navigateToWorkspace(currentNotebookId);
         }
         
         // 切换到notebook模式，但不直接清除活跃文件，而是使用switchToNotebook
-        console.log(`GlobalTabList: Before mode change - previewMode: ${previewMode}`);
+        uiLog.debug('GlobalTabList: Before mode change', { previewMode });
         
         if (currentNotebookId && typeof store.switchToNotebook === 'function') {
           // 使用switchToNotebook来正确处理状态切换
@@ -150,16 +146,16 @@ const GlobalTabList: React.FC = () => {
           store.setActiveFile(null);
         }
         
-        console.log(`GlobalTabList: Switched to notebook mode`);
+        uiLog.debug('GlobalTabList: Switched to notebook mode');
         return;
       }
       
       // 选择文件tab
-      console.log(`GlobalTabList: Selecting file tab ${tabId}`);
+      fileLog.debug('GlobalTabList: Selecting file tab', { tabId });
       
       // 确保处于文件预览模式
       if (previewMode !== 'file') {
-        console.log(`GlobalTabList: Changing to file preview mode`);
+        uiLog.debug('GlobalTabList: Changing to file preview mode');
         store.changePreviewMode();
       }
       
@@ -173,7 +169,7 @@ const GlobalTabList: React.FC = () => {
     // 不允许关闭当前notebook tab
     if (tabId === 'current-notebook') return;
     
-    console.log(`GlobalTabList: Closing tab ${tabId}`);
+    uiLog.userInteraction('tab_close', tabId);
     const store = usePreviewStore.getState();
     const currentNotebookId = getCurrentNotebookId();
     
@@ -185,19 +181,22 @@ const GlobalTabList: React.FC = () => {
       file.id !== tabId && file.id.startsWith(`${currentNotebookId}::`)
     );
     
-    console.log(`GlobalTabList: Remaining file tabs after close: ${remainingFileTabs.length}, isClosingActiveTab: ${isClosingActiveTab}`);
+    uiLog.debug('GlobalTabList: Remaining file tabs after close', {
+      remainingFileTabs: remainingFileTabs.length,
+      isClosingActiveTab
+    });
     
     // 如果这是最后一个文件tab且是活跃tab，需要同时处理删除和模式切换
     if (isClosingActiveTab && remainingFileTabs.length === 0) {
-      console.log(`GlobalTabList: Closing last active file tab, performing atomic operation`);
+      uiLog.info('GlobalTabList: Closing last active file tab, performing atomic operation');
       
       // 先切换到notebook模式（在删除之前）
       if (currentNotebookId && typeof store.switchToNotebook === 'function') {
-        console.log(`GlobalTabList: Using switchToNotebook for atomic state change`);
+        uiLog.debug('GlobalTabList: Using switchToNotebook for atomic state change');
         store.switchToNotebook(currentNotebookId);
       } else {
         // 降级处理：手动切换状态
-        console.log(`GlobalTabList: Manual state change fallback`);
+        uiLog.debug('GlobalTabList: Manual state change fallback');
         if (store.previewMode === 'file') {
           store.changePreviewMode();
         }
@@ -216,7 +215,7 @@ const GlobalTabList: React.FC = () => {
       store.closePreviewFile(tabId);
     }
     
-    console.log(`GlobalTabList: Tab ${tabId} close operation completed`);
+    uiLog.debug('GlobalTabList: Tab close operation completed', { tabId });
   }, [activeFile?.id, currentPreviewFiles, getCurrentNotebookId, navigateToWorkspace]);
 
   // 先计算所有的 Hook，然后再决定是否渲染

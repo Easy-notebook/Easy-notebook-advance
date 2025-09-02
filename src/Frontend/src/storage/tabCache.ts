@@ -3,6 +3,7 @@
 
 import { IndexedDBManager } from './database';
 import { DB_STORES } from './schema';
+import { storageLog } from '../utils/logger';
 
 export interface TabState {
   notebookId: string;
@@ -28,14 +29,14 @@ export class TabCache {
         
         // Check if our store exists, if not we need to recreate the database
         if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-          console.warn('TabCache store not found, functionality will be limited');
+          storageLog.warn('TabCache store not found, functionality will be limited');
           // The store will be created when the database is upgraded
         }
         
         this.initialized = true;
-        console.log('TabCache initialized successfully');
+        storageLog.info('TabCache initialized successfully');
       } catch (error) {
-        console.error('Failed to initialize TabCache:', error);
+        storageLog.error('Failed to initialize TabCache', { error });
         // Don't throw - allow app to continue without tab persistence
         this.initialized = false;
       }
@@ -48,7 +49,7 @@ export class TabCache {
       const db = await IndexedDBManager.getDB();
       
       if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-        console.warn('TabCache store not available, skipping save operation');
+        storageLog.warn('TabCache store not available, skipping save operation');
         return;
       }
       
@@ -72,7 +73,7 @@ export class TabCache {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to save tab state:', error);
+      storageLog.error('Failed to save tab state', { notebookId, error });
     }
   }
 
@@ -82,7 +83,7 @@ export class TabCache {
       const db = await IndexedDBManager.getDB();
       
       if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-        console.warn('TabCache store not available, returning null');
+        storageLog.warn('TabCache store not available, returning null');
         return null;
       }
       
@@ -95,7 +96,7 @@ export class TabCache {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to get tab state:', error);
+      storageLog.error('Failed to get tab state', { notebookId, error });
       return null;
     }
   }
@@ -106,7 +107,7 @@ export class TabCache {
       const db = await IndexedDBManager.getDB();
       
       if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-        console.warn('TabCache store not available, skipping remove operation');
+        storageLog.warn('TabCache store not available, skipping remove operation');
         return;
       }
       
@@ -119,7 +120,7 @@ export class TabCache {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to remove tab state:', error);
+      storageLog.error('Failed to remove tab state', { notebookId, error });
     }
   }
 
@@ -129,7 +130,7 @@ export class TabCache {
       const db = await IndexedDBManager.getDB();
       
       if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-        console.warn('TabCache store not available, returning empty array');
+        storageLog.warn('TabCache store not available, returning empty array');
         return [];
       }
       
@@ -142,7 +143,7 @@ export class TabCache {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to get all tab states:', error);
+      storageLog.error('Failed to get all tab states', { error });
       return [];
     }
   }
@@ -154,7 +155,7 @@ export class TabCache {
       const db = await IndexedDBManager.getDB();
       
       if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-        console.warn('TabCache store not available, skipping cleanup');
+        storageLog.warn('TabCache store not available, skipping cleanup');
         return 0;
       }
       
@@ -185,7 +186,7 @@ export class TabCache {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to cleanup old tab states:', error);
+      storageLog.error('Failed to cleanup old tab states', { error });
       return 0;
     }
   }

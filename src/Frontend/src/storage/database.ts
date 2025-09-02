@@ -6,7 +6,7 @@ import { DB_STORES, DB_INDEXES } from './schema';
 // Database configuration
 export const DB_CONFIG = {
   NAME: 'easyremote-notebook-cache-v2', // Changed name to avoid conflicts
-  VERSION: 1,
+  VERSION: 2, // Incremented to ensure TAB_STATES store is created
   STORES: DB_STORES
 } as const;
 
@@ -36,16 +36,13 @@ export class IndexedDBManager {
    * Initialize IndexedDB database
    */
   private static async initializeDB(): Promise<IDBDatabase> {
-    // Clean up old database versions
-    await this.cleanupOldDatabases();
-
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_CONFIG.NAME, DB_CONFIG.VERSION);
       
-      // Setup timeout for initialization
+      // Setup timeout for initialization - increased for database upgrade
       const timeout = setTimeout(() => {
         reject(new Error('IndexedDB initialization timeout'));
-      }, 10000);
+      }, 20000); // Increased to 20 seconds for upgrade operations
       
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
@@ -53,14 +50,17 @@ export class IndexedDBManager {
         
         console.log(`Upgrading database from version ${event.oldVersion} to ${event.newVersion}`);
         
-        // Clear all existing stores to ensure clean upgrade
+        // Only clear stores if they exist (for cleaner upgrades)
         const existingStores = Array.from(db.objectStoreNames);
-        existingStores.forEach(storeName => {
-          if (db.objectStoreNames.contains(storeName)) {
-            db.deleteObjectStore(storeName);
-            console.log(`Deleted existing store: ${storeName}`);
-          }
-        });
+        if (existingStores.length > 0) {
+          console.log(`Removing ${existingStores.length} existing stores for clean upgrade`);
+          existingStores.forEach(storeName => {
+            if (db.objectStoreNames.contains(storeName)) {
+              db.deleteObjectStore(storeName);
+              console.log(`Deleted existing store: ${storeName}`);
+            }
+          });
+        }
         
         // Create notebooks store
         const notebooksStore = db.createObjectStore(DB_CONFIG.STORES.NOTEBOOKS, { keyPath: 'id' });
@@ -113,6 +113,11 @@ export class IndexedDBManager {
           this.initPromise = null;
         };
         
+        // Start cleanup in background after successful initialization
+        this.cleanupOldDatabases().catch(e => 
+          console.warn('Background cleanup failed:', e)
+        );
+        
         resolve(this.instance);
       };
       
@@ -125,7 +130,7 @@ export class IndexedDBManager {
   }
   
   /**
-   * Clean up old database versions
+   * Clean up old database versions in background
    */
   private static async cleanupOldDatabases(): Promise<void> {
     try {
@@ -135,21 +140,26 @@ export class IndexedDBManager {
         'easyremote-file-cache-v3'
       ];
       
-      for (const oldName of oldDBNames) {
-        try {
-          await new Promise<void>((resolve) => {
+      // Process deletions in parallel with shorter timeouts
+      const deletePromises = oldDBNames.map(oldName => 
+        new Promise<void>((resolve) => {
+          try {
             const deleteReq = indexedDB.deleteDatabase(oldName);
             deleteReq.onsuccess = () => resolve();
             deleteReq.onerror = () => resolve(); // Continue even if delete fails
             deleteReq.onblocked = () => resolve();
-            setTimeout(() => resolve(), 1000); // Timeout after 1s
-          });
-        } catch (e) {
-          // Ignore errors when deleting old databases
-        }
-      }
+            // Shorter timeout for individual operations
+            setTimeout(() => resolve(), 500);
+          } catch (e) {
+            resolve(); // Continue even if delete fails
+          }
+        })
+      );
+      
+      await Promise.allSettled(deletePromises);
+      console.log('Background database cleanup completed');
     } catch (e) {
-      console.warn('Could not clean old databases:', e);
+      console.warn('Background cleanup failed:', e);
     }
   }
   

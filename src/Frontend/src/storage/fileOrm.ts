@@ -5,6 +5,7 @@ import { IndexedDBManager, DB_CONFIG } from './database';
 import { FileMetadataEntity, FileContentEntity, DEFAULT_STORAGE_CONFIG } from './schema';
 import { NotebookORM } from './notebookOrm';
 import { getFileType } from './fileTypes';
+import { fileLog, storageLog } from '../utils/logger';
 
 /**
  * File storage configuration
@@ -115,11 +116,9 @@ export class FileORM {
             const contentRequest = contentStore.put(content);
 
             contentRequest.onsuccess = () => {
-              console.log('💾 FileORM: Successfully saved content for', {
-                fileId,
+              fileLog.fileOperation('save', fileData.filePath, {
                 notebookId: fileData.notebookId,
-                filePath: fileData.filePath,
-                contentSize: fileData.content.length,
+                size: fileData.content.length,
                 compressed: config.compressionEnabled,
                 storageType: metadata.storageType,
                 hasLocalContent: metadata.hasLocalContent
@@ -127,9 +126,10 @@ export class FileORM {
               
               // Log activity and resolve
               NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath)
-                .catch(console.error);
+                .catch(error => storageLog.error('Failed to log file create activity', { error }));
               // Adjust notebook stats
-              NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes).catch(console.error);
+              NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes)
+                .catch(error => storageLog.error('Failed to adjust notebook stats', { error }));
               resolve(metadata);
             };
 
@@ -139,9 +139,10 @@ export class FileORM {
             NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath, {
               isLargeFile: true,
               remoteUrl: fileData.remoteUrl
-            }).catch(console.error);
+            }).catch(error => storageLog.error('Failed to log large file create activity', { error }));
             // Adjust notebook stats
-            NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes).catch(console.error);
+            NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes)
+              .catch(error => storageLog.error('Failed to adjust notebook stats for large file', { error }));
             resolve(metadata);
           }
         };
@@ -154,7 +155,11 @@ export class FileORM {
 
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
-        console.warn(`Save file timeout for ${notebookId}/${filePath}`);
+        fileLog.warn('Save file timeout', {
+          notebookId: fileData.notebookId,
+          filePath: fileData.filePath,
+          timeoutMs: 20000
+        });
         reject(new Error('Save file timeout - operation took longer than 20 seconds'));
       }, 20000); // Increased from 10s to 20s
       
@@ -172,7 +177,7 @@ export class FileORM {
   static async getFile(notebookId: string, filePath: string): Promise<FileResult | null> {
     // Validate required parameters
     if (!notebookId || !filePath) {
-      console.warn(`Invalid parameters for getFile: notebookId=${notebookId}, filePath=${filePath}`);
+      fileLog.warn('Invalid parameters for getFile', { notebookId, filePath });
       return null;
     }
     
@@ -207,10 +212,12 @@ export class FileORM {
         const updateRequest = metaStore.put(updatedMetadata);
         updateRequest.onsuccess = () => {
           // Log activity and update notebook access
-          NotebookORM.logActivity(notebookId, 'file_access', filePath).catch(console.error);
-          NotebookORM.updateNotebookAccess(notebookId).catch(console.error);
+          NotebookORM.logActivity(notebookId, 'file_access', filePath)
+            .catch(error => storageLog.error('Failed to log file access activity', { error }));
+          NotebookORM.updateNotebookAccess(notebookId)
+            .catch(error => storageLog.error('Failed to update notebook access', { error }));
         };
-        updateRequest.onerror = () => console.error('Failed to update file access stats');
+        updateRequest.onerror = () => fileLog.error('Failed to update file access stats', { notebookId, filePath });
         
         if (metadata.hasLocalContent) {
           // Get content from local storage
@@ -221,7 +228,7 @@ export class FileORM {
             clearTimeout(timeoutId);
             const contentEntity = contentRequest.result as FileContentEntity | undefined;
             
-            console.log('📖 FileORM: Retrieved content for', {
+            fileLog.debug('Retrieved file content', {
               fileId: metadata.id,
               found: !!contentEntity,
               compressed: contentEntity?.compressed,
@@ -235,7 +242,7 @@ export class FileORM {
             };
             
             if (result.content) {
-              console.log('📖 FileORM: Decompressed content size:', result.content.length);
+              fileLog.debug('Decompressed content size', { size: result.content.length });
             }
             
             resolve(result);
@@ -266,7 +273,11 @@ export class FileORM {
       
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
-        console.warn(`File retrieval timeout for ${notebookId}/${filePath} - consider optimizing database`);
+        fileLog.warn('File retrieval timeout - consider optimizing database', {
+          notebookId,
+          filePath,
+          timeoutMs: 15000
+        });
         reject(new Error('Get file timeout - operation took longer than 15 seconds'));
       }, 15000); // Increased from 5s to 15s
     });
@@ -278,7 +289,8 @@ export class FileORM {
   static async getFilesForNotebook(notebookId: string, includeContent: boolean = false): Promise<FileResult[]> {
     const db = await IndexedDBManager.getDB();
     // Update notebook access on listing files
-    NotebookORM.updateNotebookAccess(notebookId).catch(console.error);
+    NotebookORM.updateNotebookAccess(notebookId)
+      .catch(error => storageLog.error('Failed to update notebook access during file listing', { error }));
 
     return new Promise((resolve, reject) => {
       const storeNames = includeContent 
@@ -336,7 +348,11 @@ export class FileORM {
       
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
-        console.warn(`Get files timeout for notebook ${notebookId}`);
+        fileLog.warn('Get files timeout for notebook', {
+          notebookId,
+          includeContent,
+          timeoutMs: 20000
+        });
         reject(new Error('Get files timeout - operation took longer than 20 seconds'));
       }, 20000); // Increased from 8s to 20s
       
@@ -354,7 +370,7 @@ export class FileORM {
   static async deleteFile(notebookId: string, filePath: string): Promise<boolean> {
     // Validate required parameters
     if (!notebookId || !filePath) {
-      console.warn(`Invalid parameters for deleteFile: notebookId=${notebookId}, filePath=${filePath}`);
+      fileLog.warn('Invalid parameters for deleteFile', { notebookId, filePath });
       return false;
     }
     
@@ -389,9 +405,11 @@ export class FileORM {
           const contentRequest = contentStore.delete(fileId);
 
           const finalize = () => {
-            NotebookORM.logActivity(notebookId, 'file_delete', filePath).catch(console.error);
+            NotebookORM.logActivity(notebookId, 'file_delete', filePath)
+              .catch(error => storageLog.error('Failed to log file delete activity', { error }));
             // Adjust notebook stats
-            NotebookORM.adjustNotebookStats(notebookId, -1, -size).catch(console.error);
+            NotebookORM.adjustNotebookStats(notebookId, -1, -size)
+              .catch(error => storageLog.error('Failed to adjust notebook stats after delete', { error }));
             resolve(true);
           };
 
@@ -405,7 +423,11 @@ export class FileORM {
       
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
-        console.warn(`Delete file timeout for ${notebookId}/${filePath}`);
+        fileLog.warn('Delete file timeout', {
+          notebookId,
+          filePath,
+          timeoutMs: 15000
+        });
         reject(new Error('Delete file timeout - operation took longer than 15 seconds'));
       }, 15000); // Increased from 5s to 15s
       
@@ -471,7 +493,8 @@ export class FileORM {
           contentRequest.onsuccess = () => {
             // Adjust notebook stats for size change only
             const deltaBytes = (updatedMetadata.size || 0) - (metadata.size || 0);
-            NotebookORM.adjustNotebookStats(notebookId, 0, deltaBytes).catch(console.error);
+            NotebookORM.adjustNotebookStats(notebookId, 0, deltaBytes)
+              .catch(error => storageLog.error('Failed to adjust notebook stats after file update', { error }));
             resolve(true);
           };
           contentRequest.onerror = () => reject(contentRequest.error);
@@ -484,7 +507,11 @@ export class FileORM {
       
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
-        console.warn(`Update file timeout for ${notebookId}/${filePath}`);
+        fileLog.warn('Update file timeout', {
+          notebookId,
+          filePath,
+          timeoutMs: 20000
+        });
         reject(new Error('Update file timeout - operation took longer than 20 seconds'));
       }, 20000); // Increased from 8s to 20s
       
@@ -535,7 +562,10 @@ export class FileORM {
       
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
-        console.warn(`Get large files timeout for notebook ${notebookId}`);
+        fileLog.warn('Get large files timeout for notebook', {
+          notebookId,
+          timeoutMs: 15000
+        });
         reject(new Error('Get large files timeout - operation took longer than 15 seconds'));
       }, 15000); // Increased from 5s to 15s
       

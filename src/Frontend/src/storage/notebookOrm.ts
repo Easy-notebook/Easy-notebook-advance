@@ -7,6 +7,7 @@ import {
   FileMetadataEntity,
   NotebookActivityEntity,
 } from './schema';
+import { storageLog, notebookLog } from '../utils/logger';
 
 /**
  * Notebook ORM for CRUD operations and relationship management
@@ -37,7 +38,8 @@ export class NotebookORM {
         const putReq = store.put(notebook);
         putReq.onsuccess = () => {
           // Log activity
-          this.logActivity(notebook.id, 'open').catch(console.error);
+          this.logActivity(notebook.id, 'open').catch(error => 
+            storageLog.error('Failed to log notebook open activity', { error }));
           resolve(notebook);
         };
         putReq.onerror = () => reject(putReq.error);
@@ -64,7 +66,8 @@ export class NotebookORM {
         const notebook = request.result as NotebookEntity | undefined;
         if (notebook) {
           // Update last accessed time
-          this.updateNotebookAccess(notebookId).catch(console.error);
+          this.updateNotebookAccess(notebookId).catch(error => 
+            storageLog.error('Failed to update notebook access time', { error }));
         }
         resolve(notebook || null);
       };
@@ -87,7 +90,7 @@ export class NotebookORM {
     const { orderBy = 'lastAccessedAt', limit, offset = 0 } = options;
 
     return new Promise((resolve, reject) => {
-      console.log(`NotebookORM: Starting getNotebooks with options:`, { orderBy, limit, offset });
+      storageLog.debug('NotebookORM: Starting getNotebooks', { orderBy, limit, offset });
       
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
@@ -118,7 +121,9 @@ export class NotebookORM {
             notebooks.push(cursor.value as NotebookEntity);
             if (limit && notebooks.length >= limit) {
               cleanup();
-              console.log(`NotebookORM: Successfully retrieved ${notebooks.length} notebooks (limited)`);
+              notebookLog.debug('NotebookORM: Successfully retrieved notebooks (limited)', {
+                count: notebooks.length
+              });
               resolve(notebooks);
               return;
             }
@@ -127,25 +132,27 @@ export class NotebookORM {
           cursor.continue();
         } else {
           cleanup();
-          console.log(`NotebookORM: Successfully retrieved ${notebooks.length} notebooks (all)`);
+          notebookLog.debug('NotebookORM: Successfully retrieved notebooks (all)', {
+            count: notebooks.length
+          });
           resolve(notebooks);
         }
       };
 
       request.onerror = () => {
         cleanup();
-        console.error('NotebookORM: Database request error:', request.error);
+        storageLog.error('NotebookORM: Database request error', { error: request.error });
         reject(request.error);
       };
 
       transaction.onerror = () => {
         cleanup();
-        console.error('NotebookORM: Transaction error:', transaction.error);
+        storageLog.error('NotebookORM: Transaction error', { error: transaction.error });
         reject(transaction.error);
       };
 
       timeoutId = setTimeout(() => {
-        console.warn('NotebookORM: Get notebooks operation timed out after 5 seconds');
+        storageLog.warn('NotebookORM: Get notebooks operation timed out after 5 seconds');
         reject(new Error('Get notebooks timeout'));
       }, 5000);
     });

@@ -5,6 +5,7 @@ import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-f
 import useStore, { Cell as StoreCell } from '../../../store/notebookStore';
 import usePreviewStore from '../../../store/previewStore';
 import { Backend_BASE_URL } from '../../../config/base_url';
+import { uiLog } from '../../../utils/logger';
 
 // Initialize file type icons
 initializeFileTypeIcons();
@@ -21,18 +22,18 @@ interface LinkCellProps {
 }
 
 function parseContent(content: string): { href: string; label: string } {
-  console.log(`parseContent: Input content = "${content}"`);
+  uiLog.debug('parseContent: Input content', { content });
   
   // 使用更宽松的匹配，寻找最后一个括号对
   const match = content.match(/^\[([^\]]*)\]\((.+)\)$/);
   if (match) {
     const label = match[1].trim();
     const href = match[2].trim();
-    console.log(`parseContent: Successfully parsed - label: "${label}", href: "${href}"`);
+    uiLog.debug('parseContent: Successfully parsed', { label, href });
     return { href, label };
   }
   
-  console.log(`parseContent: No markdown match found, using content as href`);
+  uiLog.debug('parseContent: No markdown match found, using content as href');
   const href = (content || '').trim();
   const label = href.split(/[\\/]/).pop() || href;
   return { href, label };
@@ -58,7 +59,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
 
   const { href, label } = useMemo(() => {
     const result = parseContent(cell.content || '');
-    console.log(`LinkCell: parseContent("${cell.content}") = `, result);
+    uiLog.debug('LinkCell: parseContent result', { content: cell.content, result });
     return result;
   }, [cell.content]);
 
@@ -94,8 +95,8 @@ const LinkCell: React.FC<LinkCellProps> = ({
   }, [href, fileExtension]);
 
   const normalizeFilePath = (url: string): string | null => {
-    console.log(`normalizeFilePath: Processing URL: "${url}"`);
-    console.log(`normalizeFilePath: Backend_BASE_URL: "${Backend_BASE_URL}", notebookId: "${notebookId}"`);
+    uiLog.debug('normalizeFilePath: Processing URL', { url });
+    uiLog.debug('normalizeFilePath: Configuration', { Backend_BASE_URL, notebookId });
     
     try {
       const base = Backend_BASE_URL?.replace(/\/$/, '');
@@ -105,7 +106,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
       const downloadMatch = url.match(downloadPattern);
       if (downloadMatch && downloadMatch[1]) {
         const filePath = decodeURIComponent(downloadMatch[1]);
-        console.log(`normalizeFilePath: Matched download_file pattern, filePath: "${filePath}"`);
+        uiLog.debug('normalizeFilePath: Matched download_file pattern', { filePath });
         return filePath;
       }
       
@@ -115,45 +116,45 @@ const LinkCell: React.FC<LinkCellProps> = ({
       if (assetsMatch && assetsMatch[1]) {
         const filename = decodeURIComponent(assetsMatch[1]);
         const filePath = `.assets/${filename}`;
-        console.log(`normalizeFilePath: Matched assets pattern, filename: "${filename}", filePath: "${filePath}"`);
+        uiLog.debug('normalizeFilePath: Matched assets pattern', { filename, filePath });
         return filePath;
       }
     } catch (e) {
-      console.log(`normalizeFilePath: Pattern matching error:`, e);
+      uiLog.warn('normalizeFilePath: Pattern matching error', { error: e });
     }
 
     const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.(assets|sandbox)\\/|\\.(assets|sandbox)\\/)');
     if (relPattern.test(url)) {
       const filePath = url.replace(new RegExp('^\\./'), '');
-      console.log(`normalizeFilePath: Matched relative pattern, filePath: "${filePath}"`);
+      uiLog.debug('normalizeFilePath: Matched relative pattern', { filePath });
       return filePath;
     }
     
     if (!/^[a-z]+:\/\//i.test(url) && url.indexOf('/') === -1) {
-      console.log(`normalizeFilePath: Simple filename: "${url}"`);
+      uiLog.debug('normalizeFilePath: Simple filename', { url });
       return url;
     }
 
-    console.log(`normalizeFilePath: No pattern matched, returning null`);
+    uiLog.debug('normalizeFilePath: No pattern matched, returning null');
     return null;
   };
 
   const openInSplitPreview = async () => {
-    console.log(`LinkCell: openInSplitPreview called with cell.content="${cell.content}", notebookId="${notebookId}"`);
+    uiLog.userInteraction('openInSplitPreview', { cellContent: cell.content, notebookId });
     setDetachedCellId(cell.id);
 
     if (!href || !notebookId) {
-      console.log('LinkCell: Missing href or notebookId');
+      uiLog.warn('LinkCell: Missing href or notebookId');
       return;
     }
     
     // Parse the content to get the actual URL (href is already parsed from content)
-    console.log(`LinkCell: Using parsed href: "${href}"`);
+    uiLog.debug('LinkCell: Using parsed href', { href });
     const filePath = normalizeFilePath(href);
-    console.log(`LinkCell: normalizeFilePath result: "${filePath}" from href: "${href}"`);
+    uiLog.debug('LinkCell: normalizeFilePath result', { filePath, href });
 
     if (!filePath) {
-      console.log('LinkCell: No valid file path, opening external URL');
+      uiLog.info('LinkCell: No valid file path, opening external URL');
       const a = document.createElement('a');
       a.href = href;
       a.target = '_blank';
@@ -166,21 +167,21 @@ const LinkCell: React.FC<LinkCellProps> = ({
 
     try {
       const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
-      console.log(`LinkCell: Calling previewFileInSplit with:`, { notebookId, filePath, fileObj });
+      uiLog.info('LinkCell: Calling previewFileInSplit', { notebookId, filePath, fileObj });
       await usePreviewStore.getState().previewFileInSplit(notebookId, filePath, { file: fileObj } as any);
-      console.log('LinkCell: previewFileInSplit completed successfully');
+      uiLog.info('LinkCell: previewFileInSplit completed successfully');
     } catch (err: any) {
-      console.error('LinkCell: Open split preview failed:', err);
+      uiLog.error('LinkCell: Open split preview failed', { error: err });
       try {
         const baseName = (filePath || href).split('/').pop() || '';
-        console.log(`LinkCell: Trying fallback with baseName: "${baseName}"`);
+        uiLog.info('LinkCell: Trying fallback with baseName', { baseName });
         if (baseName && baseName !== filePath) {
           const fileObj2 = { name: baseName, path: baseName, type: 'file' } as any;
           await usePreviewStore.getState().previewFileInSplit(notebookId, baseName, { file: fileObj2 } as any);
-          console.log('LinkCell: Fallback previewFileInSplit completed');
+          uiLog.info('LinkCell: Fallback previewFileInSplit completed');
         }
       } catch (e) {
-        console.error('LinkCell: Fallback to root failed:', e);
+        uiLog.error('LinkCell: Fallback to root failed', { error: e });
       }
     }
   };
@@ -269,7 +270,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
         {/* Actions */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Debug info */}
-          {console.log(`LinkCell Actions: isInDetachedView=${isInDetachedView}, isDetached=${isDetached}`)}
+          {/* Debug: isInDetachedView=${isInDetachedView}, isDetached=${isDetached} */}
           {isInDetachedView ? (
             /* Detached view toolbar */
             <>
@@ -295,7 +296,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
             <>
               <button
                 onClick={(e) => {
-                  console.log('LinkCell: Split preview button clicked');
+                  uiLog.userInteraction('split_preview_button_click');
                   e.preventDefault();
                   e.stopPropagation();
                   openInSplitPreview();

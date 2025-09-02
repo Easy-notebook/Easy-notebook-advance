@@ -2,6 +2,7 @@
 // Route state management for NotebookApp
 
 import { create } from 'zustand';
+import { storeLog, uiLog } from '../utils/logger';
 
 export type AppView = 'empty' | 'library' | 'workspace' | 'agent' | 'file-preview';
 
@@ -24,17 +25,17 @@ export interface RouteState {
 // 获取初始路由状态，避免总是从 empty 开始
 const getInitialRouteState = () => {
   const currentPath = window.location.pathname;
-  console.log('🚀 RouteStore: Initializing with path:', currentPath);
+  storeLog.debug('RouteStore: Initializing with path', { currentPath });
   
   if (currentPath === '/') {
-    console.log('🏠 RouteStore: Setting initial state to EMPTY');
+    storeLog.debug('RouteStore: Setting initial state to EMPTY');
     return {
       currentView: 'empty' as AppView,
       currentNotebookId: null,
       currentRoute: '/'
     };
   } else if (currentPath === '/FoKn/Library') {
-    console.log('📚 RouteStore: Setting initial state to LIBRARY');
+    storeLog.debug('RouteStore: Setting initial state to LIBRARY');
     return {
       currentView: 'library' as AppView,
       currentNotebookId: null,
@@ -42,14 +43,14 @@ const getInitialRouteState = () => {
     };
   } else if (currentPath.startsWith('/workspace/')) {
     const notebookId = currentPath.split('/workspace/')[1];
-    console.log('📓 RouteStore: Setting initial state to WORKSPACE with notebook:', notebookId);
+    storeLog.debug('RouteStore: Setting initial state to WORKSPACE', { notebookId });
     return {
       currentView: 'workspace' as AppView,
       currentNotebookId: notebookId,
       currentRoute: currentPath
     };
   } else {
-    console.log('❓ RouteStore: Unknown path, defaulting to EMPTY');
+    storeLog.warn('RouteStore: Unknown path, defaulting to EMPTY', { currentPath });
     // 默认情况
     return {
       currentView: 'empty' as AppView,
@@ -60,7 +61,7 @@ const getInitialRouteState = () => {
 };
 
 const initialState = getInitialRouteState();
-console.log('🎯 RouteStore: Final initial state:', initialState);
+storeLog.debug('RouteStore: Final initial state', initialState);
 
 const useRouteStore = create<RouteState>((set, get) => ({
   currentView: initialState.currentView,
