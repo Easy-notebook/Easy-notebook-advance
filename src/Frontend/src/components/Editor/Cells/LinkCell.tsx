@@ -140,7 +140,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
   };
 
   const openInSplitPreview = async () => {
-    uiLog.userInteraction('openInSplitPreview', { cellContent: cell.content, notebookId });
+    uiLog.userInteraction('openInSplitPreview', 'LinkCell', { cellContent: cell.content, notebookId });
     setDetachedCellId(cell.id);
 
     if (!href || !notebookId) {
@@ -296,7 +296,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
             <>
               <button
                 onClick={(e) => {
-                  uiLog.userInteraction('split_preview_button_click');
+                  uiLog.userInteraction('split_preview_button_click', 'LinkCell.actions.splitPreview');
                   e.preventDefault();
                   e.stopPropagation();
                   openInSplitPreview();
@@ -327,7 +327,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
         </div>
       </div>
 
-      {/* Edit input (if not readonly and content exists) */}
+      {/* Edit input (if not readonly and content exists)
       {!readOnly && href && (
         <div className="px-3 pb-3">
           <input
@@ -338,7 +338,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
             placeholder="编辑路径..."
           />
         </div>
-      )}
+      )} */}
 
       {/* Warning for file:// protocol */}
       {href.startsWith('file://') && (

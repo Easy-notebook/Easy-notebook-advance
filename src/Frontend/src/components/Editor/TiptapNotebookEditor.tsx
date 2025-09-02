@@ -31,6 +31,7 @@ import {
   convertCellsToHtml,
   convertEditorStateToCells
 } from './utils/cellConverters'
+import { isBlankArea, debouncedFocus } from './utils/cursorPositioning'
 
 
 interface TiptapNotebookEditorProps {
@@ -175,15 +176,15 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     },
   })
 
-  // 点击编辑器尾部空白区域时，自动在末尾插入一个空段落并将光标放置其中
-  const ClickBlankToNewLineExtension = Extension.create({
-    name: 'clickBlankToNewLine',
+  // 增强的光标定位扩展，处理各种点击场景
+  const EnhancedCursorPositionExtension = Extension.create({
+    name: 'enhancedCursorPosition',
     addProseMirrorPlugins() {
       return [
         new Plugin({
-          key: new PluginKey('clickBlankToNewLine'),
+          key: new PluginKey('enhancedCursorPosition'),
           props: {
-            handleClick(view, pos, _event) {
+            handleClick(view, pos, event) {
               try {
                 const state = view?.state
                 if (!state) return false
@@ -191,22 +192,70 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
                 const schema = state.schema
                 const paragraph = schema.nodes.paragraph
                 if (!paragraph) return false
-                // 如果点击位置在文档末尾或之后
-                const atEnd = pos >= doc.content.size
-                if (atEnd) {
+
+                const target = event.target as HTMLElement
+                const isBlankAreaClick = target && isBlankArea(target)
+
+                // 处理点击空白区域的情况
+                if (isBlankAreaClick || pos >= doc.content.size) {
+                  // 确保文档末尾有空段落
                   const last = doc.lastChild
+                  let insertPosition = doc.content.size
+                  
                   if (!last || last.type.name !== 'paragraph' || last.content.size > 0) {
-                    const trInsert = state.tr.insert(doc.content.size, paragraph.create())
+                    const trInsert = state.tr.insert(insertPosition, paragraph.create())
                     view.dispatch(trInsert)
+                    insertPosition = trInsert.doc.content.size
                   }
-                  // 将光标放到文档末尾段落
-                  const $end = view.state.doc.resolve(view.state.doc.content.size)
-                  const trSel = view.state.tr.setSelection(Selection.near($end))
-                  view.dispatch(trSel)
+                  
+                  // 将光标定位到末尾
+                  debouncedFocus(() => {
+                    const newState = view.state
+                    const $end = newState.doc.resolve(newState.doc.content.size - 1)
+                    const selection = Selection.near($end, 1)
+                    const tr = newState.tr.setSelection(selection)
+                    view.dispatch(tr)
+                    view.focus()
+                  })
                   return true
                 }
+
+                // 处理点击文档内容但光标位置不准确的情况
+                const clickedNode = state.doc.nodeAt(pos)
+                if (clickedNode && pos < doc.content.size) {
+                  debouncedFocus(() => {
+                    try {
+                      const $pos = state.doc.resolve(pos)
+                      const selection = Selection.near($pos, 1)
+                      const tr = state.tr.setSelection(selection)
+                      view.dispatch(tr)
+                      view.focus()
+                    } catch (e) {
+                      // Fallback: focus at the end if position resolution fails
+                      const $end = state.doc.resolve(doc.content.size - 1)
+                      const selection = Selection.near($end, 1)
+                      const tr = state.tr.setSelection(selection)
+                      view.dispatch(tr)
+                      view.focus()
+                    }
+                  })
+                }
+
               } catch (e) {
-                // Ignore error silently
+                // Fallback: always try to focus at the end on any error
+                try {
+                  const state = view?.state
+                  if (state) {
+                    const doc = state.doc
+                    const $end = doc.resolve(Math.max(0, doc.content.size - 1))
+                    const selection = Selection.near($end, 1)
+                    const tr = state.tr.setSelection(selection)
+                    view.dispatch(tr)
+                    view.focus()
+                  }
+                } catch (fallbackError) {
+                  // Silent fallback
+                }
               }
               return false
             },
@@ -340,7 +389,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       CursorStyleExtension,
       // 结尾始终保留一个段落，并支持点击空白新起一行
       TrailingParagraphExtension,
-      ClickBlankToNewLineExtension,
+      EnhancedCursorPositionExtension,
 
       // 图片支持
       ImageExtension,
@@ -376,7 +425,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       }
     },
 
-    onDestroy: (params) => {
+    onDestroy: () => {
       try {
         // Force final sync when editor is destroyed
         if (syncTimeoutRef.current) {
@@ -385,9 +434,9 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         }
         
         // Safely attempt to sync state one last time
-        const editor = params?.editor;
-        if (editor && typeof convertEditorStateToCells === 'function') {
-          const newCells = convertEditorStateToCells(editor);
+        const editorInstance = editorRef.current;
+        if (editorInstance && typeof convertEditorStateToCells === 'function') {
+          const newCells = convertEditorStateToCells(editorInstance);
           if (newCells && setCells && typeof setCells === 'function' && cells) {
             if (JSON.stringify(newCells) !== JSON.stringify(cells)) {
               console.log('📝 TipTap onDestroy: Final force sync for auto-save');
@@ -630,13 +679,43 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         style: 'min-height: 120px; padding: 16px; transition: all 0.2s ease;',
         spellcheck: 'false',
       },
-      // 优化编辑器性能
-      handleKeyDown: (_view, event: KeyboardEvent) => {
-        // 减少不必要的事件冒泡和处理
+      // 优化编辑器性能和处理特殊按键
+      handleKeyDown: (view, event: KeyboardEvent) => {
+        // Handle Tab key
         if (event.key === 'Tab') {
           event.preventDefault();
           return true;
         }
+        
+        // Handle Ctrl/Cmd + End - Jump to end of document
+        if ((event.ctrlKey || event.metaKey) && event.key === 'End') {
+          event.preventDefault();
+          debouncedFocus(() => {
+            const state = view.state;
+            const doc = state.doc;
+            const $end = doc.resolve(Math.max(0, doc.content.size - 1));
+            const selection = Selection.near($end, 1);
+            const tr = state.tr.setSelection(selection);
+            view.dispatch(tr);
+          });
+          return true;
+        }
+        
+        // Handle Home key - Jump to beginning of line/document
+        if (event.key === 'Home') {
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            debouncedFocus(() => {
+              const state = view.state;
+              const $start = state.doc.resolve(0);
+              const selection = Selection.near($start, 1);
+              const tr = state.tr.setSelection(selection);
+              view.dispatch(tr);
+            });
+            return true;
+          }
+        }
+        
         return false;
       },
     },
@@ -737,7 +816,14 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   // 暴露编辑器API - 针对混合笔记本的增强API
   useImperativeHandle(ref, () => ({
     editor,
-    focus: () => editor?.commands.focus(),
+    focus: () => {
+      if (editor) {
+        // Focus at the end of the document
+        const doc = editor.state.doc
+        const endPos = Math.max(0, doc.content.size - 1)
+        editor.chain().focus().setTextSelection(endPos).run()
+      }
+    },
     getHTML: () => editor?.getHTML() || '',
     setContent: (content) => editor?.commands.setContent(content, false),
     clearContent: () => editor?.commands.clearContent(),
@@ -943,11 +1029,13 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
 
 
-  // 拦截编辑器中的链接点击，统一走分屏预览
+  // 拦截编辑器中的链接点击和处理光标定位
   const handleEditorClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+    
+    // 处理链接点击的分屏预览功能
     const anchor = target?.closest('a') as HTMLAnchorElement | null;
-    if (!anchor) return;
+    if (anchor) {
     const hrefAttr = anchor.getAttribute('href');
     if (!hrefAttr) return;
     e.preventDefault();
@@ -1021,7 +1109,32 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         }
       }
     });
-  }, []);
+      return;
+    }
+
+    // 处理点击空白区域的情况
+    if (target && isBlankArea(target)) {
+      // 使用 TipTap editor 将光标定位到文档末尾
+      if (editor) {
+        debouncedFocus(() => {
+          try {
+            const { state } = editor;
+            const { doc } = state;
+            const endPos = doc.content.size - 1;
+            const $end = doc.resolve(Math.max(0, endPos));
+            const selection = Selection.near($end, 1);
+            const tr = state.tr.setSelection(selection);
+            editor.view.dispatch(tr);
+            editor.view.focus();
+          } catch (e) {
+            console.warn('Failed to focus TipTap editor at end:', e);
+            // Fallback: just focus the editor
+            editor.commands.focus('end');
+          }
+        });
+      }
+    }
+  }, [editor]);
 
 
   if (!editor) {
@@ -1034,7 +1147,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
 
   return (
-    <div className="tiptap-notebook-editor-container w-full h-full bg-transparent">
+    <div className="tiptap-notebook-editor-container w-full h-full bg-transparent flex flex-col" style={{ minHeight: '500px' }}>
       {/* 浮动工具栏 - 选中文本时显示 - 已注释 */}
       {/* <div className="bubble-menu-wrapper">
         <div>
@@ -1417,6 +1530,44 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           background: none !important;
           padding: 0 !important;
           margin: 0 !important;
+        }
+
+        /* 可点击填充区域样式 */
+        .tiptap-notebook-editor-container .cursor-text:hover {
+          background-color: rgba(59, 130, 246, 0.02);
+          transition: background-color 0.2s ease;
+        }
+        
+        .tiptap-notebook-editor-container .cursor-text:active {
+          background-color: rgba(59, 130, 246, 0.05);
+        }
+
+        /* 确保编辑器容器填满高度 */
+        .tiptap-notebook-editor-container {
+          display: flex;
+          flex-direction: column;
+          min-height: 500px;
+          height: 100%;
+        }
+
+        .tiptap-notebook-editor-container > .flex-1 {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+        }
+        
+        /* ProseMirror编辑器样式 */
+        .tiptap-notebook-editor .ProseMirror {
+          min-height: 120px;
+          padding: 16px;
+          transition: all 0.2s ease;
+          outline: none !important;
+        }
+        
+        /* 确保EditorContent填充适当空间 */
+        .tiptap-notebook-editor-container .focus-within\\:outline-none {
+          min-height: 120px;
         }
       `}</style>
     </div>
