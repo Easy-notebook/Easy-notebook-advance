@@ -1,9 +1,9 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import {
   CheckCircle2,
-  FolderClock,
-  TreePine,
-  Settings2,
+  Trees,
+  PackagePlus,
+  Cog,
   Network,
   Folder,
   type LucideIcon,
@@ -12,7 +12,7 @@ import iconMapping from '@Utils/iconMapping';
 
 interface MiniSidebarItem {
   id: string;
-  icon: LucideIcon;
+  icon: React.ElementType;
   title: string;
 }
 
@@ -47,13 +47,14 @@ interface MiniSidebarProps {
 /** 功能区（顶部/中部） */
 const PRIMARY_ITEMS: MiniSidebarItem[] = [
   // { id: 'library', icon: FolderClock, title: 'Library' },
-  // { id: 'knowledge-forest', icon: TreePine, title: 'Knowledge Forest' },
-  // { id: 'tools', icon: Network, title: 'Tools' },
+  { id: 'knowledge-forest', icon: Trees, title: 'Knowledge Forest' },
+  { id: 'easynet', icon: Network, title: 'EasyNet' },
 ];
 
 /** 固定底部的功能区（只放设置，避免与中部重复且横排） */
 const BOTTOM_ITEMS: MiniSidebarItem[] = [
-  { id: 'settings', icon: Settings2, title: 'Settings' },
+  { id: 'new-notebook', icon: PackagePlus, title: 'New Notebook' },
+  { id: 'settings', icon: Cog, title: 'Settings' },
 ];
 
 /** 按钮（图标底部对齐，去除多余 margin/padding） */

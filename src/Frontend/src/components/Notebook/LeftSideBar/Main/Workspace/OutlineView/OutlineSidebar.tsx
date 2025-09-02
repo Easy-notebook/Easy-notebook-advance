@@ -1,6 +1,7 @@
 import { useState, useCallback, memo, useMemo, useEffect } from 'react';
 import useStore from '@Store/notebookStore';
 import useSettingsStore from '@Store/settingsStore';
+import { navigateToLibrary, navigateToHome } from '@/utils/navigation';
 import FileTree from '@LeftSidebar/Main/Workspace/FileExplorer/FileExplorer';
 import AgentList from '@/components/Agents/AgentList';
 import { AgentType } from '@Services/agentMemoryService';
@@ -156,9 +157,10 @@ const OutlineSidebar = ({
         onPhaseClick={handlePhaseClick}
         onItemClick={(itemId) => {
           if (itemId === 'library') setActiveTab('file');
-          else if (itemId === 'knowledge-forest') setActiveTab('agents');
+          else if (itemId === 'knowledge-forest') navigateToLibrary();
           else if (itemId === 'tools') setActiveTab('outline');
           else if (itemId === 'settings') settingstore.openSettings();
+          else if (itemId === 'new-notebook') navigateToHome();
         }}
         activeItemId={activeTab === 'file' ? 'library' : activeTab === 'agents' ? 'knowledge-forest' : activeTab === 'outline' ? 'tools' : 'library'}
         onExpandClick={toggleCollapse}
@@ -177,8 +179,9 @@ const OutlineSidebar = ({
           onPhaseClick={handlePhaseClick}
           onItemClick={(itemId) => {
             if (itemId === 'library') setActiveTab('file');
-            else if (itemId === 'knowledge-forest') setActiveTab('agents');
+            else if (itemId === 'knowledge-forest') navigateToLibrary();
             else if (itemId === 'tools') setActiveTab('outline');
+            else if (itemId === 'new-notebook') navigateToHome();
           }}
           activeItemId={activeTab === 'file' ? 'library' : activeTab === 'agents' ? 'knowledge-forest' : activeTab === 'outline' ? 'tools' : 'library'}
           onExpandClick={toggleCollapse}
