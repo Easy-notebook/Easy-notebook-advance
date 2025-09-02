@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-const Dialog = ({ open, onOpenChange, children }) => {
+const Dialog = ({ open, children }) => {
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto">

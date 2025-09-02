@@ -52,10 +52,10 @@ const NotebookApp = () => {
   const routeStore = useRouteStore();
   const routeView = routeStore.currentView;
   const { navigateToWorkspace, navigateToEmpty } = routeStore;
-  
+
   // 路由状态调试 (可选)
   // console.log('NotebookApp render:', { routeView, currentRoute: routeStore.currentRoute });
-  
+
   // 路由同步（但不使用其返回的状态）
   useRouteSync();
 
@@ -370,7 +370,7 @@ const NotebookApp = () => {
   const handleEmptyStateAddCell = useCallback(async (type: 'markdown' | 'code') => {
     try {
       let currentNotebookId = notebookId;
-      
+
       // 如果没有 notebook，先创建一个
       if (!currentNotebookId) {
         await initializeNotebook();
@@ -416,10 +416,10 @@ const NotebookApp = () => {
     try {
       setNotebookId(notebookId);
       setNotebookTitle(notebookTitle);
-      
+
       // 导航到工作区
       navigateToWorkspace(notebookId);
-      
+
       toast({
         message: t('toast.notebookSelected', `Notebook "${notebookTitle}" selected`),
         type: 'success',
@@ -691,8 +691,50 @@ const NotebookApp = () => {
     currentPhaseId
   ]);
 
+  // Create 模式下的全局箭头跨 cell 导航（避免非编辑控件无法捕获事件）
+  useEffect(() => {
+    const handleArrowNav = (e: KeyboardEvent) => {
+      if (viewMode !== 'create') return;
+      if (e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return; // 只处理纯方向键
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const inEditor = target.closest('.cm-editor');
+        const inInput = target.closest('input, textarea, [contenteditable="true"]');
+        if (inEditor || inInput) return; // 输入环境不拦截
+      }
+
+      const state = useStore.getState();
+      const navCells = state.getCurrentViewCells ? state.getCurrentViewCells() : state.cells;
+      if (!navCells || navCells.length === 0) return;
+
+      const currentId = state.editingCellId || state.currentCellId || navCells[0]?.id;
+      const idx = navCells.findIndex(c => c.id === currentId);
+      if (idx < 0) return;
+
+      e.preventDefault();
+      const goPrev = (e.key === 'ArrowUp' || e.key === 'ArrowLeft');
+      const newIdx = goPrev ? Math.max(0, idx - 1) : Math.min(navCells.length - 1, idx + 1);
+      if (newIdx === idx) return;
+      const targetCell = navCells[newIdx];
+      if (!targetCell) return;
+
+      if (targetCell.type === 'markdown') {
+        state.setEditingCellId(targetCell.id);
+      } else {
+        state.setEditingCellId(null);
+        state.setCurrentCell(targetCell.id);
+      }
+    };
+
+    window.addEventListener('keydown', handleArrowNav);
+    return () => window.removeEventListener('keydown', handleArrowNav);
+  }, [viewMode]);
+
+
   const {
-    activeFile  
+    activeFile
   } = usePreviewStore();
 
   // Initialize storage system on app start
@@ -724,48 +766,48 @@ const NotebookApp = () => {
     //   currentView,
     //   selectedAgentType
     // });
-    
+
     // 优先级1: 文件预览 (最高优先级)
     if (isShowingFileExplorer && activeFile) {
       // uiLog.debug('Content resolution result', { chosen: 'file-preview' });
       return { type: 'file-preview', component: <TabbedPreviewApp /> };
     }
-    
+
     // 优先级2: Agent详情视图
     if (currentView === 'agent' && selectedAgentType) {
       uiLog.debug('Content resolution result', { chosen: 'agent-detail', agentType: selectedAgentType });
-      return { 
-        type: 'agent-detail', 
-        component: <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} /> 
+      return {
+        type: 'agent-detail',
+        component: <AgentDetail agentType={selectedAgentType} onBack={handleBackToNotebook} />
       };
     }
-    
+
     // 优先级3: 根据路由视图决定内容
     // uiLog.debug('Route view processing', { routeView });
     switch (routeView) {
       case 'empty':
         uiLog.debug('Content resolution result', { chosen: 'empty-state', reason: 'route-based' });
-        return { 
-          type: 'empty-state', 
-          component: <EmptyState onAddCell={handleEmptyStateAddCell} /> 
+        return {
+          type: 'empty-state',
+          component: <EmptyState onAddCell={handleEmptyStateAddCell} />
         };
-      
+
       case 'library':
         uiLog.debug('Content resolution result', { chosen: 'library-state', reason: 'route-based' });
-        return { 
-          type: 'library-state', 
+        return {
+          type: 'library-state',
           component: (
-            <LibraryState 
+            <LibraryState
               onSelectNotebook={handleLibrarySelectNotebook}
               onBack={handleLibraryBack}
             />
-          ) 
+          )
         };
-      
+
       case 'workspace':
         // uiLog.debug('Content resolution result', { chosen: 'main-content', type: 'workspace', reason: 'route-based' });
-        return { 
-          type: 'main-content', 
+        return {
+          type: 'main-content',
           component: (
             <MainContent
               cells={cells}
@@ -790,35 +832,35 @@ const NotebookApp = () => {
                 return result ? result.phaseIndex === result.task.phases.length - 1 : false;
               })()}
             />
-          ) 
+          )
         };
-      
+
       default:
         // 不要盲目默认到 EmptyState，应该根据 URL 决定
         const currentPath = window.location.pathname;
         uiLog.debug('Default route case triggered, checking URL directly', { currentPath });
-        
+
         if (currentPath === '/') {
           uiLog.debug('Content resolution result', { chosen: 'empty-state', reason: 'url-fallback', path: '/' });
-          return { 
-            type: 'empty-state', 
-            component: <EmptyState onAddCell={handleEmptyStateAddCell} /> 
+          return {
+            type: 'empty-state',
+            component: <EmptyState onAddCell={handleEmptyStateAddCell} />
           };
         } else if (currentPath === '/FoKn/Library') {
           uiLog.debug('Content resolution result', { chosen: 'library-state', reason: 'url-fallback', path: '/FoKn/Library' });
-          return { 
-            type: 'library-state', 
+          return {
+            type: 'library-state',
             component: (
-              <LibraryState 
+              <LibraryState
                 onSelectNotebook={handleLibrarySelectNotebook}
                 onBack={handleLibraryBack}
               />
-            ) 
+            )
           };
         } else if (currentPath.startsWith('/workspace/')) {
           uiLog.debug('Content resolution result', { chosen: 'main-content', type: 'workspace', reason: 'url-fallback', path: currentPath });
-          return { 
-            type: 'main-content', 
+          return {
+            type: 'main-content',
             component: (
               <MainContent
                 cells={cells}
@@ -843,13 +885,13 @@ const NotebookApp = () => {
                   return result ? result.phaseIndex === result.task.phases.length - 1 : false;
                 })()}
               />
-            ) 
+            )
           };
         } else {
           uiLog.debug('Content resolution result', { chosen: 'loading', reason: 'unknown-path', path: currentPath });
           // 对于未知路径，显示加载状态而不是盲目的 EmptyState
-          return { 
-            type: 'loading', 
+          return {
+            type: 'loading',
             component: (
               <div className="flex items-center justify-center h-full">
                 <div className="text-gray-500">Loading...</div>
@@ -859,10 +901,10 @@ const NotebookApp = () => {
         }
     }
   }, [
-    isShowingFileExplorer, 
-    activeFile, 
-    currentView, 
-    selectedAgentType, 
+    isShowingFileExplorer,
+    activeFile,
+    currentView,
+    selectedAgentType,
     routeView,
     handleEmptyStateAddCell,
     handleBackToNotebook,

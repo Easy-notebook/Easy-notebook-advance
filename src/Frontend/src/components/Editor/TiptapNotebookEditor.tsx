@@ -32,6 +32,7 @@ import {
   convertEditorStateToCells
 } from './utils/cellConverters'
 import { isBlankArea, debouncedFocus } from './utils/cursorPositioning'
+import '../../utils/logger' // 初始化调试工具
 
 
 interface TiptapNotebookEditorProps {

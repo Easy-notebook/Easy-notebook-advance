@@ -35,6 +35,7 @@ import ReactMarkdown from 'react-markdown';
 import useStore from '../../../store/notebookStore';
 import useCodeStore, { DISPLAY_MODES } from '../../../store/codeStore';
 import { sendCurrentCellExecuteCodeError_should_debug } from '../../../store/autoActions';
+import editorLogger from '../../../utils/logger/editor_logger';
 
 const ansi_up = new AnsiUp();
 
@@ -123,6 +124,9 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     // 独立窗口状态
     const isDetached = detachedCellId === cell.id;
 
+    // 当前是否为聚焦的代码单元
+    const isCurrentCell = currentCellId === cell.id;
+
     const getCellExecState = useCodeStore((state) => state.getCellExecState);
     const executeCell = useCodeStore((state) => state.executeCell);
     const cancelCellExecution = useCodeStore((state) => state.cancelCellExecution);
@@ -167,6 +171,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         }
         return false;
     }, [cell.content, dslcMode]);
+
+    // （移除重复的 DOM 级别 keydown 监听，统一用 CodeMirror onKeyDown 处理）
 
     // 执行 DSLC 指令
     useEffect(() => {
@@ -277,11 +283,109 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
 
     const editorRef = useRef<any>(null);
     const codeContainerRef = useRef<HTMLDivElement | null>(null);
-    const isCurrentCell = currentCellId === cell.id;
+
+    // 检查游标是否在第一行
+    const isCursorAtFirstLine = useCallback(() => {
+        if (!editorRef.current?.view) return false;
+        const view = editorRef.current.view;
+        const state = view.state;
+        const cursorPos = state.selection.main.head;
+        const line = state.doc.lineAt(cursorPos);
+        return line.number === 1;
+    }, []);
+
+    // 检查游标是否在最后一行
+    const isCursorAtLastLine = useCallback(() => {
+        if (!editorRef.current?.view) return false;
+        const view = editorRef.current.view;
+        const state = view.state;
+        const cursorPos = state.selection.main.head;
+        const line = state.doc.lineAt(cursorPos);
+        return line.number === state.doc.lines;
+    }, []);
+    // 检查游标是否在文档起始位置（行首且第一行）
+    const isCursorAtDocStart = useCallback(() => {
+        if (!editorRef.current?.view) return false;
+        const view = editorRef.current.view;
+        const state = view.state;
+        const cursorPos = state.selection.main.head;
+        const line = state.doc.lineAt(cursorPos);
+        return cursorPos === line.from && line.number === 1;
+    }, []);
+
+    // 检查游标是否在文档末尾位置（行尾且最后一行）
+    const isCursorAtDocEnd = useCallback(() => {
+        if (!editorRef.current?.view) return false;
+        const view = editorRef.current.view;
+        const state = view.state;
+        const cursorPos = state.selection.main.head;
+        const line = state.doc.lineAt(cursorPos);
+        return cursorPos === line.to && line.number === state.doc.lines;
+    }, []);
+
+
+    // 跟踪导航方向以正确定位光标
+    const lastNavigationDirection = useRef<'up' | 'down' | null>(null);
+
+    // 监听跨cell导航事件
+    useEffect(() => {
+        const handleCellNavigation = (event: CustomEvent) => {
+            if (event.detail?.targetCellId === cell.id) {
+                lastNavigationDirection.current = event.detail.direction;
+            }
+        };
+
+        window.addEventListener('cell-navigation', handleCellNavigation as EventListener);
+        return () => {
+            window.removeEventListener('cell-navigation', handleCellNavigation as EventListener);
+        };
+    }, [cell.id]);
+
+    // 当成为当前cell时，主动聚焦编辑器，确保跨cell跳转后立即可编辑
+    useEffect(() => {
+        if (isCurrentCell && !dslcMode) {
+            setTimeout(() => {
+                try {
+                    // 正确聚焦 CodeMirror 编辑器
+                    if (editorRef.current?.view) {
+                        const view = editorRef.current.view;
+                        view.focus();
+                        
+                        // 根据导航方向定位光标
+                        if (lastNavigationDirection.current === 'down') {
+                            // 从上方导航过来，光标定位到文档开头
+                            const pos = 0;
+                            view.dispatch({
+                                selection: { anchor: pos, head: pos }
+                            });
+                        } else if (lastNavigationDirection.current === 'up') {
+                            // 从下方导航过来，光标定位到文档末尾
+                            const pos = view.state.doc.length;
+                            view.dispatch({
+                                selection: { anchor: pos, head: pos }
+                            });
+                        }
+                        
+                        // 重置导航方向
+                        lastNavigationDirection.current = null;
+                        
+                        editorLogger.logFocusChange(cell.id, 'code', true);
+                    } else if (editorRef.current) {
+                        (editorRef.current as any)?.focus?.();
+                    }
+                } catch {}
+            }, 100); // 增加延迟确保DOM更新完成
+        }
+    }, [isCurrentCell, dslcMode, cell.id]);
+
 
     // 快捷键：Ctrl+Enter 执行、Alt+↑/↓ 切换上下单元格、Delete/Backspace 删除空单元格
     const handleKeyDown = useCallback(
         (event: React.KeyboardEvent) => {
+            const state = useStore.getState();
+            const navCells = state.getCurrentViewCells ? state.getCurrentViewCells() : state.cells;
+            const currentIndex = navCells.findIndex((c: any) => c.id === cell.id);
+
             if (event.ctrlKey && event.key === 'Enter') {
                 event.preventDefault();
                 handleExecute();
@@ -290,7 +394,6 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                 (event.key === 'ArrowUp' || event.key === 'ArrowDown')
             ) {
                 event.preventDefault();
-                const currentIndex = cells.findIndex((c) => c.id === cell.id);
                 const newIndex =
                     event.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
 
@@ -308,9 +411,79 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                         }
                     }, 0);
                 }
+            } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                // 检查是否需要跨cell导航
+                const direction = event.key === 'ArrowUp' ? 'up' : 'down';
+                const isAtFirstLine = event.key === 'ArrowUp' && isCursorAtFirstLine();
+                const isAtLastLine = event.key === 'ArrowDown' && isCursorAtLastLine();
+
+                const cursorInfo = {
+                    line: 0,
+                    isAtFirstLine,
+                    isAtLastLine,
+                    isAtDocStart: isCursorAtDocStart(),
+                    isAtDocEnd: isCursorAtDocEnd()
+                };
+
+                editorLogger.logNavigationAttempt(cell.id, 'code', direction, cursorInfo);
+
+                if (isAtFirstLine || isAtLastLine) {
+                    event.preventDefault();
+                    const newIndex = event.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
+
+                    if (newIndex >= 0 && newIndex < cells.length) {
+                        const targetCell = cells[newIndex];
+                        editorLogger.logNavigationSuccess(cell.id, targetCell.id, 'code', targetCell.type as any, direction);
+
+                        if (targetCell.type === 'code') {
+                            // 设置导航方向以正确定位光标
+                            const targetCodeElement = document.querySelector(`[data-cell-id="${targetCell.id}"]`);
+                            if (targetCodeElement) {
+                                const targetCodeCell = (targetCodeElement as any)?.__reactInternalFiber || 
+                                                     (targetCodeElement as any)?._reactInternals;
+                                // 通过 DOM 查找目标 CodeCell 组件并设置导航方向
+                                setTimeout(() => {
+                                    // 使用全局事件来传递导航方向信息
+                                    window.dispatchEvent(new CustomEvent('cell-navigation', {
+                                        detail: { targetCellId: targetCell.id, direction }
+                                    }));
+                                }, 0);
+                            }
+                            setCurrentCell(targetCell.id);
+                        } else if (targetCell.type === 'markdown') {
+                            setEditingCellId(targetCell.id);
+                        } else {
+                            // 处理其他类型的cell（如thinking, image等）
+                            setCurrentCell(targetCell.id);
+                        }
+                    } else {
+                        editorLogger.logNavigationBlocked(cell.id, 'code', direction, 'no_target_cell_available');
+                    }
+                } else {
+                    editorLogger.logNavigationBlocked(cell.id, 'code', direction, 'cursor_not_at_boundary');
+                }
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                // 检查是否需要跨cell导航（左右）：当光标在文档开头或末尾
+                const atStart = event.key === 'ArrowLeft' && isCursorAtDocStart();
+                const atEnd = event.key === 'ArrowRight' && isCursorAtDocEnd();
+                if (atStart || atEnd) {
+                    event.preventDefault();
+                    const newIndex = atStart ? currentIndex - 1 : currentIndex + 1;
+                    if (newIndex >= 0 && newIndex < cells.length) {
+                        const targetCell = cells[newIndex];
+                        if (targetCell.type === 'code') {
+                            setCurrentCell(targetCell.id);
+                        } else if (targetCell.type === 'markdown') {
+                            setEditingCellId(targetCell.id);
+                        } else {
+                            // 处理其他类型的cell（如thinking, image等）
+                            setCurrentCell(targetCell.id);
+                        }
+                    }
+                }
             }
         },
-        [cell.id, cell.content, cells, handleExecute, setCurrentCell, setEditingCellId, onDelete]
+        [cell.id, cell.content, cells, handleExecute, setCurrentCell, setEditingCellId, onDelete, isCursorAtFirstLine, isCursorAtLastLine, isCursorAtDocStart, isCursorAtDocEnd]
     );
 
     // 渲染输出
@@ -463,7 +636,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         );
     }, [isExecuting, isCancelling, elapsedTime, handleCancel, handleExecute, formatElapsedTime]);
 
-    // —— 展开/收缩逻辑 ——  
+    // —— 展开/收缩逻辑 ——
     const EXPAND_THRESHOLD = 200; // 阈值高度
     const [isExpanded, setIsExpanded] = useState(true); // 默认展开
     const [isUserToggled, setIsUserToggled] = useState(false); // 用户是否手动切换过
@@ -492,13 +665,13 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
     useEffect(() => {
         const currentContent = cell.content || '';
         const prevContent = prevContentRef.current || '';
-        
+
         // 只有在内容发生显著变化时才重置（比如超过100个字符的差异）
         const contentDiff = Math.abs(currentContent.length - prevContent.length);
         if (contentDiff > 100 || (prevContent && !currentContent)) {
             setIsUserToggled(false);
         }
-        
+
         prevContentRef.current = currentContent;
     }, [cell.content]);
 
@@ -512,7 +685,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
-            
+
             // 设置防抖延迟
             timeoutId = setTimeout(() => {
                 for (let entry of entries) {
@@ -528,7 +701,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                 }
             }, 100); // 100ms 防抖延迟
         });
-        
+
         ro.observe(codeBlockWrapperRef.current);
 
         return () => {
@@ -660,8 +833,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         <div
             data-cell-id={cell.id}
             className={`code-cell-container codeCell ${
-                isInDetachedView 
-                    ? 'bg-white h-full' 
+                isInDetachedView
+                    ? 'bg-white h-full'
                     : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm'
             }`}
             ref={codeContainerRef}
@@ -673,7 +846,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
             onMouseLeave={() => setShowToolbar(false)}
         >
             <div
-                className={`${isInDetachedView ? 'h-full flex flex-col' : 'mb-4 rounded-xl border hover:shadow-md'} backdrop-blur-md transition-all duration-500 ease-out 
+                className={`${isInDetachedView ? 'h-full flex flex-col' : 'mb-4 rounded-xl border hover:shadow-md'} backdrop-blur-md transition-all duration-500 ease-out
                     ${isExecuting ? 'border-yellow-400/50 shadow-lg bg-white/95' : 'bg-white/90 text-black'}
                     ${isTransitioningToOutput ? 'transform scale-y-95 opacity-90' : ''}
                     ${isInDetachedView ? '' : 'hover:shadow-md'}
@@ -744,8 +917,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                         <button
                                             onClick={() => setCellMode(cell.id, DISPLAY_MODES.CODE_ONLY)}
                                             className={`px-3 py-1.5 text-sm rounded transition-colors ${
-                                                cellMode === DISPLAY_MODES.CODE_ONLY 
-                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                cellMode === DISPLAY_MODES.CODE_ONLY
+                                                    ? 'bg-white text-gray-900 shadow-sm'
                                                     : 'text-gray-600 hover:text-gray-900'
                                             }`}
                                             title="Show code only"
@@ -755,8 +928,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                         <button
                                             onClick={() => setCellMode(cell.id, DISPLAY_MODES.OUTPUT_ONLY)}
                                             className={`px-3 py-1.5 text-sm rounded transition-colors ${
-                                                cellMode === DISPLAY_MODES.OUTPUT_ONLY 
-                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                cellMode === DISPLAY_MODES.OUTPUT_ONLY
+                                                    ? 'bg-white text-gray-900 shadow-sm'
                                                     : 'text-gray-600 hover:text-gray-900'
                                             }`}
                                             title="Show output only"
@@ -766,8 +939,8 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                         {/* <button
                                             onClick={() => setCellMode(cell.id, DISPLAY_MODES.COMPLETE)}
                                             className={`px-3 py-1.5 text-sm rounded transition-colors ${
-                                                cellMode === DISPLAY_MODES.COMPLETE 
-                                                    ? 'bg-white text-gray-900 shadow-sm' 
+                                                cellMode === DISPLAY_MODES.COMPLETE
+                                                    ? 'bg-white text-gray-900 shadow-sm'
                                                     : 'text-gray-600 hover:text-gray-900'
                                             }`}
                                             title="Show both code and output"
@@ -852,7 +1025,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                                 }}
                             >
                                 {/* Copy button - fixed position, show on hover */}
-                                <div 
+                                <div
                                     className={`absolute top-2 right-2 z-10 transition-opacity duration-200 ${isHovering ? 'opacity-100' : 'opacity-0'}`}
                                     style={{
                                         minWidth: '48px',
@@ -951,7 +1124,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                         {renderExecutingPlaceholder()}
 
                         {/* 实际输出内容 */}
-                        <div 
+                        <div
                             onClick={() => setShowThinking(!showThinking)}
                             className={`${isInDetachedView ? 'flex-1 min-h-0 overflow-auto' : ''}`}
                         >

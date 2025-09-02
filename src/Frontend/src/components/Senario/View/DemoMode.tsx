@@ -100,7 +100,7 @@ const DemoMode: React.FC<DemoModeProps> = ({
                   <div
                     key={cell.id}
                     id={`cell-${cell.id}`}
-                    className="relative w-full transition-all duration-300 hover:shadow-md hover:border-theme-300"
+                    className="relative w-full transition-all duration-300"
                   >
                     {renderCell ? renderCell(cell) : (
                       <div className="p-4 text-gray-500">

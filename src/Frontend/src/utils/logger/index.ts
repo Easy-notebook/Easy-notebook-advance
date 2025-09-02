@@ -368,6 +368,13 @@ export { StoreLogger } from './store_logger';
 export { FileLogger } from './file_logger';
 export { AgentLogger } from './agent_logger';
 
+// Import editor logger
+import editorLogger from './editor_logger';
+export { editorLogger };
+
+// Import debug tools (will initialize global debugEditor)
+import './debug_tools';
+
 /**
  * Usage Examples:
  * 
