@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useStore from '../../../../store/notebookStore';
-import { X, Plus, BookOpen, Save, MoreHorizontal } from 'lucide-react';
+import { X, Plus, BookOpen, Save, MoreHorizontal, Code, Globe } from 'lucide-react';
+import WebViewManager from './WebViewManager';
 
 // Notebook tab interface
 interface NotebookTab {
@@ -9,6 +10,9 @@ interface NotebookTab {
     isActive: boolean;
     isDirty?: boolean;
     lastModified?: string;
+    type?: 'notebook' | 'webview';
+    projectPath?: string;
+    projectType?: 'html' | 'react' | 'javascript' | 'typescript' | 'vue' | 'angular';
 }
 
 // Tab component for notebooks
@@ -61,7 +65,11 @@ const NotebookTab: React.FC<NotebookTabProps> = ({
             `}
             onClick={() => !isRenaming && onSelect(tab.id)}
         >
-            <BookOpen className="w-4 h-4 flex-shrink-0" />
+            {tab.type === 'webview' ? (
+                tab.projectType === 'html' ? <Globe className="w-4 h-4 flex-shrink-0" /> : <Code className="w-4 h-4 flex-shrink-0" />
+            ) : (
+                <BookOpen className="w-4 h-4 flex-shrink-0" />
+            )}
             
             {isRenaming ? (
                 <input
@@ -242,22 +250,47 @@ const NotebookTabManager: React.FC = () => {
             id: newId,
             name: 'New Notebook',
             isActive: false,
-            isDirty: true
+            isDirty: true,
+            type: 'notebook'
         };
         
         setTabs(prev => [...prev, newTab]);
     }, []);
 
+    // Handle new WebView creation
+    const handleNewWebView = useCallback(() => {
+        const newId = `webview_${Date.now()}`;
+        const newTab: NotebookTab = {
+            id: newId,
+            name: 'Web Preview',
+            isActive: false,
+            isDirty: false,
+            type: 'webview'
+        };
+        
+        setTabs(prev => [...prev, newTab]);
+        handleTabSelect(newId);
+    }, [handleTabSelect]);
+
     if (tabs.length === 0) {
         return (
             <div className="flex items-center justify-center h-12 bg-gray-100 border-b border-gray-200">
-                <button
-                    onClick={handleNewNotebook}
-                    className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
-                >
-                    <Plus className="w-4 h-4" />
-                    New Notebook
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleNewNotebook}
+                        className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                    >
+                        <BookOpen className="w-4 h-4" />
+                        New Notebook
+                    </button>
+                    <button
+                        onClick={handleNewWebView}
+                        className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                    >
+                        <Globe className="w-4 h-4" />
+                        Web Preview
+                    </button>
+                </div>
             </div>
         );
     }
@@ -285,11 +318,59 @@ const NotebookTabManager: React.FC = () => {
                     className="p-1.5 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-900 transition-colors"
                     title="New notebook"
                 >
-                    <Plus className="w-4 h-4" />
+                    <BookOpen className="w-4 h-4" />
+                </button>
+                <button
+                    onClick={handleNewWebView}
+                    className="p-1.5 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-900 transition-colors"
+                    title="New web preview"
+                >
+                    <Globe className="w-4 h-4" />
                 </button>
             </div>
         </div>
     );
 };
 
+// 标签页内容渲染器
+interface TabContentRendererProps {
+    activeTab: NotebookTab | null;
+}
+
+const TabContentRenderer: React.FC<TabContentRendererProps> = ({ activeTab }) => {
+    if (!activeTab) {
+        return (
+            <div className="flex items-center justify-center h-full bg-gray-50">
+                <div className="text-center">
+                    <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Tab</h3>
+                    <p className="text-gray-600">Select a tab or create a new one to get started.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (activeTab.type === 'webview') {
+        return (
+            <WebViewManager 
+                initialPath={activeTab.projectPath}
+                initialType={activeTab.projectPath ? 'project' : undefined}
+            />
+        );
+    }
+
+    // 默认 notebook 内容
+    return (
+        <div className="flex items-center justify-center h-full bg-white">
+            <div className="text-center">
+                <BookOpen className="w-12 h-12 mx-auto mb-4 text-blue-500" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">{activeTab.name}</h3>
+                <p className="text-gray-600">Notebook content will appear here.</p>
+            </div>
+        </div>
+    );
+};
+
+// 导出组件集合
 export default NotebookTabManager;
+export { TabContentRenderer };

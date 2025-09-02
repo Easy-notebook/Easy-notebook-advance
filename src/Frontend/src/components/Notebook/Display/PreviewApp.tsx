@@ -7,6 +7,7 @@ import PDFDisplay from './PDFView/PDFDisplay';
 import ReactLiveSandbox from './WebView/ReactLiveSandbox';
 import DocDisplay from './DocView/DocDisplay';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import IframeViewer from './WebView/IframeViewer';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Monitor, Code } from 'lucide-react';
 
@@ -74,11 +75,11 @@ const PreviewApp: React.FC = () => {
             currentFile.name.toLowerCase().endsWith('.docx') || 
             currentFile.name.toLowerCase().endsWith('.doc');
         
-        let effectiveType: FileType = currentFile.type;
+        let effectiveType: FileType = currentFile.type as FileType;
         if (isExcelName) {
-            effectiveType = 'xlsx';
+            effectiveType = 'xlsx' as FileType;
         } else if (isDocxName) {
-            effectiveType = 'docx';
+            effectiveType = 'docx' as FileType;
         }
 
         switch (effectiveType) {
@@ -211,11 +212,13 @@ const PreviewApp: React.FC = () => {
                             ) : (
                                 <div className="flex-1 p-4 bg-white rounded-b-lg overflow-hidden">
                                     <div className="h-full w-full bg-white border border-gray-200 rounded overflow-hidden">
-                                        <iframe
-                                            title={currentFile.name}
-                                            srcDoc={currentFile.content}
+                                        {/* Centralized iframe rendering */}
+                                        <IframeViewer
+                                            notebookId={currentFile?.notebookId}
+                                            filePath={currentFile?.path}
+                                            htmlContent={currentFile?.content}
+                                            title={currentFile?.name}
                                             className="w-full h-full border-0"
-                                            sandbox="allow-same-origin allow-forms allow-scripts"
                                         />
                                     </div>
                                 </div>

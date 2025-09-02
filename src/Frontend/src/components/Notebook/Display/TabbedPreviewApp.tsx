@@ -10,6 +10,7 @@ import {
   Monitor,
 } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import IframeViewer from './WebView/IframeViewer';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 
@@ -62,7 +63,7 @@ const TabbedPreviewApp: React.FC = () => {
     // 兜底矫正：部分 xlsx 可能被误识别为 text/html
     const isExcelName =
       activeFile.name.toLowerCase().endsWith('.xlsx') || activeFile.name.toLowerCase().endsWith('.xls');
-    const effectiveType: FileType | 'notebook' = isExcelName ? 'xlsx' : activeFile.type;
+    const effectiveType: FileType | 'notebook' = isExcelName ? 'xlsx' : activeFile.type as FileType;
 
     switch (effectiveType) {
       case 'csv':
@@ -169,12 +170,13 @@ const TabbedPreviewApp: React.FC = () => {
               ) : (
                 <div className="flex-1 p-4 bg-white rounded-b-lg overflow-hidden">
                   <div className="h-full w-full bg-white border border-gray-200 rounded overflow-hidden">
-                    <iframe
-                      title={activeFile.name}
-                      srcDoc={activeFile.content}
+                    {/* Centralized iframe rendering */}
+                    <IframeViewer
+                      notebookId={activeFile?.notebookId}
+                      filePath={activeFile?.path}
+                      htmlContent={activeFile?.content}
+                      title={activeFile?.name}
                       className="w-full h-full border-0"
-                      // 基础 sandbox 提升安全性；根据需要增减权限
-                      sandbox="allow-same-origin allow-forms allow-scripts"
                     />
                   </div>
                 </div>

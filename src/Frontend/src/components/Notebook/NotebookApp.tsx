@@ -11,15 +11,15 @@ import LinkCell from '../Editor/Cells/LinkCell';
 import OutlineSidebarOrig from './LeftSideBar/Main/Workspace/OutlineView/OutlineSidebar';
 import StepNavigation from './MainContainer/StepNavigation';
 import ErrorAlert from '../UI/ErrorAlert';
-import useStore from '../../store/notebookStore';
+import useStore from '@Store/notebookStore';
 import { findCellsByStep } from '../../utils/markdownParser';
 import { createExportHandlers } from '../../utils/exportToFile/exportUtils';
 import { useToast } from '../UI/Toast';
 import AIAgentSidebarOrig from './RightSideBar/AIAgentSidebar';
-import useOperatorStore from '../../store/operatorStore';
+import useOperatorStore from '@Store/operatorStore';
 import CommandInputOrig from './FunctionBar/AITerminal';
-import { useAIAgentStore } from '../../store/AIAgentStore';
-import usePreviewStore from '../../store/previewStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
+import usePreviewStore from '@Store/previewStore';
 import ImportNotebook4JsonOrJupyter from '../../utils/importFile/import4JsonOrJupyterNotebook';
 import useSettingsStore from '../../store/settingsStore';
 import SettingsPage from '../Senario/settingState';
@@ -34,7 +34,7 @@ import { AgentType } from '../../services/agentMemoryService';
 import EmptyState from '../Senario/State/EmptyState/EmptyState';
 import LibraryState from '../Senario/State/LibraryState/LibraryState';
 import { useRouteSync } from '../../hooks/useRouteSync';
-import useRouteStore from '../../store/routeStore';
+import useRouteStore from '@Store/routeStore';
 
 // Cast components to any to relax prop type constraints
 const OutlineSidebar: any = OutlineSidebarOrig;
@@ -49,7 +49,7 @@ const NotebookApp = () => {
 
   // 路由同步
   const { currentView: routeView } = useRouteSync();
-  const { navigateToWorkspace, navigateToLibrary, navigateToEmpty } = useRouteStore();
+  const { navigateToWorkspace, navigateToEmpty } = useRouteStore();
 
   // Panel width states
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {

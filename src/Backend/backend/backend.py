@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Body, UploadFile, File, HTTPException, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
@@ -20,6 +20,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import uvicorn
 from screenplay import generate_response
 from kernel_manager import KernelExecutionManager
+from api.sandbox_endpoints import router as sandbox_router
 
 # ========================
 # 配置日志
@@ -95,6 +96,9 @@ ALLOWED_MIME_TYPES = {
 # 初始化 FastAPI 应用
 # ========================
 app = FastAPI(title="Notebook API", version="1.0.0")
+
+# 包含 sandbox 路由器
+app.include_router(sandbox_router)
 
 # 暂时注释掉安全过滤中间件，因为主要过滤逻辑已在各端点实现
 # app.add_middleware(SecurityFilterMiddleware)
@@ -823,6 +827,42 @@ async def serve_sandbox(notebook_id: str, path: str, request: Request, db: Sessi
                 "Cache-Control": "public, max-age=60",
                 "Last-Modified": datetime.fromtimestamp(file_path.stat().st_mtime).strftime('%a, %d %b %Y %H:%M:%S GMT')
             }
+
+            # If serving HTML, inject <base> and rewrite absolute root URLs to project-scoped URLs
+            if str(file_path).lower().endswith(('.html', '.htm')):
+                try:
+                    html = file_path.read_text(encoding="utf-8")
+                except Exception:
+                    # Fallback to raw file response if reading as text fails
+                    return FileResponse(path=str(file_path), media_type=mime_type, headers=headers)
+
+                # Determine project root (first segment of normalized path)
+                first_segment = normalized.split("/")[0] if "/" in normalized else normalized
+                project_root_prefix = f"/sandbox/{notebook_id}/{first_segment}/"
+
+                # Inject <base> tag if missing to stabilize relative URL resolution on deep routes
+                import re as _re
+                if _re.search(r"<base\\s", html, flags=_re.IGNORECASE) is None:
+                    html = _re.sub(
+                        r"</head>",
+                        f"<base href=\"{project_root_prefix}\" />\n</head>",
+                        html,
+                        count=1,
+                        flags=_re.IGNORECASE,
+                    )
+
+                # Rewrite absolute URLs that start with "/" but are not already under /sandbox/
+                def _rewrite_attr(m):
+                    attr, quote, url = m.group(1), m.group(2), m.group(3)
+                    # Skip protocol-relative and already sandbox-prefixed URLs
+                    if url.startswith("//") or url.startswith("sandbox/"):
+                        return m.group(0)
+                    return f"{attr}={quote}{project_root_prefix}{url}{quote}"
+
+                html = _re.sub(r"\b(src|href)\s*=\s*([\"\'])/(?!sandbox/)([^\"\'>]+)\2", _rewrite_attr, html, flags=_re.IGNORECASE)
+
+                return HTMLResponse(content=html, headers=headers)
+
             return FileResponse(path=str(file_path), media_type=mime_type, headers=headers)
 
         # SPA fallback: try first segment's index.html
