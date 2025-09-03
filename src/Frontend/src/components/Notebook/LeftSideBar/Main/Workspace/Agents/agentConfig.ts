@@ -1,4 +1,4 @@
-import { AgentType } from '../../services/agentMemoryService';
+import { AgentType } from '@Services/agentMemoryService';
 
 export interface AgentCapability {
   name: string;

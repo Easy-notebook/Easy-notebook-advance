@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo} from 'react';
 import { ExternalLink, Trash2, Minimize2, Maximize2, Split } from 'lucide-react';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
@@ -140,7 +140,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
   };
 
   const openInSplitPreview = async () => {
-    uiLog.userInteraction('openInSplitPreview', { cellContent: cell.content, notebookId });
+    uiLog.userInteraction('openInSplitPreview', 'LinkCell', { cellContent: cell.content, notebookId });
     setDetachedCellId(cell.id);
 
     if (!href || !notebookId) {
@@ -190,7 +190,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
     // Edit mode when no href is set
     return (
       <div
-        className={`w-full border border-gray-200 rounded-lg bg-white shadow-sm p-4 ${className}`}
+        className={`w-full border border-theme-200 rounded-lg bg-white shadow-sm p-4 ${className}`}
         onFocus={onFocus}
         onBlur={onBlur}
         data-cell-id={cell.id}
@@ -200,7 +200,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
           value={cell.content || ''}
           onChange={handleChange}
           placeholder="输入文件路径或链接 (例如: ./document.pdf, https://example.com)"
-          className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-theme-500 focus:border-transparent"
+          className="w-full border border-theme-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-theme-500 focus:border-transparent"
           autoFocus
         />
       </div>
@@ -234,7 +234,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
   return (
     <div className="flex justify-start">
       <div
-        className={`max-w-md bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}
+        className={`max-w-md bg-white border border-theme-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}
         onFocus={onFocus}
         onBlur={onBlur}
         data-cell-id={cell.id}
@@ -296,13 +296,13 @@ const LinkCell: React.FC<LinkCellProps> = ({
             <>
               <button
                 onClick={(e) => {
-                  uiLog.userInteraction('split_preview_button_click');
+                  uiLog.userInteraction('split_preview_button_click', 'LinkCell.actions.splitPreview');
                   e.preventDefault();
                   e.stopPropagation();
                   openInSplitPreview();
                 }}
                 className="p-1.5 text-gray-500 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
-                title="分屏预览"
+                title="split preview"
                 type="button"
               >
                 <ExternalLink size={16} />
@@ -316,7 +316,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
                     onDelete();
                   }}
                   className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                  title="删除"
+                  title="delete"
                   type="button"
                 >
                   <Trash2 size={16} />
@@ -327,7 +327,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
         </div>
       </div>
 
-      {/* Edit input (if not readonly and content exists) */}
+      {/* Edit input (if not readonly and content exists)
       {!readOnly && href && (
         <div className="px-3 pb-3">
           <input
@@ -338,13 +338,13 @@ const LinkCell: React.FC<LinkCellProps> = ({
             placeholder="编辑路径..."
           />
         </div>
-      )}
+      )} */}
 
       {/* Warning for file:// protocol */}
       {href.startsWith('file://') && (
         <div className="px-3 pb-3">
           <div className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">
-            ⚠️ 浏览器可能限制 file:// 协议，建议使用相对路径
+            ⚠️ Browser may restrict file:// protocol, it is recommended to use relative paths
           </div>
         </div>
       )}

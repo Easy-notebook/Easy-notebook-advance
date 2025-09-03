@@ -1,12 +1,12 @@
 import React, { useState, useEffect, memo, useCallback } from 'react';
-import { AgentMemoryService, AgentType } from '../../services/agentMemoryService';
-import useStore from '../../store/notebookStore';
+import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
+import useStore from '@Store/notebookStore';
 import {
   StatusDot,
   SidebarButton,
   RunningIndicator,
   TaskCounter
-} from '../Notebook/LeftSideBar/shared/components';
+} from '@Notebook/LeftSideBar/shared/components';
 
 interface AgentListProps {
   isCollapsed: boolean;
@@ -30,7 +30,16 @@ const AGENT_GROUPS = [
 
 // 使用共享的状态样式
 
-const AgentItem = memo(({
+interface AgentItemProps {
+  agent: { type: AgentType; icon: string; title: string };
+  isActive: boolean;
+  hasMemory: boolean;
+  isRunning: boolean;
+  taskCount: number;
+  onClick: () => void;
+}
+
+const AgentItem = memo<AgentItemProps>(({ 
   agent,
   isActive,
   hasMemory,
@@ -88,15 +97,16 @@ const AgentList: React.FC<AgentListProps> = ({
     loadAgentMemories();
     
     // 监听存储变化 - localStorage变化
-    const handleStorageChange = (e) => {
+    const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'agent_memories_v2') {
         loadAgentMemories();
       }
     };
     
     // 监听自定义事件 - 内存变化
-    const handleMemoryUpdate = (e) => {
-      if (e.detail?.notebookId === notebookId) {
+    const handleMemoryUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<any>).detail;
+      if (detail?.notebookId === notebookId) {
         loadAgentMemories();
       }
     };

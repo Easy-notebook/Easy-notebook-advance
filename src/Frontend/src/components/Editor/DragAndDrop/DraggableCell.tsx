@@ -133,7 +133,6 @@ const DraggableCell = forwardRef<HTMLDivElement, DraggableCellProps>(
                 text-gray-400 hover:text-gray-600
                 cursor-pointer
                 bg-white rounded border border-gray-200 shadow-sm
-                hover:shadow-md hover:border-gray-300
                 transition-all duration-200
                 ${showAddMenu ? 'bg-theme-50 border-theme-300 text-theme-600' : ''}
               `}

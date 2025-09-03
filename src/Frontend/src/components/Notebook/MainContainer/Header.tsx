@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Upload, BarChartHorizontalBig, TerminalSquare, ArrowLeft, Home } from 'lucide-react';
+import { Play, Upload, BarChartHorizontalBig, TerminalSquare } from 'lucide-react';
 import ModeToggle from './ModeToggle';
 import ExportToFile from '../FunctionBar/ExportToFile';
-import { navigateToLibrary, navigateToHome, isWorkspaceRoute } from '../../../utils/navigation';
 
 interface HeaderProps {
   viewMode: string;

@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Eye, Code, Sun, Moon } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface CodeDisplayProps {
   content: string;
@@ -103,12 +108,15 @@ const CodeDisplay: React.FC<CodeDisplayProps> = ({
       <div className="flex-1 flex flex-col min-h-0">
         {showPreview && language === 'markdown' ? (
           <div className="flex-1 p-4 bg-white rounded-b-lg overflow-auto">
-            <div 
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{ 
-                __html: content.replace(/\n/g, '<br>') // Basic markdown-like rendering
-              }}
-            />
+            <div className="prose max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+              >
+                {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符） */}
+                {content.replace(/(?<!\n)\n(?!\n)/g, '  \n')}
+              </ReactMarkdown>
+            </div>
           </div>
         ) : (
           <div className="flex-1 relative overflow-hidden">

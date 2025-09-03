@@ -98,7 +98,7 @@ const NotebookList: React.FC<NotebookListProps & {
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Star className="w-5 h-5 text-yellow-500" />
-            已收藏 ({starredNotebooks.length})
+            Starred ({starredNotebooks.length})
           </h2>
           <div className={gridClassName}>
             {starredNotebooks.map((notebook) => (
@@ -121,7 +121,7 @@ const NotebookList: React.FC<NotebookListProps & {
         <div>
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Calendar className="w-5 h-5 text-green-500" />
-            {starredNotebooks.length > 0 ? '最近' : '全部'} ({regularNotebooks.length})
+            {starredNotebooks.length > 0 ? 'Recent' : 'All'} ({regularNotebooks.length})
           </h2>
           <div className={gridClassName}>
             {regularNotebooks.map((notebook) => (

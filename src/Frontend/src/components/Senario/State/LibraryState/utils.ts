@@ -6,20 +6,20 @@ import { CONSTANTS } from './types';
 
 // Time formatting utility
 export const formatTime = (timestamp?: number): string => {
-  if (!timestamp) return '刚刚';
+  if (!timestamp) return 'just now';
   const diff = Date.now() - timestamp;
   const units = [
-    { value: 24 * 60 * 60 * 1000, label: '天' },
-    { value: 60 * 60 * 1000, label: '小时' },
-    { value: 60 * 1000, label: '分钟' },
+    { value: 24 * 60 * 60 * 1000, label: 'days' },
+    { value: 60 * 60 * 1000, label: 'hours' },
+    { value: 60 * 1000, label: 'minutes' },
   ];
   
   for (const unit of units) {
     if (diff >= unit.value) {
-      return `${Math.floor(diff / unit.value)} ${unit.label}前`;
+      return `${Math.floor(diff / unit.value)} ${unit.label} ago`;
     }
   }
-  return '刚刚';
+  return 'just now';
 };
 
 // Size formatting utility

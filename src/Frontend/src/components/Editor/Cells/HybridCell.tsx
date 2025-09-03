@@ -119,7 +119,8 @@ const HybridCell = ({ cell, onDelete }) => {
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                             >
-                                {contentType.content || 'AI is Thinking...'}
+                                {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符） */}
+                                {(contentType.content || 'AI is Thinking...').replace(/(?<!\n)\n(?!\n)/g, '  \n')}
                             </ReactMarkdown>
                         </div>
                     )}

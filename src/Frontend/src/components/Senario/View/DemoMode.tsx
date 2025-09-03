@@ -62,9 +62,13 @@ const DemoMode: React.FC<DemoModeProps> = ({
   }
 
   // Find the current phase and step (similar to StepMode logic)
-  const phase = tasks.find(task =>
-    task.phases.some(p => p.id === currentPhaseId)
-  )?.phases.find(p => p.id === currentPhaseId);
+  type StepRef = { id: string };
+  type PhaseRef = { id: string; steps: StepRef[] };
+  type TaskRef = { phases: PhaseRef[] };
+  const typedTasks: TaskRef[] = Array.isArray(tasks) ? (tasks as unknown as TaskRef[]) : [];
+  const phase = typedTasks
+    .find((task: TaskRef) => Array.isArray(task?.phases) && task.phases.some((p: PhaseRef) => p.id === (currentPhaseId || '')))
+    ?.phases.find((p: PhaseRef) => p.id === (currentPhaseId || ''));
 
   if (!phase) {
     console.warn(`Phase with id "${currentPhaseId}" not found.`);
@@ -100,7 +104,7 @@ const DemoMode: React.FC<DemoModeProps> = ({
                   <div
                     key={cell.id}
                     id={`cell-${cell.id}`}
-                    className="relative w-full transition-all duration-300 hover:shadow-md hover:border-theme-300"
+                    className="relative w-full transition-all duration-300"
                   >
                     {renderCell ? renderCell(cell) : (
                       <div className="p-4 text-gray-500">
@@ -130,10 +134,10 @@ const DemoMode: React.FC<DemoModeProps> = ({
       </div>
       
       {/* Step Navigation - Fixed at bottom of container */}
-      {currentPhaseId && onPrevious && onNext && (
+      {currentPhaseId && onPrevious && onNext && phase && (
         <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
           <StepNavigation
-            currentPhase={phase}
+            currentPhase={{ id: phase.id, title: (phase as any).title ?? phase.id }}
             currentStepIndex={currentStepIndex}
             totalSteps={phase.steps.length}
             onPrevious={onPrevious}

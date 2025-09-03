@@ -11,9 +11,9 @@ const NotebookStats: React.FC<NotebookStatsProps> = memo(({
   totalSize 
 }) => (
   <div className="flex items-center justify-between text-xs text-gray-500">
-    <span>{fileCount} 个文件</span>
+    <span>{fileCount} files</span>
     {totalSize !== undefined && <span>{formatSize(totalSize)}</span>}
-    <span>{accessCount} 次访问</span>
+    <span>{accessCount} visits</span>
   </div>
 ));
 
