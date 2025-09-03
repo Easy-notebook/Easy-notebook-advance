@@ -1,1 +1,1 @@
-export { MiniSidebar } from './MiniSidebar';
+export { default as MiniSidebar } from './MiniSidebar';

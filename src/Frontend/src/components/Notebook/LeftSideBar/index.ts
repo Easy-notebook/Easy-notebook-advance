@@ -1,3 +1,6 @@
+// Main LeftSideBar component
+export { default as LeftSideBar } from './LeftSideBar';
+
 // Main sidebar (expanded state)
 export * from './Main';
 

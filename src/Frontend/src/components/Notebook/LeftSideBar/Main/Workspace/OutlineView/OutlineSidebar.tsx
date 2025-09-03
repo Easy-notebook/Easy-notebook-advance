@@ -2,8 +2,9 @@ import { useState, useCallback, memo, useMemo, useEffect } from 'react';
 import useStore from '@Store/notebookStore';
 import useSettingsStore from '@Store/settingsStore';
 import { navigateToLibrary, navigateToHome } from '@/utils/navigation';
+import useRouteStore from '@Store/routeStore';
 import FileTree from '@LeftSidebar/Main/Workspace/FileExplorer/FileExplorer';
-import AgentList from '@/components/Agents/AgentList';
+import AgentList from '@LeftSidebar/Main/Workspace/Agents/AgentList';
 import { AgentType } from '@Services/agentMemoryService';
 
 // 导入拆分后的组件
@@ -50,7 +51,33 @@ const OutlineSidebar = ({
   const isCollapsed = useStore((state) => state.isCollapsed);
   const setIsCollapsed = useStore((state) => state.setIsCollapsed);
   const settingstore = useSettingsStore();
+  const { currentRoute, currentView } = useRouteStore();
   const notebookId = useStore((state) => state.notebookId);
+
+  // Calculate active sidebar item based on current route
+  const getActiveItemId = useCallback(() => {
+    if (settingstore.settingsOpen) {
+      return 'settings';
+    }
+    
+    switch (currentView) {
+      case 'empty':
+        return 'new-notebook';
+      case 'library':
+        return 'knowledge-forest';
+      case 'workspace':
+        return 'workspace';
+      default:
+        if (currentRoute === '/') {
+          return 'new-notebook';
+        } else if (currentRoute === '/FoKn/Library') {
+          return 'knowledge-forest';
+        } else if (currentRoute.startsWith('/workspace/')) {
+          return 'workspace';
+        }
+        return 'workspace'; // Default for workspace view
+    }
+  }, [currentView, currentRoute, settingstore.settingsOpen]);
   const [activeTab, setActiveTab] = useState<'file' | 'outline' | 'agents'>('outline');
   const [isHovered, setIsHovered] = useState(false);
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
@@ -166,7 +193,7 @@ const OutlineSidebar = ({
             navigateToHome();
           }
         }}
-        activeItemId={activeTab === 'file' ? 'library' : activeTab === 'agents' ? 'knowledge-forest' : activeTab === 'outline' ? 'tools' : 'library'}
+        activeItemId={getActiveItemId()}
         onExpandClick={toggleCollapse}
         isMainSidebarExpanded={false}
       />
@@ -175,28 +202,6 @@ const OutlineSidebar = ({
 
   return (
     <div className="flex h-full">
-      {/* MiniSidebar - 固定宽度 */}
-      <div className="w-17 shrink-0 bg-white">
-        <MiniSidebar
-          phases={allPhases}
-          currentPhaseId={currentPhaseId}
-          onPhaseClick={handlePhaseClick}
-          onItemClick={(itemId) => {
-            if (itemId === 'library') setActiveTab('file');
-            else if (itemId === 'knowledge-forest') navigateToLibrary();
-            else if (itemId === 'tools') setActiveTab('outline');
-            else if (itemId === 'new-notebook') {
-              useStore.getState().setNotebookId(null);
-              setActiveTab('outline'); // 重置到默认 tab
-              navigateToHome();
-            }
-          }}
-          activeItemId={activeTab === 'file' ? 'library' : activeTab === 'agents' ? 'knowledge-forest' : activeTab === 'outline' ? 'tools' : 'library'}
-          onExpandClick={toggleCollapse}
-          isMainSidebarExpanded={true}
-        />
-      </div>
-
       {/* 主侧边栏 - 填充剩余空间 */}
       <div className="flex-1">
         <SidebarContainer

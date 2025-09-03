@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { AgentMemoryService, AgentType } from '../../services/agentMemoryService';
+import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import { AGENT_PROFILES } from './agentConfig';
-import useStore from '../../store/notebookStore';
+import useStore from '@Store/notebookStore';
 
 interface AgentDetailProps {
   agentType: AgentType;
@@ -25,15 +25,16 @@ const AgentDetail: React.FC<AgentDetailProps> = ({ agentType, onBack }) => {
     loadAgentMemory();
     
     // 监听存储变化 - localStorage变化
-    const handleStorageChange = (e) => {
+    const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'agent_memories_v2') {
         loadAgentMemory();
       }
     };
     
     // 监听自定义事件 - 内存变化
-    const handleMemoryUpdate = (e) => {
-      if (e.detail?.notebookId === notebookId && e.detail?.agentType === agentType) {
+    const handleMemoryUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<any>).detail;
+      if (detail?.notebookId === notebookId && detail?.agentType === agentType) {
         loadAgentMemory();
       }
     };

@@ -1,9 +1,5 @@
-// /utils/encryption.ts
-
 // Type definitions for encryption utilities
 type EncryptionAlgorithm = 'AES-GCM';
-type KeyUsage = 'encrypt' | 'decrypt';
-
 const STORAGE_KEY: string = 'enc_key';
 const ALGORITHM: EncryptionAlgorithm = 'AES-GCM';
 const KEY_LENGTH: number = 256;

@@ -46,7 +46,7 @@ interface MiniSidebarProps {
 
 /** 功能区（顶部/中部） */
 const PRIMARY_ITEMS: MiniSidebarItem[] = [
-  // { id: 'library', icon: FolderClock, title: 'Library' },
+  { id: 'workspace', icon: Folder, title: 'Workspace' },
   { id: 'knowledge-forest', icon: Trees, title: 'Knowledge Forest' },
   { id: 'easynet', icon: Network, title: 'EasyNet' },
 ];
@@ -92,6 +92,10 @@ const MiniSidebar = memo(function MiniSidebar({
     else onPhaseClick?.(null);
   }, [onExpandClick, onPhaseClick]);
 
+  // Determine what to show in the phases area based on current state
+  const shouldShowPhases = hasPhases && !isMainSidebarExpanded && activeItemId === 'workspace';
+  const shouldShowFolderIcon = hasPhases && ((isMainSidebarExpanded && activeItemId === 'workspace') || activeItemId !== 'workspace');
+
   return (
     <nav
       className={[
@@ -102,137 +106,104 @@ const MiniSidebar = memo(function MiniSidebar({
         'border-r',
       ].join(' ')}
     >
+      {/* Logo - only controls expand/collapse */}
       <div className="h-12 flex items-center justify-center shrink-0 mt-2">
         <button
           onClick={handleExpandClick}
           className="rounded-lg transition-colors"
-          title="Expand Sidebar"
+          title="Expand/Collapse Sidebar"
         >
           <img src="/icon.svg" className="w-8 h-8"/>
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-visible">
-        {/* 阶段模式 */}
-        {hasPhases && (
-          <>
-            {isMainSidebarExpanded ? (
-              <div className="relative -mr-2 my-0">
-                <div 
-                  className="absolute inset-0 bg-white rounded-l-3xl"
-                  style={{
-                    border: '1px solid rgba(0,0,0,0.04)',
-                    borderRight: 'none'
-                  }}
-                />
-                
-                {/* Workspace 图标 */}
-                <ul className="space-y-1 relative z-10 py-3 pl-3 pr-4">
-                  <li className="flex justify-center overflow-visible">
-                    <div className="overflow-visible relative">
-                      <ItemButton
-                        active={true}
-                        onClick={() => onExpandClick?.()}
-                        title="Workspace"
-                      >
-                        <Folder size={18} />
-                      </ItemButton>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-            ) : (
-              /* 主侧边栏折叠时：显示所有阶段图标 */
-              <>
-                {/* 整体阶段挖孔区域 */}
-                <div className="relative -mr-2 my-0">
-                  {/* 整体挖孔背景 - 白色背景 + 圆滑边缘 */}
-                  <div 
-                    className="absolute inset-0 bg-white rounded-l-3xl"
-                    style={{
-                      // boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06), inset 0 -2px 4px rgba(0,0,0,0.06), inset 2px 0 4px rgba(0,0,0,0.06)',
-                      // border: '1px solid rgba(0,0,0,0.04)',
-                      borderRight: 'none'
-                    }}
-                  />
-                  
-                  {/* 阶段列表 */}
-                  <ul className="space-y-1 relative z-10 py-3 pl-1 pr-4">
-                    {phases!.map((phase, index) => {
-                      const IconComp =
-                        (iconMapping as Record<string, LucideIcon>)[phase.icon] ?? CheckCircle2;
-                      const isActive = currentPhaseId === phase.id;
-
-                      return (
-                        <li key={phase.id} className="flex justify-center overflow-visible">
-                          <div className="overflow-visible relative">
-                            <ItemButton
-                              active={isActive}
-                              onClick={() => onPhaseClick?.(phase.id)}
-                              title={phase.title}
-                            >
-                              <IconComp size={18} />
-                            </ItemButton>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              </>
-            )}
-
-            {/* 其他功能区（不包含底部设置） */}
-            <ul className="space-y-1">
-              {PRIMARY_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive = false;
+        {/* Phases area - only show when workspace is active and sidebar is collapsed */}
+        {shouldShowPhases && (
+          <div className="relative -mr-2 my-0">
+            <div 
+              className="absolute inset-0 bg-white rounded-l-3xl"
+              style={{
+                borderRight: 'none'
+              }}
+            />
+            
+            {/* Phase icons list */}
+            <ul className="space-y-1 relative z-10 py-3 pl-1 pr-4">
+              {phases!.map((phase) => {
+                const IconComp =
+                  (iconMapping as Record<string, LucideIcon>)[phase.icon] ?? CheckCircle2;
+                const isActive = currentPhaseId === phase.id;
 
                 return (
-                  <li key={item.id} className="flex justify-center overflow-visible">
-                    <div className="overflow-visible">
+                  <li key={phase.id} className="flex justify-center overflow-visible">
+                    <div className="overflow-visible relative">
                       <ItemButton
                         active={isActive}
-                        onClick={() => onItemClick?.(item.id)}
-                        title={item.title}
+                        onClick={() => onPhaseClick?.(phase.id)}
+                        title={phase.title}
                       >
-                        <Icon size={18} />
+                        <IconComp size={18} />
                       </ItemButton>
                     </div>
                   </li>
                 );
               })}
             </ul>
-          </>
+          </div>
         )}
 
-        {/* 通用模式（无 phases）：只渲染主功能区，底部另渲染设置 */}
-        {!hasPhases && (
-          <ul className="space-y-1">
-            {PRIMARY_ITEMS.map((item) => {
-              const Icon = item.icon;
-              // 无 phases 模式下，根据 activeItemId 正常显示 active 状态
-              const isActive = activeItemId === item.id;
-
-              return (
-                <li key={item.id} className="flex justify-center overflow-visible">
-                  <div className="overflow-visible">
-                    <ItemButton
-                      active={isActive}
-                      onClick={() => onItemClick?.(item.id)}
-                      title={item.title}
-                    >
-                      <Icon size={18} />
-                    </ItemButton>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+        {/* Folder icon - show when sidebar is expanded OR when active item is not workspace */}
+        {shouldShowFolderIcon && (
+          <div className="relative -mr-2 my-0">
+            <div 
+              className="absolute inset-0 bg-white rounded-l-3xl"
+              style={{
+                border: '1px solid rgba(0,0,0,0.04)',
+                borderRight: 'none'
+              }}
+            />
+            
+            <ul className="space-y-1 relative z-10 py-3 pl-3 pr-4">
+              <li className="flex justify-center overflow-visible">
+                <div className="overflow-visible relative">
+                  <ItemButton
+                    active={activeItemId === 'workspace'}
+                    onClick={() => onItemClick?.('workspace')}
+                    title="Workspace"
+                  >
+                    <Folder size={18} />                        
+                  </ItemButton>
+                </div>
+              </li>
+            </ul>
+          </div>
         )}
+
+        {/* Primary items - show non-workspace items */}
+        <ul className="space-y-1">
+          {PRIMARY_ITEMS.filter(item => item.id !== 'workspace').map((item) => {
+            const Icon = item.icon;
+            const isActive = activeItemId === item.id;
+
+            return (
+              <li key={item.id} className="flex justify-center overflow-visible">
+                <div className="overflow-visible">
+                  <ItemButton
+                    active={isActive}
+                    onClick={() => onItemClick?.(item.id)}
+                    title={item.title}
+                  >
+                    <Icon size={18} />
+                  </ItemButton>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
-      {/* 底部固定：仅纵向渲染底部项（默认只有 Settings），避免横向排布 */}
+      {/* Bottom items - always show */}
       <div className="py-3 shrink-0">
         <ul className="space-y-1">
           {BOTTOM_ITEMS.map((item) => {

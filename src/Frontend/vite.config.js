@@ -13,6 +13,8 @@ export default defineConfig({
       '@Editor': resolve(__dirname, './src/components/Editor'),
       '@Notebook': resolve(__dirname, './src/components/Notebook'),
       '@LeftSidebar': resolve(__dirname, './src/components/Notebook/LeftSideBar'),
+      '@RightSidebar': resolve(__dirname, './src/components/Notebook/RightSideBar'),
+      '@MainContainer': resolve(__dirname, './src/components/Notebook/MainContainer'),
       '@Store': resolve(__dirname, './src/store'),
       '@Services': resolve(__dirname, './src/services'),
       '@Utils': resolve(__dirname, './src/utils'),
@@ -20,7 +22,8 @@ export default defineConfig({
       '@Types': resolve(__dirname, './src/types'),
       '@WorkflowMode': resolve(__dirname, './src/components/Senario/WorkflowMode'),
       '@BasicMode': resolve(__dirname, './src/components/Senario/BasicMode'),
-      '@Storage': resolve(__dirname, './src/storage')
+      '@Storage': resolve(__dirname, './src/storage'),
+      '@Hooks': resolve(__dirname, './src/hooks')
     }
   }
 })
