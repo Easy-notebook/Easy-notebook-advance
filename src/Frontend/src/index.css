@@ -1,3 +1,6 @@
+/* Import unified Ant Design theme overrides */
+@import './theme/antdOverrides.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -425,6 +428,63 @@
 .markdown-cell em {
     font-style: italic;
     color: #41B883;
+}
+
+/* Safety rules to hide any leaked markdown syntax tokens in display mode */
+.markdown-cell:not(.editing-mode) {
+    /* Hide markdown header syntax that might leak through */
+    *:before, *:after {
+        content: none !important;
+    }
+}
+
+/* Ensure ReactMarkdown properly renders headers without showing # tokens */
+.markdown-cell .markdown-render h1:before,
+.markdown-cell .markdown-render h2:before,
+.markdown-cell .markdown-render h3:before,
+.markdown-cell .markdown-render h4:before,
+.markdown-cell .markdown-render h5:before,
+.markdown-cell .markdown-render h6:before {
+    content: none !important;
+}
+
+/* Ensure blockquotes don't show > tokens */
+.markdown-cell .markdown-render blockquote:before {
+    content: none !important;
+}
+
+/* Clean up any raw text that starts with markdown syntax */
+.markdown-cell p:not(.editing-mode) {
+    /* This catches any paragraph that might accidentally contain raw markdown */
+    text-rendering: optimizeLegibility;
+}
+
+/* Specific handling for ReactMarkdown rendered content */
+.markdown-cell .react-markdown-content {
+    /* Ensure clean rendering of all markdown elements */
+    line-height: inherit;
+}
+
+.markdown-cell .react-markdown-content h1,
+.markdown-cell .react-markdown-content h2,
+.markdown-cell .react-markdown-content h3,
+.markdown-cell .react-markdown-content h4,
+.markdown-cell .react-markdown-content h5,
+.markdown-cell .react-markdown-content h6 {
+    /* Ensure headers render without syntax tokens */
+    display: block;
+    text-indent: 0;
+}
+
+.markdown-cell .react-markdown-content blockquote {
+    /* Ensure blockquotes render without syntax tokens */
+    quotes: none;
+}
+
+.markdown-cell .react-markdown-content ul,
+.markdown-cell .react-markdown-content ol {
+    /* Ensure lists render without syntax tokens */
+    list-style-position: inside;
 }
 
 /* 暗色模式 - 暂时注释掉，统一使用明亮模式 */
@@ -1101,10 +1161,11 @@
 }
 
 /* ====================================================================
-   Slash Commands 主题色定义 - 统一设计风格
+   Unified Theme Colors - Vue 绿色主题统一定义
+   These classes work with both Tailwind and Ant Design components
    ==================================================================== */
 
-/* 主题色变量 - Vue 绿色主题统一定义 */
+/* Border Colors */
 .border-theme-100 {
     border-color: rgba(65, 184, 131, 0.1) !important;
 }
@@ -1117,6 +1178,7 @@
     border-color: #41B883 !important;
 }
 
+/* Background Colors */
 .bg-theme-25 {
     background-color: rgba(65, 184, 131, 0.025) !important;
 }
@@ -1129,8 +1191,17 @@
     background-color: rgba(65, 184, 131, 0.1) !important;
 }
 
+.bg-theme-500 {
+    background-color: #41B883 !important;
+}
+
+/* Text Colors */
 .text-theme-600 {
     color: #41B883 !important;
+}
+
+.text-theme-700 {
+    color: #369870 !important;
 }
 
 .text-theme-800 {
@@ -1139,6 +1210,19 @@
 
 .text-theme-900 {
     color: #2c3e50 !important;
+}
+
+/* Enhanced theme colors for Ant Design integration */
+.ant-theme-primary {
+    color: #41B883 !important;
+}
+
+.ant-theme-secondary {
+    color: #3490DC !important;
+}
+
+.ant-theme-accent {
+    color: #6574CD !important;
 }
 
 /* 边框宽度 */

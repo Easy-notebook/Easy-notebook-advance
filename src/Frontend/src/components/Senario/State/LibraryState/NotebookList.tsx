@@ -75,7 +75,7 @@ const NotebookList: React.FC<NotebookListProps & {
     return (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={searchQuery ? '没有匹配到 Notebook' : '还没有任何 Notebook'}
+        description={searchQuery ? 'No matching Notebook' : 'No Notebook'}
       >
         {!searchQuery && (
           <Button 
@@ -84,7 +84,7 @@ const NotebookList: React.FC<NotebookListProps & {
             loading={isCreatingNotebook}
             onClick={createNewNotebook}
           >
-            {isCreatingNotebook ? '正在创建...' : '新建 Notebook'}
+            {isCreatingNotebook ? 'Creating...' : 'New Notebook'}
           </Button>
         )}
       </Empty>

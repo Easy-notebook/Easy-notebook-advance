@@ -1,0 +1,13 @@
+fastapi
+apscheduler
+uvicorn
+python-dotenv
+requests
+rich
+pyfiglet
+openai
+jupyter_client
+sqlalchemy
+python-multipart
+ipython
+ipykernel
