@@ -30,7 +30,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = memo(({
       <div className="flex items-center gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <TreePine className="w-6 h-6 text-blue-500" />
+            <TreePine className="w-6 h-6 text-theme-500" />
             Notebook Library
           </h1>
           <p className="text-sm text-gray-600 mt-1">

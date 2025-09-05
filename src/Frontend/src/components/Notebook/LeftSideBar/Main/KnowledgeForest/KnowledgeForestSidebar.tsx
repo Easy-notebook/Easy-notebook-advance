@@ -3,8 +3,8 @@ import useStore from '@Store/notebookStore';
 import useSettingsStore from '@Store/settingsStore';
 import { navigateToLibrary, navigateToHome } from '@/utils/navigation';
 import useRouteStore from '@Store/routeStore';
-import { BookOpen, Clock, FileText, Tag, Search, Filter, Hash, Image } from 'lucide-react';
-import { Input, Empty } from 'antd';
+import { BookOpen, Clock, FileText, Search, Filter, Hash, Image } from 'lucide-react';
+import { Input, Empty, Button, Badge, Card, Space, Tag as AntTag, Divider, Tabs } from 'antd';
 import KnowledgeTrees from './Trees/KnowledgeTrees';
 import MiniSidebar from '@LeftSidebar/Mini/MiniSidebar';
 import './KnowledgeForest.css';
@@ -159,7 +159,7 @@ const KnowledgeForestSidebar = ({
 
   const getTypeIcon = useCallback((type: string) => {
     switch (type) {
-      case 'markdown': return <FileText className="w-4 h-4 text-blue-500" />;
+      case 'markdown': return <FileText className="w-4 h-4 text-theme-500" />;
       case 'code': return <Hash className="w-4 h-4 text-green-500" />;
       case 'hybrid': return <BookOpen className="w-4 h-4 text-purple-500" />;
       case 'link': return <Tag className="w-4 h-4 text-orange-500" />;
@@ -227,40 +227,26 @@ const KnowledgeForestSidebar = ({
         <SidebarContainer>
           {/* 头部区域：Tab切换 */}
           <SidebarHeader>
-            <div className="flex items-center bg-white align-center w-full justify-center flex-col">
-              <div className="flex bg-gray-100 rounded-lg p-1 w-full max-w-xs">
-                <button
-                  onClick={() => setActiveTab('records')}
-                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                    activeTab === 'records' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Records
-                </button>
-                <button
-                  onClick={() => setActiveTab('trees')}
-                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                    activeTab === 'trees' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Trees
-                </button>
-                <button
-                  onClick={() => setActiveTab('search')}
-                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                    activeTab === 'search' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Search
-                </button>
-              </div>
-            </div>
+            <Tabs
+              activeKey={activeTab}
+              onChange={(key) => setActiveTab(key as 'records' | 'trees' | 'search')}
+              size="small"
+              centered
+              items={[
+                {
+                  key: 'records',
+                  label: 'Records',
+                },
+                {
+                  key: 'trees', 
+                  label: 'Trees',
+                },
+                {
+                  key: 'search',
+                  label: 'Search',
+                }
+              ]}
+            />
           </SidebarHeader>
 
           {/* 中间内容：根据 activeTab 切换显示 */}
@@ -273,21 +259,18 @@ const KnowledgeForestSidebar = ({
                     <Filter className="w-3 h-3 text-gray-500" />
                     <span className="text-xs text-gray-600">Filter by type</span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <Space wrap>
                     {['all', 'markdown', 'code', 'hybrid', 'link', 'image'].map((type) => (
-                      <button
+                      <Button
                         key={type}
+                        size="small"
+                        type={filterType === type ? 'primary' : 'default'}
                         onClick={() => setFilterType(type as any)}
-                        className={`px-2 py-1 text-xs rounded transition-colors ${
-                          filterType === type
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
                       >
                         {type === 'all' ? 'All' : type}
-                      </button>
+                      </Button>
                     ))}
-                  </div>
+                  </Space>
                 </div>
 
                 {/* 记录列表 */}
@@ -298,12 +281,14 @@ const KnowledgeForestSidebar = ({
                     className="py-8"
                   />
                 ) : (
-                  <div className="space-y-2">
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     {filteredRecords.map((record) => (
-                      <div
+                      <Card
                         key={record.id}
+                        size="small"
+                        hoverable
                         onClick={() => handleRecordClick(record)}
-                        className="p-3 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
+                        style={{ cursor: 'pointer' }}
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-shrink-0 mt-0.5">
@@ -314,9 +299,7 @@ const KnowledgeForestSidebar = ({
                               <h4 className="text-sm font-medium text-gray-900 truncate">
                                 {record.title}
                               </h4>
-                              <span className="text-xs text-gray-500 ml-2">
-                                #{record.cellIndex + 1}
-                              </span>
+                              <Badge count={record.cellIndex + 1} size="small" />
                             </div>
                             <p className="text-xs text-gray-600 line-clamp-2 mb-2">
                               {record.content.substring(0, 100)}
@@ -329,15 +312,15 @@ const KnowledgeForestSidebar = ({
                                   {formatDate(record.updatedAt)}
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-500 capitalize">
+                              <AntTag size="small" color="blue">
                                 {record.type}
-                              </div>
+                              </AntTag>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </Card>
                     ))}
-                  </div>
+                  </Space>
                 )}
               </div>
             ) : activeTab === 'trees' ? (
@@ -356,12 +339,14 @@ const KnowledgeForestSidebar = ({
                 </div>
                 
                 {searchQuery && (
-                  <div className="space-y-2">
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     {filteredRecords.map((record) => (
-                      <div
+                      <Card
                         key={record.id}
+                        size="small"
+                        hoverable
                         onClick={() => handleRecordClick(record)}
-                        className="p-2 bg-white rounded border border-gray-200 hover:border-gray-300 cursor-pointer"
+                        style={{ cursor: 'pointer' }}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           {getTypeIcon(record.type)}
@@ -373,9 +358,9 @@ const KnowledgeForestSidebar = ({
                           {record.content.substring(0, 80)}
                           {record.content.length > 80 && '...'}
                         </p>
-                      </div>
+                      </Card>
                     ))}
-                  </div>
+                  </Space>
                 )}
               </div>
             )}

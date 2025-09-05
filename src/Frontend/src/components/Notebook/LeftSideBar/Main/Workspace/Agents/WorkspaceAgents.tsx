@@ -1,31 +1,58 @@
 import React from 'react';
 import { Bot, FileText, Users } from 'lucide-react';
+import { Card, Space, Tag, Typography } from 'antd';
+
+const { Title, Text } = Typography;
 
 interface WorkspaceAgentsProps {
   workspaceId: string;
 }
 
 const WorkspaceAgents: React.FC<WorkspaceAgentsProps> = ({ workspaceId }) => {
+  const agentData = [
+    {
+      id: 1,
+      title: 'Document Assistant',
+      icon: <FileText className="w-4 h-4" />,
+      status: 'Coming Soon'
+    },
+    {
+      id: 2,
+      title: 'Workflow Helper',
+      icon: <Users className="w-4 h-4" />,
+      status: 'Coming Soon'
+    }
+  ];
+
   return (
     <div className="p-4">
       <div className="flex items-center gap-2 mb-3">
         <Bot className="w-4 h-4 text-theme-600" />
-        <h3 className="font-medium text-sm text-gray-800">Workspace Agents</h3>
+        <Title level={5} style={{ margin: 0, fontSize: '14px' }}>
+          Workspace Agents
+        </Title>
       </div>
       
-      <div className="space-y-2 text-sm text-gray-500">
-        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-          <FileText className="w-3 h-3" />
-          <span>Document Assistant</span>
-          <span className="ml-auto text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">Coming Soon</span>
-        </div>
-        
-        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-          <Users className="w-3 h-3" />
-          <span>Workflow Helper</span>
-          <span className="ml-auto text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">Coming Soon</span>
-        </div>
-      </div>
+      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+        {agentData.map((agent) => (
+          <Card
+            key={agent.id}
+            size="small"
+            hoverable
+            style={{ backgroundColor: '#fafafa' }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {agent.icon}
+                <Text>{agent.title}</Text>
+              </div>
+              <Tag color="orange" size="small">
+                {agent.status}
+              </Tag>
+            </div>
+          </Card>
+        ))}
+      </Space>
     </div>
   );
 };

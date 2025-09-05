@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { BsBoxArrowInRight, BsCheckCircleFill, BsGearFill, BsPlayCircleFill } from 'react-icons/bs';
 import { usePipelineStore } from '../../Senario/Workflow/store/usePipelineStore';
 import { useWorkflowStateMachine, WorkflowStep } from '../../Senario/Workflow/store/workflowStateMachine';
-import { extractSectionTitle} from '../utils/String';
+import { extractSectionTitle} from '../../../utils/String';
 // A mapping for step status icons and colors
 const STEP_STATUS_STYLES = {
   ACTIVE: {

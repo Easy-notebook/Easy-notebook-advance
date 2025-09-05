@@ -56,7 +56,7 @@ const WebViewDemo: React.FC = () => {
                             onClick={() => setActiveDemo(key as any)}
                             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                                 activeDemo === key
-                                    ? 'bg-blue-500 text-white'
+                                    ? 'bg-theme-500 text-white'
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                         >
@@ -69,8 +69,8 @@ const WebViewDemo: React.FC = () => {
             {/* Content */}
             <div className="flex-1 flex flex-col">
                 {/* Demo Description */}
-                <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
-                    <p className="text-blue-800">{demos[activeDemo].description}</p>
+                <div className="bg-theme-50 border-b border-theme-200 px-6 py-3">
+                    <p className="text-theme-800">{demos[activeDemo].description}</p>
                 </div>
 
                 {/* Demo Component */}
@@ -108,7 +108,7 @@ const BasicDemo: React.FC = () => {
                                     value={projectPath}
                                     onChange={(e) => setProjectPath(e.target.value)}
                                     placeholder="/path/to/your/project"
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-theme-500"
                                 />
                                 <button className="px-3 py-2 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">
                                     <FolderOpen className="w-4 h-4" />
@@ -123,7 +123,7 @@ const BasicDemo: React.FC = () => {
                             <select
                                 value={projectType}
                                 onChange={(e) => setProjectType(e.target.value as any)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-theme-500"
                             >
                                 <option value="html">HTML</option>
                                 <option value="react">React</option>
@@ -134,7 +134,7 @@ const BasicDemo: React.FC = () => {
                         <button
                             onClick={handlePreview}
                             disabled={!projectPath}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-theme-500 text-white rounded hover:bg-theme-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Play className="w-4 h-4" />
                             开始预览
@@ -233,7 +233,7 @@ const AdvancedDemo: React.FC = () => {
                                                 {project.projectType === 'html' ? (
                                                     <Globe className="w-4 h-4 text-orange-500" />
                                                 ) : (
-                                                    <Code className="w-4 h-4 text-blue-500" />
+                                                    <Code className="w-4 h-4 text-theme-500" />
                                                 )}
                                                 <span className="font-medium">{project.name}</span>
                                                 <span className="text-xs px-2 py-1 bg-gray-200 rounded">
@@ -275,16 +275,16 @@ const AdvancedDemo: React.FC = () => {
                             </div>
                             <div className="flex items-center justify-between">
                                 <span className="text-gray-600">Sandbox 目录</span>
-                                <span className="flex items-center gap-1 text-blue-600">
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <span className="flex items-center gap-1 text-theme-600">
+                                    <div className="w-2 h-2 bg-theme-500 rounded-full"></div>
                                     已配置
                                 </span>
                             </div>
                         </div>
 
-                        <div className="mt-4 p-3 bg-blue-50 rounded">
-                            <h4 className="font-medium text-blue-900 mb-1">使用提示</h4>
-                            <p className="text-sm text-blue-700">
+                        <div className="mt-4 p-3 bg-theme-50 rounded">
+                            <h4 className="font-medium text-theme-900 mb-1">使用提示</h4>
+                            <p className="text-sm text-theme-700">
                                 点击"扫描项目"查看当前工作空间中的可用项目。系统会自动检测项目类型并创建对应的 .sandbox 目录。
                             </p>
                         </div>

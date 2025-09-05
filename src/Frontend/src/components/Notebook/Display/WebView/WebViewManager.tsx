@@ -222,13 +222,13 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onSelect }) => {
     const getProjectIcon = () => {
         switch (project.projectType) {
             case 'react':
-                return <Code className="w-5 h-5 text-blue-500" />;
+                return <Code className="w-5 h-5 text-theme-500" />;
             case 'vue':
                 return <Code className="w-5 h-5 text-green-500" />;
             case 'angular':
                 return <Code className="w-5 h-5 text-red-500" />;
             case 'typescript':
-                return <Code className="w-5 h-5 text-blue-600" />;
+                return <Code className="w-5 h-5 text-theme-600" />;
             case 'html':
                 return <Globe className="w-5 h-5 text-orange-500" />;
             default:
@@ -244,7 +244,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onSelect }) => {
 
     const getProjectTypeBadgeColor = () => {
         switch (project.projectType) {
-            case 'react': return 'bg-blue-100 text-blue-800';
+            case 'react': return 'bg-theme-100 text-theme-800';
             case 'vue': return 'bg-green-100 text-green-800';
             case 'angular': return 'bg-red-100 text-red-800';
             case 'typescript': return 'bg-indigo-100 text-indigo-800';

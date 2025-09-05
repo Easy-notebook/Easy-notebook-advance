@@ -105,7 +105,7 @@ const HexDisplay: React.FC<HexDisplayProps> = ({
             <button
               type="button"
               onClick={handleCopy}
-              className="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              className="px-2 py-1 text-sm bg-theme-500 text-white rounded hover:bg-theme-600 transition-colors"
               title="Copy hex dump"
             >
               <Copy className="w-4 h-4" />

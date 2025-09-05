@@ -6,6 +6,7 @@ import sys
 import base64
 import mimetypes
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -21,24 +22,12 @@ import uvicorn
 from screenplay import generate_response
 from kernel_manager import KernelExecutionManager
 from api.sandbox_endpoints import router as sandbox_router
+from utils.logger import ModernLogger
 
 # ========================
 # 配置日志
 # ========================
-class UTF8StreamHandler(logging.StreamHandler):
-    def __init__(self):
-        super().__init__(sys.stdout)
-        self.encoding = 'utf-8'
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('app.log', encoding='utf-8'),
-        UTF8StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+logger = ModernLogger("Notebook API", level="info", log_file="app.log")
 
 # ========================
 # ORM: 使用 SQLAlchemy 建立 SQLite 数据库
@@ -93,9 +82,35 @@ ALLOWED_MIME_TYPES = {
 }
 
 # ========================
+# 应用启动与关闭事件
+# ========================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时执行
+    logger.info("Starting up application")
+    Path("./notebooks").mkdir(exist_ok=True)
+    # 创建数据库表
+    Base.metadata.create_all(bind=engine)
+    # 初始化调度器，定时清理过期 notebook
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(cleanup_old_notebooks, 'interval', hours=1)
+    scheduler.start()
+    
+    yield
+    
+    # 关闭时执行
+    logger.info("Shutting down application")
+    executor.shutdown(wait=True)
+    for notebook_id, kem in kernel_managers.items():
+        try:
+            kem.shutdown_kernel()
+        except Exception as e:
+            logger.error(f"Error shutting down kernel {notebook_id}: {str(e)}")
+
+# ========================
 # 初始化 FastAPI 应用
 # ========================
-app = FastAPI(title="Notebook API", version="1.0.0")
+app = FastAPI(title="Notebook API", version="1.0.0", lifespan=lifespan)
 
 # 包含 sandbox 路由器
 app.include_router(sandbox_router)
@@ -604,20 +619,27 @@ async def send_operation_endpoint(send_operation_request: SendOperationRequest, 
 
     # 对流式响应进行包装以过滤输出
     async def filtered_generate_response():
+        import asyncio
         async for chunk in generate_response(operation):
             if isinstance(chunk, str):
                 sanitized_chunk = sanitize_response_content(chunk, notebook_id)
                 if sanitized_chunk:  # 只有非空的chunk才返回
                     yield sanitized_chunk
             else:
-                yield chunk
+                if chunk:  # 只有非空chunk才发送
+                    yield chunk
+            # 确保立即发送而不缓冲
+            await asyncio.sleep(0)
 
     return StreamingResponse(
         filtered_generate_response(),
         media_type="application/json",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用nginx缓存
         }
     )
 
@@ -984,30 +1006,6 @@ async def cleanup_assets(notebook_id: str, db: Session = Depends(get_db)):
 
 
 # ========================
-# 应用启动与关闭事件
-# ========================
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting up application")
-    Path("./notebooks").mkdir(exist_ok=True)
-    # 创建数据库表
-    Base.metadata.create_all(bind=engine)
-    # 初始化调度器，定时清理过期 notebook
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(cleanup_old_notebooks, 'interval', hours=1)
-    scheduler.start()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Shutting down application")
-    executor.shutdown(wait=True)
-    for notebook_id, kem in kernel_managers.items():
-        try:
-            kem.shutdown_kernel()
-        except Exception as e:
-            logger.error(f"Error shutting down kernel {notebook_id}: {str(e)}")
-
-# ========================
 # 辅助函数：清理过期的 notebook
 # ========================
 def cleanup_old_notebooks():
@@ -1030,5 +1028,7 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=18600,
         log_level="info",
-        access_log=True
+        access_log=True,
+        timeout_keep_alive=0,  # 立即关闭空闲连接以避免缓冲
+        timeout_graceful_shutdown=0  # 快速关闭以避免缓冲
     )

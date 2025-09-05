@@ -34,7 +34,7 @@
       "@Utils/*": ["./src/utils/*"],
       "@Config/*": ["./src/config/*"],
       "@Types/*": ["./src/types/*"],
-      "@WorkflowMode/*": ["src/components/Senario/Workflow/*"],
+      "@Senario/*": ["src/components/Senario/Workflow/*"],
       "@BasicMode/*": ["src/components/Senario/View/*"],
       "@Storage/*": ["./src/storage/*"],
       "@Hooks/*": ["./src/hooks/*"]

@@ -15,7 +15,7 @@ const SwipeIndicator: React.FC<SwipeIndicatorProps> = memo(({ swipeDistance, vis
 
   return (
     <div
-      className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-full shadow-lg pointer-events-none"
+      className="fixed top-4 left-4 z-50 flex items-center gap-2 px-3 py-2 bg-theme-500 text-white rounded-full shadow-lg pointer-events-none"
       style={{ 
         opacity: swipeDistance / CONSTANTS.MAX_SWIPE_DISTANCE,
         transform: `translateX(${Math.min(swipeDistance * 0.5, 50)}px)`

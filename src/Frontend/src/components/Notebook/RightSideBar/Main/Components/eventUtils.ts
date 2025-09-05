@@ -1,4 +1,4 @@
-import { EVENT_TYPES, EventType } from '../../../store/AIAgentStore';
+import { EVENT_TYPES, EventType } from '@Store/AIAgentStore';
 
 export const getEventLabel = (type: EventType, t: any) => {
   const labelConfig = {

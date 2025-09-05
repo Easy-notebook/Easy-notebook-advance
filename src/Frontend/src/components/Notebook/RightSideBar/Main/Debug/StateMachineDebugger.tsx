@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS } from '../../Senario/Workflow/store/workflowStateMachine';
-import { usePipelineStore } from '../../Senario/Workflow/store/usePipelineStore';
+import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS } from '@Senario/Workflow/store/workflowStateMachine';
+import { usePipelineStore } from '@Senario/Workflow/store/usePipelineStore';
 import { 
   Settings, 
   ChevronDown, 
@@ -22,7 +22,7 @@ import {
   Eye,
   Repeat
 } from 'lucide-react';
-import { extractSectionTitle,extractChapterTitle} from '../utils/String';
+import { extractSectionTitle,extractChapterTitle} from '@Utils/String';
 
 const StateMachineDebugger: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);

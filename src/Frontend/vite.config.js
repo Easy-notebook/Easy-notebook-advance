@@ -20,6 +20,7 @@ export default defineConfig({
       '@Utils': resolve(__dirname, './src/utils'),
       '@Config': resolve(__dirname, './src/config'),
       '@Types': resolve(__dirname, './src/types'),
+      '@Senario': resolve(__dirname, './src/components/Senario/'),
       '@WorkflowMode': resolve(__dirname, './src/components/Senario/WorkflowMode'),
       '@BasicMode': resolve(__dirname, './src/components/Senario/BasicMode'),
       '@Storage': resolve(__dirname, './src/storage'),

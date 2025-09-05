@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bot, Image, Video, Command, Brain } from 'lucide-react';
+import { Tag, Space } from 'antd';
 
 export interface AgentInfoProps {
   agent?: string;
@@ -36,18 +37,21 @@ const AgentInfo: React.FC<AgentInfoProps> = ({ agent, model, type }) => {
   if (!agent && !type) return null;
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1 bg-theme-50 rounded-md">
-      {getAgentIcon(type || agent)}
-      <span className="text-xs text-theme-700 font-medium">
+    <Space size={4}>
+      <Tag 
+        icon={getAgentIcon(type || agent)}
+        color="blue"
+        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+      >
         {getAgentName(type || agent)}
-      </span>
+      </Tag>
       {model && (
-        <span className="text-xs text-gray-500">({model})</span>
+        <Tag color="default" size="small">
+          {model}
+        </Tag>
       )}
-    </div>
+    </Space>
   );
 };
 
 export default AgentInfo;
-
-

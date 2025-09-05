@@ -1,12 +1,15 @@
 import React, { useState, useEffect, memo, useCallback } from 'react';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
+import { Space, Typography } from 'antd';
 import {
   StatusDot,
   SidebarButton,
   RunningIndicator,
   TaskCounter
 } from '@Notebook/LeftSideBar/shared/components';
+
+const { Title } = Typography;
 
 interface AgentListProps {
   isCollapsed: boolean;
@@ -152,38 +155,42 @@ const AgentList: React.FC<AgentListProps> = ({
 
   return (
     <div className="py-0.5">
-      {AGENT_GROUPS.map((group) => (
-        <div key={group.name} className="mb-3">
-          {/* 组标题 */}
-          <div className="px-2.5 mb-1">
-            <h2 className="pl-2 text-base font-semibold text-theme-800">
-              {group.name}
-            </h2>
-          </div>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        {AGENT_GROUPS.map((group) => (
+          <div key={group.name}>
+            {/* 组标题 */}
+            <div className="px-2.5 mb-1">
+              <Title level={4} style={{ margin: 0, fontSize: '16px' }} className="pl-2 text-theme-800">
+                {group.name}
+              </Title>
+            </div>
 
-          {/* 组内的agents */}
-          <div className="px-2.5 space-y-0.5">
-            {group.agents.map((agent) => {
-              const stats = getAgentStats(agent.type);
-              const isActive = selectedAgentType === agent.type;
-              const hasMemory = !!agentMemories[agent.type];
-              const isRunning = runningAgents.has(agent.type);
-              
-              return (
-                <AgentItem
-                  key={agent.type}
-                  agent={agent}
-                  isActive={isActive}
-                  hasMemory={hasMemory}
-                  isRunning={isRunning}
-                  taskCount={stats.taskCount}
-                  onClick={() => handleAgentClick(agent.type)}
-                />
-              );
-            })}
+            {/* 组内的agents */}
+            <div className="px-2.5">
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                {group.agents.map((agent) => {
+                  const stats = getAgentStats(agent.type);
+                  const isActive = selectedAgentType === agent.type;
+                  const hasMemory = !!agentMemories[agent.type];
+                  const isRunning = runningAgents.has(agent.type);
+                  
+                  return (
+                    <AgentItem
+                      key={agent.type}
+                      agent={agent}
+                      isActive={isActive}
+                      hasMemory={hasMemory}
+                      isRunning={isRunning}
+                      taskCount={stats.taskCount}
+                      onClick={() => handleAgentClick(agent.type)}
+                    />
+                  );
+                })}
+              </Space>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </Space>
     </div>
   );
 };

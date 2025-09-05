@@ -4,7 +4,7 @@ import {
   BarChart2, Bug, AlertTriangle, MessageCircle, Wrench, Server,
   Edit, ShieldCheck
 } from 'lucide-react';
-import { EVENT_TYPES, EventType } from '../../../store/AIAgentStore';
+import { EVENT_TYPES, EventType } from '@Store/AIAgentStore';
 
 export interface EventIconProps { type: EventType; className?: string; onProcess?: boolean }
 

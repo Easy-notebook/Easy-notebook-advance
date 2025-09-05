@@ -11,7 +11,7 @@ import { findCellsByStep } from '@Utils/markdownParser';
 import { createExportHandlers } from '@Utils/exportToFile/exportUtils';
 import { useToast } from '../UI/Toast';
 import { uiLog, notebookLog } from '@Utils/logger';
-import AIAgentSidebarOrig from './RightSideBar/AIAgentSidebar';
+import AIAgentSidebarOrig from './RightSideBar';
 import useOperatorStore from '@Store/operatorStore';
 import CommandInputOrig from './FunctionBar/AITerminal';
 import { useAIAgentStore } from '@Store/AIAgentStore';
