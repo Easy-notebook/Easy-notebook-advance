@@ -9,7 +9,7 @@ import { ThinkingCellExtension } from './extensions/ThinkingCellExtension'
 import SimpleTableExtension from './extensions/TableExtension'
 import ImageExtension from './extensions/ImageExtension'
 import LaTeXExtension from './extensions/LaTeXExtension'
-import TipTapSlashCommands from './TipTap/TipTapSlashCommands'
+import { TipTapSlashCommandsComponent as TipTapSlashCommands } from './TipTap/TipTapSlashCommands'
 import { useTipTapSlashCommands } from './TipTap/useTipTapSlashCommands'
 import SimpleDragManager from './TipTap/BlockManager/SimpleDragManager'
 import useStore from '../../store/notebookStore'
@@ -1297,12 +1297,13 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         editor={currentEditor}
         isOpen={slashCommands.isMenuOpen}
         onClose={() => {
-          slashCommands.removeSlashText();
           slashCommands.closeMenu();
         }}
         position={slashCommands.menuPosition}
         searchQuery={slashCommands.searchQuery}
         onQueryUpdate={slashCommands.updateSlashQuery}
+        slashRange={slashCommands.slashRange}
+        onRemoveSlashText={slashCommands.removeSlashText}
       />
 
 

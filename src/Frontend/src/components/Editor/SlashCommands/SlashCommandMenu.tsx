@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Code, 
   Type, 
@@ -6,14 +6,12 @@ import {
   Table, 
   Brain, 
   Calculator, 
-  Hash,
   List,
   ListOrdered,
   Quote,
   Heading1,
   Heading2,
   Heading3,
-  FileText,
   Zap
 } from 'lucide-react';
 
@@ -31,16 +29,20 @@ interface SlashCommandMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onCommand: (command: SlashCommand) => void;
+  onChatRequest?: (query: string) => void; // Add chat request handler
   position: { x: number; y: number };
   searchQuery?: string;
+  onQueryChange?: (q: string) => void;
 }
 
 const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   isOpen,
   onClose,
   onCommand,
+  onChatRequest,
   position,
-  searchQuery = ''
+  searchQuery = '',
+  onQueryChange
 }) => {
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -48,135 +50,140 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState(searchQuery);
 
-  // 定义所有可用的命令
+  // keep local query synced with props when it changes
+  useEffect(() => {
+    setQuery(searchQuery || '');
+  }, [searchQuery]);
+
+  // Define all available commands
   const commands: SlashCommand[] = [
-    // 基础内容
+    // Basic content
     {
       id: 'text',
-      title: '文本',
-      description: '开始写作...',
+      title: 'Text',
+      description: 'Start writing...',
       icon: <Type size={16} />,
-      keywords: ['text', 'paragraph', '文本', '段落'],
+      keywords: ['text', 'paragraph', 'content'],
       action: () => {},
       category: 'basic'
     },
     {
       id: 'heading1',
-      title: '标题 1',
-      description: '大标题',
+      title: 'Heading 1',
+      description: 'Large heading',
       icon: <Heading1 size={16} />,
-      keywords: ['h1', 'heading', 'title', '标题', '大标题'],
+      keywords: ['h1', 'heading', 'title'],
       action: () => {},
       category: 'basic'
     },
     {
       id: 'heading2',
-      title: '标题 2',
-      description: '中标题',
+      title: 'Heading 2',
+      description: 'Medium heading',
       icon: <Heading2 size={16} />,
-      keywords: ['h2', 'heading', 'subtitle', '标题', '中标题'],
+      keywords: ['h2', 'heading', 'subtitle'],
       action: () => {},
       category: 'basic'
     },
     {
       id: 'heading3',
-      title: '标题 3',
-      description: '小标题',
+      title: 'Heading 3',
+      description: 'Small heading',
       icon: <Heading3 size={16} />,
-      keywords: ['h3', 'heading', '标题', '小标题'],
+      keywords: ['h3', 'heading', 'subtitle'],
       action: () => {},
       category: 'basic'
     },
     {
       id: 'bulletlist',
-      title: '无序列表',
-      description: '创建一个简单的无序列表',
+      title: 'Bulleted list',
+      description: 'Create a bulleted list',
       icon: <List size={16} />,
-      keywords: ['list', 'bullet', 'ul', '列表', '无序'],
+      keywords: ['list', 'bullet', 'ul'],
       action: () => {},
       category: 'basic'
     },
     {
       id: 'numberedlist',
-      title: '有序列表',
-      description: '创建一个编号列表',
+      title: 'Numbered list',
+      description: 'Create a numbered list',
       icon: <ListOrdered size={16} />,
-      keywords: ['list', 'numbered', 'ol', '列表', '有序', '编号'],
+      keywords: ['list', 'numbered', 'ol'],
       action: () => {},
       category: 'basic'
     },
     {
       id: 'quote',
-      title: '引用',
-      description: '创建一个引用块',
+      title: 'Quote',
+      description: 'Insert a blockquote',
       icon: <Quote size={16} />,
-      keywords: ['quote', 'blockquote', '引用'],
+      keywords: ['quote', 'blockquote'],
       action: () => {},
       category: 'basic'
     },
     
-    // 代码和技术
+    // Code and technical
     {
       id: 'code',
-      title: '代码块',
-      description: '创建一个可执行的代码单元格',
+      title: 'Code block',
+      description: 'Create an executable code cell',
       icon: <Code size={16} />,
-      keywords: ['code', 'python', 'javascript', '代码', '编程'],
+      keywords: ['code', 'python', 'javascript', 'programming'],
       action: () => {},
       category: 'advanced'
     },
     {
       id: 'math',
-      title: '数学公式',
-      description: '插入LaTeX数学公式',
+      title: 'Math formula',
+      description: 'Insert a LaTeX math formula',
       icon: <Calculator size={16} />,
-      keywords: ['math', 'latex', 'formula', '数学', '公式'],
+      keywords: ['math', 'latex', 'formula'],
       action: () => {},
       category: 'advanced'
     },
     
-    // 媒体
+    // Media
     {
       id: 'image',
-      title: '图片',
-      description: '上传或插入图片',
+      title: 'Image',
+      description: 'Upload or insert an image',
       icon: <Image size={16} />,
-      keywords: ['image', 'photo', 'picture', '图片', '照片'],
+      keywords: ['image', 'photo', 'picture'],
       action: () => {},
       category: 'media'
     },
     {
       id: 'table',
-      title: '表格',
-      description: '插入一个表格',
+      title: 'Table',
+      description: 'Insert a table',
       icon: <Table size={16} />,
-      keywords: ['table', 'grid', '表格'],
+      keywords: ['table', 'grid'],
       action: () => {},
       category: 'media'
     },
     
-    // AI功能
+    // AI features
     {
       id: 'ai-thinking',
-      title: 'AI思考',
-      description: '创建一个AI思考单元格',
+      title: 'AI Thinking',
+      description: 'Create an AI thinking cell',
       icon: <Brain size={16} />,
-      keywords: ['ai', 'thinking', 'assistant', 'AI', '思考', '助手'],
+      keywords: ['ai', 'thinking', 'assistant'],
       action: () => {},
       category: 'ai'
     },
     {
       id: 'ai-generate',
-      title: 'AI生成',
-      description: '让AI生成内容',
+      title: 'AI Generate',
+      description: 'Let AI generate content',
       icon: <Zap size={16} />,
-      keywords: ['ai', 'generate', 'create', 'AI', '生成', '创建'],
+      keywords: ['ai', 'generate', 'create'],
       action: () => {},
       category: 'ai'
     }
   ];
 
-  // 过滤命令
+  // Filter commands
   useEffect(() => {
     const filtered = commands.filter(command => {
       if (!query.trim()) return true;
@@ -193,7 +200,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     setSelectedIndex(0);
   }, [query]);
 
-  // 键盘导航
+  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
@@ -213,7 +220,14 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           break;
         case 'Enter':
           e.preventDefault();
-          if (filteredCommands[selectedIndex]) {
+          if (filteredCommands.length === 0) {
+            // No matching commands - send as chat request
+            if (query.trim() && onChatRequest) {
+              onChatRequest(query.trim());
+            }
+            onClose();
+          } else if (filteredCommands[selectedIndex]) {
+            // Execute the selected command
             onCommand(filteredCommands[selectedIndex]);
           }
           break;
@@ -228,14 +242,14 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, filteredCommands, selectedIndex, onCommand, onClose]);
 
-  // 自动聚焦输入框
+  // Auto-focus the search input
   useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
     }
   }, [isOpen]);
 
-  // 点击外部关闭
+  // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -274,23 +288,29 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         maxHeight: '400px'
       }}
     >
-      {/* 搜索输入框 */}
+      {/* Search input */}
       <div className="p-3 border-b border-gray-100">
         <input
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索命令..."
+          onChange={(e) => {
+            const val = e.target.value;
+            setQuery(val);
+            onQueryChange?.(val);
+          }}
+          placeholder="Search commands..."
           className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-theme-500 focus:border-transparent"
         />
       </div>
 
-      {/* 命令列表 */}
+      {/* Command list */}
       <div className="max-h-80 overflow-y-auto">
         {filteredCommands.length === 0 ? (
           <div className="p-4 text-center text-gray-500 text-sm">
-            没有找到匹配的命令
+              <div className="text-xs text-theme-600">
+                Press Enter to use let AI to help you.
+              </div>               
           </div>
         ) : (
           <div className="py-2">
@@ -320,12 +340,12 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         )}
       </div>
 
-      {/* 底部提示 */}
-      <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
-        <span>↑↓ 导航</span>
-        <span>Enter 选择</span>
-        <span>Esc 关闭</span>
-      </div>
+      {/* Footer hints */}
+      {filteredCommands.length !== 0 && <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
+        <span>↑↓ Navigate</span>
+        <span>Enter Select</span>
+        <span>Esc Close</span>
+      </div>}
     </div>
   );
 };

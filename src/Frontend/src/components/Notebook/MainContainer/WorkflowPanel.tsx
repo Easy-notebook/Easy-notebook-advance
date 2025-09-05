@@ -5,7 +5,7 @@ import { CheckCircle, AlertCircle, X } from 'lucide-react';
 import { useWorkflowPanelStore } from '../store/workflowPanelStore';
 import { useWorkflowStateMachine, EVENTS } from '../../Senario/Workflow/store/workflowStateMachine';
 import { usePipelineStore } from '../../Senario/Workflow/store/usePipelineStore';
-import { extractSectionTitle} from '../utils/String';
+import { extractSectionTitle} from '../../../utils/String';
 import WorkflowErrorBoundary from './WorkflowErrorBoundary';
 
 // ----------------------

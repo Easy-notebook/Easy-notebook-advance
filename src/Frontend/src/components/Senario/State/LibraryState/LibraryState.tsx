@@ -112,10 +112,9 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
       try {
         const success = await deleteNotebook(selectedNotebook);
         if (success) {
-          message.success('笔记本已成功删除');
           closeDeleteModal();
         } else {
-          message.error('删除笔记本失败，请重试');
+          message.error('Failed to delete notebook');
         }
       } catch (error) {
         console.error('Delete notebook error:', error);
@@ -200,22 +199,22 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
 
       {/* Delete Confirmation Modal */}
       <Modal
-        title="删除 Notebook"
+        title="Delete Notebook"
         open={showDeleteModal}
         onOk={handleDeleteConfirm}
         onCancel={closeDeleteModal}
-        okText="删除"
-        cancelText="取消"
+        okText="Delete"
+        cancelText="Cancel"
         okButtonProps={{ danger: true }}
       >
         <p>
-          确定要删除 Notebook <strong>"{selectedNotebookData?.name || selectedNotebook}"</strong> 吗？
-          此操作会清空其本地缓存，且无法撤销。
+          Are you sure you want to delete Notebook <strong>"{selectedNotebookData?.name || selectedNotebook}"</strong> ?
+          This operation will clear its local cache and cannot be undone.
         </p>
         {selectedNotebookData && (
           <div className="mt-3 text-sm text-gray-600">
-            <p>包含 {selectedNotebookData.fileCount} 个文件</p>
-            <p>总大小: {Math.round((selectedNotebookData.totalSize || 0) / 1024)} KB</p>
+            <p>Contains {selectedNotebookData.fileCount} files</p>
+            <p>Total size: {Math.round((selectedNotebookData.totalSize || 0) / 1024)} KB</p>
           </div>
         )}
       </Modal>

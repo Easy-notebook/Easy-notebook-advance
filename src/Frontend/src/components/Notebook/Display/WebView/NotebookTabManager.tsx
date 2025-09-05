@@ -363,7 +363,7 @@ const TabContentRenderer: React.FC<TabContentRendererProps> = ({ activeTab }) =>
     return (
         <div className="flex items-center justify-center h-full bg-white">
             <div className="text-center">
-                <BookOpen className="w-12 h-12 mx-auto mb-4 text-blue-500" />
+                <BookOpen className="w-12 h-12 mx-auto mb-4 text-theme-500" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">{activeTab.name}</h3>
                 <p className="text-gray-600">Notebook content will appear here.</p>
             </div>

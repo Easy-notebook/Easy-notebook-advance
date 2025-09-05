@@ -5,16 +5,19 @@ import { navigateToLibrary, navigateToHome } from '@/utils/navigation';
 import useRouteStore from '@Store/routeStore';
 import FileTree from '@LeftSidebar/Main/Workspace/FileExplorer/FileExplorer';
 import AgentList from '@LeftSidebar/Main/Workspace/Agents/AgentList';
+import { AISuggestions } from '@LeftSidebar/Main/Workspace/Suggestions';
+import { useAISuggestions } from '@LeftSidebar/Main/Workspace/Suggestions/useAISuggestions';
 import { AgentType } from '@Services/agentMemoryService';
 
 // 导入拆分后的组件
 import { PhaseSection } from './PhaseSection';
 import MiniSidebar from '@LeftSidebar/Mini/MiniSidebar';
 
+import { Tabs } from 'antd';
+
 // 导入共享组件
 import {
   StatusDot,
-  TabSwitcher,
   SidebarContainer,
   SidebarHeader,
   SidebarContent
@@ -78,7 +81,7 @@ const OutlineSidebar = ({
         return 'workspace'; // Default for workspace view
     }
   }, [currentView, currentRoute, settingstore.settingsOpen]);
-  const [activeTab, setActiveTab] = useState<'file' | 'outline' | 'agents'>('outline');
+  const [activeTab, setActiveTab] = useState<'file' | 'outline' | 'agents' | 'suggestions'>('outline');
   const [isHovered, setIsHovered] = useState(false);
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
 
@@ -131,6 +134,16 @@ const OutlineSidebar = ({
     setSelectedAgentType(agentType);
     onAgentSelect?.(agentType);
   }, [onAgentSelect]);
+
+  // AI 建议相关
+  const {
+    suggestions,
+    loading: suggestionsLoading,
+    applySuggestion,
+    dismissSuggestion,
+    viewSuggestion,
+    newSuggestionsCount
+  } = useAISuggestions(notebookId || undefined);
 
   const allPhases = useMemo(() => tasks.flatMap(task => task.phases), [tasks]);
 
@@ -186,6 +199,7 @@ const OutlineSidebar = ({
           if (itemId === 'library') setActiveTab('file');
           else if (itemId === 'knowledge-forest') navigateToLibrary();
           else if (itemId === 'tools') setActiveTab('outline');
+          else if (itemId === 'suggestions') setActiveTab('suggestions');
           else if (itemId === 'settings') settingstore.openSettings();
           else if (itemId === 'new-notebook') {
             useStore.getState().setNotebookId(null);
@@ -210,13 +224,37 @@ const OutlineSidebar = ({
         >
           {/* 简化的头部区域：只显示 Tab 切换 + 设置按钮 */}
           <SidebarHeader>
-            <div className="flex items-center bg-white align-center w-full justify-center flex-col">
-              {/* Tab 切换器 */}
-              <TabSwitcher
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-              />
-            </div>
+            <Tabs
+              activeKey={activeTab}
+              onChange={(key) => setActiveTab(key as 'file' | 'outline' | 'agents' | 'suggestions')}
+              size="small"
+              centered
+              items={[
+                {
+                  key: 'file',
+                  label: 'Files',
+                },
+                {
+                  key: 'outline', 
+                  label: 'Outline',
+                },
+                {
+                  key: 'agents',
+                  label: 'Agents',
+                },
+                {
+                  key: 'suggestions',
+                  label: newSuggestionsCount > 0 ? (
+                    <span>
+                      Suggestions 
+                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                        {newSuggestionsCount}
+                      </span>
+                    </span>
+                  ) : 'Suggestions',
+                }
+              ]}
+            />
           </SidebarHeader>
 
           {/* 中间内容：根据 activeTab 切换显示 */}
@@ -233,6 +271,16 @@ const OutlineSidebar = ({
                   isCollapsed={false}
                   onAgentSelect={handleAgentSelect}
                   selectedAgentType={selectedAgentType}
+                />
+              </div>
+            ) : activeTab === 'suggestions' ? (
+              // AI建议视图：显示AI建议列表
+              <div className="py-0">
+                <AISuggestions
+                  suggestions={suggestions}
+                  onApplySuggestion={applySuggestion}
+                  onDismissSuggestion={dismissSuggestion}
+                  onViewSuggestion={viewSuggestion}
                 />
               </div>
             ) : (

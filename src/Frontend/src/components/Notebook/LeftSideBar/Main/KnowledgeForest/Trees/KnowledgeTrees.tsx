@@ -1,33 +1,63 @@
 import React from 'react';
 import { TreePine, Leaf, Sprout } from 'lucide-react';
+import { Card, Space, Tag, Typography, Badge } from 'antd';
+
+const { Title, Text } = Typography;
 
 const KnowledgeTrees: React.FC = () => {
+  const treeData = [
+    {
+      id: 1,
+      title: 'Machine Learning',
+      icon: <TreePine className="w-4 h-4 text-green-600" />,
+      color: 'green',
+      status: 'Coming Soon'
+    },
+    {
+      id: 2,
+      title: 'Data Science',
+      icon: <Leaf className="w-4 h-4 text-green-500" />,
+      color: 'green',
+      status: 'Coming Soon'
+    },
+    {
+      id: 3,
+      title: 'Growing Seeds',
+      icon: <Sprout className="w-4 h-4 text-green-400" />,
+      color: 'green',
+      status: 'Coming Soon'
+    }
+  ];
+
   return (
     <div className="p-4">
       <div className="flex items-center gap-2 mb-3">
         <TreePine className="w-4 h-4 text-green-600" />
-        <h3 className="font-medium text-sm text-gray-800">Knowledge Trees</h3>
+        <Title level={5} style={{ margin: 0, fontSize: '14px' }}>
+          Knowledge Trees
+        </Title>
       </div>
       
-      <div className="space-y-2 text-sm text-gray-500">
-        <div className="flex items-center gap-2 p-2 bg-green-50 rounded">
-          <TreePine className="w-3 h-3 text-green-600" />
-          <span>Machine Learning</span>
-          <span className="ml-auto text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">Coming Soon</span>
-        </div>
-        
-        <div className="flex items-center gap-2 p-2 bg-green-50 rounded">
-          <Leaf className="w-3 h-3 text-green-500" />
-          <span>Data Science</span>
-          <span className="ml-auto text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">Coming Soon</span>
-        </div>
-        
-        <div className="flex items-center gap-2 p-2 bg-green-50 rounded">
-          <Sprout className="w-3 h-3 text-green-400" />
-          <span>Growing Seeds</span>
-          <span className="ml-auto text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded">Coming Soon</span>
-        </div>
-      </div>
+      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+        {treeData.map((tree) => (
+          <Card
+            key={tree.id}
+            size="small"
+            hoverable
+            style={{ backgroundColor: '#f6ffed' }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {tree.icon}
+                <Text strong>{tree.title}</Text>
+              </div>
+              <Tag color="orange" size="small">
+                {tree.status}
+              </Tag>
+            </div>
+          </Card>
+        ))}
+      </Space>
     </div>
   );
 };

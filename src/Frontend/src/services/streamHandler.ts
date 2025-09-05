@@ -379,6 +379,7 @@ export const handleStreamResponse = async (
         }
 
         case 'addCell2EndWithContent': {
+            console.log('🔄 Processing addCell2EndWithContent:', data);
             const cellType = data.data?.payload?.type;
             const description = data.data?.payload?.description;
             const content = data.data?.payload?.content;
@@ -386,14 +387,18 @@ export const handleStreamResponse = async (
             const commandId = data.data?.payload?.commandId;
             const prompt = data.data?.payload?.prompt;
             const serverUniqueIdentifier = (data.data as any)?.payload?.uniqueIdentifier || metadata?.uniqueIdentifier;
+            
+            console.log('📝 Extracted data:', { cellType, description, contentLength: content?.length, metadata, commandId, prompt, serverUniqueIdentifier });
 
             let newCellId = null;
             if (cellType && description) {
+                console.log('✅ cellType and description found, creating cell...');
                 const enableEdit = !metadata?.isGenerating; // 如果正在生成，不启用编辑
+                console.log('🔧 enableEdit:', enableEdit);
 
                 // 如果是图片或视频生成任务，使用唯一标识符策略
                 if ((cellType === 'image' || cellType === 'video') && metadata?.isGenerating && (prompt || serverUniqueIdentifier)) {
-
+                    console.log('🖼️ Creating image/video generation cell...');
 
                     // 优先使用服务端提供的唯一标识符，否则回退到本地生成
                     const uniqueIdentifier = serverUniqueIdentifier || `gen-${Date.now()}-${(prompt || '').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
@@ -420,8 +425,15 @@ export const handleStreamResponse = async (
                     }
                 } else {
                     // 普通cell创建
+                    console.log('📝 Creating normal cell...');
                     const normalizedType2 = normalizeCellTypeForStore(cellType);
-                    newCellId = await globalUpdateInterface.addNewCell2End(normalizedType2, description, enableEdit);
+                    console.log('🔄 Normalized type:', normalizedType2);
+                    try {
+                        newCellId = await globalUpdateInterface.addNewCell2End(normalizedType2, description, enableEdit);
+                        console.log('✅ Cell created successfully, ID:', newCellId);
+                    } catch (error) {
+                        console.error('❌ Error creating cell:', error);
+                    }
 
                     // 如果这是一个生成任务且有 commandId，存储映射关系
                     if (newCellId && commandId && metadata?.isGenerating) {
@@ -429,25 +441,47 @@ export const handleStreamResponse = async (
                         agentLog.debug('Storing cell mapping', { commandId, cellId: newCellId });
                     }
                 }
+            } else {
+                console.warn('⚠️ Missing cellType or description:', { cellType, description });
             }
             if (content && newCellId) {
+                console.log('📄 Adding content to cell...', { newCellId, contentLength: content.length });
                 // Sticky-aware: append to the cell's existing content instead of overwriting
                 const target = useStore.getState().cells.find(c => c.id === newCellId);
                 const appended = `${target?.content || ''}${content}`;
-                useStore.getState().updateCell(newCellId, appended);
+                console.log('📄 Content to set:', { existing: target?.content, new: content, final: appended.substring(0, 100) + '...' });
+                try {
+                    useStore.getState().updateCell(newCellId, appended);
+                    console.log('✅ Content updated successfully');
+                } catch (error) {
+                    console.error('❌ Error updating cell content:', error);
+                }
+            } else {
+                console.warn('⚠️ Missing content or newCellId:', { hasContent: !!content, newCellId });
             }
 
             // Handle metadata for the newly created cell
             if (metadata && newCellId) {
+                console.log('🏷️ Updating cell metadata...', { newCellId, metadata });
                 // Update the cell's metadata in the store
                 const cells = useStore.getState().cells;
                 const targetCell = cells.find(cell => cell.id === newCellId);
 
                 if (targetCell) {
                     // 使用专门的updateCellMetadata方法
-                    useStore.getState().updateCellMetadata(newCellId, metadata);
+                    try {
+                        useStore.getState().updateCellMetadata(newCellId, metadata);
+                        console.log('✅ Metadata updated successfully');
+                    } catch (error) {
+                        console.error('❌ Error updating metadata:', error);
+                    }
+                } else {
+                    console.warn('⚠️ Target cell not found for metadata update:', newCellId);
                 }
+            } else {
+                console.log('ℹ️ No metadata to update or no cellId');
             }
+            console.log('✅ addCell2EndWithContent processing complete');
             break;
         }
 
@@ -466,6 +500,28 @@ export const handleStreamResponse = async (
                         state.setEditingCellId(streamingCandidate.id);
                     }
                 }
+                
+                // Record content generation activity (only for first chunk to avoid spam)
+                const currentCell = state.cells.find(c => c.id === state.currentCellId);
+                const isFirstChunk = !currentCell || (currentCell.content.code || currentCell.content.description || '').trim() === '';
+                
+                if (isFirstChunk) {
+                    const { useAIAgentStore } = await import('../store/AIAgentStore');
+                    useAIAgentStore.getState().addAction({
+                        type: EVENT_TYPES.AI_GENERATING_TEXT,
+                        content: 'Generating content for cell',
+                        result: '',
+                        relatedQAIds: [],
+                        cellId: state.currentCellId,
+                        viewMode: state.viewMode,
+                        onProcess: true,
+                        agentName: 'Content Generator',
+                        agentType: 'text_creator',
+                        taskDescription: `Streaming content to cell`,
+                        progressPercent: 0
+                    });
+                }
+                
                 await globalUpdateInterface.addNewContent2CurrentCell(content);
             }
             break;
@@ -473,7 +529,42 @@ export const handleStreamResponse = async (
 
         case 'runCurrentCodeCell': {
             agentLog.info('Executing current code cell', { data });
-            await globalUpdateInterface.runCurrentCodeCell();
+            
+            // Record code execution start activity
+            const { useAIAgentStore } = await import('../store/AIAgentStore');
+            const actionId = `action-run-${Date.now()}`;
+            useAIAgentStore.getState().addAction({
+                id: actionId,
+                type: EVENT_TYPES.AI_RUNNING_CODE,
+                content: 'Executing code cell',
+                result: '',
+                relatedQAIds: [],
+                cellId: useStore.getState().currentCellId,
+                viewMode: useStore.getState().viewMode,
+                onProcess: true,
+                agentName: 'Code Executor',
+                agentType: 'code_generator',
+                taskDescription: 'Running current code cell',
+                progressPercent: 0
+            });
+            
+            try {
+                await globalUpdateInterface.runCurrentCodeCell();
+                
+                // Update activity as completed
+                useAIAgentStore.getState().updateAction(actionId, {
+                    onProcess: false,
+                    result: 'Code executed successfully',
+                    progressPercent: 100
+                });
+            } catch (error) {
+                // Update activity as failed
+                useAIAgentStore.getState().updateAction(actionId, {
+                    onProcess: false,
+                    errorMessage: `Execution failed: ${error}`,
+                    progressPercent: 0
+                });
+            }
 
             // 记录debug完成（如果这是debug flow的一部分）
             try {
@@ -512,6 +603,21 @@ export const handleStreamResponse = async (
                                 interaction_type: 'debug_session'
                             }
                         );
+                        
+                        // Record debug completion activity
+                        useAIAgentStore.getState().addAction({
+                            type: EVENT_TYPES.AI_FIXING_BUGS,
+                            content: 'Debug process completed',
+                            result: 'Code fixed and executed successfully',
+                            relatedQAIds: [],
+                            cellId: useStore.getState().currentCellId,
+                            viewMode: useStore.getState().viewMode,
+                            onProcess: false,
+                            agentName: 'Debug Assistant',
+                            agentType: 'debug_assistant',
+                            taskDescription: 'Completed debug process and code execution',
+                            progressPercent: 100
+                        });
                     }
                 }
             } catch (error) {
@@ -986,7 +1092,22 @@ export const handleStreamResponse = async (
             const targetAgent = data.payload?.target_agent;
             const message = data.payload?.message;
             console.log('与Agent通信:', targetAgent, message);
-            // 这里可以添加Agent间通信的逻辑
+            
+            // Record agent communication activity
+            const { useAIAgentStore } = await import('../store/AIAgentStore');
+            useAIAgentStore.getState().addAction({
+                type: EVENT_TYPES.AI_UNDERSTANDING,
+                content: `Agent communication: ${message}`,
+                result: '',
+                relatedQAIds: [],
+                cellId: useStore.getState().currentCellId,
+                viewMode: useStore.getState().viewMode,
+                onProcess: true,
+                agentName: targetAgent || 'Communication Agent',
+                agentType: 'workflow_manager',
+                taskDescription: `Communicating with ${targetAgent}: ${message}`,
+                progressPercent: 0
+            });
             break;
         }
 
@@ -1086,7 +1207,22 @@ export const handleStreamResponse = async (
             const targetAgent = data.payload?.target_agent;
             const helpRequest = data.payload?.help_request;
             console.log('请求Agent帮助:', targetAgent, helpRequest);
-            // 这里可以添加Agent帮助请求的逻辑
+            
+            // Record agent help request activity
+            const { useAIAgentStore } = await import('../store/AIAgentStore');
+            useAIAgentStore.getState().addAction({
+                type: EVENT_TYPES.AI_CRITICAL_THINKING,
+                content: `Requesting help from ${targetAgent}`,
+                result: '',
+                relatedQAIds: [],
+                cellId: useStore.getState().currentCellId,
+                viewMode: useStore.getState().viewMode,
+                onProcess: true,
+                agentName: targetAgent || 'Help Agent',
+                agentType: 'debug_assistant',
+                taskDescription: `Help request: ${helpRequest}`,
+                progressPercent: 0
+            });
             break;
         }
 
@@ -1096,10 +1232,25 @@ export const handleStreamResponse = async (
             if (prompt && commandId) {
                 console.log('触发图片生成:', prompt);
 
+                // 添加图像生成活动
+                const activityInfo = getActivityFromOperation('trigger_image_generation', prompt);
+                useAIAgentStore.getState().addAction({
+                    type: activityInfo.eventType,
+                    content: prompt,
+                    result: '',
+                    relatedQAIds: [],
+                    cellId: null,
+                    viewMode: useStore.getState().viewMode,
+                    onProcess: true,
+                    agentName: activityInfo.agentName,
+                    agentType: activityInfo.agentType,
+                    taskDescription: activityInfo.taskDescription,
+                    progressPercent: 0
+                });
+
                 // 获取当前notebook状态和操作器
                 const notebookState = useStore.getState();
                 const notebookId = notebookState.notebookId;
-                // const currentCellId = notebookState.currentCellId; // not used
                 const viewMode = notebookState.viewMode;
                 const currentPhaseId = notebookState.currentPhaseId;
                 const currentStepIndex = notebookState.currentStepIndex;
@@ -1130,7 +1281,6 @@ export const handleStreamResponse = async (
 
                 // 将工具调用记录到当前进行中的 QA（如果有）
                 try {
-                    const { useAIAgentStore } = require('../store/AIAgentStore');
                     const state = useAIAgentStore.getState();
                     const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
                     if (runningQA) {
@@ -1337,6 +1487,88 @@ export const handleStreamResponse = async (
                 }
             }
             // 对于 'waiting', 'active', 'queued', 'generating' 等状态，继续等待轮询
+            break;
+        }
+
+        // 工作流阶段变化事件
+        case 'workflow_stage_changed': {
+            const phaseId = data.payload?.phaseId || data.payload?.chapter;
+            const stageName = data.payload?.stageName;
+            
+            if (phaseId) {
+                const stageDescription = getWorkflowStageDescription(phaseId);
+                
+                // Add workflow change activity
+                useAIAgentStore.getState().addAction({
+                    type: EVENT_TYPES.WORKFLOW_STAGE_CHANGE,
+                    content: `Entering new stage: ${stageDescription}`,
+                    result: 'Stage switched successfully',
+                    relatedQAIds: [],
+                    cellId: null,
+                    viewMode: useStore.getState().viewMode,
+                    onProcess: false,
+                    agentName: 'Workflow Manager',
+                    agentType: 'workflow_manager',
+                    taskDescription: `Workflow stage changed: ${stageDescription}`,
+                    workflowContext: {
+                        chapter: phaseId,
+                        stage: stageDescription
+                    }
+                });
+                
+                // 继续原有的处理逻辑
+                await globalUpdateInterface.setCurrentPhase(phaseId);
+                await globalUpdateInterface.setCurrentStepIndex(0);
+                await showToast({
+                    message: `当前阶段已更新: ${stageDescription}`,
+                    type: "success"
+                });
+            }
+            break;
+        }
+        
+        // 任务完成事件
+        case 'task_completed': {
+            const taskType = data.payload?.taskType || 'unknown';
+            const taskResult = data.payload?.result || '任务完成';
+            const agentType = data.payload?.agentType || 'general';
+            
+            // Add task completion activity
+            useAIAgentStore.getState().addAction({
+                type: EVENT_TYPES.TASK_COMPLETED,
+                content: `Task completed: ${taskType}`,
+                result: taskResult,
+                relatedQAIds: [],
+                cellId: null,
+                viewMode: useStore.getState().viewMode,
+                onProcess: false,
+                agentName: `${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent`,
+                agentType: agentType as any,
+                taskDescription: `Completed task: ${taskType}`
+            });
+            break;
+        }
+        
+        // 任务失败事件
+        case 'task_failed': {
+            const taskType = data.payload?.taskType || 'unknown';
+            const errorMessage = data.payload?.error || '任务失败';
+            const agentType = data.payload?.agentType || 'general';
+            
+            // Add task failure activity
+            useAIAgentStore.getState().addAction({
+                type: EVENT_TYPES.TASK_FAILED,
+                content: `Task failed: ${taskType}`,
+                result: '',
+                relatedQAIds: [],
+                cellId: null,
+                viewMode: useStore.getState().viewMode,
+                onProcess: false,
+                agentName: `${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent`,
+                agentType: agentType as any,
+                taskDescription: `Task failed: ${taskType}`,
+                errorMessage: errorMessage
+            });
             break;
         }
 

@@ -221,10 +221,10 @@ const CodeSandboxWebView: React.FC<CodeSandboxWebViewProps> = ({
 
     const getProjectTypeIcon = () => {
         const icons = {
-            'react': <Code className="w-4 h-4 text-blue-500" />,
+            'react': <Code className="w-4 h-4 text-theme-500" />,
             'vue': <Code className="w-4 h-4 text-green-500" />,
             'angular': <Code className="w-4 h-4 text-red-500" />,
-            'typescript': <Code className="w-4 h-4 text-blue-600" />,
+            'typescript': <Code className="w-4 h-4 text-theme-600" />,
             'html': <Globe className="w-4 h-4 text-orange-500" />,
             'javascript': <Code className="w-4 h-4 text-yellow-500" />
         };
@@ -233,7 +233,7 @@ const CodeSandboxWebView: React.FC<CodeSandboxWebViewProps> = ({
 
     const getProjectTypeColor = () => {
         const colors = {
-            'react': 'bg-blue-100 text-blue-800',
+            'react': 'bg-theme-100 text-theme-800',
             'vue': 'bg-green-100 text-green-800',
             'angular': 'bg-red-100 text-red-800',
             'typescript': 'bg-indigo-100 text-indigo-800',
@@ -285,7 +285,7 @@ const CodeSandboxWebView: React.FC<CodeSandboxWebViewProps> = ({
                             className={`px-2 py-1 text-xs rounded transition-colors disabled:opacity-50 ${
                                 isPreviewMode 
                                     ? 'bg-green-100 text-green-700' 
-                                    : 'bg-blue-100 text-blue-700'
+                                    : 'bg-theme-100 text-theme-700'
                             }`}
                             title={isPreviewMode ? "Switch to editor" : "Switch to preview"}
                         >

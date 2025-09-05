@@ -6,6 +6,7 @@ import sys
 import base64
 import mimetypes
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -21,24 +22,12 @@ import uvicorn
 from screenplay import generate_response
 from kernel_manager import KernelExecutionManager
 from api.sandbox_endpoints import router as sandbox_router
+from utils.logger import ModernLogger
 
 # ========================
 # 配置日志
 # ========================
-class UTF8StreamHandler(logging.StreamHandler):
-    def __init__(self):
-        super().__init__(sys.stdout)
-        self.encoding = 'utf-8'
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('app.log', encoding='utf-8'),
-        UTF8StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+logger = ModernLogger("Notebook API", level="info", log_file="app.log")
 
 # ========================
 # ORM: 使用 SQLAlchemy 建立 SQLite 数据库
@@ -93,9 +82,35 @@ ALLOWED_MIME_TYPES = {
 }
 
 # ========================
+# 应用启动与关闭事件
+# ========================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时执行
+    logger.info("Starting up application")
+    Path("./notebooks").mkdir(exist_ok=True)
+    # 创建数据库表
+    Base.metadata.create_all(bind=engine)
+    # 初始化调度器，定时清理过期 notebook
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(cleanup_old_notebooks, 'interval', hours=1)
+    scheduler.start()
+    
+    yield
+    
+    # 关闭时执行
+    logger.info("Shutting down application")
+    executor.shutdown(wait=True)
+    for notebook_id, kem in kernel_managers.items():
+        try:
+            kem.shutdown_kernel()
+        except Exception as e:
+            logger.error(f"Error shutting down kernel {notebook_id}: {str(e)}")
+
+# ========================
 # 初始化 FastAPI 应用
 # ========================
-app = FastAPI(title="Notebook API", version="1.0.0")
+app = FastAPI(title="Notebook API", version="1.0.0", lifespan=lifespan)
 
 # 包含 sandbox 路由器
 app.include_router(sandbox_router)
@@ -602,22 +617,66 @@ async def send_operation_endpoint(send_operation_request: SendOperationRequest, 
     sanitized_operation = sanitize_response_content(operation, notebook_id)
     logger.info(f"Received operation for notebook {notebook_id}: {sanitized_operation}")
 
-    # 对流式响应进行包装以过滤输出
+    # 对流式响应进行包装，保持原有过滤逻辑并添加性能优化
     async def filtered_generate_response():
+        import asyncio
+        import sys
+        import time
+        
+        logger.info(f"Starting stream for notebook {notebook_id}")
+        chunk_count = 0
+        start_time = time.time()
+        
         async for chunk in generate_response(operation):
+            chunk_count += 1
+            chunk_time = time.time()
+            
+            # 记录每个chunk的信息（仅记录前几个避免日志过多）
+            if chunk_count <= 3:
+                chunk_preview = str(chunk)[:100] if chunk else "None"
+                logger.info(f"Stream chunk #{chunk_count} (t+{chunk_time-start_time:.2f}s): {chunk_preview}")
+            elif chunk_count % 10 == 0:  # 每10个chunk记录一次
+                logger.info(f"Stream progress: {chunk_count} chunks sent (t+{chunk_time-start_time:.2f}s)")
+            
+            # 保持原有的类型处理逻辑
             if isinstance(chunk, str):
                 sanitized_chunk = sanitize_response_content(chunk, notebook_id)
                 if sanitized_chunk:  # 只有非空的chunk才返回
                     yield sanitized_chunk
             else:
+                # 对于非字符串chunk（如图片、视频数据），直接传递
                 yield chunk
+            
+            # 强制刷新标准输出缓冲区
+            sys.stdout.flush()
+            # 让出控制权确保立即传输
+            await asyncio.sleep(0)
+            
+        end_time = time.time()
+        logger.info(f"Stream completed for notebook {notebook_id}: {chunk_count} chunks in {end_time-start_time:.2f}s")
 
     return StreamingResponse(
         filtered_generate_response(),
         media_type="application/json",
         headers={
-            "Cache-Control": "no-cache",
+            # 完全禁用缓存
+            "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Last-Modified": "0",
+            "ETag": "",
+            # 保持连接活跃
             "Connection": "keep-alive",
+            "Keep-Alive": "timeout=0, max=1",
+            # 禁用代理和服务器缓冲
+            "X-Accel-Buffering": "no",  # 禁用nginx缓存
+            "X-Cache-Control": "no-cache",
+            # 确保流式传输
+            "Transfer-Encoding": "chunked",
+            "Content-Encoding": "identity",
+            # 跨域支持
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
         }
     )
 
@@ -984,30 +1043,6 @@ async def cleanup_assets(notebook_id: str, db: Session = Depends(get_db)):
 
 
 # ========================
-# 应用启动与关闭事件
-# ========================
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting up application")
-    Path("./notebooks").mkdir(exist_ok=True)
-    # 创建数据库表
-    Base.metadata.create_all(bind=engine)
-    # 初始化调度器，定时清理过期 notebook
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(cleanup_old_notebooks, 'interval', hours=1)
-    scheduler.start()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Shutting down application")
-    executor.shutdown(wait=True)
-    for notebook_id, kem in kernel_managers.items():
-        try:
-            kem.shutdown_kernel()
-        except Exception as e:
-            logger.error(f"Error shutting down kernel {notebook_id}: {str(e)}")
-
-# ========================
 # 辅助函数：清理过期的 notebook
 # ========================
 def cleanup_old_notebooks():
@@ -1030,5 +1065,13 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=18600,
         log_level="info",
-        access_log=True
+        access_log=True,
+        # 优化事件循环性能
+        loop="asyncio",  # 使用标准asyncio事件循环
+        http="httptools",  # 使用高性能HTTP解析器
+        # 优化连接处理
+        backlog=2048,  # 增加连接队列大小
+        # 优化内存使用
+        limit_concurrency=1000,  # 限制并发连接数
+        limit_max_requests=10000,  # 每个worker最大请求数
     )

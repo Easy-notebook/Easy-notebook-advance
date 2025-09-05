@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Editor } from '@tiptap/react';
 
 interface UseTipTapSlashCommandsProps {
@@ -9,23 +9,26 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [searchQuery, setSearchQuery] = useState('');
+  // Keep query as-is to support IME and non-ASCII characters
+  const sanitizeQuery = useCallback((raw: string) => raw, []);
   const [slashRange, setSlashRange] = useState<{ from: number; to: number } | null>(null);
+  const isComposingRef = useRef(false);
 
-  // 打开命令菜单
+  // Open command menu
   const openMenu = useCallback((position: { x: number; y: number }, query: string = '') => {
     setMenuPosition(position);
-    setSearchQuery(query);
+    setSearchQuery(sanitizeQuery(query));
     setIsMenuOpen(true);
-  }, []);
+  }, [sanitizeQuery]);
 
-  // 关闭命令菜单
+  // Close command menu
   const closeMenu = useCallback(() => {
     setIsMenuOpen(false);
     setSearchQuery('');
     setSlashRange(null);
   }, []);
 
-  // 检测斜杠输入
+  // Detect slash input
   const detectSlashCommand = useCallback(() => {
     if (!editor) return;
 
@@ -33,22 +36,21 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
     const { selection } = state;
     const { $from } = selection;
 
-    // 检查是否在文本节点中
+    // Ensure we are in a text block
     if (!$from.parent.isTextblock) return;
 
-    // 获取当前行的文本
+    // Get text before cursor in current line
     const textBefore = $from.parent.textBetween(0, $from.parentOffset);
     
-    // 查找最后一个斜杠的位置
-    const slashMatch = textBefore.match(/\/([^\/\s]*)$/);
+    // Find the last slash; allow any non-newline characters as query (supports IME/non-ASCII)
+    const slashMatch = textBefore.match(/\/([^\n]*)$/);
     
     if (slashMatch) {
       const slashPos = $from.pos - slashMatch[0].length;
-      const query = slashMatch[1];
+      const query = sanitizeQuery(slashMatch[1] || '');
       
-      // 检查斜杠前是否是空格或行首
-      const charBeforeSlash = textBefore[textBefore.length - slashMatch[0].length - 1];
-      const isValidSlash = !charBeforeSlash || charBeforeSlash === ' ' || charBeforeSlash === '\n';
+      // Validate slash position (relaxed to support IME typing)
+      const isValidSlash = true; // allow slash anywhere to support IME typing
       
       if (isValidSlash) {
         const range = {
@@ -58,7 +60,7 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
 
         setSlashRange(range);
         
-        // 获取斜杠的屏幕位置
+        // Compute panel position for slash
         const coords = editor.view.coordsAtPos(slashPos);
         openMenu({ x: coords.left, y: coords.bottom + 8 }, query);
         
@@ -69,7 +71,7 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
     return false;
   }, [editor, openMenu]);
 
-  // 删除斜杠文本
+  // Remove slash text from editor
   const removeSlashText = useCallback(() => {
     if (!editor || !slashRange) return;
     
@@ -78,30 +80,31 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
     setSlashRange(null);
   }, [editor, slashRange]);
 
-  // 更新斜杠后的查询内容
+  // Update query text after slash in the editor
   const updateSlashQuery = useCallback((newQuery: string) => {
     if (!editor || !slashRange) return;
     
     const { from } = slashRange;
-    const newTo = from + 1 + newQuery.length; // '/' + query length
+    const safeQuery = sanitizeQuery(newQuery);
+    const newTo = from + 1 + safeQuery.length; // '/' + safe query length
     
     // 更新编辑器中的文本
-    editor.chain().focus().deleteRange({ from, to: slashRange.to }).insertContentAt(from, `/${newQuery}`).run();
+    editor.chain().focus().deleteRange({ from, to: slashRange.to }).insertContentAt(from, `/${safeQuery}`).run();
     
     // 更新范围和搜索查询
     setSlashRange({ from, to: newTo });
-    setSearchQuery(newQuery);
-  }, [editor, slashRange]);
+    setSearchQuery(safeQuery);
+  }, [editor, slashRange, sanitizeQuery]);
 
-  // 监听编辑器输入
+  // Observe editor updates
   useEffect(() => {
     if (!editor) return;
 
     const handleUpdate = () => {
-      // 检测斜杠命令
+      // Detect slash command
       const detected = detectSlashCommand();
       
-      // 如果没有检测到斜杠命令，关闭菜单
+      // Close panel if no slash is detected
       if (!detected && isMenuOpen) {
         closeMenu();
       }
@@ -110,49 +113,49 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
     editor.on('update', handleUpdate);
     editor.on('selectionUpdate', handleUpdate);
 
+    // Track IME composition on editor DOM to avoid intercepting commits
+    const dom = editor.view.dom;
+    const onCompositionStart = () => { isComposingRef.current = true; };
+    const onCompositionEnd = () => { 
+      // small grace period could be added if needed
+      isComposingRef.current = false; 
+    };
+    dom.addEventListener('compositionstart', onCompositionStart, true);
+    dom.addEventListener('compositionend', onCompositionEnd, true);
+
     return () => {
       editor.off('update', handleUpdate);
       editor.off('selectionUpdate', handleUpdate);
+      dom.removeEventListener('compositionstart', onCompositionStart, true);
+      dom.removeEventListener('compositionend', onCompositionEnd, true);
     };
   }, [editor, detectSlashCommand, isMenuOpen, closeMenu]);
 
-  // 当菜单打开时，拦截编辑器的键盘事件
+  // Intercept editor keydown while the menu is open
   useEffect(() => {
     if (!editor) return;
 
-    const handleKeyDown = (view: any, event: KeyboardEvent) => {
-      // 如果菜单打开，拦截某些键盘事件，让菜单组件处理
+    const onKeydown = (event: KeyboardEvent) => {
       if (isMenuOpen) {
         const interceptKeys = ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab'];
         if (interceptKeys.includes(event.key)) {
-          console.log('Intercepting key in editor:', event.key);
-          // 不阻止事件，让菜单组件处理
-          return false; // 让 TipTap 知道我们没有处理这个事件
+          // During IME composition, do not intercept Enter/Arrow to allow committing candidates
+          if (isComposingRef.current && event.key !== 'Escape') {
+            return;
+          }
+          event.stopPropagation();
         }
       }
-      return false; // 让其他键盘事件正常处理
     };
 
-    // 注册 ProseMirror 的键盘处理
-    const keydownHandler = editor.view.dom.addEventListener('keydown', (event: KeyboardEvent) => {
-      if (isMenuOpen) {
-        const interceptKeys = ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab'];
-        if (interceptKeys.includes(event.key)) {
-          console.log('Preventing editor keydown:', event.key);
-          event.stopPropagation(); // 阻止事件向上传播给编辑器
-        }
-      }
-    }, true); // 使用 capture 阶段
-
+    const dom = editor.view.dom;
+    dom.addEventListener('keydown', onKeydown, true);
     return () => {
-      // 清理事件监听器
-      if (keydownHandler) {
-        editor.view.dom.removeEventListener('keydown', keydownHandler, true);
-      }
+      dom.removeEventListener('keydown', onKeydown, true);
     };
   }, [editor, isMenuOpen]);
 
-  // 键盘快捷键 - 已注释以避免干扰全局命令快捷键
+  // Keyboard shortcuts (kept commented to avoid conflicting with global shortcuts)
   /*
   useEffect(() => {
     if (!editor) return;

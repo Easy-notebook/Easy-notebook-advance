@@ -49,7 +49,7 @@ class Oracle(ParallelProcessor):
         return model
     
     # for chat completion
-    def query(self, prompt_sys, prompt_user, temp=None, top_p=0.9, logprobs=True, query_key=None):
+    def query(self, prompt_sys, prompt_user):
         """
         Query the model with a system prompt and user prompt.
         Args:
@@ -71,14 +71,6 @@ class Oracle(ParallelProcessor):
             "stream": False,
         }
         
-        # Only add parameters if supported by the model
-        if temp is not None and "o4" not in self.model:
-            request_params["temperature"] = temp
-        if "o4" not in self.model:
-            request_params["top_p"] = top_p
-        if "o4" not in self.model:
-            request_params["logprobs"] = logprobs
-            
         completion = self.client.chat.completions.create(**request_params)
 
         response_result = ""
@@ -86,11 +78,9 @@ class Oracle(ParallelProcessor):
         if completion.choices[0].message and completion.choices[0].message.content:
             response_result = completion.choices[0].message.content
         
-        if not query_key:
-            query_key = prompt_user
         return response_result
 
-    def query_stream(self, prompt_sys: str, prompt_user: str, temp: float = 0.1, top_p: float = 0.9, query_key: Optional[str] = None):
+    def query_stream(self, prompt_sys: str, prompt_user: str):
         """
         Query the model with streaming response.
         Args:
@@ -110,8 +100,6 @@ class Oracle(ParallelProcessor):
                     {"role": "user", "content": prompt_user},
                 ],
                 stream=True,
-                temperature=temp,
-                top_p=top_p,
             )
 
             for chunk in stream:
@@ -123,7 +111,7 @@ class Oracle(ParallelProcessor):
         except Exception as e:
             yield f"STREAM_ERROR: {str(e)}"
 
-    async def query_stream_async(self, prompt_sys: str, prompt_user: str, temp: float = None, top_p: float = 0.9, query_key: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def query_stream_async(self, prompt_sys: str, prompt_user: str) -> AsyncGenerator[str, None]:
         """
         Async query the model with streaming response.
         Args:
@@ -146,12 +134,6 @@ class Oracle(ParallelProcessor):
                 "stream": True,
             }
             
-            # Only add temperature and top_p if supported by the model
-            if temp is not None and "o4" not in self.model:
-                request_params["temperature"] = temp
-            if "o4" not in self.model:
-                request_params["top_p"] = top_p
-            
             # Create streaming request - note: this is synchronous in OpenAI SDK
             stream = self.client.chat.completions.create(**request_params)
 
@@ -167,7 +149,7 @@ class Oracle(ParallelProcessor):
         except Exception as e:
             yield f"ASYNC_STREAM_ERROR: {str(e)}"
 
-    def chat_with_history(self, messages: List[Dict[str, str]], temp: float = 0.1, top_p: float = 0.9, stream: bool = False):
+    def chat_with_history(self, messages: List[Dict[str, str]], stream: bool = False):
         """
         Chat with conversation history.
         Args:
@@ -184,8 +166,6 @@ class Oracle(ParallelProcessor):
                     model=self.model,
                     messages=messages,
                     stream=True,
-                    temperature=temp,
-                    top_p=top_p,
                 )
 
                 def stream_generator():
@@ -201,8 +181,6 @@ class Oracle(ParallelProcessor):
                     model=self.model,
                     messages=messages,
                     stream=False,
-                    temperature=temp,
-                    top_p=top_p,
                 )
 
                 if completion.choices[0].message and completion.choices[0].message.content:
@@ -363,15 +341,13 @@ class Oracle(ParallelProcessor):
         return clean_content
 
     
-    def query_all(self, prompt_sys, prompt_user_all, workers=None, temp=0.1, top_p=0.9, query_key_list=[], batch_size=10, max_retries=2, timeout=3000, **kwargs):
+    def query_all(self, prompt_sys, prompt_user_all, workers=None, query_key_list=[], batch_size=10, max_retries=2, timeout=3000, **kwargs):
         """
         Query all prompts in parallel using ThreadPoolExecutor with optimized performance.
         Args:
             prompt_sys (str): System prompt.
             prompt_user_all (list): List of user prompts.
             workers (int): Number of worker threads. If None, will use min(32, os.cpu_count() * 4)
-            temp (float): Temperature for the model.
-            top_p (float): Top-p sampling parameter.
             query_key_list (list): List of query keys for each prompt.
             batch_size (int): Size of batches to process for better performance.
             max_retries (int): Maximum number of retries for failed queries.
@@ -385,13 +361,13 @@ class Oracle(ParallelProcessor):
             query_items.append((prompt, key))
         
         # Define process function for a single query
-        def process_func(item, prompt_sys=prompt_sys, temp=temp, top_p=top_p):
+        def process_func(item, prompt_sys=prompt_sys):
             prompt, key = item
             try:
                 if key:
-                    return self.query(prompt_sys, prompt, temp, top_p, query_key=key)
-                else:
-                    return self.query(prompt_sys, prompt, temp, top_p)
+                    return self.query(prompt_sys, prompt, query_key=key)
+                else:   
+                    return self.query(prompt_sys, prompt)
             except Exception as e:
                 return f"QUERY_FAILED: {str(e)}"
         

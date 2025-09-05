@@ -5,7 +5,7 @@ import { useAIPlanningContextStore } from '../../Senario/Workflow/store/aiPlanni
 import { useWorkflowStateMachine, WORKFLOW_STATES, EVENTS, WorkflowState } from '../../Senario/Workflow/store/workflowStateMachine';
 import usePreStageStore from '../../Senario/Workflow/store/preStageStore';
 import './WorkflowErrorCollector'; // Initialize error collector
-import { extractSectionTitle} from '../utils/String';
+import { extractSectionTitle} from '../../../utils/String';
 
 // 定义可运行状态集合，方便判断
 const RUNNING_STATES: WorkflowState[] = [

@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { filterSectionStageText } from '../utils/String';
+import { Button } from 'antd';
+import { filterSectionStageText } from '../../../../../utils/String';
 
 export interface ExpandableTextProps { text: string; maxLines?: number }
 
@@ -14,7 +15,7 @@ const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) =
 
   const filteredText = filterSectionStageText(text);
 
-  // 在外层使用者中处理空内容以展示思考状态，这里不再渲染“No content”
+  // Handle empty content in parent components to show thinking state
   if (!filteredText || filteredText.trim() === '') {
     return <></>;
   }
@@ -60,33 +61,29 @@ const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) =
             }
           }}
         >
-          {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符） */}
+          {/* Preprocess content: convert single line breaks to markdown line break format */}
           {filteredText.replace(/(?<!\n)\n(?!\n)/g, '  \n')}
         </ReactMarkdown>
       </div>
 
       {exceedsMaxLines && (
-        <button
+        <Button
+          type="link"
+          size="small"
           onClick={toggleExpand}
-          className="mt-2 text-xs font-medium text-theme-600 hover:text-theme-800 transition-colors duration-300 flex items-center gap-1"
+          icon={isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          style={{ 
+            padding: '4px 8px',
+            height: 'auto',
+            fontSize: '12px',
+            marginTop: '8px'
+          }}
         >
-          {isExpanded ? (
-            <>
-              <ChevronUp size={12} />
-              {t('rightSideBar.collapseDetails')}
-            </>
-          ) : (
-            <>
-              <ChevronDown size={12} />
-              {t('rightSideBar.viewDetails')}
-            </>
-          )}
-        </button>
+          {isExpanded ? t('rightSideBar.collapseDetails') : t('rightSideBar.viewDetails')}
+        </Button>
       )}
     </div>
   );
 };
 
 export default ExpandableText;
-
-

@@ -8,8 +8,13 @@ export const EVENT_TYPES = {
     USER_ASK_QUESTION: 'user_ask_question',           // 用户提出问题
     USER_NEW_INSTRUCTION: 'user_new_instruction',     // 用户提出新指令
     USER_FILE_UPLOAD: 'user_file_upload',             // 用户进行文件上传操作
+    USER_REQUEST_IMAGE: 'user_request_image',         // 用户请求图像生成
+    USER_REQUEST_VIDEO: 'user_request_video',         // 用户请求视频生成
+    USER_REQUEST_WEBPAGE: 'user_request_webpage',     // 用户请求网页生成
+    USER_REQUEST_CODE: 'user_request_code',           // 用户请求代码生成
+    USER_REQUEST_TEXT: 'user_request_text',           // 用户请求文本创作
 
-    // AI 相关事件
+    // AI Agent 相关事件
     AI_UNDERSTANDING: 'ai_understanding',             // AI 正在理解用户的问题和操作
     AI_EXPLAINING_PROCESS: 'ai_explaining_process',   // AI 正在解释整个过程和思路
     AI_WRITING_CODE: 'ai_writing_code',               // AI 正在书写代码
@@ -21,7 +26,27 @@ export const EVENT_TYPES = {
     AI_FIXING_CODE: 'ai_fixing_code',                 // AI 正在修复代码
     AI_GENERATING_CODE: 'ai_generating_code',         // AI 正在生成代码
     AI_GENERATING_TEXT: 'ai_generating_text',         // AI 正在生成文本
-    SYSTEM_EVENT: 'system_event'                      // 系统事件
+    AI_GENERATING_IMAGE: 'ai_generating_image',       // AI 正在生成图像
+    AI_GENERATING_VIDEO: 'ai_generating_video',       // AI 正在生成视频
+    AI_GENERATING_WEBPAGE: 'ai_generating_webpage',   // AI 正在生成网页
+    
+    // 专业 Agent 事件
+    PCS_AGENT_PLANNING: 'pcs_agent_planning',         // PCS Agent 正在进行工作流规划
+    PCS_AGENT_ANALYZING: 'pcs_agent_analyzing',       // PCS Agent 正在分析数据结构
+    DATA_CLEANING_AGENT: 'data_cleaning_agent',       // 数据清洁 Agent 工作
+    MODEL_TRAINING_AGENT: 'model_training_agent',     // 模型训练 Agent 工作
+    RESULT_EVALUATION_AGENT: 'result_evaluation_agent', // 结果评估 Agent 工作
+    
+    // 工作流相关事件
+    WORKFLOW_STAGE_CHANGE: 'workflow_stage_change',   // 工作流阶段变化
+    WORKFLOW_STEP_COMPLETE: 'workflow_step_complete', // 工作流步骤完成
+    WORKFLOW_BRANCH_START: 'workflow_branch_start',   // 工作流分支启动
+    
+    // 系统事件
+    SYSTEM_EVENT: 'system_event',                      // 系统事件
+    TASK_STARTED: 'task_started',                     // 任务开始
+    TASK_COMPLETED: 'task_completed',                 // 任务完成
+    TASK_FAILED: 'task_failed'                       // 任务失败
 } as const;
 
 // 事件类型的联合类型
@@ -56,6 +81,31 @@ export interface QAItem {
     thinkingEndAtMs?: number;
 }
 
+// Agent 类型定义
+export type AgentType = 
+    | 'general'           // 通用 AI
+    | 'pcs'              // PCS Agent (问题定义与解决)
+    | 'data_cleaning'    // 数据清洁 Agent
+    | 'model_training'   // 模型训练 Agent
+    | 'result_evaluation' // 结果评估 Agent
+    | 'image_generator'  // 图像生成 Agent
+    | 'video_generator'  // 视频生成 Agent
+    | 'webpage_generator' // 网页生成 Agent
+    | 'code_generator'   // 代码生成 Agent
+    | 'text_creator'     // 文本创作 Agent
+    | 'workflow_manager' // 工作流管理器
+    | 'debug_assistant'  // 调试助手
+    | 'command_processor'; // 命令处理器
+
+// 工作流上下文信息
+export interface WorkflowContext {
+    chapter?: string;    // 当前章节
+    section?: string;    // 当前部分
+    stage?: string;      // 当前阶段
+    step?: string;       // 当前步骤
+    progress?: number;   // 进度百分比
+}
+
 // Action 项接口
 export interface ActionItem {
     id: string;
@@ -67,10 +117,18 @@ export interface ActionItem {
     cellId: string | null;
     viewMode: string;
     onProcess: boolean;
+    // 新增的 Agent 信息字段
+    agentName?: string;          // Agent 显示名称，如 "PCS Agent", "图像生成助手"
+    agentType?: AgentType;       // Agent 类型
+    workflowContext?: WorkflowContext; // 工作流上下文
+    taskDescription?: string;    // 任务描述，更具体的任务说明
+    progressPercent?: number;    // 任务进度 (0-100)
+    errorMessage?: string;       // 错误信息（如果任务失败）
+    metadata?: Record<string, any>; // 额外的元数据
 }
 
 // 视图类型
-export type ViewType = 'script' | 'qa' | 'todo' | 'debug';
+export type ViewType = 'script' | 'qa' | 'todo' | 'debug' | 'activity';
 
 // Store 状态接口
 export interface AIAgentState {

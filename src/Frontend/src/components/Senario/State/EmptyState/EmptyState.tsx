@@ -384,7 +384,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
           className="fixed right-2 top-1/2 -translate-y-1/2 z-40 pointer-events-none transition-opacity"
           style={{ opacity: rightSwipeDistance > 12 ? 1 : rightSwipeDistance / 12 }}
         >
-          <div className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-full shadow-lg">
+          <div className="flex items-center gap-2 px-3 py-2 bg-theme-500 text-white rounded-full shadow-lg">
             <ArrowRight className="w-4 h-4" />
             <span className="text-sm whitespace-nowrap">
               {rightSwipeDistance > RIGHT_TRIGGER_THRESHOLD ? '松开进入 Library' : '右滑查看 Library'}
