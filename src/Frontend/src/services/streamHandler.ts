@@ -379,6 +379,7 @@ export const handleStreamResponse = async (
         }
 
         case 'addCell2EndWithContent': {
+            console.log('🔄 Processing addCell2EndWithContent:', data);
             const cellType = data.data?.payload?.type;
             const description = data.data?.payload?.description;
             const content = data.data?.payload?.content;
@@ -386,14 +387,18 @@ export const handleStreamResponse = async (
             const commandId = data.data?.payload?.commandId;
             const prompt = data.data?.payload?.prompt;
             const serverUniqueIdentifier = (data.data as any)?.payload?.uniqueIdentifier || metadata?.uniqueIdentifier;
+            
+            console.log('📝 Extracted data:', { cellType, description, contentLength: content?.length, metadata, commandId, prompt, serverUniqueIdentifier });
 
             let newCellId = null;
             if (cellType && description) {
+                console.log('✅ cellType and description found, creating cell...');
                 const enableEdit = !metadata?.isGenerating; // 如果正在生成，不启用编辑
+                console.log('🔧 enableEdit:', enableEdit);
 
                 // 如果是图片或视频生成任务，使用唯一标识符策略
                 if ((cellType === 'image' || cellType === 'video') && metadata?.isGenerating && (prompt || serverUniqueIdentifier)) {
-
+                    console.log('🖼️ Creating image/video generation cell...');
 
                     // 优先使用服务端提供的唯一标识符，否则回退到本地生成
                     const uniqueIdentifier = serverUniqueIdentifier || `gen-${Date.now()}-${(prompt || '').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
@@ -420,8 +425,15 @@ export const handleStreamResponse = async (
                     }
                 } else {
                     // 普通cell创建
+                    console.log('📝 Creating normal cell...');
                     const normalizedType2 = normalizeCellTypeForStore(cellType);
-                    newCellId = await globalUpdateInterface.addNewCell2End(normalizedType2, description, enableEdit);
+                    console.log('🔄 Normalized type:', normalizedType2);
+                    try {
+                        newCellId = await globalUpdateInterface.addNewCell2End(normalizedType2, description, enableEdit);
+                        console.log('✅ Cell created successfully, ID:', newCellId);
+                    } catch (error) {
+                        console.error('❌ Error creating cell:', error);
+                    }
 
                     // 如果这是一个生成任务且有 commandId，存储映射关系
                     if (newCellId && commandId && metadata?.isGenerating) {
@@ -429,25 +441,47 @@ export const handleStreamResponse = async (
                         agentLog.debug('Storing cell mapping', { commandId, cellId: newCellId });
                     }
                 }
+            } else {
+                console.warn('⚠️ Missing cellType or description:', { cellType, description });
             }
             if (content && newCellId) {
+                console.log('📄 Adding content to cell...', { newCellId, contentLength: content.length });
                 // Sticky-aware: append to the cell's existing content instead of overwriting
                 const target = useStore.getState().cells.find(c => c.id === newCellId);
                 const appended = `${target?.content || ''}${content}`;
-                useStore.getState().updateCell(newCellId, appended);
+                console.log('📄 Content to set:', { existing: target?.content, new: content, final: appended.substring(0, 100) + '...' });
+                try {
+                    useStore.getState().updateCell(newCellId, appended);
+                    console.log('✅ Content updated successfully');
+                } catch (error) {
+                    console.error('❌ Error updating cell content:', error);
+                }
+            } else {
+                console.warn('⚠️ Missing content or newCellId:', { hasContent: !!content, newCellId });
             }
 
             // Handle metadata for the newly created cell
             if (metadata && newCellId) {
+                console.log('🏷️ Updating cell metadata...', { newCellId, metadata });
                 // Update the cell's metadata in the store
                 const cells = useStore.getState().cells;
                 const targetCell = cells.find(cell => cell.id === newCellId);
 
                 if (targetCell) {
                     // 使用专门的updateCellMetadata方法
-                    useStore.getState().updateCellMetadata(newCellId, metadata);
+                    try {
+                        useStore.getState().updateCellMetadata(newCellId, metadata);
+                        console.log('✅ Metadata updated successfully');
+                    } catch (error) {
+                        console.error('❌ Error updating metadata:', error);
+                    }
+                } else {
+                    console.warn('⚠️ Target cell not found for metadata update:', newCellId);
                 }
+            } else {
+                console.log('ℹ️ No metadata to update or no cellId');
             }
+            console.log('✅ addCell2EndWithContent processing complete');
             break;
         }
 

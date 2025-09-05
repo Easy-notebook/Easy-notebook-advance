@@ -1297,12 +1297,13 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         editor={currentEditor}
         isOpen={slashCommands.isMenuOpen}
         onClose={() => {
-          slashCommands.removeSlashText();
           slashCommands.closeMenu();
         }}
         position={slashCommands.menuPosition}
         searchQuery={slashCommands.searchQuery}
         onQueryUpdate={slashCommands.updateSlashQuery}
+        slashRange={slashCommands.slashRange}
+        onRemoveSlashText={slashCommands.removeSlashText}
       />
 
 

@@ -4,6 +4,14 @@ import type { Editor } from '@tiptap/react';
 import { ReactRenderer } from '@tiptap/react';
 import tippy, { Instance as TippyInstance } from 'tippy.js';
 import SlashCommandMenu, { SlashCommand } from '../SlashCommands/SlashCommandMenu';
+import { v4 as uuidv4 } from 'uuid';
+import React, { useEffect } from 'react';
+import { useAIAgentStore } from '../../../store/AIAgentStore';
+import useStore from '../../../store/notebookStore';
+import useOperatorStore from '../../../store/operatorStore';
+import { detectActivityType } from '../../../utils/activityDetector';
+import { AgentMemoryService, AgentType } from '../../../services/agentMemoryService';
+import type { QAItem } from '../../../store/AIAgentStore';
 
 export interface SlashItem {
   id: string;
@@ -102,6 +110,17 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
               item.keywords.some((k) => k.toLowerCase().includes(q))
             );
           });
+        },
+
+        // Command function to execute when item is selected
+        command: ({ editor, range, props }) => {
+          const item = props as SlashItem;
+          if (item && item.run) {
+            // Delete the trigger text (including '/' and query)
+            editor.chain().focus().deleteRange(range).run();
+            // Execute the command
+            item.run(editor, props.query || '');
+          }
         },
 
         // Keyboard handling lives in renderer.onKeyDown to avoid type mismatch
@@ -211,7 +230,21 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
                   if (lastProps) {
                     const item = lastProps.items[lastProps.selectedIndex];
                     if (item) {
-                      lastProps.command(item);
+                      // Execute the selected command via Suggestion's command function
+                      lastProps.command({ id: item.id, ...item });
+                    } else if (lastProps.query && lastProps.query.trim()) {
+                      // No matching items - handle as chat request
+                      // Access the component's chat request handler through the extension's storage
+                      const chatHandler = ext.storage.handleChatRequest;
+                      if (chatHandler && typeof chatHandler === 'function') {
+                        console.log('Sending chat request via extension:', lastProps.query);
+                        chatHandler(lastProps.query.trim());
+                      } else {
+                        // Fallback: delete the slash text
+                        const { from, to } = lastProps.range;
+                        lastProps.editor.chain().focus().deleteRange({ from, to }).run();
+                        console.log('No chat handler found, just removed slash text');
+                      }
                     }
                   }
                   return true;
@@ -234,6 +267,7 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
   addStorage() {
     return {
       slashMenuComponent: null as any, // Will be injected in setupSlashMenuRenderer
+      handleChatRequest: null as any,  // Will be injected with handleChatRequest function
     };
   },
 });
@@ -252,6 +286,21 @@ export function setupSlashMenuRenderer(
   }
 }
 
+// Allow external code to inject the chat request handler into extension.storage
+export function setupSlashChatHandler(
+  editor: Editor,
+  handleChatRequest: (command: string) => void,
+) {
+  const slashExt = editor.extensionManager.extensions.find((e) => e.name === 'slashCommands') as any;
+  if (slashExt) {
+    slashExt.storage.handleChatRequest = handleChatRequest;
+    console.log('Chat handler injected into extension storage');
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn('[SlashCommands] extension not found; did you add it to editor?');
+  }
+}
+
 // React component API used by TiptapNotebookEditor
 export interface TipTapSlashCommandsProps {
   editor: Editor | null;
@@ -260,10 +309,205 @@ export interface TipTapSlashCommandsProps {
   position: { x: number; y: number };
   searchQuery: string;
   onQueryUpdate: (q: string) => void;
+  slashRange?: { from: number; to: number } | null;
+  onRemoveSlashText?: (range?: { from: number; to: number }) => void;
 }
 
-export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position, searchQuery, onQueryUpdate }: TipTapSlashCommandsProps) => {
+export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position, searchQuery, onQueryUpdate, slashRange, onRemoveSlashText }: TipTapSlashCommandsProps) => {
+  // Store hooks for chat functionality (same as AITerminal)
+  const {
+    setActiveView,
+    actions,
+    qaList,
+    addQA
+  } = useAIAgentStore();
+
+  const {
+    currentCellId,
+    viewMode,
+    currentPhaseId,
+    currentStepIndex,
+    notebookId,
+    getCurrentViewCells,
+    setIsRightSidebarCollapsed
+  } = useStore();
+
+  // Helper method to infer goals from questions
+  const inferGoalsFromQuestion = (question: string): string[] => {
+    const inferredGoals: string[] = [];
+    const lowerQuestion = question.toLowerCase();
+    
+    if (lowerQuestion.includes('how to')) {
+      inferredGoals.push('learning_method');
+    }
+    if (lowerQuestion.includes('error') || lowerQuestion.includes('bug')) {
+      inferredGoals.push('debug_issue');
+    }
+    if (lowerQuestion.includes('data')) {
+      inferredGoals.push('data_analysis');
+    }
+    if (lowerQuestion.includes('plot') || lowerQuestion.includes('chart')) {
+      inferredGoals.push('data_visualization');
+    }
+    if (lowerQuestion.includes('optimize') || lowerQuestion.includes('improve')) {
+      inferredGoals.push('code_optimization');
+    }
+    if (lowerQuestion.includes('explain') || lowerQuestion.includes('what is')) {
+      inferredGoals.push('concept_explanation');
+    }
+    
+    return inferredGoals;
+  };
+
+  // Handle chat request for unknown commands (same logic as AITerminal)
+  const handleChatRequest = async (command: string) => {
+    try {
+      // First, remove the current slash text
+      removeCurrentSlashText();
+
+      setIsRightSidebarCollapsed(true);
+      setActiveView('qa');
+      
+      const effectiveNotebookId = notebookId ?? `temp-session-${Date.now()}`;
+      const qaId = `qa-${uuidv4()}`;
+      
+      const qaData: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean } = {
+        id: qaId,
+        type: 'user',
+        content: command,
+        resolved: false,
+        cellId: currentCellId || undefined,
+        viewMode,
+        onProcess: true
+      };
+      addQA(qaData);
+      
+      // Use smart detector to get activity info
+      const detectionResult = detectActivityType(command);
+      
+      // Create enhanced action info
+      const enhancedAction = {
+        type: detectionResult.eventType,
+        content: command,
+        result: '',
+        relatedQAIds: [qaId],
+        cellId: currentCellId,
+        viewMode: viewMode || 'create',
+        onProcess: true,
+        agentName: detectionResult.agentName,
+        agentType: detectionResult.agentType,
+        taskDescription: detectionResult.taskDescription,
+        progressPercent: 0
+      };
+      
+      useAIAgentStore.getState().addAction(enhancedAction);
+
+      // Prepare Agent memory context
+      const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
+        notebookId,
+        'general' as AgentType,
+        {
+          current_cell_id: currentCellId || undefined,
+          related_cells: getCurrentViewCells(),
+          related_qa_ids: qaList.map(qa => qa.id),
+          current_qa_id: qaId,
+          question_content: command
+        }
+      );
+
+      // Update user intent
+      AgentMemoryService.updateUserIntent(
+        effectiveNotebookId,
+        'general' as AgentType,
+        [command], // Goals explicitly expressed by user
+        inferGoalsFromQuestion(command), // Inferred goals
+        command, // Current focus
+        [] // Current blocks
+      );
+
+      // Record QA interaction start
+      AgentMemoryService.recordOperationInteraction(
+        effectiveNotebookId,
+        'general' as AgentType,
+        'qa_started',
+        true,
+        {
+          qa_id: qaId,
+          question: command,
+          start_time: new Date().toISOString(),
+          related_context: {
+            current_cell_id: currentCellId || undefined,
+            related_qa_count: qaList.length,
+            view_mode: viewMode
+          }
+        }
+      );
+
+      const finalPayload = {
+        type: 'user_question',
+        payload: {
+          content: command,
+          QId: [qaId],
+          current_view_mode: viewMode,
+          current_phase_id: currentPhaseId,
+          current_step_index: currentStepIndex,
+          related_qas: qaList,
+          related_actions: actions,
+          related_cells: getCurrentViewCells(),
+          ...memoryContext
+        }
+      };
+      
+      useOperatorStore.getState().sendOperation(notebookId, finalPayload);
+      
+      console.log('SlashCommand: Sending chat request:', command);
+      
+    } catch (error) {
+      console.error('Error in slash command chat request:', error);
+    } finally {
+      onClose(); // Close the menu after sending chat request
+    }
+  };
+
+  // Inject the handleChatRequest function into the extension storage
+  useEffect(() => {
+    if (editor) {
+      setupSlashChatHandler(editor, handleChatRequest);
+    }
+  }, [editor, handleChatRequest]);
+
   if (!isOpen) return null;
+
+  // Helper function to detect and remove current slash text
+  const removeCurrentSlashText = () => {
+    if (!editor) return;
+    
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+    
+    if (!$from.parent.isTextblock) return;
+    
+    // Get text before cursor
+    const textBefore = $from.parent.textBetween(0, $from.parentOffset);
+    
+    // Find the slash and query
+    const slashMatch = textBefore.match(/\/([^\n]*)$/);
+    
+    if (slashMatch) {
+      const slashPos = $from.pos - slashMatch[0].length;
+      const range = {
+        from: slashPos,
+        to: $from.pos,
+      };
+      
+      console.log('Removing slash text from', range.from, 'to', range.to, 'content:', slashMatch[0]);
+      editor.chain().focus().deleteRange(range).run();
+      return true;
+    }
+    
+    return false;
+  };
 
   const handleCommand = (cmd: SlashCommand) => {
     try {
@@ -273,6 +517,10 @@ export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position
         return;
       }
 
+      // First, remove the current slash text
+      removeCurrentSlashText();
+
+      // Then execute the command
       switch (cmd.id) {
         case 'heading1':
           ed.chain().focus().toggleHeading({ level: 1 }).run();
@@ -335,6 +583,7 @@ export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position
       isOpen={isOpen}
       onClose={onClose}
       onCommand={handleCommand}
+      onChatRequest={handleChatRequest}
       position={position}
       searchQuery={searchQuery}
       onQueryChange={(q) => onQueryUpdate?.(q)}

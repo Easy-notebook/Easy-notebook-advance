@@ -29,6 +29,7 @@ interface SlashCommandMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onCommand: (command: SlashCommand) => void;
+  onChatRequest?: (query: string) => void; // Add chat request handler
   position: { x: number; y: number };
   searchQuery?: string;
   onQueryChange?: (q: string) => void;
@@ -38,6 +39,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   isOpen,
   onClose,
   onCommand,
+  onChatRequest,
   position,
   searchQuery = '',
   onQueryChange
@@ -218,7 +220,14 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           break;
         case 'Enter':
           e.preventDefault();
-          if (filteredCommands[selectedIndex]) {
+          if (filteredCommands.length === 0) {
+            // No matching commands - send as chat request
+            if (query.trim() && onChatRequest) {
+              onChatRequest(query.trim());
+            }
+            onClose();
+          } else if (filteredCommands[selectedIndex]) {
+            // Execute the selected command
             onCommand(filteredCommands[selectedIndex]);
           }
           break;
@@ -299,7 +308,9 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       <div className="max-h-80 overflow-y-auto">
         {filteredCommands.length === 0 ? (
           <div className="p-4 text-center text-gray-500 text-sm">
-            No matching commands
+              <div className="text-xs text-theme-600">
+                Press Enter to use let AI to help you.
+              </div>               
           </div>
         ) : (
           <div className="py-2">
@@ -330,11 +341,11 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       </div>
 
       {/* Footer hints */}
-      <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
+      {filteredCommands.length !== 0 && <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
         <span>↑↓ Navigate</span>
         <span>Enter Select</span>
         <span>Esc Close</span>
-      </div>
+      </div>}
     </div>
   );
 };
