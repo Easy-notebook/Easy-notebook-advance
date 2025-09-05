@@ -18,6 +18,7 @@ import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
+import { detectActivityType } from '../../../../utils/activityDetector';
 import useCodeStore from '@Store/codeStore';
 import { notebookApiIntegration } from '@Services/notebookServices';
 import { useAIPlanningContextStore } from '@/components/Senario/Workflow/store/aiPlanningContext';
@@ -261,7 +262,18 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           onProcess: false,
           attachedFiles: files,
         };
-        addAction(actionData as any);
+        // 使用智能检测器增强活动信息
+        const detectionResult = detectActivityType(command);
+        const enhancedActionData = {
+          ...actionData,
+          type: detectionResult.eventType,
+          agentName: detectionResult.agentName,
+          agentType: detectionResult.agentType,
+          taskDescription: detectionResult.taskDescription,
+          onProcess: true,
+          progressPercent: 0
+        };
+        addAction(enhancedActionData as any);
         sendOperation(useStore.getState().notebookId, {
           type: 'user_command',
           payload: {
@@ -291,8 +303,29 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           attachedFiles: files,
         };
         addQA(qaData as any);
-        const action = createUserAskQuestionAction(command, [qaId], currentCellId);
-        useAIAgentStore.getState().addAction(action);
+        // 使用智能检测器获取活动信息
+        const detectionResult = detectActivityType(command);
+        
+        // 创建增强的活动信息
+        const enhancedAction = {
+          type: detectionResult.eventType,
+          content: command,
+          result: '',
+          relatedQAIds: [qaId],
+          cellId: currentCellId,
+          viewMode: viewMode || 'create',
+          onProcess: true,
+          agentName: detectionResult.agentName,
+          agentType: detectionResult.agentType,
+          taskDescription: detectionResult.taskDescription,
+          progressPercent: 0,
+          metadata: {
+            attachedFiles: files,
+            hasFiles: files && files.length > 0
+          }
+        };
+        
+        useAIAgentStore.getState().addAction(enhancedAction);
 
         const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
           useStore.getState().notebookId || '',

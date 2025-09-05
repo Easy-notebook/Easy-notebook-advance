@@ -1,6 +1,7 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, MessageSquare, MessageCircle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
+import { Typography, Spin } from 'antd';
 
 import useStore from '@Store/notebookStore';
 import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
@@ -14,12 +15,48 @@ import EventIcon from '../Components/EventIcon';
 import { RightSidebarContainer, RightSidebarHeader, RightSidebarContent } from '../../shared';
 import ActivityBar from './ActivityBar';
 
+const { Text } = Typography;
+
+// Simple thinking timer for QA responses
+const ThinkingTimer = ({ startTime, endTime, isThinking }: { 
+  startTime?: number; 
+  endTime?: number; 
+  isThinking: boolean;
+}) => {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isThinking || !startTime) return;
+
+    const updateElapsed = () => {
+      const now = endTime || Date.now();
+      const elapsedSeconds = Math.max(0, Math.round((now - startTime) / 1000));
+      setElapsed(elapsedSeconds);
+    };
+
+    updateElapsed(); // Initial update
+    
+    if (isThinking && !endTime) {
+      const interval = setInterval(updateElapsed, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [startTime, endTime, isThinking]);
+
+  if (!startTime) return null;
+
+  return (
+    <Text className="text-gray-400 text-xs">
+      ({elapsed}s)
+    </Text>
+  );
+};
+
 const AIAgentSidebar = () => {
   const {
     activeView,
     isLoading,
     qaList,
-    setActiveView,
+    // setActiveView,
   } = useAIAgentStore();
   
   const { t } = useTranslation();
@@ -47,7 +84,11 @@ const AIAgentSidebar = () => {
       
       // For step mode, check if cellId is in current step
       if (viewMode === 'step') {
-        if (currentStepCellsIDs && currentStepCellsIDs.includes(qa.cellId)) {
+        if (
+          currentStepCellsIDs &&
+          typeof qa.cellId === 'string' &&
+          currentStepCellsIDs.includes(qa.cellId)
+        ) {
           filtered.push(qa);
         }
       } else {
@@ -57,16 +98,6 @@ const AIAgentSidebar = () => {
     
     return filtered;
   }, [qaList, viewMode, getCurrentStepCellsIDs]);
-
-  const handleJumpToQA = useCallback((qaId: string) => {
-    setActiveView('qa');
-    requestAnimationFrame(() => {
-      const qaElement = document.getElementById(qaId);
-      if (qaElement) {
-        qaElement.scrollIntoView({ behavior: 'smooth' });
-      }
-    });
-  }, [setActiveView]);
 
   return (
     <RightSidebarContainer>
@@ -135,11 +166,14 @@ const AIAgentSidebar = () => {
                     <div className="text-left break-words overflow-wrap-anywhere min-w-0">
                       {(!qa.content || qa.content.trim() === '') && qa.type === 'assistant' ? (
                         <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <span>{qa.agentType || qa.agent || 'AI'} {t('rightSideBar.thinking') || 'is thinking...'}</span>
+                          <Spin size="small" />
+                          <span>{qa.agentType || qa.agent || 'AI'} is thinking...</span>
                           {qa.thinkingStartAtMs && (
-                            <span className="text-gray-400">(
-                              {Math.max(0, Math.round(((qa.thinkingEndAtMs || Date.now()) - qa.thinkingStartAtMs) / 1000))}s
-                              )</span>
+                            <ThinkingTimer 
+                              startTime={qa.thinkingStartAtMs}
+                              endTime={qa.thinkingEndAtMs}
+                              isThinking={qa.onProcess}
+                            />
                           )}
                         </div>
                       ) : (
@@ -191,7 +225,7 @@ const AIAgentSidebar = () => {
                     )}
 
                     {qa.type === 'assistant' && (!qa.toolCalls || qa.toolCalls.length === 0) && qa.content && /<([a-z-]+)[\s\S]*?<\/\1>/i.test(qa.content) && (
-                      <div className="mt-2 text-xs text-gray-500">✅ {qa.agentType || qa.agent || 'AI'} {t('rightSideBar.completedActions') || 'completed some operations during answering.'}</div>
+                      <div className="mt-2 text-xs text-gray-500">✅ {qa.agentType || qa.agent || 'AI'} completed some operations during answering.</div>
                     )}
                   </div>
                 </div>
@@ -200,7 +234,7 @@ const AIAgentSidebar = () => {
           </div>
         )}
 
-        {(activeView as any) === 'debug' && (
+        {activeView === 'debug' && (
           <div className="space-y-4">
             <WorkflowTODOPanel />
             <StateMachineDebugger />
@@ -209,9 +243,9 @@ const AIAgentSidebar = () => {
         )}
 
         {isLoading && (
-          <div className="flex items-center justify-center gap-3 text-theme-700 p-4 my-4 bg-white/10 rounded-lg animate-pulse transition-all duration-300">
-            <Loader2 className="animate-spin" size={24} />
-            <span className="font-medium">{t('rightSideBar.processing')}</span>
+          <div className="flex items-center justify-center gap-3 text-theme-700 p-4 my-4 bg-white/10 rounded-lg transition-all duration-300">
+            <Spin size="default" />
+            <span className="font-medium">Processing...</span>
           </div>
         )}
       </RightSidebarContent>

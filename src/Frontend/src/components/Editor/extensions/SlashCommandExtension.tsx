@@ -16,21 +16,21 @@ export const SlashCommandExtension = Extension.create<SlashCommandOptions>({
   addKeyboardShortcuts() {
     return {
       '/': ({ editor }) => {
-        // 简单的斜杠检测
+        // Simple slash detection
         const { state } = editor;
         const { selection } = state;
         const { $from } = selection;
 
-        // 检查光标前的文本
+        // Check text before the cursor
         const textBefore = $from.parent.textBetween(0, $from.parentOffset);
         const isAtStart = $from.parentOffset === 0;
         const isAfterSpace = textBefore.endsWith(' ');
 
         if (isAtStart || isAfterSpace) {
-          // 插入斜杠
+          // Insert a slash
           editor.commands.insertContent('/');
 
-          // 通知外部检测到斜杠
+          // Notify external handler that a slash was detected
           setTimeout(() => {
             this.options.onSlashDetected?.('');
           }, 100);

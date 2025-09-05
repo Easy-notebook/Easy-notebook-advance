@@ -617,29 +617,66 @@ async def send_operation_endpoint(send_operation_request: SendOperationRequest, 
     sanitized_operation = sanitize_response_content(operation, notebook_id)
     logger.info(f"Received operation for notebook {notebook_id}: {sanitized_operation}")
 
-    # 对流式响应进行包装以过滤输出
+    # 对流式响应进行包装，保持原有过滤逻辑并添加性能优化
     async def filtered_generate_response():
         import asyncio
+        import sys
+        import time
+        
+        logger.info(f"Starting stream for notebook {notebook_id}")
+        chunk_count = 0
+        start_time = time.time()
+        
         async for chunk in generate_response(operation):
+            chunk_count += 1
+            chunk_time = time.time()
+            
+            # 记录每个chunk的信息（仅记录前几个避免日志过多）
+            if chunk_count <= 3:
+                chunk_preview = str(chunk)[:100] if chunk else "None"
+                logger.info(f"Stream chunk #{chunk_count} (t+{chunk_time-start_time:.2f}s): {chunk_preview}")
+            elif chunk_count % 10 == 0:  # 每10个chunk记录一次
+                logger.info(f"Stream progress: {chunk_count} chunks sent (t+{chunk_time-start_time:.2f}s)")
+            
+            # 保持原有的类型处理逻辑
             if isinstance(chunk, str):
                 sanitized_chunk = sanitize_response_content(chunk, notebook_id)
                 if sanitized_chunk:  # 只有非空的chunk才返回
                     yield sanitized_chunk
             else:
-                if chunk:  # 只有非空chunk才发送
-                    yield chunk
-            # 确保立即发送而不缓冲
+                # 对于非字符串chunk（如图片、视频数据），直接传递
+                yield chunk
+            
+            # 强制刷新标准输出缓冲区
+            sys.stdout.flush()
+            # 让出控制权确保立即传输
             await asyncio.sleep(0)
+            
+        end_time = time.time()
+        logger.info(f"Stream completed for notebook {notebook_id}: {chunk_count} chunks in {end_time-start_time:.2f}s")
 
     return StreamingResponse(
         filtered_generate_response(),
         media_type="application/json",
         headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
+            # 完全禁用缓存
+            "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate",
             "Pragma": "no-cache",
             "Expires": "0",
+            "Last-Modified": "0",
+            "ETag": "",
+            # 保持连接活跃
             "Connection": "keep-alive",
+            "Keep-Alive": "timeout=0, max=1",
+            # 禁用代理和服务器缓冲
             "X-Accel-Buffering": "no",  # 禁用nginx缓存
+            "X-Cache-Control": "no-cache",
+            # 确保流式传输
+            "Transfer-Encoding": "chunked",
+            "Content-Encoding": "identity",
+            # 跨域支持
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
         }
     )
 
@@ -1029,6 +1066,12 @@ if __name__ == "__main__":
         port=18600,
         log_level="info",
         access_log=True,
-        timeout_keep_alive=0,  # 立即关闭空闲连接以避免缓冲
-        timeout_graceful_shutdown=0  # 快速关闭以避免缓冲
+        # 优化事件循环性能
+        loop="asyncio",  # 使用标准asyncio事件循环
+        http="httptools",  # 使用高性能HTTP解析器
+        # 优化连接处理
+        backlog=2048,  # 增加连接队列大小
+        # 优化内存使用
+        limit_concurrency=1000,  # 限制并发连接数
+        limit_max_requests=10000,  # 每个worker最大请求数
     )

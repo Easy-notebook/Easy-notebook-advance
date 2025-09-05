@@ -3,11 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
 import useStore from '../../../store/notebookStore';
 import useOperatorStore from '../../../store/operatorStore';
-import {
-    createUserAskQuestionAction,
-} from '../../../store/actionCreators';
+import { detectActivityType } from '../../../utils/activityDetector';
 import { Command } from 'lucide-react';
 import { AgentMemoryService, AgentType } from '../../../services/agentMemoryService';
+import type { QAItem } from '../../../store/AIAgentStore';
 
 const CommandInput: React.FC = () => {
     const {
@@ -33,21 +32,22 @@ const CommandInput: React.FC = () => {
     } = useStore();
 
     const [input, setInput] = useState('');
-    const modalRef = useRef(null);
-    const textareaRef = useRef(null);
+    const modalRef = useRef<HTMLDivElement | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const [isFocused, setIsFocused] = useState(false);
+    const [isComposing, setIsComposing] = useState(false);
 
-    // 动态调整文本框高度
+    // Dynamically adjust textarea height
     const adjustTextareaHeight = useCallback(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
 
-        // 重置高度以获取正确的scrollHeight
+        // Reset height to get correct scrollHeight
         textarea.style.height = 'auto';
 
-        // 计算行数（hypothesis每行20px）
-        const lineHeight = 24; // 基础行高
-        const maxHeight = lineHeight * 4; // 4行的最大高度
+        // Calculate rows (assume each row is 24px)
+        const lineHeight = 24; // base line height
+        const maxHeight = lineHeight * 4; // 4 rows max height
         const newHeight = Math.min(textarea.scrollHeight, maxHeight);
 
         textarea.style.height = `${newHeight}px`;
@@ -60,22 +60,22 @@ const CommandInput: React.FC = () => {
 
         return actions.filter(action => {
             const isStepMode = viewMode === 'step';
-            const isCompleteMode = viewMode === 'complete' || viewMode === 'create';
-            const isOtherMode = !isStepMode && !isCompleteMode; // dslc, etc.
+            const isDemoMode = viewMode === 'demo';
+            const isCreateMode = viewMode === 'create';
 
             // Step mode: only show actions for current step
-            if (isStepMode && action.viewMode === viewMode &&
-                getCurrentStepCellsIDs().includes(action.cellId)) {
+            if (isStepMode && action.viewMode === 'step' &&
+                (action.cellId ? getCurrentStepCellsIDs().includes(action.cellId) : false)) {
                 return true;
             }
             
-            // Complete mode: show all complete mode actions
-            if (isCompleteMode && action.viewMode === viewMode) {
+            // Demo mode: show all demo mode actions
+            if (isDemoMode && action.viewMode === 'demo') {
                 return true;
             }
             
-            // Other modes: show all actions for that mode or general actions
-            if (isOtherMode && (action.viewMode === viewMode || action.viewMode === 'complete' || action.viewMode === 'create')) {
+            // Create mode: show actions for create or general/demo actions (backward compatible 'complete')
+            if (isCreateMode && (action.viewMode === 'create' || action.viewMode === 'demo' || action.viewMode === 'complete')) {
                 return true;
             }
             
@@ -89,22 +89,22 @@ const CommandInput: React.FC = () => {
 
         return qaList.filter(qa => {
             const isStepMode = viewMode === 'step';
-            const isCompleteMode = viewMode === 'complete' || viewMode === 'create';
-            const isOtherMode = !isStepMode && !isCompleteMode; // dslc, etc.
+            const isDemoMode = viewMode === 'demo';
+            const isCreateMode = viewMode === 'create';
 
             // Step mode: only show QAs for current step
-            if (isStepMode && qa.viewMode === viewMode &&
-                getCurrentStepCellsIDs().includes(qa.cellId)) {
+            if (isStepMode && qa.viewMode === 'step' &&
+                (qa.cellId ? getCurrentStepCellsIDs().includes(qa.cellId) : false)) {
                 return true;
             }
             
-            // Complete mode: show all complete mode QAs
-            if (isCompleteMode && qa.viewMode === viewMode) {
+            // Demo mode: show all demo mode QAs
+            if (isDemoMode && qa.viewMode === 'demo') {
                 return true;
             }
             
-            // Other modes: show all QAs for that mode or general QAs
-            if (isOtherMode && (qa.viewMode === viewMode || qa.viewMode === 'complete')) {
+            // Create mode: show QAs for create or general/demo QAs (backward compatible 'complete')
+            if (isCreateMode && (qa.viewMode === 'create' || qa.viewMode === 'demo' || qa.viewMode === 'complete')) {
                 return true;
             }
             
@@ -114,15 +114,15 @@ const CommandInput: React.FC = () => {
 
     // Handle escape key to close and click outside
     useEffect(() => {
-        const handleEscape = (e) => {
+        const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 setShowCommandInput(false);
                 setInput('');
             }
         };
 
-        const handleClickOutside = (e) => {
-            if (modalRef.current && !modalRef.current.contains(e.target)) {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
                 setShowCommandInput(false);
                 setInput('');
             }
@@ -145,72 +145,73 @@ const CommandInput: React.FC = () => {
         }
     }, [showCommandInput]);
 
-    // 监听输入变化自动调整高度
+    // Listen for input changes to automatically adjust height
     useEffect(() => {
         adjustTextareaHeight();
     }, [input, adjustTextareaHeight]);
 
-    // 从问题推断用户目标的辅助方法
+    // Helper method to infer user goals from questions
     const _inferGoalsFromQuestion = useCallback((question: string): string[] => {
         const inferredGoals: string[] = [];
         const lowerQuestion = question.toLowerCase();
         
-        // 基于关键词推断目标
-        if (lowerQuestion.includes('how to') || lowerQuestion.includes('怎么') || lowerQuestion.includes('如何')) {
+        // Infer goals based on keywords
+        if (lowerQuestion.includes('how to') || lowerQuestion.includes('how') || lowerQuestion.includes('method')) {
             inferredGoals.push('learning_method');
         }
-        if (lowerQuestion.includes('error') || lowerQuestion.includes('bug') || lowerQuestion.includes('错误') || lowerQuestion.includes('问题')) {
+        if (lowerQuestion.includes('error') || lowerQuestion.includes('bug') || lowerQuestion.includes('issue') || lowerQuestion.includes('problem')) {
             inferredGoals.push('debug_issue');
         }
-        if (lowerQuestion.includes('data') || lowerQuestion.includes('数据')) {
+        if (lowerQuestion.includes('data') || lowerQuestion.includes('dataset')) {
             inferredGoals.push('data_analysis');
         }
-        if (lowerQuestion.includes('plot') || lowerQuestion.includes('chart') || lowerQuestion.includes('图') || lowerQuestion.includes('可视化')) {
+        if (lowerQuestion.includes('plot') || lowerQuestion.includes('chart') || lowerQuestion.includes('graph') || lowerQuestion.includes('visualize')) {
             inferredGoals.push('data_visualization');
         }
-        if (lowerQuestion.includes('optimize') || lowerQuestion.includes('improve') || lowerQuestion.includes('优化') || lowerQuestion.includes('改进')) {
+        if (lowerQuestion.includes('optimize') || lowerQuestion.includes('improve') || lowerQuestion.includes('enhance') || lowerQuestion.includes('performance')) {
             inferredGoals.push('code_optimization');
         }
-        if (lowerQuestion.includes('explain') || lowerQuestion.includes('what is') || lowerQuestion.includes('什么是') || lowerQuestion.includes('解释')) {
+        if (lowerQuestion.includes('explain') || lowerQuestion.includes('what is') || lowerQuestion.includes('describe') || lowerQuestion.includes('define')) {
             inferredGoals.push('concept_explanation');
         }
         
         return inferredGoals;
     }, []);
 
-    // 从命令推断用户目标的辅助方法
+    // Helper method to infer user goals from commands
     const _inferGoalsFromCommand = useCallback((command: string): string[] => {
         const inferredGoals: string[] = [];
         const lowerCommand = command.toLowerCase();
         
-        // 基于命令模式推断目标
-        if (lowerCommand.includes('plot') || lowerCommand.includes('chart') || lowerCommand.includes('图') || lowerCommand.includes('画')) {
+        // Infer goals based on command patterns
+        if (lowerCommand.includes('plot') || lowerCommand.includes('chart') || lowerCommand.includes('graph') || lowerCommand.includes('draw')) {
             inferredGoals.push('data_visualization');
         }
-        if (lowerCommand.includes('load') || lowerCommand.includes('read') || lowerCommand.includes('import') || lowerCommand.includes('读取') || lowerCommand.includes('加载')) {
+        if (lowerCommand.includes('load') || lowerCommand.includes('read') || lowerCommand.includes('import') || lowerCommand.includes('fetch') || lowerCommand.includes('get')) {
             inferredGoals.push('data_loading');
         }
-        if (lowerCommand.includes('clean') || lowerCommand.includes('process') || lowerCommand.includes('transform') || lowerCommand.includes('清理') || lowerCommand.includes('处理')) {
+        if (lowerCommand.includes('clean') || lowerCommand.includes('process') || lowerCommand.includes('transform') || lowerCommand.includes('parse') || lowerCommand.includes('format')) {
             inferredGoals.push('data_processing');
         }
-        if (lowerCommand.includes('analyze') || lowerCommand.includes('analysis') || lowerCommand.includes('分析') || lowerCommand.includes('统计')) {
+        if (lowerCommand.includes('analyze') || lowerCommand.includes('analysis') || lowerCommand.includes('calculate') || lowerCommand.includes('statistics')) {
             inferredGoals.push('data_analysis');
         }
-        if (lowerCommand.includes('model') || lowerCommand.includes('train') || lowerCommand.includes('predict') || lowerCommand.includes('模型') || lowerCommand.includes('训练')) {
+        if (lowerCommand.includes('model') || lowerCommand.includes('train') || lowerCommand.includes('predict') || lowerCommand.includes('ml') || lowerCommand.includes('ai')) {
             inferredGoals.push('machine_learning');
         }
-        if (lowerCommand.includes('save') || lowerCommand.includes('export') || lowerCommand.includes('output') || lowerCommand.includes('保存') || lowerCommand.includes('导出')) {
+        if (lowerCommand.includes('save') || lowerCommand.includes('export') || lowerCommand.includes('output') || lowerCommand.includes('write') || lowerCommand.includes('store')) {
             inferredGoals.push('data_export');
         }
         
         return inferredGoals;
     }, []);
     
-    const handleSubmit = useCallback(async (command) => {
+    const handleSubmit = useCallback(async (command: string) => {
         try {
             setShowCommandInput(false);
             setIsLoading(true);
             const timestamp = new Date().toLocaleTimeString();
+            const effectiveNotebookId = notebookId ?? `temp-session-${Date.now()}`;
 
             if (command.startsWith('/')) {
                 setActiveView('script');
@@ -226,34 +227,43 @@ const CommandInput: React.FC = () => {
                     viewMode,
                     onProcess: false
                 };
-                addAction(actionData);
+                const detectionResult = detectActivityType(command);
+                const enhancedActionData = {
+                    ...actionData,
+                    type: detectionResult.eventType,
+                    agentName: detectionResult.agentName,
+                    agentType: detectionResult.agentType,
+                    taskDescription: detectionResult.taskDescription,
+                    onProcess: true,
+                    progressPercent: 0
+                };
+                addAction(enhancedActionData);
 
-                // 准备Command Agent记忆上下文
+                // Prepare Command Agent memory context
                 const commandMemoryContext = AgentMemoryService.prepareMemoryContextForBackend(
                     notebookId,
                     'command' as AgentType,
                     {
-                        current_cell_id: currentCellId,
+                        current_cell_id: currentCellId || undefined,
                         related_cells: getCurrentViewCells(),
-                        related_actions: actionsToShow.map(action => action.id),
                         command_id: commandId,
                         command_content: command
                     }
                 );
 
-                // 更新用户意图（从命令推断）
+                // Update user intent (inferred from command)
                 AgentMemoryService.updateUserIntent(
-                    notebookId,
+                    effectiveNotebookId,
                     'command' as AgentType,
-                    [command], // 用户明确表达的目标
-                    _inferGoalsFromCommand(command), // 从命令推断的目标
-                    command, // 当前焦点
-                    [] // 当前阻塞
+                    [command], // Goals explicitly expressed by user
+                    _inferGoalsFromCommand(command), // Goals inferred from command
+                    command, // Current focus
+                    [] // Current blocks
                 );
 
-                // 记录命令交互启动
+                // Record command interaction start
                 AgentMemoryService.recordOperationInteraction(
-                    notebookId,
+                    effectiveNotebookId,
                     'command' as AgentType,
                     'command_started',
                     true,
@@ -262,7 +272,7 @@ const CommandInput: React.FC = () => {
                         command: command,
                         start_time: new Date().toISOString(),
                         related_context: {
-                            current_cell_id: currentCellId,
+                            current_cell_id: currentCellId || undefined,
                             related_actions_count: actionsToShow.length,
                             view_mode: viewMode
                         }
@@ -277,7 +287,7 @@ const CommandInput: React.FC = () => {
                         current_step_index: currentStepIndex,
                         content: command,
                         commandId: commandId,
-                        // 添加记忆上下文
+                        // Add memory context
                         ...commandMemoryContext
                     }
                 });
@@ -285,49 +295,64 @@ const CommandInput: React.FC = () => {
                 setIsRightSidebarCollapsed(true);
                 setActiveView('qa');
                 const qaId = `qa-${uuidv4()}`;
-                const qaData = {
+                const qaData: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean } = {
                     id: qaId,
                     type: 'user',
-                    timestamp,
                     content: command,
                     resolved: false,
-                    relatedActionId: null,
-                    cellId: currentCellId,
+                    cellId: currentCellId || undefined,
                     viewMode,
                     onProcess: true
                 };
                 addQA(qaData);
-                const action = createUserAskQuestionAction(command, qaId, currentCellId);
-                useAIAgentStore.getState().addAction(action);
+                // Use smart detector to get activity information
+                const detectionResult = detectActivityType(command);
+                
+                // Create enhanced activity information
+                const enhancedAction = {
+                    type: detectionResult.eventType,
+                    content: command,
+                    result: '',
+                    relatedQAIds: [qaId],
+                    cellId: currentCellId,
+                    viewMode: viewMode || 'create',
+                    onProcess: true,
+                    agentName: detectionResult.agentName,
+                    agentType: detectionResult.agentType,
+                    taskDescription: detectionResult.taskDescription,
+                    progressPercent: 0
+                };
+                
+                useAIAgentStore.getState().addAction(enhancedAction);
 
-                // 准备Agent记忆上下文
-                console.log('AITerminal: 准备记忆上下文', { notebookId, command });
+                // Prepare Agent memory context
+                console.log('AITerminal: Preparing memory context', { notebookId, command });
                 const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
                     notebookId,
                     'general' as AgentType,
                     {
-                        current_cell_id: currentCellId,
+                        current_cell_id: currentCellId || undefined,
                         related_cells: getCurrentViewCells(),
                         related_qa_ids: qasToShow.map(qa => qa.id),
                         current_qa_id: qaId,
                         question_content: command
                     }
                 );
-                console.log('AITerminal: 记忆上下文准备完成', memoryContext);
+                console.log('AITerminal: Memory context preparation completed', memoryContext);
 
-                // 更新用户意图（从用户问题推断）
+                // Update user intent (inferred from user question)
                 AgentMemoryService.updateUserIntent(
-                    notebookId,
+                    effectiveNotebookId,
                     'general' as AgentType,
-                    [command], // 用户明确表达的目标  
-                    _inferGoalsFromQuestion(command), // 推断的目标
-                    command, // 当前焦点
-                    [] // 当前阻塞（如果有的话）
+                    [command], // Goals explicitly expressed by user
+                    _inferGoalsFromQuestion(command), // Inferred goals
+                    command, // Current focus
+                    [] // Current blocks (if any)
                 );
 
-                // 记录QA交互启动
+                // Record QA interaction start
                 AgentMemoryService.recordOperationInteraction(
-                    notebookId,
+                    effectiveNotebookId,
                     'general' as AgentType,
                     'qa_started',
                     true,
@@ -336,7 +361,7 @@ const CommandInput: React.FC = () => {
                         question: command,
                         start_time: new Date().toISOString(),
                         related_context: {
-                            current_cell_id: currentCellId,
+                            current_cell_id: currentCellId || undefined,
                             related_qa_count: qasToShow.length,
                             view_mode: viewMode
                         }
@@ -354,11 +379,11 @@ const CommandInput: React.FC = () => {
                         related_qas: qasToShow,
                         related_actions: actionsToShow,
                         related_cells: getCurrentViewCells(),
-                        // 添加记忆上下文
+                        // Add memory context
                         ...memoryContext
                     }
                 };
-                console.log('AITerminal: 发送最终payload', finalPayload);
+                console.log('AITerminal: Sending final payload', finalPayload);
                 useOperatorStore.getState().sendOperation(notebookId, finalPayload);
             }
         } catch (error) {
@@ -382,7 +407,12 @@ const CommandInput: React.FC = () => {
         getCurrentViewCells,
         setIsRightSidebarCollapsed
     ]);
-    const handleKeyDown = useCallback((e) => {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Prevent handling during IME composition
+        if (isComposing) {
+            return;
+        }
+        
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             if (input.trim()) {
@@ -390,7 +420,15 @@ const CommandInput: React.FC = () => {
                 setInput('');
             }
         }
-    }, [input, handleSubmit, setInput]);
+    }, [input, handleSubmit, setInput, isComposing]);
+
+    const handleCompositionStart = useCallback(() => {
+        setIsComposing(true);
+    }, []);
+
+    const handleCompositionEnd = useCallback(() => {
+        setIsComposing(false);
+    }, []);
 
 
     if (!showCommandInput) return null;
@@ -417,6 +455,8 @@ const CommandInput: React.FC = () => {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
+                            onCompositionStart={handleCompositionStart}
+                            onCompositionEnd={handleCompositionEnd}
                             onFocus={() => setIsFocused(true)}
                             onBlur={() => setIsFocused(false)}
                             placeholder="Type a command (start with /) or ask a question..."
