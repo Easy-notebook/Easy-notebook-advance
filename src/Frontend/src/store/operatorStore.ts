@@ -6,6 +6,8 @@ import { notebookApiIntegration } from '../services/notebookServices';
 import { handleStreamResponse } from '../services/streamHandler';
 import { showToast } from '../components/UI/Toast';
 import useCodeStore from './codeStore';
+import useStore from './notebookStore';
+import { useAIAgentStore, EVENT_TYPES } from './AIAgentStore';
 
 /**
  * 操作接口
@@ -134,6 +136,32 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
         const operationId = get().addOperation(operation);
 
         try {
+            // Record activity: stream start
+            const viewMode = useStore.getState().viewMode;
+            const { agentName, agentType } = (() => {
+                switch (operation.type) {
+                    case 'user_command':
+                        return { agentName: 'Command Processor', agentType: 'command_processor' as const };
+                    case 'user_question':
+                        return { agentName: 'General Assistant', agentType: 'general' as const };
+                    default:
+                        return { agentName: 'System Assistant', agentType: 'general' as const };
+                }
+            })();
+            useAIAgentStore.getState().addAction({
+                type: EVENT_TYPES.SYSTEM_EVENT,
+                content: `Operation started: ${operation.type}`,
+                result: '',
+                relatedQAIds: [],
+                cellId: null,
+                viewMode: viewMode || 'create',
+                onProcess: true,
+                agentName,
+                agentType,
+                taskDescription: 'Streaming updates from backend'
+            });
+            const startActionId = useAIAgentStore.getState().actions[0]?.id;
+
             // 使用统一接口发送操作，传入自定义的流处理函数
             await notebookApiIntegration.sendOperation(
                 notebookId,
@@ -157,10 +185,27 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
                         console.error('处理操作时发生错误:', error);
                     }
                 }
-            );            
+            );
+
+            // Mark activity completed when stream closes
+            if (startActionId) {
+                useAIAgentStore.getState().updateAction(startActionId, {
+                    onProcess: false,
+                    result: `Stream completed: ${operation.type}`,
+                    progressPercent: 100
+                } as any);
+            }
         } catch (error: any) {
             console.error('发送操作失败:', error);
             set({ error: error.message });
+            // Mark activity failed
+            const latestId = useAIAgentStore.getState().actions[0]?.id;
+            if (latestId) {
+                useAIAgentStore.getState().updateAction(latestId, {
+                    onProcess: false,
+                    errorMessage: error?.message || String(error)
+                } as any);
+            }
             showToast({
                 message: `操作发送失败: ${error.message}`,
                 type: 'error'

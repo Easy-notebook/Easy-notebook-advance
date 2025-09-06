@@ -40,7 +40,7 @@ const ViewSwitcher: React.FC = () => {
   return (
     <div className="flex gap-2 text-lg items-center w-full justify-between">
       <Space size="small" className="flex-1 min-w-0">
-        <Button.Group>
+        <Space.Compact>
           {(['activity', 'qa', 'debug'] as RightSidebarView[]).map((view) => (
             <Button
               key={view}
@@ -55,7 +55,7 @@ const ViewSwitcher: React.FC = () => {
               </span>
             </Button>
           ))}
-        </Button.Group>
+        </Space.Compact>
       </Space>
       <Button
         type="text"
