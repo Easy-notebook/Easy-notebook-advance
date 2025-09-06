@@ -317,11 +317,7 @@ const NotebookApp = () => {
   // Handle sidebar item change
   const handleSidebarItemChange = useCallback((itemId: string) => {
     setActiveSidebarItem(itemId as any);
-    // Auto-expand sidebar when switching items if currently collapsed
-    if (isCollapsed) {
-      setIsCollapsed(false);
-    }
-  }, [isCollapsed, setIsCollapsed]);
+  }, []);
   
   // Handle sidebar toggle (expand/collapse)
   const handleSidebarToggle = useCallback(() => {

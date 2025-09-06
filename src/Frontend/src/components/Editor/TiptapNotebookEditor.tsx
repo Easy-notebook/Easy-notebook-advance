@@ -11,7 +11,7 @@ import ImageExtension from './extensions/ImageExtension'
 import LaTeXExtension from './extensions/LaTeXExtension'
 import { TipTapSlashCommandsComponent as TipTapSlashCommands } from './TipTap/TipTapSlashCommands'
 import { useTipTapSlashCommands } from './TipTap/useTipTapSlashCommands'
-import SimpleDragManager from './TipTap/BlockManager/SimpleDragManager'
+import DragUpload from './TipTap/DragUpload'
 import useStore from '../../store/notebookStore'
 import { RawCellExtension } from './extensions/RawCellExtension'
 import { UploadDropExtension } from './extensions/UploadDropExtension'
@@ -1283,14 +1283,14 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       </div> */}
 
       {/* 主编辑器内容 - 使用简化的拖拽管理器 */}
-      <SimpleDragManager editor={currentEditor}>
+      <DragUpload editor={currentEditor}>
         <div onClick={handleEditorClick} className="w-full h-full">
           <EditorContent
             editor={editor}
             className="w-full h-full focus-within:outline-none"
           />
         </div>
-      </SimpleDragManager>
+      </DragUpload>
 
       {/* TipTap快捷指令菜单 */}
       <TipTapSlashCommands

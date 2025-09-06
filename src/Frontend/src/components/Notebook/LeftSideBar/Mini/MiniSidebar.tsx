@@ -82,7 +82,7 @@ const MiniSidebar = memo(function MiniSidebar({
   onPhaseClick,
   onItemClick,
   onExpandClick,
-  activeItemId = 'workspace',
+  activeItemId,
   isMainSidebarExpanded = false,
 }: MiniSidebarProps) {
   const hasPhases = useMemo(() => Array.isArray(phases) && phases.length > 0, [phases]);

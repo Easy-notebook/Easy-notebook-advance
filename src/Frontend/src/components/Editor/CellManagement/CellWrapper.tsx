@@ -6,7 +6,6 @@ import {
   ChevronDown, 
   Copy, 
   Trash2, 
-  MoreVertical,
   Plus
 } from 'lucide-react';
 
@@ -46,8 +45,6 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
   canMoveDown,
   children,
   onSelect,
-  onFocus,
-  onBlur,
   onStartEdit,
   onStopEdit,
   onDelete,

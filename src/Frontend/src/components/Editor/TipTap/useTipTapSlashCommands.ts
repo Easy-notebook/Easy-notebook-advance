@@ -88,10 +88,7 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
     const safeQuery = sanitizeQuery(newQuery);
     const newTo = from + 1 + safeQuery.length; // '/' + safe query length
     
-    // 更新编辑器中的文本
     editor.chain().focus().deleteRange({ from, to: slashRange.to }).insertContentAt(from, `/${safeQuery}`).run();
-    
-    // 更新范围和搜索查询
     setSlashRange({ from, to: newTo });
     setSearchQuery(safeQuery);
   }, [editor, slashRange, sanitizeQuery]);
@@ -155,31 +152,6 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
     };
   }, [editor, isMenuOpen]);
 
-  // Keyboard shortcuts (kept commented to avoid conflicting with global shortcuts)
-  /*
-  useEffect(() => {
-    if (!editor) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const { ctrlKey, metaKey, key } = event;
-      const isModifierPressed = ctrlKey || metaKey;
-
-      if (isModifierPressed && key === '/') {
-        event.preventDefault();
-        
-        // 获取当前光标位置
-        const { state } = editor;
-        const { selection } = state;
-        const coords = editor.view.coordsAtPos(selection.from);
-        
-        openMenu({ x: coords.left, y: coords.bottom + 8 });
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editor, openMenu]);
-  */
 
   return {
     isMenuOpen,
