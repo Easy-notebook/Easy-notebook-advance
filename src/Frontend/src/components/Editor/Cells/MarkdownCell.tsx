@@ -73,14 +73,14 @@ interface MarkdownImageProps {
 }
 
 const MarkdownImage: React.FC<MarkdownImageProps> = ({ alt, src, title }) => (
-  <div style={{ textAlign: 'center' }}>
+  <span style={{ display: 'block', textAlign: 'center' }}>
     <img
       src={src}
       alt={alt}
       title={title}
       style={{ maxWidth: '100%', height: 'auto', display: 'inline-block' }}
     />
-  </div>
+  </span>
 );
 
 interface MarkdownTableProps {

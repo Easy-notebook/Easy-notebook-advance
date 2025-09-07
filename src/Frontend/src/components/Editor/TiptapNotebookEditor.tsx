@@ -11,7 +11,7 @@ import ImageExtension from './extensions/ImageExtension'
 import LaTeXExtension from './extensions/LaTeXExtension'
 import { TipTapSlashCommandsComponent as TipTapSlashCommands } from './TipTap/TipTapSlashCommands'
 import { useTipTapSlashCommands } from './TipTap/useTipTapSlashCommands'
-import SimpleDragManager from './TipTap/BlockManager/SimpleDragManager'
+import DragUpload from './TipTap/DragUpload'
 import useStore from '../../store/notebookStore'
 import { RawCellExtension } from './extensions/RawCellExtension'
 import { UploadDropExtension } from './extensions/UploadDropExtension'
@@ -1283,14 +1283,74 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       </div> */}
 
       {/* 主编辑器内容 - 使用简化的拖拽管理器 */}
-      <SimpleDragManager editor={currentEditor}>
-        <div onClick={handleEditorClick} className="w-full h-full">
+      <DragUpload editor={currentEditor}>
+        <div onClick={handleEditorClick} className="w-full flex flex-col flex-1">
           <EditorContent
             editor={editor}
-            className="w-full h-full focus-within:outline-none"
+            className="w-full flex-shrink-0 focus-within:outline-none"
           />
+          {/* 填充剩余高度的可点击容器 */}
+          <div 
+            className="w-full flex-1 cursor-text relative"
+            onClick={(e) => {
+              console.log('🔴 TipTap filler area clicked!', e.target);
+              
+              if (!editor) return;
+
+              // 检查最后一个cell的类型
+              const lastCell = cells[cells.length - 1];
+              
+              if (cells.length === 0 || !lastCell) {
+                // 没有cells时，创建新markdown，光标定位到开头
+                const newCellId = generateCellId();
+                const newCell: Cell = {
+                  id: newCellId,
+                  type: 'markdown',
+                  content: '',
+                  outputs: [],
+                  enableEdit: true,
+                };
+                setCells([newCell]);
+                
+                // 聚焦到编辑器开头
+                setTimeout(() => {
+                  editor.commands.focus('start');
+                }, 50);
+              } else if (lastCell.type === 'markdown') {
+                // 最后一个cell是markdown，光标定位到该cell末尾
+                debouncedFocus(() => {
+                  try {
+                    editor.commands.focus('end');
+                  } catch (e) {
+                    console.warn('Failed to focus TipTap editor at end:', e);
+                  }
+                });
+              } else {
+                // 最后一个cell不是markdown，创建新markdown，光标定位到开头
+                const newCellId = generateCellId();
+                const newCell: Cell = {
+                  id: newCellId,
+                  type: 'markdown',
+                  content: '',
+                  outputs: [],
+                  enableEdit: true,
+                };
+                setCells([...cells, newCell]);
+                
+                // 聚焦到新内容的开头
+                setTimeout(() => {
+                  editor.commands.focus('end');
+                }, 50);
+              }
+
+            }}
+            style={{ minHeight: '300px' }}
+          >
+            <div className="absolute inset-0 flex items-center justify-center opacity-20">
+            </div>
+          </div>
         </div>
-      </SimpleDragManager>
+      </DragUpload>
 
       {/* TipTap快捷指令菜单 */}
       <TipTapSlashCommands
@@ -1535,14 +1595,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         }
 
         /* 可点击填充区域样式 */
-        .tiptap-notebook-editor-container .cursor-text:hover {
-          background-color: rgba(59, 130, 246, 0.02);
-          transition: background-color 0.2s ease;
-        }
-        
-        .tiptap-notebook-editor-container .cursor-text:active {
-          background-color: rgba(59, 130, 246, 0.05);
-        }
 
         /* 确保编辑器容器填满高度 */
         .tiptap-notebook-editor-container {

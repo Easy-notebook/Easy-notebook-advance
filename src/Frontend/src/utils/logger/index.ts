@@ -45,35 +45,35 @@ class LoggerManager {
     // Default configuration
     this.config = {
       storage: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.DEBUG
       },
       api: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.INFO
       },
       ui: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.DEBUG
       },
       network: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.DEBUG
       },
       notebook: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.INFO
       },
       store: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.DEBUG
       },
       file: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.INFO
       },
       agent: {
-        enabled: true,
+        enabled: false,
         level: LogLevel.INFO
       }
     };

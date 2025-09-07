@@ -8,7 +8,7 @@ import NotebookCard from './NotebookCard';
 import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
 import { notebookApiIntegration } from '@Services/notebookServices';
-import type { NotebookListProps, CachedNotebook } from './types';
+import type { NotebookListProps } from './types';
 
 const NotebookList: React.FC<NotebookListProps & { 
   loading?: boolean; 

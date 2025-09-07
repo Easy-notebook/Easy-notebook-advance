@@ -60,7 +60,7 @@ export interface JupyterNotebookEditorHandle {
 /* ------------------------- Component ------------------------- */
 const JupyterNotebookEditor = forwardRef < JupyterNotebookEditorHandle, JupyterNotebookEditorProps> (
   ({ className = '', readOnly = false }, ref) => {
-    const { cells, setCells, notebookId } = useStore();
+    const { cells, setCells, notebookId, setEditingCellId } = useStore();
 
     const containerRef = useRef < HTMLDivElement | null > (null);
     const [focusedCellId, setFocusedCellId] = useState < string | null > (null);
@@ -168,9 +168,44 @@ const JupyterNotebookEditor = forwardRef < JupyterNotebookEditorHandle, JupyterN
     }, [handleAddCell]);
 
     const handleDeleteCell = useCallback((cellId: string) => {
+      console.log('🗑️ Deleting cell:', cellId);
+      
+      // 从 cells 数组中移除指定 cell
       const newCells = cells.filter((cell) => cell.id !== cellId);
+      console.log(`📊 Cells count: ${cells.length} -> ${newCells.length}`);
+      
+      // 清理相关状态
+      if (focusedCellId === cellId) {
+        console.log('🧹 Clearing focused cell ID');
+        setFocusedCellId(null);
+      }
+      
+      // 清理 store 中的编辑状态
+      const storeState = useStore.getState();
+      if (storeState.editingCellId === cellId) {
+        console.log('🧹 Clearing editing cell ID from store');
+        storeState.setEditingCellId?.(null);
+      }
+      
+      // 清理 store 中的当前 cell 状态
+      if (storeState.currentCellId === cellId) {
+        console.log('🧹 Clearing current cell ID from store');
+        storeState.setCurrentCell?.(null);
+      }
+      
+      // 如果删除后没有 cells 了，额外清理所有相关状态
+      if (newCells.length === 0) {
+        console.log('🧹 No cells left, clearing all states');
+        setFocusedCellId(null);
+        storeState.setEditingCellId?.(null);
+        storeState.setCurrentCell?.(null);
+      }
+      
+      // 最后更新 cells - 这很重要，确保在状态清理完成后再更新
       setCells(newCells);
-    }, [setCells, cells]);
+      
+      console.log('✅ Cell deletion cleanup completed');
+    }, [setCells, cells, focusedCellId, setFocusedCellId]);
 
     const handleMoveCell = useCallback((cellId: string, direction: 'up' | 'down') => {
       const idx = cells.findIndex((c) => c.id === cellId);
@@ -522,44 +557,50 @@ const JupyterNotebookEditor = forwardRef < JupyterNotebookEditorHandle, JupyterN
         <div
           className="w-full cursor-text flex-1 relative"
           onClick={(e) => {
-            const target = e.target as Element | null;
-            if (!ensureHTMLElement(target) || !isBlankArea(target)) return;
+            console.log('🔴 Jupyter filler area clicked!', e.target);
 
             if (cells.length === 0) {
+              // 没有cells时，创建新markdown，光标定位到开头
               const id = handleAddCell('markdown', 0);
               requestAnimationFrame(() => {
                 setTimeout(() => {
                   setFocusedCellId(id);
                   const el = containerRef.current?.querySelector(`[data-cell-id="${id}"]`) as HTMLElement | null;
-                  if (el) focusCellEditor(el, true);
+                  if (el) focusCellEditor(el, true); // 光标到开头
                 }, 50);
               });
+              
               return;
             }
 
             const last = cells[cells.length - 1];
             if (last.type === 'markdown') {
-              debouncedFocus(() => {
-                const containerEl = containerRef.current;
-                if (containerEl && focusNotebookAtEnd(containerEl)) {
-                  const nodes = containerRef.current?.querySelectorAll('[data-cell-id]');
-                  const lastEl = nodes && nodes[nodes.length - 1];
-                  const cellId = lastEl?.getAttribute?.('data-cell-id');
-                  if (cellId) setFocusedCellId(cellId);
-                }
+              // 最后一个cell是markdown，让该cell进入编辑模式，光标定位到末尾
+              console.log('🔵 Setting markdown cell to edit mode:', last.id);
+              setFocusedCellId(last.id);
+              setEditingCellId(last.id); // 这是关键！让 markdown cell 进入编辑模式
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  const el = containerRef.current?.querySelector(`[data-cell-id="${last.id}"]`) as HTMLElement | null;
+                  if (el) {
+                    // 聚焦并定位到末尾
+                    focusCellEditor(el, false); // false表示光标到末尾
+                  }
+                }, 100); // 增加延迟确保编辑模式已激活
               });
             } else {
+              // 最后一个cell不是markdown，创建新markdown，光标定位到开头
               const id = handleAddCell('markdown', -1);
               requestAnimationFrame(() => {
                 setTimeout(() => {
                   setFocusedCellId(id);
                   const el = containerRef.current?.querySelector(`[data-cell-id="${id}"]`) as HTMLElement | null;
-                  if (el) focusCellEditor(el, true);
+                  if (el) focusCellEditor(el, true); // 光标到开头
                 }, 50);
               });
             }
           }}
-          style={{ minHeight: '200px', backgroundColor: 'transparent' }}
+          style={{ minHeight: '300px' }}
         >
           {(cells.length === 0 || !lastIsMarkdown) && (
             <div className="absolute inset-0 flex items-center justify-center opacity-20">
@@ -603,13 +644,6 @@ const JupyterNotebookEditor = forwardRef < JupyterNotebookEditorHandle, JupyterN
             background-color: #e0f2fe !important;
             border-radius: 3px;
             padding: 1px 2px;
-          }
-          .jupyter-notebook-editor .cursor-text:hover {
-            background-color: rgba(59, 130, 246, 0.02);
-            transition: background-color 0.2s ease;
-          }
-          .jupyter-notebook-editor .cursor-text:active {
-            background-color: rgba(59, 130, 246, 0.05);
           }
         `}</style>
       </div>

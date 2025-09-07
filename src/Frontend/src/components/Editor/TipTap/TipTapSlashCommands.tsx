@@ -6,12 +6,11 @@ import tippy, { Instance as TippyInstance } from 'tippy.js';
 import SlashCommandMenu, { SlashCommand } from '../SlashCommands/SlashCommandMenu';
 import { v4 as uuidv4 } from 'uuid';
 import React, { useEffect } from 'react';
-import { useAIAgentStore } from '../../../store/AIAgentStore';
+import { useAIAgentStore, type QAItem } from '../../../store/AIAgentStore';
 import useStore from '../../../store/notebookStore';
 import useOperatorStore from '../../../store/operatorStore';
 import { detectActivityType } from '../../../utils/activityDetector';
 import { AgentMemoryService, AgentType } from '../../../services/agentMemoryService';
-import type { QAItem } from '../../../store/AIAgentStore';
 
 export interface SlashItem {
   id: string;
@@ -89,11 +88,16 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
 
         // Allow showing the panel in a permissive manner; closing handled in onKeyDown
         allow: ({ state, range }) => {
-          // If the trigger is deleted (e.g. "/" removed), the plugin exits naturally
-          const from = range.from - 1;
-          const prev = state.doc.textBetween(from, from + 1);
+          // Require the "/" to be at the start of the line (ignoring leading whitespace)
+          // The slash character is located at position (range.from - 1)
+          const slashPos = range.from - 1;
+          const prev = state.doc.textBetween(slashPos, slashPos + 1);
           if (prev !== '/') return false;
-          return true;
+
+          const $slash = state.doc.resolve(slashPos);
+          const beforeText = $slash.parent.textBetween(0, $slash.parentOffset);
+          // Only allow if no non-whitespace chars before '/'
+          return beforeText.trim().length === 0;
         },
 
         items: ({ query }) => {
@@ -314,61 +318,15 @@ export interface TipTapSlashCommandsProps {
 }
 
 export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position, searchQuery, onQueryUpdate, slashRange, onRemoveSlashText }: TipTapSlashCommandsProps) => {
-  // Store hooks for chat functionality (same as AITerminal)
-  const {
-    setActiveView,
-    actions,
-    qaList,
-    addQA
-  } = useAIAgentStore();
+  const { setActiveView, qaList, addQA } = useAIAgentStore();
+  const { currentCellId, viewMode, notebookId, getCurrentViewCells, setIsRightSidebarCollapsed } = useStore();
 
-  const {
-    currentCellId,
-    viewMode,
-    currentPhaseId,
-    currentStepIndex,
-    notebookId,
-    getCurrentViewCells,
-    setIsRightSidebarCollapsed
-  } = useStore();
-
-  // Helper method to infer goals from questions
-  const inferGoalsFromQuestion = (question: string): string[] => {
-    const inferredGoals: string[] = [];
-    const lowerQuestion = question.toLowerCase();
-    
-    if (lowerQuestion.includes('how to')) {
-      inferredGoals.push('learning_method');
-    }
-    if (lowerQuestion.includes('error') || lowerQuestion.includes('bug')) {
-      inferredGoals.push('debug_issue');
-    }
-    if (lowerQuestion.includes('data')) {
-      inferredGoals.push('data_analysis');
-    }
-    if (lowerQuestion.includes('plot') || lowerQuestion.includes('chart')) {
-      inferredGoals.push('data_visualization');
-    }
-    if (lowerQuestion.includes('optimize') || lowerQuestion.includes('improve')) {
-      inferredGoals.push('code_optimization');
-    }
-    if (lowerQuestion.includes('explain') || lowerQuestion.includes('what is')) {
-      inferredGoals.push('concept_explanation');
-    }
-    
-    return inferredGoals;
-  };
-
-  // Handle chat request for unknown commands (same logic as AITerminal)
   const handleChatRequest = async (command: string) => {
     try {
-      // First, remove the current slash text
       removeCurrentSlashText();
-
       setIsRightSidebarCollapsed(true);
       setActiveView('qa');
       
-      const effectiveNotebookId = notebookId ?? `temp-session-${Date.now()}`;
       const qaId = `qa-${uuidv4()}`;
       
       const qaData: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean } = {
@@ -382,10 +340,7 @@ export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position
       };
       addQA(qaData);
       
-      // Use smart detector to get activity info
       const detectionResult = detectActivityType(command);
-      
-      // Create enhanced action info
       const enhancedAction = {
         type: detectionResult.eventType,
         content: command,
@@ -402,7 +357,6 @@ export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position
       
       useAIAgentStore.getState().addAction(enhancedAction);
 
-      // Prepare Agent memory context
       const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
         notebookId,
         'general' as AgentType,
@@ -415,44 +369,13 @@ export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position
         }
       );
 
-      // Update user intent
-      AgentMemoryService.updateUserIntent(
-        effectiveNotebookId,
-        'general' as AgentType,
-        [command], // Goals explicitly expressed by user
-        inferGoalsFromQuestion(command), // Inferred goals
-        command, // Current focus
-        [] // Current blocks
-      );
-
-      // Record QA interaction start
-      AgentMemoryService.recordOperationInteraction(
-        effectiveNotebookId,
-        'general' as AgentType,
-        'qa_started',
-        true,
-        {
-          qa_id: qaId,
-          question: command,
-          start_time: new Date().toISOString(),
-          related_context: {
-            current_cell_id: currentCellId || undefined,
-            related_qa_count: qaList.length,
-            view_mode: viewMode
-          }
-        }
-      );
-
       const finalPayload = {
         type: 'user_question',
         payload: {
           content: command,
           QId: [qaId],
           current_view_mode: viewMode,
-          current_phase_id: currentPhaseId,
-          current_step_index: currentStepIndex,
           related_qas: qaList,
-          related_actions: actions,
           related_cells: getCurrentViewCells(),
           ...memoryContext
         }
@@ -460,16 +383,13 @@ export const TipTapSlashCommandsComponent = ({ editor, isOpen, onClose, position
       
       useOperatorStore.getState().sendOperation(notebookId, finalPayload);
       
-      console.log('SlashCommand: Sending chat request:', command);
-      
     } catch (error) {
       console.error('Error in slash command chat request:', error);
     } finally {
-      onClose(); // Close the menu after sending chat request
+      onClose();
     }
   };
 
-  // Inject the handleChatRequest function into the extension storage
   useEffect(() => {
     if (editor) {
       setupSlashChatHandler(editor, handleChatRequest);

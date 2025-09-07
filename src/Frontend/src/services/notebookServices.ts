@@ -648,32 +648,56 @@ export const notebookApiIntegration = {
             const reader = stream.getReader();
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
+            let processedSinceYield = 0;
 
-            const readStream = async (): Promise<void> => {
+            // Iterative stream loop to avoid recursion growth and allow periodic yielding
+            // Protect against indefinite tight loops when network is slow: track idle chunks
+            let emptyReads = 0;
+            while (true) {
                 const { done, value } = await reader.read();
                 if (done) {
                     console.log('Stream closed');
-                    return;
+                    break;
                 }
+                if (!value || value.byteLength === 0) {
+                    emptyReads++;
+                    if (emptyReads > 10) {
+                        await new Promise(r => setTimeout(r, 5));
+                        emptyReads = 0;
+                    }
+                    continue;
+                }
+                emptyReads = 0;
                 buffer += decoder.decode(value, { stream: true });
+
+                // Process all complete lines currently in buffer
                 let boundary = buffer.indexOf('\n');
                 while (boundary !== -1) {
-                    const line = buffer.substring(0, boundary).trim();
+                    const rawLine = buffer.substring(0, boundary);
                     buffer = buffer.substring(boundary + 1);
+                    const line = rawLine.replace(/\r$/, '').trim(); // handle CRLF and trim
                     if (line) {
                         try {
                             const data = JSON.parse(line);
-                            handleStreamUpdate(data); // Handle each update
+                            try {
+                                if (data && typeof data === 'object' && 'type' in data) {
+                                    console.log('STREAM EVENT →', (data as any).type, data);
+                                }
+                            } catch {}
+                            await handleStreamUpdate(data); // ensure ordering
                         } catch (e) {
-                            console.error('Failed to parse stream data:', e);
+                            console.error('Failed to parse stream data:', e, '\nRaw line:', line.slice(0, 200));
                         }
+                    }
+                    processedSinceYield++;
+                    // Yield to UI thread periodically to reduce blocking on large bursts
+                    if (processedSinceYield >= 50) {
+                        await Promise.resolve();
+                        processedSinceYield = 0;
                     }
                     boundary = buffer.indexOf('\n');
                 }
-                readStream();
-            };
-
-            readStream();
+            }
         } catch (error) {
             console.error('Send operation error:', error);
             throw error;
