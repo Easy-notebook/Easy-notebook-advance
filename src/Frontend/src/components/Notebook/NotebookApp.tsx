@@ -30,6 +30,7 @@ import EmptyState from '../Senario/State/EmptyState/EmptyState';
 import LibraryState from '../Senario/State/LibraryState/LibraryState';
 import { useRouteSync } from '@Hooks/useRouteSync';
 import useRouteStore from '@Store/routeStore';
+import ProblemDefineState from '../Senario/State/ProblemDefineState/ProblemDefineState';
 
 // Cast components to any to relax prop type constraints
 const AIAgentSidebar: any = AIAgentSidebarOrig;
@@ -810,7 +811,14 @@ const NotebookApp = () => {
               />
             )
           };
-        } else if (currentPath.startsWith('/workspace/')) {
+        } else if (currentPath === '/workspace/ProblemDefine') {
+          uiLog.debug('Content resolution result', { chosen: 'problem-define-state', reason: 'url-fallback', path: '/workspace/ProblemDefine' });
+          return {
+            type: 'problem-define-state',
+            component: <ProblemDefineState confirmProblem={() => {}} />
+          };
+        }
+        else if (currentPath.startsWith('/workspace/')) {
           uiLog.debug('Content resolution result', { chosen: 'main-content', type: 'workspace', reason: 'url-fallback', path: currentPath });
           return {
             type: 'main-content',

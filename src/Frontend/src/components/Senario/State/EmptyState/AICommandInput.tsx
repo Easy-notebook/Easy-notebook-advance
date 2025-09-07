@@ -57,9 +57,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
   const defaultPresetQuestions = useMemo<VDSQuestion[]>(
     () => [
-      { problem_name: '代码解释与优化', problem_description: '/explain 帮我解释这段代码的功能并提供优化建议' },
-      { problem_name: '数据分析咨询', problem_description: '如何对我的数据进行统计分析？' },
-      { problem_name: '代码生成', problem_description: '/gen 生成一个Python函数来处理数据' },
+      // { problem_name: '代码解释与优化', problem_description: '/explain 帮我解释这段代码的功能并提供优化建议' },
+      // { problem_name: '数据分析咨询', problem_description: '如何对我的数据进行统计分析？' },
+      // { problem_name: '代码生成', problem_description: '/gen 生成一个Python函数来处理数据' },
     ],
     []
   );
@@ -415,7 +415,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     ]
   );
 
-  const hasContent = useMemo(() => input.trim().length > 0 || files.length > 0, [input, files.length]);
+  // const hasContent = useMemo(() => input.trim().length > 0 || files.length > 0, [input, files.length]);
 
   return (
     <div className="relative mb-6">

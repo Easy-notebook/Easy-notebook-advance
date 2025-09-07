@@ -42,6 +42,9 @@ const AppRouter: React.FC = () => {
         {/* 库页面 - 显示 NotebookApp (LibraryState) */}
         <Route path="/FoKn/Library" element={<RouteAwareNotebookApp />} />
         
+        {/* 需求确认页面 - 显示 NotebookApp (ProblemDefineState) */}
+        <Route path="/workspace/ProblemDefine" element={<RouteAwareNotebookApp />} />
+
         {/* 工作区页面 - 显示 NotebookApp (MainContent) */}
         <Route path="/workspace/:notebookId" element={<RouteAwareNotebookApp />} />
         
