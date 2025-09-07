@@ -5,7 +5,7 @@ import { useWorkflowStateMachine } from './store/workflowStateMachine';
 import usePreStageStore from './store/preStageStore';
 import PipelineStageWrapper from './utils/PipelineStageWrapper';
 import EmptyState from '../State/EmptyState';
-import ProblemDefineState from '../State/ProblemDefineState';
+import ProblemDefineState from '../State/ProblemDefineState/ProblemDefineState';
 import { Loader2 } from 'lucide-react';
 
 /**

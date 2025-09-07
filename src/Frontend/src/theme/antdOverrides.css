@@ -118,8 +118,6 @@
   /* Input Focus Enhancement */
   .ant-input:focus,
   .ant-input-focused {
-    border-color: #41B883 !important;
-    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.1) !important;
     outline: none !important;
   }
   
@@ -705,6 +703,23 @@
     border-color: #369870 !important;
   }
   
+  /* 关掉 TextArea 的聚焦边框/阴影 */
+  .ai-bar .ant-input-textarea {
+    box-shadow: none !important;
+  }
+
+  .ai-bar .ant-input-textarea:focus-within,
+  .ai-bar .ant-input-textarea:hover {
+    box-shadow: none !important;
+    border-color: transparent !important;
+  }
+
+  .ai-bar .ant-input-textarea textarea.ant-input {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
   /* ====================================================================
      Responsive Design Adjustments
      ==================================================================== */
