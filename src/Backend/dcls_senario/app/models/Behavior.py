@@ -342,48 +342,94 @@ class Behavior(Action):
     def run(self) -> Dict[str, Any]:
         if self._has_errors:
             return self.end_event()
-        
+
+        max_iterations = 20  # 防止无限循环
+        iteration = 0
+
+        # 执行start事件
         if self.event("start") and "start" in self.event_handlers:
             handler = self.event_handlers["start"]
             if self._validate_handler_requirements(handler):
-                return handler()
+                result = handler()
+                # 如果start事件返回了完整结果，直接返回
+                if isinstance(result, dict) and "steps" in result:
+                    return result
+                # 如果返回的是self，继续执行后续事件
             else:
                 return self.end_event()
-        
-        todo_list = self.get_toDoList()
-        if todo_list:
+
+        # 继续执行todo_list中的事件，直到完成
+        while iteration < max_iterations:
+            iteration += 1
+            todo_list = self.get_toDoList()
+
+            if not todo_list:
+                # 没有更多事件要执行，返回结果
+                break
+
             last_event = todo_list[-1]
-            
-            if last_event in self.event_handlers and self.event(last_event):
-                handler = self.event_handlers[last_event]
-                if self._validate_handler_requirements(handler):
-                    return handler()
-                else:
-                    return self.end_event()
-            
-            if last_event in self.after_exec_handlers and self.event(last_event):
-                handler = self.after_exec_handlers[last_event]
-                if self._validate_handler_requirements(handler):
-                    return handler()
-                else:
-                    return self.end_event()
-            
-            if last_event in self.thinking_handlers and self.event(last_event):
-                handler = self.thinking_handlers[last_event]
-                if self._validate_handler_requirements(handler):
-                    return handler()
-                else:
-                    return self.end_event()
-            
-            if last_event in self.finnish_handlers and self.event(last_event):
-                handler = self.finnish_handlers[last_event]
-                if self._validate_handler_requirements(handler):
-                    return handler()
-                else:
-                    return self.end_event()
-        
+            executed = False
+
+            # 尝试执行各种类型的事件处理器
+            for handler_dict, handler_type in [
+                (self.event_handlers, "event"),
+                (self.after_exec_handlers, "after_exec"),
+                (self.thinking_handlers, "thinking"),
+                (self.finnish_handlers, "finnish")
+            ]:
+                if last_event in handler_dict:
+                    # 检查事件条件，但不移除事件
+                    if handler_type == "event":
+                        # 对于普通事件，检查是否匹配
+                        if last_event == "start":
+                            can_execute = not self.todo_list or len(self.todo_list) == 0
+                        else:
+                            can_execute = self.todo_list and self.todo_list[-1] == last_event
+                    else:
+                        # 对于其他类型的处理器，直接检查
+                        can_execute = self.todo_list and self.todo_list[-1] == last_event
+
+                    if can_execute:
+                        handler = handler_dict[last_event]
+                        if self._validate_handler_requirements(handler):
+                            # 手动移除事件
+                            if self.todo_list and self.todo_list[-1] == last_event:
+                                self.todo_list.pop()
+
+                            result = handler()
+                            executed = True
+                            # 如果返回了完整结果，直接返回
+                            if isinstance(result, dict) and "steps" in result:
+                                return result
+                            # 如果返回的是self，继续执行后续事件
+                            break
+                        else:
+                            # 验证失败，移除事件
+                            if self.todo_list and self.todo_list[-1] == last_event:
+                                self.todo_list.pop()
+                            executed = True
+                            break
+
+            # 如果没有找到处理器，移除事件
+            if not executed:
+                if self.todo_list:
+                    self.todo_list.pop()
+
         return self.end_event()
-    
+
+    async def run_streaming(self):
+        """执行Behavior并返回流式响应的异步迭代器"""
+        # 执行完整的事件链
+        result = self.run()
+
+        # 如果结果包含steps，逐个yield
+        if isinstance(result, dict) and "steps" in result:
+            for action in result["steps"]:
+                yield action
+        else:
+            # 如果没有steps，返回一个默认action
+            yield {"content": "Action completed", "action": "text"}
+
     def next_thinking_event(self, event_tag: str, textArray: List[str] = None, agentName: str = ""):
         self.is_thinking(
             textArray=textArray or ["Processing..."],

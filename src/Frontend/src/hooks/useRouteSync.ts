@@ -21,6 +21,7 @@ export const useRouteSync = () => {
         uiLog.navigation('workspace', { notebookId });
         
         // 设置当前 notebook ID
+        console.log('[useRouteSync] Setting notebookId from route:', notebookId);
         setNotebookId(notebookId);
         
         // 从数据库加载 notebook 数据

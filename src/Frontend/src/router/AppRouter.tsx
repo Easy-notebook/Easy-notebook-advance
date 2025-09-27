@@ -47,7 +47,10 @@ const AppRouter: React.FC = () => {
 
         {/* 工作区页面 - 显示 NotebookApp (MainContent) */}
         <Route path="/workspace/:notebookId" element={<RouteAwareNotebookApp />} />
-        
+
+        {/* EasyNet图表编辑器页面 - 显示 NotebookApp (EasyNetState) */}
+        <Route path="/EasyNet/:easyNetId" element={<RouteAwareNotebookApp />} />
+
         {/* 其他路由重定向到主页 */}
         <Route path="*" element={<RouteAwareNotebookApp />} />
       </Routes>

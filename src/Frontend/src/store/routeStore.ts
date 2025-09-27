@@ -4,22 +4,26 @@
 import { create } from 'zustand';
 import { storeLog, uiLog } from '../utils/logger';
 
-export type AppView = 'empty' | 'library' | 'workspace' | 'agent' | 'file-preview';
+export type AppView = 'empty' | 'library' | 'workspace' | 'problemdefine' | 'agent' | 'file-preview' | 'easynet';
 
 export interface RouteState {
   currentView: AppView;
   currentNotebookId: string | null;
+  currentEasyNetId: string | null;
   currentRoute: string;
-  
+
   // Actions
   setView: (view: AppView) => void;
   setNotebookId: (id: string | null) => void;
+  setEasyNetId: (id: string | null) => void;
   setRoute: (route: string) => void;
-  
+
   // Route helpers
   navigateToEmpty: () => void;
   navigateToLibrary: () => void;
   navigateToWorkspace: (notebookId: string) => void;
+  navigateToProblemDefine: () => void;
+  navigateToEasyNet: (easyNetId: string) => void;
 }
 
 // 获取初始路由状态，避免总是从 empty 开始
@@ -32,6 +36,7 @@ const getInitialRouteState = () => {
     return {
       currentView: 'empty' as AppView,
       currentNotebookId: null,
+      currentEasyNetId: null,
       currentRoute: '/'
     };
   } else if (currentPath === '/FoKn/Library') {
@@ -39,7 +44,25 @@ const getInitialRouteState = () => {
     return {
       currentView: 'library' as AppView,
       currentNotebookId: null,
+      currentEasyNetId: null,
       currentRoute: '/FoKn/Library'
+    };
+  } else if (currentPath === '/workspace/ProblemDefine') {
+    storeLog.debug('RouteStore: Setting initial state to PROBLEMDEFINE');
+    return {
+      currentView: 'problemdefine' as AppView,
+      currentNotebookId: null,
+      currentEasyNetId: null,
+      currentRoute: '/workspace/ProblemDefine'
+    };
+  } else if (currentPath.startsWith('/EasyNet/')) {
+    const easyNetId = currentPath.split('/EasyNet/')[1];
+    storeLog.debug('RouteStore: Setting initial state to EASYNET', { easyNetId });
+    return {
+      currentView: 'easynet' as AppView,
+      currentNotebookId: null,
+      currentEasyNetId: easyNetId,
+      currentRoute: currentPath
     };
   } else if (currentPath.startsWith('/workspace/')) {
     const notebookId = currentPath.split('/workspace/')[1];
@@ -47,6 +70,7 @@ const getInitialRouteState = () => {
     return {
       currentView: 'workspace' as AppView,
       currentNotebookId: notebookId,
+      currentEasyNetId: null,
       currentRoute: currentPath
     };
   } else {
@@ -55,6 +79,7 @@ const getInitialRouteState = () => {
     return {
       currentView: 'empty' as AppView,
       currentNotebookId: null,
+      currentEasyNetId: null,
       currentRoute: currentPath
     };
   }
@@ -66,10 +91,12 @@ storeLog.debug('RouteStore: Final initial state', initialState);
 const useRouteStore = create<RouteState>((set, get) => ({
   currentView: initialState.currentView,
   currentNotebookId: initialState.currentNotebookId,
+  currentEasyNetId: initialState.currentEasyNetId,
   currentRoute: initialState.currentRoute,
   
   setView: (view: AppView) => set({ currentView: view }),
   setNotebookId: (id: string | null) => set({ currentNotebookId: id }),
+  setEasyNetId: (id: string | null) => set({ currentEasyNetId: id }),
   setRoute: (route: string) => {
     const state = get();
     set({ currentRoute: route });
@@ -79,11 +106,25 @@ const useRouteStore = create<RouteState>((set, get) => ({
       set({ currentView: 'empty' });
     } else if (route === '/FoKn/Library') {
       set({ currentView: 'library' });
+    } else if (route === '/workspace/ProblemDefine') {
+      set({
+        currentView: 'problemdefine',
+        currentNotebookId: null,
+        currentEasyNetId: null
+      });
+    } else if (route.startsWith('/EasyNet/')) {
+      const easyNetId = route.split('/EasyNet/')[1];
+      set({
+        currentView: 'easynet',
+        currentNotebookId: null,
+        currentEasyNetId: easyNetId
+      });
     } else if (route.startsWith('/workspace/')) {
       const notebookId = route.split('/workspace/')[1];
-      set({ 
+      set({
         currentView: 'workspace',
-        currentNotebookId: notebookId
+        currentNotebookId: notebookId,
+        currentEasyNetId: null
       });
     }
   },
@@ -100,6 +141,17 @@ const useRouteStore = create<RouteState>((set, get) => ({
   
   navigateToWorkspace: (notebookId: string) => {
     const route = `/workspace/${notebookId}`;
+    window.history.pushState(null, '', route);
+    get().setRoute(route);
+  },
+  
+  navigateToProblemDefine: () => {
+    window.history.pushState(null, '', '/workspace/ProblemDefine');
+    get().setRoute('/workspace/ProblemDefine');
+  },
+
+  navigateToEasyNet: (easyNetId: string) => {
+    const route = `/EasyNet/${easyNetId}`;
     window.history.pushState(null, '', route);
     get().setRoute(route);
   },

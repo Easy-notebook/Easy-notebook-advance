@@ -28,6 +28,7 @@ import { useWorkflowControlStore } from './store/workflowControlStore';
 import { AgentType } from '@Services/agentMemoryService';
 import EmptyState from '../Senario/State/EmptyState/EmptyState';
 import LibraryState from '../Senario/State/LibraryState/LibraryState';
+import EasyNetState from '../Senario/State/EasyNetState/EasyNetState';
 import { useRouteSync } from '@Hooks/useRouteSync';
 import useRouteStore from '@Store/routeStore';
 import ProblemDefineState from '../Senario/State/ProblemDefineState/ProblemDefineState';
@@ -161,8 +162,11 @@ const NotebookApp = () => {
   // 修改后的 handleAddCell 函数，使用 hook 的 initializeNotebook
   const handleAddCell = useCallback(async (type: any, index?: number) => {
     try {
+      console.log('[handleAddCell] Called with notebookId:', notebookId, 'type:', type, 'index:', index);
       if (!notebookId) {
+        console.log('[handleAddCell] No notebookId found, initializing new notebook');
         await initializeNotebook();
+        console.log('[handleAddCell] New notebookId after initialization:', useStore.getState().notebookId);
       }
 
       const newCell = {
@@ -399,6 +403,37 @@ const NotebookApp = () => {
     // 从 Library 返回到 EmptyState
     navigateToEmpty();
   }, [navigateToEmpty]);
+
+  const handleProblemDefineConfirm = useCallback(async () => {
+    try {
+      console.log('[handleProblemDefineConfirm] Starting with notebookId:', notebookId);
+      // 创建新的 notebook 或使用现有的
+      let currentNotebookId = notebookId;
+      if (!currentNotebookId) {
+        console.warn('[handleProblemDefineConfirm] No notebookId found, creating new notebook');
+        await initializeNotebook();
+        currentNotebookId = useStore.getState().notebookId;
+        console.log('[handleProblemDefineConfirm] Created new notebookId:', currentNotebookId);
+      } else {
+        console.log('[handleProblemDefineConfirm] Using existing notebookId:', currentNotebookId);
+      }
+
+      // 导航到工作区
+      if (currentNotebookId) {
+        uiLog.info('ProblemDefine: Confirming problem and navigating to workspace', { notebookId: currentNotebookId });
+        console.log('[handleProblemDefineConfirm] Navigating to workspace with notebookId:', currentNotebookId);
+        navigateToWorkspace(currentNotebookId);
+      } else {
+        uiLog.error('Failed to get notebook ID for ProblemDefine confirmation');
+      }
+    } catch (err) {
+      uiLog.error('Error confirming problem in ProblemDefine', { error: err });
+      toast({
+        message: (err as Error).message || t('toast.error'),
+        type: 'error',
+      } as any);
+    }
+  }, [initializeNotebook, notebookId, navigateToWorkspace, toast, t]);
 
   // 监听 notebookId 变化，当在 EmptyState 创建新 notebook 时自动导航
   useEffect(() => {
@@ -758,6 +793,20 @@ const NotebookApp = () => {
           )
         };
 
+      case 'problemdefine':
+        uiLog.debug('Content resolution result', { chosen: 'problem-define-state', reason: 'route-based' });
+        return {
+          type: 'problem-define-state',
+          component: <ProblemDefineState confirmProblem={handleProblemDefineConfirm} />
+        };
+
+      case 'easynet':
+        uiLog.debug('Content resolution result', { chosen: 'easynet-state', reason: 'route-based' });
+        return {
+          type: 'easynet-state',
+          component: <EasyNetState />
+        };
+
       case 'workspace':
         // uiLog.debug('Content resolution result', { chosen: 'main-content', type: 'workspace', reason: 'route-based' });
         return {
@@ -871,6 +920,7 @@ const NotebookApp = () => {
     handleBackToNotebook,
     handleLibrarySelectNotebook,
     handleLibraryBack,
+    handleProblemDefineConfirm,
     cells,
     viewMode,
     tasks,

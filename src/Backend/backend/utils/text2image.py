@@ -23,9 +23,19 @@ class Text2ImageAPI(ModernLogger):
             }
         )
 
-        # response.raise_for_status()
         data = response.json()
         self.info(f"Generation: {data}")
+        
+        # Check if the response was successful
+        if response.status_code != 200:
+            self.error(f"API request failed with status {response.status_code}: {data}")
+            raise Exception(f"Image generation failed: {data.get('message', 'Unknown error')}")
+        
+        # Check if the response has the expected structure
+        if "data" not in data or not data["data"] or "url" not in data["data"][0]:
+            self.error(f"Unexpected response structure: {data}")
+            raise Exception("Image generation failed: Invalid response structure")
+        
         return data["data"][0]["url"]
 
 

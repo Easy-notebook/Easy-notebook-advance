@@ -204,13 +204,7 @@ const AISuggestions: React.FC<AISuggestionsProps> = ({
 
   if (suggestions.length === 0) {
     return (
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Sparkles className="w-4 h-4 text-purple-600" />
-          <Title level={5} style={{ margin: 0, fontSize: '14px' }}>
-            AI Suggestions
-          </Title>
-        </div>
+      <div className="p-4 w-full flex justify-center items-center">
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description="No AI suggestions available"

@@ -16,6 +16,7 @@ import { usePipelineStore, PIPELINE_STAGES } from '@/components/Senario/Workflow
 import usePreStageStore from '@/components/Senario/Workflow/store/preStageStore';
 import { generalResponse } from '@/components/Senario/Workflow/services/StageGeneralFunction';
 import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
+import useRouteStore from '@Store/routeStore';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
@@ -35,6 +36,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   // -------- UI refs / state --------
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  
+  // -------- Route navigation --------
+  const { navigateToProblemDefine } = useRouteStore();
 
   const [input, setInput] = useState<string>('');
   const [isFocused, setIsFocused] = useState<boolean>(false);
@@ -119,19 +123,28 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   // ---------- 上传逻辑 ----------
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
+      console.log('[DEBUG] AICommandInput - File upload initiated');
       const selectedFiles = Array.from(e.target.files ?? []);
-      if (!selectedFiles.length) return;
+      console.log('[DEBUG] AICommandInput - Selected files count:', selectedFiles.length);
+      
+      if (!selectedFiles.length) {
+        console.log('[DEBUG] AICommandInput - No files selected, returning');
+        return;
+      }
 
       const csv = selectedFiles.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
+      console.log('[DEBUG] AICommandInput - CSV file found:', csv ? csv.name : 'none');
+      
       if (!csv) {
-        // 业务保留：简单提醒
+        console.log('[DEBUG] AICommandInput - No valid CSV/Excel file found');
         alert('Please select a CSV or Excel file');
-        // 清空 input 值，避免二次无法选同一文件
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
 
+      console.log('[DEBUG] AICommandInput - File validation - name:', csv.name, 'size:', csv.size);
       if (csv.size > MAX_SIZE) {
+        console.log('[DEBUG] AICommandInput - File too large:', csv.size, 'max:', MAX_SIZE);
         alert(`File is too large. Maximum size allowed is ${MAX_SIZE / 1024 / 1024}MB`);
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
@@ -158,33 +171,53 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         maxFileSize: MAX_SIZE,
         targetDir: '.assets',
       };
+      console.log('[DEBUG] AICommandInput - Upload config created:', uploadConfig);
 
       // 确保有 notebookId
       let currentNotebookId = notebookId;
+      console.log('[DEBUG] AICommandInput - Current notebookId from store:', currentNotebookId);
+      
       if (!currentNotebookId) {
+        console.log('[DEBUG] AICommandInput - No notebookId, initializing new notebook');
         try {
           currentNotebookId = await notebookApiIntegration.initializeNotebook();
+          console.log('[DEBUG] AICommandInput - New notebook initialized:', currentNotebookId);
           useStore.getState().setNotebookId(currentNotebookId);
           useCodeStore.getState().setKernelReady(true);
+          console.log('[DEBUG] AICommandInput - Notebook ID and kernel status updated');
         } catch (initError) {
-          console.error('Failed to create notebook:', initError);
+          console.error('[DEBUG] AICommandInput - Failed to create notebook:', initError);
           alert('Failed to create notebook. Please try again.');
           if (fileInputRef.current) fileInputRef.current.value = '';
           return;
         }
       }
 
+      console.log('[DEBUG] AICommandInput - Setting upload state to true');
       setIsUploading(true);
 
       try {
-        // 确保内核 ready
+        console.log('[DEBUG] AICommandInput - Initializing kernel...');
         await useCodeStore.getState().initializeKernel();
+        console.log('[DEBUG] AICommandInput - Kernel initialized successfully');
 
+        console.log('[DEBUG] AICommandInput - Starting file upload with:', {
+          notebookId: currentNotebookId,
+          fileName: csv.name,
+          fileSize: csv.size,
+          config: uploadConfig
+        });
+        
         const result = await notebookApiIntegration.uploadFiles(currentNotebookId!, [csv], uploadConfig);
+        console.log('[DEBUG] AICommandInput - Upload result:', result);
 
         if (result && (result as any).status === 'ok') {
+          console.log('[DEBUG] AICommandInput - File upload successful, setting notebookId:', currentNotebookId);
           if (currentNotebookId !== notebookId) {
             useStore.getState().setNotebookId(currentNotebookId!);
+            console.log('[DEBUG] AICommandInput - NotebookId updated in store:', currentNotebookId);
+          } else {
+            console.log('[DEBUG] AICommandInput - NotebookId already matches:', currentNotebookId);
           }
 
           const newFiles: UploadFile[] = [
@@ -197,47 +230,72 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
               file: csv,
             },
           ];
+          console.log('[DEBUG] AICommandInput - Setting files state:', newFiles);
           setFiles(newFiles);
 
+          console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
           await usePreStageStore.getState().setCurrentFile(csv);
+          console.log('[DEBUG] AICommandInput - Setting CSV file path:', csv.name);
           await usePreStageStore.getState().setCsvFilePath(csv.name);
 
-          // 业务：开启 VDS
+          console.log('[DEBUG] AICommandInput - Enabling VDS mode');
           setIsVDSMode(true);
 
           // 生成 VDS 预设问题（异步延时保持原逻辑）
+          console.log('[DEBUG] AICommandInput - Starting question generation timer');
           setTimeout(async () => {
             try {
+              console.log('[DEBUG] AICommandInput - Getting file columns and dataset info');
               const cols = usePreStageStore.getState().getFileColumns();
               const info = usePreStageStore.getState().getDatasetInfo();
+              console.log('[DEBUG] AICommandInput - File columns:', cols);
+              console.log('[DEBUG] AICommandInput - Dataset info:', info);
+              
+              console.log('[DEBUG] AICommandInput - Calling generalResponse for question generation');
               const map = await generalResponse(
                 'generate_question_choice_map',
                 { column_info: cols, dataset_info: info },
                 i18n.language
               );
+              console.log('[DEBUG] AICommandInput - Question generation result:', map);
+              
               if (map?.message) {
+                console.log('[DEBUG] AICommandInput - Updating choice map and preset questions');
                 usePreStageStore.getState().updateChoiceMap(map.message);
                 setPresetQuestions(map.message as VDSQuestion[]);
                 if ((map.message as VDSQuestion[]).length && (map.message as VDSQuestion[])[0].problem_description) {
+                  console.log('[DEBUG] AICommandInput - Setting input to first question:', (map.message as VDSQuestion[])[0].problem_description);
                   setInput((map.message as VDSQuestion[])[0].problem_description);
                 }
+                
+                // 生成预设问题后，自动跳转到 ProblemDefine 页面
+                console.log('[DEBUG] AICommandInput - File uploaded and questions generated, navigating to ProblemDefine');
+                setTimeout(() => {
+                  navigateToProblemDefine();
+                }, 500); // 给用户一点时间看到问题生成，然后跳转
+              } else {
+                console.log('[DEBUG] AICommandInput - No questions generated from response');
               }
             } catch (genErr) {
-              console.error('Error generating preset questions:', genErr);
+              console.error('[DEBUG] AICommandInput - Error generating preset questions:', genErr);
             }
           }, 1000);
         } else {
+          console.error('[DEBUG] AICommandInput - Upload failed with result:', result);
           alert('Upload failed: ' + ((result as any)?.message || 'Unknown error'));
         }
       } catch (err: any) {
-        console.error('Upload error:', err);
+        console.error('[DEBUG] AICommandInput - Upload error:', err);
+        console.error('[DEBUG] AICommandInput - Error stack:', err.stack);
         alert(t('emptyState.uploadError') || 'Upload failed: ' + err.message);
       } finally {
+        console.log('[DEBUG] AICommandInput - Setting upload state to false');
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        console.log('[DEBUG] AICommandInput - File input cleared');
       }
     },
-    [notebookId, i18n.language, t, setFiles]
+    [notebookId, i18n.language, t, setFiles, navigateToProblemDefine]
   );
 
   // Note: removeFile handler removed due to being unused.

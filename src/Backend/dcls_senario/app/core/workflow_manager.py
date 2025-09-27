@@ -33,9 +33,8 @@ class WorkflowManager:
             "name": "Data Existence Establishment",
             "description": "Systematic data discovery, structure analysis, and relevance assessment",
             "sections": [
-                "section_1_data_existence_initialization",  # 重命名避免重复
-                "section_2_agent_driven_data_discovery",    # 新的Agent驱动数据发现
-                "section_2_data_structure_discovery",       # 保留原有步骤
+                "section_1_workflow_initialization",        # BrainCell Agent 自主设计工作流
+                "section_2_data_structure_discovery",
                 "section_3_variable_semantic_analysis",
                 "section_4_observation_unit_identification",
                 "section_5_variable_relevance_assessment",
@@ -46,7 +45,7 @@ class WorkflowManager:
             "name": "Data Integrity Assurance",
             "description": "Comprehensive data cleaning, validation, and quality assurance",
             "sections": [
-                "section_1_data_integrity_initialization",  # 重命名避免重复
+                "section_1_data_integrity_initialization",  # BrainCell Agent 自主设计工作流
                 "section_2_dimensional_integrity_validation",
                 "section_3_value_validity_assurance",
                 "section_4_completeness_integrity_restoration",
@@ -381,8 +380,8 @@ class WorkflowManager:
         if section_id not in available_sections:
             return {"success": False, "error": f"Invalid section: {section_id} in chapter: {chapter_id}"}
         
-        # 构建动态import路径
-        module_path = f"app.actions.{chapter_id}.{section_id}"
+        # Build dynamic import path from stages package
+        module_path = f"app.stages.{chapter_id}.{section_id}"
         
         return {
             "success": True,

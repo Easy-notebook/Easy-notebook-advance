@@ -62,11 +62,11 @@ export interface WorkflowTemplate {
 }
 
 export interface ExecutionHistoryEntry {
-    timestamp: number;
-    fromState: string;
-    toState: string;
-    event: string;
-    payload: any;
+    timestamp: Date;
+    fromState: WorkflowState;
+    toState: WorkflowState;
+    event: WorkflowEvent;
+    payload: unknown;
     hierarchicalId?: string | null;
     stageId?: string | null;
     stepId?: string | null;
@@ -423,20 +423,20 @@ interface WorkflowContext {
 }
 
 interface PendingUpdateData {
-    workflowTemplate: any;
+    workflowTemplate: WorkflowTemplate;
     nextStageId?: string;
 }
 
 interface WorkflowStateMachineState {
     currentState: WorkflowState;
     context: WorkflowContext;
-    executionHistory: any[];
+    executionHistory: ExecutionHistoryEntry[];
     pendingWorkflowData: PendingUpdateData | null;
 }
 
 interface WorkflowStateMachineActions {
-    transition: (event: WorkflowEvent, payload?: any) => void;
-    startWorkflow: (initialContext: { stageId: string, stepId: string }) => void;
+    transition: (event: WorkflowEvent, payload?: Record<string, unknown>) => void;
+    startWorkflow: (initialContext: { stageId: string, stepId?: string | null }) => void;
     fail: (error: Error, message?: string) => void;
     cancel: () => void;
     reset: () => void;
@@ -451,7 +451,7 @@ export type WorkflowStateMachine = WorkflowStateMachineState & WorkflowStateMach
 // 4. STATE EFFECTS (The Engine Logic)
 // ==============================================
 
-async function executeStateEffects(state: WorkflowState, payload: any) {
+async function executeStateEffects(state: WorkflowState, payload?: unknown): Promise<void> {
     const { transition, context } = useWorkflowStateMachine.getState();
     const { execAction } = useScriptStore.getState();
     const { getContext } = useAIPlanningContextStore.getState();
@@ -464,15 +464,14 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
      * resetting lower-level context appropriately.
      * @param {'step' | 'stage'} level - The level to advance.
      */
- const move2Next = (level: 'step' | 'stage') => {
-    const { context, fail } = useWorkflowStateMachine.getState();
+ const move2Next = (level: 'step' | 'stage'): void => {
+    const { context } = useWorkflowStateMachine.getState();
     const { workflowTemplate } = usePipelineStore.getState();
 
     // Guard against missing workflow data, which is a critical error.
     if (!workflowTemplate?.stages?.length) {
         console.error("[move2Next] Aborted: Workflow template or stages are missing.");
-        fail(new Error("Workflow template not loaded"), "Cannot advance to the next item.");
-        return;
+        throw new Error("Workflow template not loaded");
     }
 
     if (level === 'stage') {
@@ -481,8 +480,7 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
         if (currentStageIndex === -1) {
             console.error(`[move2Next] Failed to find current stage with ID: '${context.currentStageId}'. This indicates a state inconsistency.`);
-            fail(new Error(`Stage not found: ${context.currentStageId}`), "Inconsistent state detected.");
-            return;
+            throw new Error(`Stage not found: ${context.currentStageId}`);
         }
 
         // Check if it's already the last stage.
@@ -513,8 +511,7 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
         if (!currentStage || !currentStage.steps?.length) {
             console.error(`[move2Next] Failed to find current stage ('${context.currentStageId}') or it contains no steps.`);
-            fail(new Error(`Stage not found or is empty: ${context.currentStageId}`), "Inconsistent state detected.");
-            return;
+            throw new Error(`Stage not found or is empty: ${context.currentStageId}`);
         }
 
         const steps = currentStage.steps;
@@ -523,8 +520,7 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
         if (currentStepIndex === -1) {
             console.error(`[move2Next] Failed to find current step with ID: '${context.currentStepId}' in stage '${currentStage.id}'.`);
-            fail(new Error(`Step not found: ${context.currentStepId}`), "Inconsistent state detected.");
-            return;
+            throw new Error(`Step not found: ${context.currentStepId}`);
         }
 
         // Check if it's already the last step of the current stage.
@@ -536,31 +532,38 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
         // Correctly get the next step.
         const nextStep = steps[currentStepIndex + 1];
+        const nextStepId = nextStep.id ?? nextStep.step_id;
         
         console.log(`[move2Next] Advancing from step '${context.currentStepId}' to '${nextStep.id}'.`);
 
         useWorkflowStateMachine.setState(s => ({
             context: {
                 ...s.context,
-                currentStepId: nextStep.id, // Set the new step ID
+                currentStepId: nextStepId, // Set the new step ID
                 currentBehaviorActions: [], // Reset behavior context
                 currentActionIndex: 0,
             }
         }));
     }
 };
-    try {
         switch (state) {
             case WORKFLOW_STATES.STAGE_RUNNING: {
-                const pipeline = usePipelineStore.getState();
-                const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
-                const firstStepId = stage?.steps[0]?.id;
-
-                if (firstStepId) {
-                    useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentStepId: firstStepId } }));
+                // If currentStepId is already set, proceed directly
+                if (context.currentStepId) {
                     transition(EVENTS.START_STEP);
                 } else {
-                    transition(EVENTS.FAIL, { error: new Error(`No steps found in stage ${context.currentStageId}`) });
+                    // Look up the first step in the workflow template
+                    const pipeline = usePipelineStore.getState();
+                    const stage = pipeline.workflowTemplate?.stages.find(s => s.id === context.currentStageId);
+                    const firstStepId = stage?.steps?.[0] ? (stage.steps[0].id ?? stage.steps[0].step_id ?? null) : null;
+
+                    if (firstStepId) {
+                        useWorkflowStateMachine.setState(s => ({ context: { ...s.context, currentStepId: firstStepId } }));
+                        // Use setTimeout to ensure state update is applied before transition
+                        setTimeout(() => transition(EVENTS.START_STEP), 0);
+                    } else {
+                        transition(EVENTS.FAIL, { error: new Error(`No steps found in stage ${context.currentStageId}`) });
+                    }
                 }
                 break;
             }
@@ -572,19 +575,29 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
             // BEHAVIOR_RUNNING: Fetch actions and start first action
             case WORKFLOW_STATES.BEHAVIOR_RUNNING: {
-                const response = await fetch(constants.API.BEHAVIOR_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        stage_id: context.currentStageId,
-                        step_index: context.currentStepId,
-                        state: getContext(),
-                        stream: true,
-                    }),
-                });
-                if (!response.ok) throw new Error(`Sequence API failed: ${response.status}`);
+                // Validate required context before making API call
+                if (!context.currentStageId || !context.currentStepId) {
+                    transition(EVENTS.FAIL, {
+                        error: new Error(`Missing required context: stageId=${context.currentStageId}, stepId=${context.currentStepId}`)
+                    });
+                    break;
+                }
 
-                const reader = response.body!.getReader();
+                try {
+                    const response = await fetch(constants.API.BEHAVIOR_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            stage_id: context.currentStageId,
+                            step_index: context.currentStepId,
+                            state: getContext(),
+                            stream: true,
+                        }),
+                    });
+                    if (!response.ok) throw new Error(`Sequence API failed: ${response.status}`);
+                if (!response.body) throw new Error('Empty response body');
+
+                const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
                 let buffer = "";
                 const actions: any[] = [];
@@ -611,6 +624,11 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                     transition(EVENTS.START_ACTION);
                 } else {
                     transition(EVENTS.COMPLETE_BEHAVIOR);
+                }
+                } catch (error) {
+                    console.error('[FSM Effect] Error in BEHAVIOR_RUNNING:', error);
+                    const errorMessage = error instanceof Error ? error.message : 'Network error occurred';
+                    transition(EVENTS.FAIL, { error: errorMessage });
                 }
                 break;
             }
@@ -640,23 +658,18 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
 
             // BEHAVIOR_COMPLETED: Send feedback and decide next action based on response
             case WORKFLOW_STATES.BEHAVIOR_COMPLETED: {
-                try {
-                    const feedbackResponse: FeedbackResponse = await workflowAPIClient.sendFeedback({
-                        stage_id: context.currentStageId!,
-                        step_index: context.currentStepId!,
-                        state: getContext() || {},
-                    });
+                const feedbackResponse: FeedbackResponse = await workflowAPIClient.sendFeedback({
+                    stage_id: context.currentStageId!,
+                    step_index: context.currentStepId!,
+                    state: getContext() || {},
+                });
 
-                    console.log(`[FSM Effect] BEHAVIOR_COMPLETED: Feedback response received:`, feedbackResponse);
+                console.log(`[FSM Effect] BEHAVIOR_COMPLETED: Feedback response received:`, feedbackResponse);
 
-                    if (feedbackResponse.targetAchieved) {
-                        transition(EVENTS.COMPLETE_STEP);
-                    } else {
-                        transition(EVENTS.NEXT_BEHAVIOR);
-                    }
-                } catch (error) {
-                    console.error(`[FSM Effect] BEHAVIOR_COMPLETED: Error getting feedback:`, error);
-                    transition(EVENTS.FAIL, { error: `Feedback request failed: ${error.message}` });
+                if (feedbackResponse.targetAchieved) {
+                    transition(EVENTS.COMPLETE_STEP);
+                } else {
+                    transition(EVENTS.NEXT_BEHAVIOR);
                 }
                 break;
             }
@@ -667,19 +680,19 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
                 const pipeline = usePipelineStore.getState();
                 const stages = pipeline.workflowTemplate?.stages;
 
-                // 添加防护检查
+                // Guard checks
                 if (!stages || !Array.isArray(stages) || !context.currentStageId) {
                     console.error('[FSM Effect] Invalid stages or currentStageId in STEP_COMPLETED state');
-                    break;
+                    throw new Error('Invalid pipeline stages or missing currentStageId');
                 }
 
                 const currentStage = stages.find(s => s.id === context.currentStageId);
                 if (!currentStage?.steps || !Array.isArray(currentStage.steps)) {
                     console.error('[FSM Effect] Invalid currentStage or steps in STEP_COMPLETED state');
-                    break;
+                    throw new Error('Invalid current stage or steps');
                 }
 
-                const currentStepIndex = currentStage.steps.findIndex(step => step.id === context.currentStepId) ?? -1;
+                const currentStepIndex = currentStage.steps.findIndex(step => step.id === context.currentStepId);
                 const isLastStep = currentStepIndex === (currentStage.steps.length - 1);
 
                 if (isLastStep) {
@@ -695,7 +708,7 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
             case WORKFLOW_STATES.STAGE_COMPLETED: {
                 const pipeline = usePipelineStore.getState();
                 const currentStageIndex = pipeline.workflowTemplate?.stages.findIndex(s => s.id === context.currentStageId) ?? -1;
-                const isLastStage = currentStageIndex === (pipeline.workflowTemplate?.stages.length ?? 0) - 1;
+                const isLastStage = currentStageIndex === ((pipeline.workflowTemplate?.stages.length ?? 0) - 1);
 
                 if (isLastStage) {
                     transition(EVENTS.COMPLETE_WORKFLOW);
@@ -722,10 +735,6 @@ async function executeStateEffects(state: WorkflowState, payload: any) {
             default:
                 console.warn(`[FSM Effect] No side effects defined for state: ${state}`);
         }
-    } catch (error) {
-        console.error(`[FSM Effect] Unhandled error in state ${state}:`, error);
-        useWorkflowStateMachine.getState().transition(EVENTS.FAIL, { error: error instanceof Error ? error.message : String(error) });
-    }
 }
 
 // ==============================================
@@ -744,7 +753,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     executionHistory: [],
     pendingWorkflowData: null,
 
-    transition: (event, payload = {}) => {
+    transition: (event, payload: unknown = {}) => {
         const fromState = get().currentState;
         const toState = STATE_TRANSITIONS[fromState]?.[event];
         if (!toState) {
@@ -754,18 +763,27 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         console.log(`[FSM] Transition: ${fromState} -> ${toState} (Event: ${event})`, payload);
 
         set(state => {
-            const newState = {
-                executionHistory: [...state.executionHistory, { from: fromState, to: toState, event, payload, timestamp: new Date() }],
+            const historyEntry: ExecutionHistoryEntry = {
+                fromState,
+                toState,
+                event,
+                payload,
+                timestamp: new Date(),
+                stageId: state.context.currentStageId,
+                stepId: state.context.currentStepId,
+            };
+            const newState: Partial<WorkflowStateMachineState> = {
+                executionHistory: [...state.executionHistory, historyEntry],
                 currentState: toState
             };
 
             // Store pending workflow data when transitioning to UPDATE_PENDING
             if (event === EVENTS.UPDATE_WORKFLOW && payload) {
-                newState.pendingWorkflowData = payload;
+                newState.pendingWorkflowData = payload as unknown as PendingUpdateData;
 
                 // Also set UI state to show confirmation dialog
                 const workflowPanelStore = useWorkflowPanelStore.getState();
-                workflowPanelStore.setPendingWorkflowUpdate(payload);
+                workflowPanelStore.setPendingWorkflowUpdate(payload as unknown as PendingUpdateData);
                 workflowPanelStore.setShowWorkflowConfirm(true);
             }
 
@@ -793,7 +811,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                         if (!currentStageExists && newWorkflowStages.length > 0) {
                             // Current stage doesn't exist in new workflow, switch to first stage
                             const firstStage = newWorkflowStages[0];
-                            const firstStepId = firstStage.steps && firstStage.steps.length > 0 ? firstStage.steps[0].id : null;
+                            const firstStepId = firstStage.steps && firstStage.steps.length > 0 ? (firstStage.steps[0].id ?? firstStage.steps[0].step_id ?? null) : null;
 
                             console.log(`[FSM] Current stage ${state.context.currentStageId} not found in new workflow, switching to first stage: ${firstStage.id} with first step: ${firstStepId}`);
                             newState.context = {
@@ -823,17 +841,24 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
                 workflowPanelStore.setShowWorkflowConfirm(false);
             }
 
-            return newState;
+            return newState as WorkflowStateMachineState;
         });
 
         setTimeout(() => executeStateEffects(toState, payload), 0);
     },
 
-    startWorkflow: (initialContext) => {
+    startWorkflow: (initialContext): void => {
+        // Special handling for planning stage - set the step ID immediately
+        let stepId = initialContext.stepId || null;
+        if (initialContext.stageId === 'chapter_0_planning') {
+            // For planning stage, use the provided stepId or default to section_1_design_workflow
+            stepId = initialContext.stepId || 'section_1_design_workflow';
+        }
+
         set({
             context: {
                 currentStageId: initialContext.stageId,
-                currentStepId: null, // Start with stage, step will be determined by effect
+                currentStepId: stepId, // For planning stage, set step ID immediately
                 currentBehaviorId: null,
                 currentBehaviorActions: [],
                 currentActionIndex: 0,
@@ -842,9 +867,9 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         get().transition(EVENTS.START_WORKFLOW);
     },
 
-    fail: (error, message) => get().transition(EVENTS.FAIL, { error, message }),
-    cancel: () => get().transition(EVENTS.CANCEL),
-    reset: () => {
+    fail: (error, message): void => get().transition(EVENTS.FAIL, { error, message }),
+    cancel: (): void => get().transition(EVENTS.CANCEL),
+    reset: (): void => {
         set({
             currentState: WORKFLOW_STATES.IDLE,
             context: { currentStageId: null, currentStepId: null, currentBehaviorId: null, currentBehaviorActions: [], currentActionIndex: 0 },
@@ -853,7 +878,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         });
     },
 
-    requestWorkflowUpdate: (payload) => get().transition(EVENTS.UPDATE_WORKFLOW, payload),
-    confirmWorkflowUpdate: () => get().transition(EVENTS.UPDATE_WORKFLOW_CONFIRMED),
-    rejectWorkflowUpdate: () => get().transition(EVENTS.UPDATE_WORKFLOW_REJECTED),
+    requestWorkflowUpdate: (payload): void => get().transition(EVENTS.UPDATE_WORKFLOW, payload as unknown as Record<string, unknown>),
+    confirmWorkflowUpdate: (): void => get().transition(EVENTS.UPDATE_WORKFLOW_CONFIRMED),
+    rejectWorkflowUpdate: (): void => get().transition(EVENTS.UPDATE_WORKFLOW_REJECTED),
 }));

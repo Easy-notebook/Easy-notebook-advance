@@ -2,8 +2,8 @@ from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 
 class SequenceRequest(BaseModel):
-    stage_id: str
-    step_index: Union[int, str]
+    stage_id: Optional[str] = None
+    step_index: Optional[Union[int, str]] = None
     state: Dict[str, Any] = Field(default_factory=dict, description="全局上下文，可包含checklist、plan、thinking等信息")
     stream: bool = Field(default=True, description="是否启用流式输出")
     notebook_id: Optional[str] = None

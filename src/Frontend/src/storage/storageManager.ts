@@ -77,23 +77,36 @@ export class StorageManager {
    */
   private static async doInitialize(): Promise<void> {
     try {
+      console.log('[DEBUG] StorageManager - Starting storage system initialization');
       storageLog.info('Initializing storage system');
+      
+      console.log('[DEBUG] StorageManager - Calling IndexedDBManager.initialize()');
       await IndexedDBManager.initialize();
+      console.log('[DEBUG] StorageManager - IndexedDB initialization completed');
       storageLog.persistence('IndexedDB', 'init', { success: true });
       
       // Wait a bit to ensure database is fully ready
+      console.log('[DEBUG] StorageManager - Waiting 100ms for database to be ready');
       await new Promise(resolve => setTimeout(resolve, 100));
       
+      console.log('[DEBUG] StorageManager - Ensuring config');
       await this.ensureConfig();
+      console.log('[DEBUG] StorageManager - Config ensured');
       storageLog.info('Storage configuration initialized');
       
       // Check and perform data migration if needed
+      console.log('[DEBUG] StorageManager - Starting data migration check');
       await this.checkAndMigrate();
+      console.log('[DEBUG] StorageManager - Migration check completed');
       
       // Schedule periodic cleanup
+      console.log('[DEBUG] StorageManager - Scheduling periodic cleanup');
       this.scheduleCleanup();
+      console.log('[DEBUG] StorageManager - Storage system initialization completed');
       storageLog.info('Storage system initialization completed');
     } catch (error) {
+      console.error('[DEBUG] StorageManager - Storage system initialization failed:', error);
+      console.error('[DEBUG] StorageManager - Error stack:', error.stack);
       storageLog.error('Storage system initialization failed', { error });
       throw error;
     }

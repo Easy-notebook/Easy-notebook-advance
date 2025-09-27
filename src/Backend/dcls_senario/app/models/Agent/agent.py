@@ -15,14 +15,14 @@ load_dotenv()
 class Agent(ABC, Oracle, Token, AgentAbilityMixin):
     """
     重新设计的智能体基类
-    
+
     基于事件驱动和装饰器模式的智能体架构，支持：
     - 装饰器定义的标准能力
-    - 动态添加的自定义能力  
+    - 动态添加的自定义能力
     - FoKn框架集成
     - XML标签规范化处理
     """
-    
+
     def __init__(self,
                  operation: Optional[Dict[str, Any]] = None,
                  api_key: Optional[str] = None,
@@ -34,7 +34,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         Oracle.__init__(self, model=engine, apikey=api_key, base_url=base_url)
         Token.__init__(self)
         AgentAbilityMixin.__init__(self)
-        
+
         # 基础属性
         self.logger = ModernLogger("Agent", level=os.getenv("AGENT_LOG_LEVEL", "info"))
         self.operation = operation or {}
@@ -45,11 +45,11 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         self.messages: List[Dict[str, str]] = []
         self.payload = self.operation.get("payload", {})
         self.status = "pending"
-        
+
         # 初始化FoKn框架
         self.fokn = FoKn()
         self._setup_fokn_integration()
-        
+
         # 上下文管理
         self.agent_memory = self._parse_agent_memory()
         self.current_context = self._parse_current_context()
@@ -59,37 +59,47 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         # 流处理状态
         self._accumulated_content = ""
         self._current_qid = None
-        
+
         # 注册标准能力
         self._register_standard_abilities()
-    
+
     # ==================== 标准能力定义 ====================
     @ability("Workflow Update", xml_tag="update-workflow", description="Update workflow structure")
     def update_workflow_ability(self, workflow_data: dict) -> dict:
         """更新工作流结构的能力"""
         return {"type": "update_workflow", "payload": workflow_data}
-    
+
     @ability("Step Management", xml_tag="manage-step", description="Manage workflow steps")
     def manage_step_ability(self, step_data: dict) -> dict:
         """管理工作流步骤的能力"""
         return {"type": "manage_step", "payload": step_data}
-    
+
     @ability("Plan Creation", xml_tag="create-plan", description="Create workflow plans")
     def create_plan_ability(self, plan_data: dict) -> dict:
         """创建工作流计划的能力"""
         return {"type": "create_plan", "payload": plan_data}
-    
+
     @ability("TODO Management", xml_tag="manage-todo", description="Manage TODO items")
     def manage_todo_ability(self, todo_data: dict) -> dict:
         """管理TODO项的能力"""
         return {"type": "manage_todo", "payload": todo_data}
-    
-    @ability("Status Check", xml_tag="status", xml_attributes={"state": "active"}, 
+
+    @ability("Status Check", xml_tag="status", xml_attributes={"state": "active"},
              is_self_closing=True, description="Check agent status")
     def status_check_ability(self) -> dict:
         """检查智能体状态的能力"""
         return {"type": "status_check", "payload": {"status": self.status}}
-    
+
+    @ability("Step Update", xml_tag="step-update", description="Update specific step in workflow")
+    def step_update_ability(self, step_data: dict) -> dict:
+        """更新特定工作流步骤的能力"""
+        return {"type": "update_workflow_step", "payload": step_data}
+
+    @ability("Plan", xml_tag="plan", description="Submit or update high-level plan for stages")
+    def plan_ability(self, plan_data: dict) -> dict:
+        """提交或更新高层计划的能力"""
+        return {"type": "create_plan", "payload": plan_data}
+
     def _register_standard_abilities(self):
         """注册额外的标准能力（不使用装饰器的）"""
         # 这些是核心的notebook操作能力
@@ -100,13 +110,13 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 "description": "Update the title of the notebook"
             },
             {
-                "name": "New Chapter", 
+                "name": "New Chapter",
                 "xml_tag": "new-chapter",
                 "description": "Create a new chapter"
             },
             {
                 "name": "New Section",
-                "xml_tag": "new-section", 
+                "xml_tag": "new-section",
                 "description": "Create a new section"
             },
             {
@@ -134,7 +144,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 "description": "Get variable value"
             },
             {
-                "name": "Set Variable", 
+                "name": "Set Variable",
                 "xml_tag": "set-variable",
                 "xml_attributes": {"variable": "name", "value": "value", "type": "str"},
                 "is_self_closing": True,
@@ -153,7 +163,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             },
             {
                 "name": "Create Video",
-                "xml_tag": "create-video", 
+                "xml_tag": "create-video",
                 "description": "Generate video from prompt"
             },
             {
@@ -169,7 +179,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 "description": "Ask other agents for help"
             }
         ]
-        
+
         for ability_def in standard_abilities:
             self.add_ability(
                 ability_name=ability_def["name"],
@@ -178,7 +188,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 xml_attributes=ability_def.get("xml_attributes", {}),
                 is_self_closing=ability_def.get("is_self_closing", False)
             )
-    
+
     def _setup_fokn_integration(self):
         """设置FoKn框架集成 - 增强版策略管理"""
         # 设置基础描述
@@ -186,19 +196,19 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             "You are an AI assistant behind the Easy Notebook system. "
             "You can help users with data analysis, code generation, and documentation."
         )
-        
+
         # 设置角色
         self.fokn.add_role(self.role)
-        
+
         # 设置核心行为策略
         self._setup_core_policies()
-        
+
         # 设置基础规则
         self._setup_core_rules()
-        
+
         # 设置基础约束
         self._setup_core_constraints()
-    
+
     def _setup_core_policies(self):
         """设置核心行为策略"""
         # 基础行为策略
@@ -211,10 +221,10 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             "You must maintain consistency in your communication style",
             "You should adapt your explanation level based on user preferences when available"
         ]
-        
+
         for policy in core_policies:
             self.fokn.add_policy(policy)
-    
+
     def _setup_core_rules(self):
         """设置核心强制规则"""
         # 强制规则
@@ -225,10 +235,10 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             "MUST handle errors gracefully and provide meaningful feedback",
             "MUST maintain conversation context throughout the session"
         ]
-        
+
         for rule in core_rules:
             self.fokn.add_rule(rule)
-    
+
     def _setup_core_constraints(self):
         """设置核心操作约束"""
         # 操作约束
@@ -239,14 +249,14 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             "Cannot store or remember personal data beyond the current session",
             "Cannot override safety mechanisms or security protocols"
         ]
-        
+
         for constraint in core_constraints:
             self.fokn.add_constraint(constraint)
-    
+
     def add_dynamic_policy(self, policy: str, policy_type: str = "behavior") -> 'Agent':
         """
         动态添加策略到智能体
-        
+
         Args:
             policy: 策略内容
             policy_type: 策略类型 ("behavior", "rule", "constraint")
@@ -260,13 +270,13 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         else:
             # 默认作为行为策略
             self.fokn.add_policy(policy)
-        
+
         return self
-    
+
     def add_contextual_strategy(self, context: str, strategy: str) -> 'Agent':
         """
         添加上下文相关的策略
-        
+
         Args:
             context: 上下文描述
             strategy: 在该上下文下的策略
@@ -274,11 +284,11 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         contextual_policy = f"In context of {context}: {strategy}"
         self.fokn.add_policy(contextual_policy)
         return self
-    
+
     def add_user_preference_policy(self, preference_type: str, preference_value: str) -> 'Agent':
         """
         基于用户偏好添加策略
-        
+
         Args:
             preference_type: 偏好类型
             preference_value: 偏好值
@@ -286,11 +296,11 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         preference_policy = f"User prefers {preference_type}: {preference_value}"
         self.fokn.add_user_preference(preference_policy)
         return self
-    
+
     def add_session_memory(self, memory_type: str, memory_content: str) -> 'Agent':
         """
         添加会话记忆到FoKn
-        
+
         Args:
             memory_type: 记忆类型 ("insight", "lesson", "pattern", "preference")
             memory_content: 记忆内容
@@ -306,13 +316,13 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         else:
             # 默认作为一般记忆
             self.fokn.add_memory(memory_content)
-        
+
         return self
-    
+
     def add_domain_expertise(self, domain: str, expertise: str) -> 'Agent':
         """
         添加领域专业知识
-        
+
         Args:
             domain: 领域名称
             expertise: 专业知识内容
@@ -320,33 +330,33 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         domain_knowledge = f"[{domain}] {expertise}"
         self.fokn.add_domain_knowledge(domain_knowledge)
         return self
-    
+
     def add_workflow_guidance(self, workflow_name: str, guidance: str) -> 'Agent':
         """
         添加工作流指导
-        
+
         Args:
             workflow_name: 工作流名称
             guidance: 指导内容
         """
         self.fokn.add_available_workflow(workflow_name, guidance)
         return self
-    
+
     def set_quality_standards(self, standards: List[str]) -> 'Agent':
         """
         设置质量标准
-        
+
         Args:
             standards: 质量标准列表
         """
         for standard in standards:
             self.fokn.add_policy(f"Quality standard: {standard}")
         return self
-    
+
     def get_fokn_state(self) -> Dict[str, Any]:
         """
         获取FoKn的当前状态摘要
-        
+
         Returns:
             包含FoKn状态信息的字典
         """
@@ -358,7 +368,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             "workflow_context": bool(self.workflow_context),
             "available_workflows": len(self.available_workflows)
         }
-    
+
     def _sync_abilities_to_fokn(self):
         for ability_name in self.ability_registry.list_abilities():
             ability = self.ability_registry.get_ability(ability_name)
@@ -366,7 +376,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 # 添加能力描述到工具列表
                 description = ability.get("description", ability_name)
                 self.fokn.add_tool(f"{ability_name}: {description}")
-                
+
                 # 添加XML格式到输出格式要求
                 xml_spec = self.get_ability_xml_spec(ability_name)
                 if xml_spec:
@@ -375,11 +385,11 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
     def _get_payload_value(self, key: str, default=None):
         """Get value from payload with default when missing."""
         return self.payload.get(key, default)
-        
+
     def _parse_agent_memory(self) -> Dict[str, Any]:
         """Parse agent memory from payload."""
         return self.payload.get("agent_memory", {})
-        
+
     def _parse_current_context(self) -> Dict[str, Any]:
         """Parse current context from payload."""
         return self.payload.get("current_context", {})
@@ -402,65 +412,65 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 available = []
 
         return available
-        
+
     def _should_terminate(self) -> Tuple[bool, str]:
         """Check whether to terminate to avoid infinite loops and return reason."""
         if not self.agent_memory:
             return False, ""
-            
+
         termination = self.agent_memory.get("termination_conditions", {})
         current_counts = termination.get("current_counts", {})
         max_iterations = termination.get("max_iterations", {})
-        
+
         agent_type = self.agent_memory.get("agent_type", "")
-        
+
         # Check debug cycles
-        if (agent_type == "debug" and 
+        if (agent_type == "debug" and
             current_counts.get("debug_cycles", 0) >= max_iterations.get("debug_cycles", 5)):
             return True, f"Reached maximum debug attempts ({max_iterations.get('debug_cycles', 5)}). Recommend changing approach or seeking assistance."
-            
+
         # Check code generation counts
-        if (agent_type == "command" and 
+        if (agent_type == "command" and
             current_counts.get("code_generations", 0) >= max_iterations.get("code_generations", 10)):
             return True, f"Too many code generations ({max_iterations.get('code_generations', 10)}). Suggest pausing to organize thoughts."
-            
+
         # Check QA round counts
-        if (agent_type == "general" and 
+        if (agent_type == "general" and
             current_counts.get("question_rounds", 0) >= max_iterations.get("question_rounds", 20)):
             return True, f"Too many QA rounds ({max_iterations.get('question_rounds', 20)}). Consider summarizing progress."
-            
+
         return False, ""
-        
+
     def _get_avoided_approaches(self) -> List[str]:
         """Return a list of approaches that previously failed and should be avoided."""
         if not self.agent_memory:
             return []
-            
+
         situation = self.agent_memory.get("situation_tracking", {})
         debug_attempts = situation.get("debug_attempts", {})
         return debug_attempts.get("failed_approaches", [])
-        
+
     def _get_working_solutions(self) -> Dict[str, str]:
         """Return previously effective solutions for reference."""
         if not self.agent_memory:
             return {}
-            
+
         patterns = self.agent_memory.get("learned_patterns", {})
         return patterns.get("effective_solutions", {})
-        
+
     def _get_user_preferences(self) -> Dict[str, Any]:
         """Return user preferences if any are stored in memory."""
         if not self.agent_memory:
             return {}
-            
+
         patterns = self.agent_memory.get("learned_patterns", {})
         return patterns.get("user_preferences", {})
-        
+
     def _get_user_intent(self) -> Dict[str, Any]:
         """Return user intent observations collected in memory."""
         if not self.agent_memory:
             return {}
-            
+
         return self.agent_memory.get("user_intent_observations", {})
 
     def _get_background_knowledge(self) -> str:
@@ -506,97 +516,97 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             combined_info.append(context_info)
 
         return " | ".join(combined_info)
-        
+
     def _build_memory_aware_prompt(self) -> str:
         """Build a memory-aware system prompt using new ability system and FoKn framework."""
         # 重新初始化FoKn以确保干净的状态
         self._setup_fokn_integration()
-        
+
         # 同步能力到FoKn
         self._sync_abilities_to_fokn()
-        
+
         # 添加智能体记忆到FoKn
         self._sync_memory_to_fokn()
-        
+
         # 添加上下文信息到FoKn
         self._sync_context_to_fokn()
-        
+
         # 添加智能体通信能力
         self.fokn.add_available_agent("text-to-image", "专门绘制复杂图片或视频的智能体") \
                .add_available_agent("text-to-video", "专门创建视频内容的智能体")
-        
+
         # 生成最终的高质量提示词
         return self.fokn.generate_high_quality_prompt()
-    
+
     def _sync_memory_to_fokn(self):
         """将智能体记忆同步到FoKn框架"""
         if not self.agent_memory:
             return
-        
+
         # 1) 用户意图和目标
         intent_obs = self._get_user_intent()
         stated_goals = intent_obs.get("stated_goals", [])
         for goal in stated_goals:
             self.fokn.add_context(f"User stated goal: {goal}")
-        
+
         progress_markers = intent_obs.get("progress_markers", {})
         blocked_on = progress_markers.get("blocked_on", [])
         for blocker in blocked_on:
             self.fokn.add_limitation(f"Currently blocked on: {blocker}")
-        
+
         current_focus = progress_markers.get("current_focus", "")
         if current_focus:
             self.fokn.add_context(f"Current focus: {current_focus}")
-        
+
         # 2) 失败的方法和限制
         failed_approaches = self._get_avoided_approaches()
         for approach in failed_approaches:
             self.fokn.add_limitation(f"Avoid previously failed approach: {approach}")
-        
+
         # 3) 成功的解决方案
         working_solutions = self._get_working_solutions()
         for solution_name, solution_detail in working_solutions.items():
             self.fokn.add_best_practice(solution_detail, f"Proven solution for {solution_name}")
-        
+
         # 4) 用户偏好
         user_prefs = self._get_user_preferences()
         preferred_libs = user_prefs.get("preferred_libraries", [])
         for lib in preferred_libs[:5]:  # 限制数量
             self.fokn.add_user_preference(f"Preferred library: {lib}")
-        
+
         explanation_detail = user_prefs.get("explanation_detail", "")
         if explanation_detail:
             self.fokn.add_user_preference(f"Explanation detail level: {explanation_detail}")
-        
+
         # 5) 版本信息和历史
         situation = self.agent_memory.get("situation_tracking", {})
         code_evolution = situation.get("code_evolution", {})
         working_versions = code_evolution.get("working_versions", [])
         if working_versions:
             self.fokn.add_memory("Historical working code versions exist - consider rollback if needed")
-        
+
         # 6) 终止警告
         should_terminate, terminate_reason = self._should_terminate()
         if should_terminate:
             self.fokn.add_constraint(f"IMPORTANT WARNING: {terminate_reason}")
-    
+
     def _sync_context_to_fokn(self):
         """将上下文信息同步到FoKn框架"""
         # 工作流信息
         if self.available_workflows:
             workflows_info = f"Available workflows: {', '.join(self.available_workflows)}"
             self.fokn.add_context(workflows_info)
-        
+
         # 背景知识
         background_knowledge = self._get_background_knowledge()
         if background_knowledge:
             self.fokn.add_domain_knowledge(background_knowledge)
-        
+
         # 当前上下文
         things_to_know = self._get_things_to_know()
         if things_to_know:
             self.fokn.add_context(things_to_know)
-        
+
         # 当前状态
         if self.current_context:
             current_stage = self.current_context.get("current_stage", "")
@@ -605,7 +615,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 self.fokn.add_current_state(f"Current stage: {current_stage}")
             if current_step:
                 self.fokn.add_current_state(f"Current step: {current_step}")
-        
+
     def _build_system_messages(self) -> List[Dict[str, str]]:
         """Build system messages using memory-aware prompt with guardrails."""
         # Check termination
@@ -617,18 +627,18 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                     "content": self.fokn.to_string()
                 }
                 ,{
-                "role": "system", 
+                "role": "system",
                 "content": f"The task has reached its limit: {terminate_reason}. Please summarize the current issue and suggest next steps instead of continuing."
             }]
-            
+
         # 使用记忆感知的提示词
         memory_aware_prompt = self._build_memory_aware_prompt()
         return [{"role": "system", "content": memory_aware_prompt}]
-        
+
     def _add_user_message(self, content: str):
         """Append user message."""
         self.messages.append({"role": "user", "content": content})
-        
+
     def _create_response_json(self, response_type: str, data: Dict[str, Any]) -> str:
         """Create newline-delimited JSON for streaming."""
         return json.dumps({
@@ -668,19 +678,19 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                    is_self_closing: bool = False) -> 'Agent':
         """
         为智能体添加新的能力，同时更新Ability实例和FoKn框架。
-        
+
         Args:
             ability_name: 能力名称
-            capability_description: 能力描述  
+            capability_description: 能力描述
             xml_tag_name: XML标签名称
             xml_attributes: XML属性字典
             xml_content_structure: XML内容结构
             detailed_explanation: 详细说明
             is_self_closing: 是否为自闭合标签
-            
+
         Returns:
             Self for method chaining
-            
+
         Example:
             agent.add_ability(
                 ability_name="Data Analysis",
@@ -701,7 +711,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             detailed_explanation=detailed_explanation,
             is_self_closing=is_self_closing
         )
-        
+
         # 添加到FoKn框架
         self.fokn.add_ability(
             ability_name=ability_name,
@@ -712,34 +722,34 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             detailed_explanation=detailed_explanation,
             is_self_closing=is_self_closing
         )
-        
+
         return self
 
     def get_ability_xml_spec(self, ability_name: str) -> Optional[str]:
         """
         获取指定能力的XML规范。
-        
+
         Args:
             ability_name: 能力名称
-            
+
         Returns:
             XML规范字符串，如果能力不存在则返回None
         """
         ability_details = self.ability.get_ability_details(ability_name)
         if not ability_details:
             return None
-            
+
         xml_tag_name = ability_details.get("xml_tag_name", "")
         if not xml_tag_name:
             return None
-            
+
         xml_attributes = ability_details.get("xml_attributes", {})
         xml_content_structure = ability_details.get("xml_content_structure", "")
         is_self_closing = ability_details.get("is_self_closing", False)
-        
+
         # 构建XML标签规范
         tag_spec = f"<{xml_tag_name}"
-        
+
         # 添加属性
         if xml_attributes:
             attr_parts = []
@@ -747,7 +757,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 attr_parts.append(f'{key}="{value}"')
             if attr_parts:
                 tag_spec += f" {' '.join(attr_parts)}"
-        
+
         # 处理自闭合标签
         if is_self_closing:
             tag_spec += " />"
@@ -756,13 +766,13 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             if xml_content_structure:
                 tag_spec += f"\n  Content Structure: {xml_content_structure}\n"
             tag_spec += f"</{xml_tag_name}>"
-            
+
         return tag_spec
 
     def list_dynamic_abilities(self) -> List[Dict[str, Any]]:
         """
         列出所有动态添加的能力及其详细信息。
-        
+
         Returns:
             包含能力信息的字典列表
         """
@@ -841,7 +851,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                 }
 
         return action
-    
+
     async def stream_response(self, query: str) -> AsyncGenerator[str, None]:
         """
         Streaming response: parse LLM XML-like output into frontend JSON events.
@@ -853,18 +863,18 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         try:
             # Build system messages
             messages = self._build_system_messages()
-            
+
             self.logger.debug(f"Starting stream response for query: {query[:80]}...")
-            
+
             # Fetch LLM output via async streaming
             chunk_count = 0
             async for chunk in self.query_stream_async(
-                prompt_sys=messages[0]["content"], 
+                prompt_sys=messages[0]["content"],
                 prompt_user=query
             ):
                 chunk_count += 1
                 self.logger.debug(f"Received chunk {chunk_count}: '{chunk[:60]}...'")
-                
+
                 # Handle stream error
                 if chunk.startswith("ASYNC_STREAM_ERROR:"):
                     yield json.dumps({
@@ -872,7 +882,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                         "payload": {"error": chunk}
                     }) + "\n"
                     continue
-                
+
                 # Parse XML-like tags using Token-based parser only
                 actions = self.parse_chunk(chunk)
 
@@ -881,19 +891,19 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
                     processed_action = self._process_workflow_action(action) if isinstance(action, dict) else action
                     self.logger.debug(f"Parser output: {processed_action}")
                     yield json.dumps(processed_action) + "\n"
-            
+
             self.logger.info(f"Stream completed, processed {chunk_count} chunks")
-            
+
             # Flush remaining buffered content via Token-based parser
             final_actions = self.finalize()
             for action in final_actions:
                 processed_action = self._process_workflow_action(action) if isinstance(action, dict) else action
                 yield json.dumps(processed_action) + "\n"
-                
+
         except Exception as e:
             self.logger.exception(f"Stream error: {str(e)}")
             yield json.dumps({
-                "type": "error", 
+                "type": "error",
                 "payload": {"error": f"Stream response error: {str(e)}"}
             }) + "\n"
 
@@ -914,28 +924,41 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         for ability_name in self.ability_registry.list_abilities():
             ability = self.ability_registry.get_ability(ability_name)
             if ability and ability.get("xml_tag") == tag_name:
-                # 调用能力处理器
+                # 对于工作流类标签，直接生成前端可消费的指令，而不是调用Behavior
+                direct_map = {
+                    "update-workflow": "update_workflow",
+                    "step-update": "update_workflow_step",
+                    "plan": "create_plan",
+                    "manage-step": "manage_step",
+                    "create-plan": "create_plan"
+                }
+                if tag_name in direct_map:
+                    return {
+                        "type": direct_map[tag_name],
+                        "payload": {
+                            "content": content,
+                            "attributes": attributes
+                        }
+                    }
+                # 其他标签仍尝试使用能力处理器（若其返回Behavior）
                 handler = ability.get("handler")
                 if handler:
                     try:
-                        # 准备参数
                         handler_args = {
                             "content": content,
                             "attributes": attributes,
                             "behavior": behavior
                         }
-                        # 调用处理器
                         result = handler(**handler_args)
-                        # 如果处理器返回了Behavior对象，直接返回
                         if isinstance(result, Behavior):
                             return result
                     except Exception as e:
                         self.logger.warning(f"能力处理器 {ability_name} 执行失败: {e}")
                         # 继续执行默认处理
-        
+
         # 默认标签处理（向后兼容）
         return self._handle_standard_tag(behavior, tag_name, content, attributes)
-    
+
     def _handle_standard_tag(self, behavior: Behavior, tag_name: str, content: str, attributes: Dict[str, str]) -> Behavior:
         """处理标准XML标签"""
         tag_handlers = {
@@ -948,14 +971,17 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             "call-execute": lambda: self._handle_execute(behavior, attributes),
             "get-variable": lambda: self._handle_get_variable(behavior, content, attributes),
             "set-variable": lambda: self._handle_set_variable(behavior, content, attributes),
-            "remember": lambda: self._handle_remember(behavior, content, attributes),
-            "update-todo": lambda: self._handle_update_todo(behavior, attributes),
+            "remember": lambda: self._handle_remember2(behavior, content, attributes),
+            "update-todo": lambda: self._handle_update_todo2(behavior, attributes),
+            "todo": lambda: self._handle_todo2(behavior, content, attributes),
             "answer": lambda: behavior.add_text(content).finish_thinking(),
             "draw-image": lambda: behavior.generate_image(content),
             "create-video": lambda: behavior.generate_video(content),
             "communicate": lambda: behavior.comunicate_with_agent(attributes.get("to", ""), content),
+            "cummunicate": lambda: behavior.comunicate_with_agent(attributes.get("to", ""), content),
+            "ask-for-help": lambda: behavior.comunicate_with_agent(attributes.get("to", ""), content),
         }
-        
+
         handler = tag_handlers.get(tag_name)
         if handler:
             try:
@@ -966,19 +992,19 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         else:
             # 未知标签的默认处理
             return behavior.add_text(f"[{tag_name}] {content}")
-    
+
     def _get_code_metadata(self, attributes: Dict[str, str]) -> Optional[Dict[str, str]]:
         """获取代码元数据"""
         language = attributes.get("language", "python")
         return {"language": language} if language != "python" else None
-    
+
     def _handle_execute(self, behavior: Behavior, attributes: Dict[str, str]) -> Behavior:
         """处理代码执行标签"""
         event_name = attributes.get("event", "")
         if event_name:
             behavior.push_todo(event_name)
         return behavior.exec_code()
-    
+
     def _handle_get_variable(self, behavior: Behavior, content: str, attributes: Dict[str, str]) -> Behavior:
         """处理获取变量标签"""
         variable_name = attributes.get("variable", "")
@@ -988,7 +1014,7 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
             if content:
                 return behavior.add_text(f"{content}: {value}")
         return behavior
-    
+
     def _handle_set_variable(self, behavior: Behavior, content: str, attributes: Dict[str, str]) -> Behavior:
         """处理设置变量标签"""
         variable_name = attributes.get("variable", "")
@@ -996,15 +1022,23 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         if variable_name:
             return behavior.add_variable(variable_name, value)
         return behavior
-    
+
     def _handle_remember(self, behavior: Behavior, content: str, attributes: Dict[str, str]) -> Behavior:
         """处理记忆标签"""
         remember_type = attributes.get("type", "insight")
         memory_key = f"memory_{remember_type}"
-        current_memory = behavior.get_variable(memory_key, "")
-        new_memory = f"{current_memory}\n{content}" if current_memory else content
-        return behavior.add_variable(memory_key, new_memory)
-    
+    def _handle_todo(self, behavior: Behavior, content: str, attributes: Dict[str, str]) -> Behavior:
+        """todo handler"""
+
+
+        event_name = attributes.get("event", "")
+        if event_name:
+            behavior.push_todo(event_name)
+        if content:
+            behavior.add_text(content)
+        return behavior
+
+
     def _handle_update_todo(self, behavior: Behavior, attributes: Dict[str, str]) -> Behavior:
         """处理TODO更新标签"""
         action = attributes.get("action", "add")
@@ -1014,7 +1048,36 @@ class Agent(ABC, Oracle, Token, AgentAbilityMixin):
         elif action == "next" and event:
             return behavior.next_event(event)
         return behavior
-    
+
+    # Safe replacements to avoid relying on corrupted methods above
+    def _handle_remember2(self, behavior: Behavior, content: str, attributes: Dict[str, str]) -> Behavior:
+        """处理记忆标签（修复版）"""
+        remember_type = attributes.get("type", "insight")
+        memory_key = f"memory_{remember_type}"
+        current_memory = behavior.get_variable(memory_key, "")
+        new_memory = f"{current_memory}\n{content}" if current_memory else content
+        return behavior.add_variable(memory_key, new_memory)
+
+    def _handle_update_todo2(self, behavior: Behavior, attributes: Dict[str, str]) -> Behavior:
+        """处理TODO更新标签（修复版）"""
+        action = attributes.get("action", "add")
+        event = attributes.get("event", "")
+        if action == "add" and event:
+            return behavior.push_todo(event)
+        elif action == "next" and event:
+            return behavior.next_event(event)
+        return behavior
+
+    def _handle_todo2(self, behavior: Behavior, content: str, attributes: Dict[str, str]) -> Behavior:
+        """处理<todo>标签：既记录计划事件也展示背景说明（修复版）"""
+        event_name = attributes.get("event", "")
+        if event_name:
+            behavior.push_todo(event_name)
+        if content:
+            behavior.add_text(content)
+        return behavior
+
+
     # ==================== 能力处理器示例 ====================
     def _create_ability_handler(self, behavior_method: str):
         """创建能力处理器的工厂方法"""

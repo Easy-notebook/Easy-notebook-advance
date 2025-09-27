@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { useAIPlanningContextStore } from '@/components/Senario/Workflow/store/aiPlanningContext';
 import usePreStageStore from '@/components/Senario/Workflow/store/preStageStore';
+import useRouteStore from '@/store/routeStore';
+import { useWorkflowStateMachine } from '@/components/Senario/Workflow/store/workflowStateMachine';
+import { usePipelineStore } from '@/components/Senario/Workflow/store/usePipelineStore';
 // @ts-ignore
 import { generalResponse } from '@/components/Senario/Workflow/services/StageGeneralFunction';
 
@@ -160,6 +163,12 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
     const setSelectedProblemStore = usePreStageStore(state => state.setSelectedProblem);
     const setDatasetInfoStore = usePreStageStore(state => state.setDatasetInfo);
     const addVariable = useAIPlanningContextStore(state => state.addVariable);
+    
+    // VDS Workflow 状态机
+    const { startWorkflow, isRunning } = useWorkflowStateMachine();
+    
+    // Pipeline Store for workflow template management
+    const { initializeWorkflow } = usePipelineStore();
 
     /* ─────────── Handlers ─────────── */
     const handleProblemSelect = useCallback((problem: ProblemChoice) => {
@@ -216,11 +225,54 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
         
         state.setDataBackground(datasetBackground || '');
 
-        const aiPlanningStore = useAIPlanningContextStore.getState();
-        console.log('[ProblemDefineState] All stored variables:', aiPlanningStore.variables);
+        // 构建完整的 workflow 上下文并存储到 AI Planning Context Store
+        const workflowContext = {
+            csv_file_path: currentFile?.name || '',
+            problem_description: state.problem_description || '',
+            context_description: datasetBackground || 'No additional context provided',
+            problem_name: state.problem_name || '',
+            user_goal: state.problem_description || '',
+            // 文件信息
+            file_info: {
+                name: currentFile?.name || '',
+                size: currentFile?.size || 0,
+                type: currentFile?.type || '',
+            }
+        };
 
+        // 将 workflowContext 存储到 AI Planning Context Store
+        Object.entries(workflowContext).forEach(([key, value]) => {
+            addVariable(`workflow_${key}`, value);
+        });
+
+        const aiPlanningStore = useAIPlanningContextStore.getState();
+        console.log('[ProblemDefineState] All stored variables (including workflow context):', aiPlanningStore.variables);
+
+        // 启动 VDS workflow
+        try {
+            console.log('[ProblemDefineState] Starting VDS workflow...');
+            console.log('[ProblemDefineState] Workflow context will be retrieved from AI Planning Context Store');
+            
+            // 首先初始化 pipeline store 中的工作流模板
+            console.log('[ProblemDefineState] Initializing workflow template...');
+            await initializeWorkflow({ planningRequest: workflowContext });
+            
+            // 使用 VDS workflow 状态机启动工作流
+            // 从规划阶段开始，让 VDS 系统设计完整的工作流
+            await startWorkflow({ 
+                stageId: 'chapter_0_planning', 
+                stepId: 'chapter_0_planning_section_1_design_workflow' 
+            });
+            
+            console.log('[ProblemDefineState] VDS workflow started successfully');
+            
+        } catch (error) {
+            console.error('[ProblemDefineState] Error starting VDS workflow:', error);
+        }
+
+        // 调用确认回调（导航到工作区）
         await confirmProblem();
-    }, [datasetBackground, confirmProblem, addVariable, currentFile, setDatasetInfoStore]);
+    }, [datasetBackground, confirmProblem, addVariable, currentFile, setDatasetInfoStore, startWorkflow]);
 
     const setPreProblem = useCallback(async () => {
         const fileColumns = usePreStageStore.getState().getFileColumns();
@@ -253,10 +305,15 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
     }, [problem_description, problem_name, selectedTarget, currentFile]);
 
     useEffect(() => {
+        // 只有在有文件但没有选择项且没有问题描述时才生成预设问题
         if (currentFile && choiceMap.length === 0 && !problem_description) {
+            console.log('ProblemDefineWorkload: Generating preset problems for file:', currentFile.name);
             setPreProblem();
         }
     }, [currentFile, choiceMap.length, problem_description, setPreProblem]);
+
+    // 添加加载状态
+    const isLoadingChoices = currentFile && choiceMap.length === 0 && !problem_description;
 
     /* ─────────── Render Steps ─────────── */
     if (step === 'select') {
@@ -277,54 +334,64 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
                             </p>
                         </div>
                         
-                        <div className="grid gap-4 mb-8">
-                            {choiceMap.map((choice: ProblemChoice, index: number) => (
-                                <button
-                                    key={index}
-                                    onClick={() => handleProblemSelect(choice)}
-                                    className="group p-6 bg-white border-2 border-gray-200 rounded-2xl text-left hover:border-theme-300 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02]"
-                                >
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-12 h-12 bg-theme-50 rounded-xl flex items-center justify-center group-hover:bg-theme-100 transition-colors">
-                                            <Sparkles className="w-6 h-6 text-theme-600" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-800 mb-2">{choice.problem_name}</h3>
-                                            <p className="text-gray-600 text-sm">{choice.problem_description}</p>
-                                        </div>
-                                        <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-theme-600 transition-colors" />
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                        
-                        <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-2xl p-6">
-                            <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                                <PlusCircle className="w-5 h-5" />
-                                {t('emptyState.customProblem') || '自定义问题'}
-                            </h3>
-                            <div className="flex gap-3">
-                                <input
-                                    type="text"
-                                    value={customProblem}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomProblem(e.target.value)}
-                                    placeholder={t('emptyState.customProblemPlaceholder') || '描述你想进行的自定义分析...'}
-                                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-theme-400 transition-colors"
-                                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomSubmit()}
-                                />
-                                <button
-                                    onClick={handleCustomSubmit}
-                                    disabled={!customProblem.trim()}
-                                    className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                                        customProblem.trim()
-                                            ? 'bg-theme-600 text-white hover:bg-theme-700 transform hover:scale-105'
-                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                    }`}
-                                >
-                                    {t('emptyState.confirm') || '确认'}
-                                </button>
+                        {/* 加载状态 */}
+                        {isLoadingChoices ? (
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-600 mb-4"></div>
+                                <p className="text-gray-600">正在分析数据并生成问题建议...</p>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div className="grid gap-4 mb-8">
+                                    {choiceMap.map((choice: ProblemChoice, index: number) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => handleProblemSelect(choice)}
+                                            className="group p-6 bg-white border-2 border-gray-200 rounded-2xl text-left hover:border-theme-300 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02]"
+                                        >
+                                            <div className="flex items-start gap-4">
+                                                <div className="w-12 h-12 bg-theme-50 rounded-xl flex items-center justify-center group-hover:bg-theme-100 transition-colors">
+                                                    <Sparkles className="w-6 h-6 text-theme-600" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-gray-800 mb-2">{choice.problem_name}</h3>
+                                                    <p className="text-gray-600 text-sm">{choice.problem_description}</p>
+                                                </div>
+                                                <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-theme-600 transition-colors" />
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                                
+                                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-2xl p-6">
+                                    <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                        <PlusCircle className="w-5 h-5" />
+                                        {t('emptyState.customProblem') || '自定义问题'}
+                                    </h3>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="text"
+                                            value={customProblem}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomProblem(e.target.value)}
+                                            placeholder={t('emptyState.customProblemPlaceholder') || '描述你想进行的自定义分析...'}
+                                            className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-theme-400 transition-colors"
+                                            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleCustomSubmit()}
+                                        />
+                                        <button
+                                            onClick={handleCustomSubmit}
+                                            disabled={!customProblem.trim()}
+                                            className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                                                customProblem.trim()
+                                                    ? 'bg-theme-600 text-white hover:bg-theme-700 transform hover:scale-105'
+                                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                        >
+                                            {t('emptyState.confirm') || '确认'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -452,6 +519,45 @@ const ProblemDefineWorkload: FC<ProblemDefineProps> = ({ confirmProblem }) => {
  * ProblemDefineState 组件：作为问题定义阶段的容器
  */
 const ProblemDefineState: FC<ProblemDefineProps> = ({ confirmProblem }) => {
+    const currentFile = usePreStageStore(state => state.currentFile);
+    const choiceMap = usePreStageStore(state => state.choiceMap);
+    const { navigateToEmpty } = useRouteStore();
+    
+    // 如果没有文件或者必要的数据，显示提示或重定向逻辑
+    useEffect(() => {
+        // 检查是否有必要的数据来显示问题定义页面
+        if (!currentFile) {
+            console.warn('ProblemDefineState: No file found, redirecting to home page in 3 seconds');
+            // 延迟3秒后自动重定向
+            const timer = setTimeout(() => {
+                navigateToEmpty();
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [currentFile, navigateToEmpty]);
+
+    // 如果没有文件，显示提示信息
+    if (!currentFile) {
+        return (
+            <div className="flex items-center justify-center w-full h-full">
+                <div className="text-center p-8">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                        请先上传数据文件
+                    </h2>
+                    <p className="text-gray-600 mb-6">
+                        需要上传数据文件后才能进行问题定义。3秒后将自动跳转到首页...
+                    </p>
+                    <button 
+                        onClick={() => navigateToEmpty()} 
+                        className="px-6 py-3 bg-theme-600 text-white rounded-xl font-medium hover:bg-theme-700 transition-colors"
+                    >
+                        立即返回首页
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <Splitter>
             <Splitter.Panel defaultSize={'100%'} resizable={false}>

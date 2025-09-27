@@ -9,7 +9,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 from typing import Dict, Any, Optional
-from app.models.Behavior import Behavior
+from app.models.Behavior import Behavior, event, thinking, finnish
 from datetime import datetime
 import json
 
@@ -81,14 +81,19 @@ Use your event-driven consciousness to create comprehensive, goal-oriented data 
 
     def run(self):
         """真实智能工作流规划执行"""
-        # 固定操作：用户目标验证
+        # 使用父类的run方法来处理事件流
+        return super().run()
+
+    @event("start")
+    def start_workflow_design(self):
+        """开始工作流设计"""
         return self.new_section("🧠 Real Intelligent Workflow Design") \
             .add_text("🎯 **智能工作流规划系统**") \
             .add_text("📋 **规划模式**: 固定验证 + PCS Agent智能设计") \
             .add_text("🧠 **Agent类型**: EventDrivenPCSAgent with strategic consciousness") \
             .next_event("validate_user_goal")
 
-
+    @event("validate_user_goal")
     def validate_user_goal(self):
         """固定操作：验证和解析用户目标"""
         user_goal = self.get_variable('user_goal', '数据科学项目')
@@ -154,6 +159,7 @@ print(f"📊 验证结果: {{validation_result}}")
                 mark_finnish="目标验证完成"
             )
 
+    @finnish("goal_validation_complete")
     def goal_validation_complete(self):
         """目标验证完成，启动PCS Agent智能规划"""
         validation_result = self.get_current_effect()
@@ -168,6 +174,7 @@ print(f"📊 验证结果: {{validation_result}}")
                 .add_variable("goal_validation_result", validation_result) \
                 .next_event("traditional_planning")
 
+    @event("pcs_agent_planning")
     def pcs_agent_planning(self):
         """PCS Agent智能规划"""
         if not self.agent_mode or not self.pcs_agent:
@@ -183,6 +190,7 @@ print(f"📊 验证结果: {{validation_result}}")
             .add_text("📋 **规划范围**: 问题分析→上下文评估→解决方案设计→验证→最终化") \
             .next_event("execute_pcs_planning")
 
+    @event("execute_pcs_planning")
     def execute_pcs_planning(self):
         """执行PCS规划"""
         user_goal = self.get_variable('user_goal')
@@ -384,9 +392,20 @@ print("\\n🧠 PCS Agent Strategic Planning Complete")
                 mark_finnish="PCS规划完成"
             )
 
+    @finnish("pcs_planning_complete")
     def pcs_planning_complete(self):
         """PCS规划完成处理"""
         planning_result = self.get_current_effect()
+
+        # 生成PCS Agent推荐的工作流
+        pcs_workflow = [
+            "chapter_1_data_existence_establishment",
+            "chapter_2_data_integrity_assurance",
+            "chapter_3_data_insight_acquisition",
+            "chapter_4_methodology_strategy_formulation",
+            "chapter_5_model_implementation_execution",
+            "chapter_7_results_evaluation_confirmation"
+        ]
 
         return self.add_text("✅ **PCS Agent智能规划完成**") \
             .add_text("🧠 **规划成就**: 成功完成5个规划事件，生成战略工作流") \
@@ -396,8 +415,11 @@ print("\\n🧠 PCS Agent Strategic Planning Complete")
             .add_variable("pcs_planning_result", planning_result) \
             .add_variable("planning_status", "completed") \
             .add_variable("workflow_designed", True) \
-            .add_variable("next_recommended_action", "chapter_1_data_existence_establishment")
+            .add_variable("next_recommended_action", "chapter_1_data_existence_establishment") \
+            .update_workflow(pcs_workflow) \
+            .end_event()
 
+    @event("traditional_planning")
     def traditional_planning(self):
         """传统规划模式（Agent不可用时的回退）"""
         user_goal = self.get_variable('user_goal')
@@ -437,16 +459,29 @@ print("\\n✅ 传统规划完成")
                 mark_finnish="传统规划完成"
             )
 
+    @finnish("traditional_planning_complete")
     def traditional_planning_complete(self):
         """传统规划完成"""
         planning_result = self.get_current_effect()
+
+        # 生成传统规划的工作流
+        traditional_workflow = [
+            "chapter_1_data_existence_establishment",
+            "chapter_2_data_integrity_assurance",
+            "chapter_3_data_insight_acquisition",
+            "chapter_4_methodology_strategy_formulation",
+            "chapter_5_model_implementation_execution",
+            "chapter_7_results_evaluation_confirmation"
+        ]
 
         return self.add_text("✅ **传统规划完成**") \
             .add_text("📊 **结果**: 基础工作流规划已完成") \
             .add_text("💡 **建议**: 考虑升级到PCS Agent模式获得更智能的规划") \
             .add_variable("traditional_planning_result", planning_result) \
             .add_variable("planning_status", "completed_traditional") \
-            .add_variable("next_recommended_action", "chapter_1_data_existence_establishment")
+            .add_variable("next_recommended_action", "chapter_1_data_existence_establishment") \
+            .update_workflow(traditional_workflow) \
+            .end_event()
 
 # 生成器函数
 def generate_design_workflow(
@@ -456,7 +491,7 @@ def generate_design_workflow(
 ):
     """真实智能工作流规划生成器"""
     action = RealWorkflowDesign(step, state, stream)
-    return action.run()
+    return action
 
 # 保持向后兼容性
 def design_workflow(
@@ -465,5 +500,14 @@ def design_workflow(
     stream: bool = False
 ):
     """向后兼容的生成器函数"""
+    return generate_design_workflow(step, state, stream)
+
+# 添加标准的generate函数名
+def generate(
+    step: Dict[str, Any],
+    state: Optional[Dict[str, Any]] = None,
+    stream: bool = False
+):
+    """标准生成器函数"""
     return generate_design_workflow(step, state, stream)
 

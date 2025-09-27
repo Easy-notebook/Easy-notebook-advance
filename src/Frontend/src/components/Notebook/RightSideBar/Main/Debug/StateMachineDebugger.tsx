@@ -42,6 +42,7 @@ const StateMachineDebugger: React.FC = () => {
   };
 
   const getStateColor = (state: string) => {
+    if (!state || typeof state !== 'string') return 'text-gray-800';
     if (state.includes('COMPLETED')) return 'text-green-600';
     if (state.includes('RUNNING') || state.includes('EXECUTING')) return 'text-theme-600';
     if (state.includes('PENDING')) return 'text-orange-500';
@@ -370,11 +371,11 @@ const StateMachineDebugger: React.FC = () => {
                   <div className="text-xs space-y-1 pl-1">
                     <div className="flex items-center space-x-2">
                       <span className={`font-mono ${getStateColor(entry.from)}`}>
-                        {entry.from}
+                        {entry.from || 'unknown'}
                       </span>
                       <ArrowRight size={8} className="text-gray-400" />
                       <span className={`font-medium font-mono ${getStateColor(entry.to)}`}>
-                        {entry.to}
+                        {entry.to || 'unknown'}
                       </span>
                     </div>
                     

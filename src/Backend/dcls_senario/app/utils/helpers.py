@@ -43,15 +43,36 @@ async def generate_streaming_response(sequence: dict):
     # 处理步骤列表或异步迭代器
     steps = sequence.get("steps", [])
 
-    # 检查是否是Action对象（有run方法的对象）
-    if hasattr(steps, 'run') and callable(getattr(steps, 'run')):
-        # 如果是Action对象，执行它并获取异步迭代器
+    # 检查是否是Action对象（有run_streaming方法的对象）
+    if hasattr(steps, 'run_streaming') and callable(getattr(steps, 'run_streaming')):
+        # 如果是Action对象，使用流式方法
         try:
-            action_iterator = steps.run()
-            if hasattr(action_iterator, '__aiter__'):  # 检查是否是异步迭代器
-                count = 0
-                async for action in action_iterator:
-                    count += 1
+            async for action in steps.run_streaming():
+                # 确保action是可序列化的
+                if hasattr(action, 'to_dict'):
+                    action_data = action.to_dict()
+                elif isinstance(action, dict):
+                    action_data = action
+                else:
+                    action_data = {"content": str(action), "action": "text"}
+
+                action_json = json.dumps({"action": action_data})
+                yield action_json + "\n"
+                # 确保每个操作都被立即刷新到客户端
+                await asyncio.sleep(0.01)  # 微小延迟确保数据被发送
+        except Exception as e:
+            # 如果执行失败，返回错误信息
+            error_action = {"content": f"Error executing action: {str(e)}", "action": "error"}
+            action_json = json.dumps({"action": error_action})
+            yield action_json + "\n"
+    # 检查是否是Action对象（有run方法的对象）
+    elif hasattr(steps, 'run') and callable(getattr(steps, 'run')):
+        # 如果是Action对象，执行它并获取结果
+        try:
+            action_result = steps.run()
+            if isinstance(action_result, dict) and "steps" in action_result:
+                # 如果结果包含steps，逐个处理
+                for action in action_result["steps"]:
                     # 确保action是可序列化的
                     if hasattr(action, 'to_dict'):
                         action_data = action.to_dict()
@@ -60,12 +81,18 @@ async def generate_streaming_response(sequence: dict):
                     else:
                         action_data = {"content": str(action), "action": "text"}
 
+                    # 检查是否是update_workflow action，如果是，需要特殊处理
+                    if action_data.get("action") == "update_workflow":
+                        # 为前端添加workflow更新的特殊标记
+                        action_data["workflow_update"] = True
+                        logger.info(f"Detected workflow update action: {action_data.get('updated_workflow', [])}")
+
                     action_json = json.dumps({"action": action_data})
                     yield action_json + "\n"
                     # 确保每个操作都被立即刷新到客户端
                     await asyncio.sleep(0.01)  # 微小延迟确保数据被发送
             else:
-                # 如果不是异步迭代器，包装成单个action
+                # 如果不是预期的格式，包装成单个action
                 action_data = {"content": "Action completed", "action": "text"}
                 action_json = json.dumps({"action": action_data})
                 yield action_json + "\n"

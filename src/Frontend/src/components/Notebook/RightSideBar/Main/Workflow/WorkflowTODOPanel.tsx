@@ -86,7 +86,7 @@ const WorkflowTODOPanel = () => {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-              <Title 
+              <h5 
                 level={5} 
                 style={{ 
                   margin: 0, 
@@ -97,7 +97,7 @@ const WorkflowTODOPanel = () => {
                 className="break-words"
               >
                 {extractSectionTitle(stage.title || stage.id)}
-              </Title>
+              </h5>
               {isCurrent && (
                 <Tag color="blue" size="small">
                   {t('rightSideBar.currentStage')}
@@ -133,10 +133,10 @@ const WorkflowTODOPanel = () => {
       <div className="py-4">
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div>
-            <Title level={4} style={{ margin: 0, fontSize: '16px' }} className="flex items-center gap-2 text-gray-800">
+            <h5 style={{ margin: 0}} className="flex items-center gap-2 text-gray-800">
               <ArrowRight className="w-4 h-4" />
               {t('rightSideBar.workflowStages')}
-            </Title>
+            </h5>
           </div>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             {workflowTemplate.stages.map((stage, index) => renderStage(stage, index))}

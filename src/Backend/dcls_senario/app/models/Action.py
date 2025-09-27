@@ -89,16 +89,59 @@ class Action:
         self.actions.append(action)
         return self
     
-    def update_workflow(self, workflow_data: Dict[str, Any]):
+    def update_workflow(self, workflow_chapters: List[str], next_stage_id: str = None):
         """
         添加工作流更新action，前端会通过 message.action.updated_workflow 访问
-        
+
         Args:
-            workflow_data: 更新后的工作流配置数据
+            workflow_chapters: 更新后的章节列表
+            next_stage_id: 可选的下一个阶段ID
         """
+        # Import WorkflowManager to get actual available sections
+        from app.core.workflow_manager import WorkflowManager
+
+        # 构建符合前端期望的workflow模板格式
+        workflow_template = {
+            "name": "Dynamic Workflow",
+            "stages": []
+        }
+
+        # 将章节列表转换为stages格式，使用实际可用的步骤
+        for i, chapter_id in enumerate(workflow_chapters):
+            # Get actual available sections for this chapter
+            chapter_info = WorkflowManager.AVAILABLE_CHAPTERS.get(chapter_id, {})
+            available_sections = chapter_info.get("sections", [f"{chapter_id}_section_1"])
+
+            # Create steps for all available sections
+            steps = []
+            for section_id in available_sections:
+                step = {
+                    "id": f"{chapter_id}_{section_id}",
+                    "step_id": f"{chapter_id}_{section_id}",
+                    "title": f"{chapter_id} - {section_id}",
+                    "description": f"Section: {section_id}"
+                }
+                steps.append(step)
+
+            stage = {
+                "id": chapter_id,
+                "title": chapter_info.get("name", chapter_id.replace("_", " ").title()),
+                "description": chapter_info.get("description", f"Stage {i+1}: {chapter_id}"),
+                "steps": steps
+            }
+            workflow_template["stages"].append(stage)
+
+        # 构建更新数据
+        updated_workflow = {
+            "workflowTemplate": workflow_template
+        }
+
+        if next_stage_id:
+            updated_workflow["nextStageId"] = next_stage_id
+
         action = {
             "action": "update_workflow",
-            "updated_workflow": workflow_data,
+            "updated_workflow": updated_workflow,
             "state": self._get_context()
         }
         self.actions.append(action)
@@ -199,9 +242,13 @@ class Action:
         # 确保variables键存在
         if "variables" not in self.state:
             self.state["variables"] = {}
-        
+
+        # 首先检查variables字典
         if variable_name in self.state["variables"]:
             return self.state["variables"][variable_name]
+        # 然后检查state的顶层
+        elif variable_name in self.state:
+            return self.state[variable_name]
         else:
             return default_value
     
@@ -234,6 +281,12 @@ class Action:
         return self.state["variables"][variable_name].get(sub_key)
     
     def get_current_effect(self):
+        if "effect" not in self.state:
+            return None
+        if "current" not in self.state["effect"]:
+            return None
+        if not self.state["effect"]["current"]:
+            return None
         return self.state["effect"]["current"][0]
     
     def get_toDoList(self):
@@ -296,9 +349,15 @@ class Action:
         
     
     def build(self) -> Dict[str, Any]:
+        # 对于非流式模式，直接返回actions列表
         return {
-            "steps": generate_step_actions(self.actions)
+            "steps": self.actions
         }
+
+    async def build_streaming(self):
+        """构建流式响应的异步迭代器"""
+        for action in self.actions:
+            yield action
     
     def end_event(self):
         return self.build()

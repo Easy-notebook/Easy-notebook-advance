@@ -17,11 +17,17 @@ router = APIRouter()
 
 @router.post("/actions", response_model=SequenceResponse)
 async def planner_sequence(request: SequenceRequest):
+    # 处理null值
+    if request.stage_id is None:
+        raise HTTPException(status_code=422, detail="stage_id cannot be null")
+    if request.step_index is None:
+        raise HTTPException(status_code=422, detail="step_index cannot be null")
+
     # 适配前端参数：stage_id -> chapter_id, step_index -> section_id
     chapter_id = request.stage_id
-    
-    # 解析step_index: 可能是完整的唯一ID (stage_id_section_id) 或原始的section_id
     step_index = request.step_index
+
+    # 解析step_index: 可能是完整的唯一ID (stage_id_section_id) 或原始的section_id
     if isinstance(step_index, str) and step_index.startswith(chapter_id + "_"):
         # 如果是完整的唯一ID，提取section_id部分
         section_id = step_index[len(chapter_id) + 1:]  # 去掉 "chapter_id_" 前缀
@@ -73,8 +79,29 @@ async def planner_sequence(request: SequenceRequest):
         sequence["section_id"] = section_id
         sequence["next_section"] = next_section
     else:
-        # 如果sequence是Action对象，需要包装成字典格式
+        # 如果sequence是Action对象，需要执行它并包装成字典格式
         logger.info(f"Sequence is an Action object: {type(sequence)}")
+
+        # 执行Action对象获取结果
+        if hasattr(sequence, 'run') and callable(getattr(sequence, 'run')):
+            try:
+                action_result = sequence.run()
+                logger.info(f"Action result type: {type(action_result)}")
+
+                # 如果结果是字典且包含steps，使用它
+                if isinstance(action_result, dict) and "steps" in action_result:
+                    steps = action_result["steps"]
+                else:
+                    # 否则将结果包装为单个步骤
+                    steps = [{"content": str(action_result), "action": "text"}]
+
+            except Exception as e:
+                logger.error(f"Error executing Action object: {e}")
+                steps = [{"content": f"Error: {str(e)}", "action": "error"}]
+        else:
+            # 如果不是可执行的Action对象，转换为字符串
+            steps = [{"content": str(sequence), "action": "text"}]
+
         # 创建包装字典
         sequence_dict = {
             "stage_id": chapter_id,
@@ -84,7 +111,7 @@ async def planner_sequence(request: SequenceRequest):
             "chapter_id": chapter_id,
             "section_id": section_id,
             "next_section": next_section,
-            "steps": sequence  # 将Action对象作为steps
+            "steps": steps
         }
         sequence = sequence_dict
     
@@ -93,7 +120,37 @@ async def planner_sequence(request: SequenceRequest):
     else:
         async def process_sequence_for_json_response(sequence):
             """处理sequence对象，确保可以JSON序列化"""
-            if isinstance(sequence, dict):
+            # 处理Behavior对象
+            if hasattr(sequence, 'run') and callable(getattr(sequence, 'run')):
+                try:
+                    action_iterator = sequence.run()
+                    collected_actions = []
+
+                    if hasattr(action_iterator, '__aiter__'):
+                        # 异步迭代器
+                        async for action in action_iterator:
+                            if hasattr(action, 'to_dict'):
+                                collected_actions.append(action.to_dict())
+                            elif isinstance(action, dict):
+                                collected_actions.append(action)
+                            else:
+                                collected_actions.append({"content": str(action), "action": "text"})
+                    else:
+                        # 同步结果
+                        if hasattr(action_iterator, 'to_dict'):
+                            collected_actions.append(action_iterator.to_dict())
+                        elif isinstance(action_iterator, dict):
+                            collected_actions.append(action_iterator)
+                        else:
+                            collected_actions.append({"content": str(action_iterator), "action": "text"})
+
+                    return {"steps": collected_actions}
+
+                except Exception as e:
+                    logger.error(f"Error executing Behavior object: {e}")
+                    return {"steps": [{"content": f"Error: {str(e)}", "action": "error"}]}
+
+            elif isinstance(sequence, dict):
                 # 处理包含异步生成器的字典
                 if "steps" in sequence:
                     steps = sequence["steps"]
