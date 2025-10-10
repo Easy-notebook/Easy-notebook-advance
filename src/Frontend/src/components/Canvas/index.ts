@@ -2,7 +2,16 @@
 export { default as BrainCellGraphEditor } from './editors/BrainCellGraphEditor';
 export type { BrainCellGraphEditorRef } from './editors/BrainCellGraphEditor';
 
-// Modern components (recommended) - Based on React Flow examples
+// Minimal components (recommended) - OpenAI style minimal design
+export { MinimalBrainCellNode } from './nodes/MinimalBrainCellNode';
+export { MinimalEasyNetEdge, minimalEdgeTypes } from './nodes/MinimalEasyNetEdge';
+export { MinimalToolbar } from './ui/MinimalToolbar';
+export { MinimalPalette } from './ui/MinimalPalette';
+export { MinimalInspector } from './ui/MinimalInspector';
+export { MinimalDebugConsole } from './ui/MinimalDebugConsole';
+export { default as MinimalBrainCellInternalView } from './editors/MinimalBrainCellInternalView';
+
+// Modern components - Based on React Flow examples
 export { default as ModernBrainCellGraphEditor } from './editors/ModernBrainCellGraphEditor';
 export type { ModernBrainCellGraphEditorRef } from './editors/ModernBrainCellGraphEditor';
 export { ModernBrainCellNode } from './nodes/ModernBrainCellNode';
