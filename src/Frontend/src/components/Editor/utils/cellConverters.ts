@@ -18,7 +18,31 @@ export function generateCellId() {
 /**
  * 将cells数组转换为HTML内容
  */
-export function convertCellsToHtml(cells: Cell[]) {
+interface ConvertCellsOptions {
+  activeCellId?: string | null;
+  degradeActiveMarkdown?: boolean;
+}
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const convertMarkdownFallbackHtml = (markdown: string) => {
+  if (!markdown) return '<p></p>'
+  const parts = markdown.split(/\n{2,}/)
+  return parts
+    .map(part => {
+      const escaped = escapeHtml(part)
+      return `<p>${escaped.replace(/\n/g, '<br />')}</p>`
+    })
+    .join('\n')
+}
+
+export function convertCellsToHtml(cells: Cell[], options: ConvertCellsOptions = {}) {
   if (!cells || cells.length === 0) {
     return '<p></p>' // 空内容
   }
@@ -32,11 +56,22 @@ export function convertCellsToHtml(cells: Cell[]) {
   const headingSlugCounter = new Map<string, Map<string, number>>();
 
   const htmlParts = cells.map((cell, index) => {
+    const shouldDegradeMarkdown =
+      options.degradeActiveMarkdown === true &&
+      options.activeCellId &&
+      cell.id === options.activeCellId &&
+      cell.type === 'markdown'
+
     if (cell.type === 'code' || cell.type === 'hybrid') {
       // code和Hybrid cell转换为可执行代码块，确保包含正确的ID和位置信息
       if (DEBUG) console.log(`转换代码块 ${index}: ID=${cell.id}, type=${cell.type}`);
       return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}" data-is-generating="${(cell as any).metadata?.isGenerating === true}"></div>`
     } else if (cell.type === 'markdown') {
+      if (shouldDegradeMarkdown) {
+        const originalMarkdown = cell.content || ''
+        const fallbackHtml = convertMarkdownFallbackHtml(originalMarkdown)
+        return `<div data-type="markdown-fallback" data-cell-id="${cell.id}" data-original-markdown="${encodeURIComponent(originalMarkdown)}">${fallbackHtml}</div>`
+      }
       // markdown cell转换为HTML
       return convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter)
     } else if (cell.type === 'image') {
@@ -506,6 +541,27 @@ function convertHtmlToCells_fallback(editor: any) {
           enableEdit: true,
           metadata: { isGenerating: (el.getAttribute('data-is-generating') === 'true') }
         } as any)
+      } else if (el.getAttribute('data-type') === 'markdown-fallback') {
+        flushMarkdownContent()
+
+        const cellId = el.getAttribute('data-cell-id') || generateCellId()
+        const originalMarkdownEncoded = el.getAttribute('data-original-markdown') || ''
+        let originalMarkdown = ''
+        try {
+          originalMarkdown = decodeURIComponent(originalMarkdownEncoded)
+        } catch {
+          originalMarkdown = originalMarkdownEncoded
+        }
+
+        const fallbackText = originalMarkdown || el.textContent || ''
+
+        newCells.push({
+          id: cellId,
+          type: 'markdown',
+          content: fallbackText,
+          outputs: [],
+          enableEdit: true,
+        })
       } else if (el.getAttribute('data-type') === 'latex-block') {
         // 处理LaTeX节点
         flushMarkdownContent()

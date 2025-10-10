@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Handle, Position } from "reactflow";
-import { BrainCellMeta } from './types';
-import { IO_BADGE, STATUS_DOT } from './constants';
+import { BrainCellMeta } from '../utils/types';
+import { IO_BADGE, STATUS_DOT } from '../utils/constants';
 import { getNodeDesign, getNodeIcon } from './nodeDesigns';
-import { CircleShape, RectangleShape, HexagonShape, PentagonShape, DiamondShape } from './shapes/ShapeComponents';
+import { CircleShape, RectangleShape, HexagonShape, PentagonShape, DiamondShape } from '../shapes/ShapeComponents';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface EnhancedBrainCellNodeProps {
@@ -16,10 +16,10 @@ export function EnhancedBrainCellNode({ data, selected = false }: EnhancedBrainC
   const design = getNodeDesign(data.kind);
   const icon = getNodeIcon(data.kind);
 
-  // 根据展开状态选择尺寸
+  // Select size based on expanded state
   const currentSize = isExpanded ? design.size : design.compactSize;
 
-  // 根据形状选择对应的组件
+  // Select corresponding component based on shape
   const getShapeComponent = () => {
     const shapeProps = {
       width: currentSize.width,
@@ -48,7 +48,7 @@ export function EnhancedBrainCellNode({ data, selected = false }: EnhancedBrainC
 
   const ShapeComponent = getShapeComponent();
 
-  // 计算端口位置
+  // Calculate port positions
   const getPortPositions = () => {
     const { shape } = design;
 
@@ -146,7 +146,7 @@ export function EnhancedBrainCellNode({ data, selected = false }: EnhancedBrainC
                 <div className="space-y-1">
                   <div className="text-xs font-medium opacity-75" style={{ color: design.colors.text }}>输入</div>
                   {data.inputs?.slice(0, 2).map((port, index) => (
-                    <div key={port.id} className="text-xs px-2 py-1 bg-blue-500 bg-opacity-20 rounded text-blue-200">
+                    <div key={port.id} className="text-xs px-2 py-1 bg-blue-50 rounded text-blue-700 border border-blue-200">
                       {port.label}
                     </div>
                   ))}
@@ -154,7 +154,7 @@ export function EnhancedBrainCellNode({ data, selected = false }: EnhancedBrainC
                 <div className="space-y-1 text-right">
                   <div className="text-xs font-medium opacity-75" style={{ color: design.colors.text }}>输出</div>
                   {data.outputs?.slice(0, 2).map((port, index) => (
-                    <div key={port.id} className="text-xs px-2 py-1 bg-orange-500 bg-opacity-20 rounded text-orange-200">
+                    <div key={port.id} className="text-xs px-2 py-1 bg-orange-50 rounded text-orange-700 border border-orange-200">
                       {port.label}
                     </div>
                   ))}
@@ -167,10 +167,13 @@ export function EnhancedBrainCellNode({ data, selected = false }: EnhancedBrainC
                   <div className="text-xs font-medium mb-1 opacity-75" style={{ color: design.colors.text }}>
                     进度 {data.runtime.progress}%
                   </div>
-                  <div className="h-2 bg-white bg-opacity-20 rounded-full overflow-hidden">
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-white transition-all duration-300"
-                      style={{ width: `${data.runtime.progress}%` }}
+                      className="h-full transition-all duration-300"
+                      style={{
+                        width: `${data.runtime.progress}%`,
+                        backgroundColor: design.colors.primary
+                      }}
                     />
                   </div>
                 </div>

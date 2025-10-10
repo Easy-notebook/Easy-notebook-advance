@@ -4,7 +4,7 @@ import KnowledgeForestSidebar from './Main/KnowledgeForest/KnowledgeForestSideba
 import { EmptySidebar } from './Main/Empty';
 import { MiniSidebar } from './Mini';
 import { AgentType } from '@Services/agentMemoryService';
-import { navigateToHome, navigateToLibrary, navigateToWorkspace } from '@Utils/navigation';
+import { navigateToEasyNet, navigateToHome, navigateToLibrary, navigateToWorkspace } from '@Utils/navigation';
 import useSettingsStore from '@Store/settingsStore';
 import useStore from '@Store/notebookStore';
 import useRouteStore from '@Store/routeStore';
@@ -90,6 +90,8 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
         return 'knowledge-forest';
       case 'workspace':
         return 'workspace';
+      case 'easynet':
+        return 'easynet';
       default:
         // Fallback to route-based detection
         if (currentRoute === '/') {
@@ -98,6 +100,8 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
           return 'knowledge-forest';
         } else if (currentRoute.startsWith('/workspace/')) {
           return 'workspace';
+        } else if (currentRoute.startsWith('/EasyNet/')) {
+          return 'easynet';
         }
         return activeSidebarItem; // Use prop as fallback
     }
@@ -123,7 +127,9 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
       case 'settings':
         settingsStore.openSettings();
         break;
-      // easynet doesn't have navigation yet
+      case 'easynet':
+        navigateToEasyNet('test');
+        break;
     }
   }, [onSidebarItemChange, settingsStore]);
 
@@ -183,11 +189,12 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
     viewMode
   ]);
   
-
   return (
-    <div className="flex">
+    <div className="relative flex h-full bg-white text-slate-700 border-r border-slate-200/70">
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-16" />
+
       {/* Mini sidebar (always visible) */}
-      <div className="shrink-0">
+      <div className="relative z-10 shrink-0">
         <MiniSidebar
           phases={tasks?.flatMap(task => task.phases) || []}
           currentPhaseId={currentPhaseId || undefined}
@@ -213,16 +220,20 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
       {!isCollapsed && (
         <>
           <div
-            className="transition-all duration-500 ease-in-out relative bg-white"
+            className="relative z-10 h-full transition-all duration-500 ease-in-out"
             style={{ width: `${leftSidebarWidth - 64}px` }}
           >
-            {renderMainContent()}
+            <div className="relative flex h-full w-full overflow-hidden bg-white">
+              <div className="flex-1">
+                {renderMainContent()}
+              </div>
+            </div>
           </div>
           <div
-            className="w-px bg-gray-300 hover:bg-thme-500 cursor-col-resize transition-colors duration-150 relative group"
+            className="relative z-10 w-3 cursor-col-resize select-none transition-colors duration-200 ease-out group"
             onMouseDown={handleLeftResize}
           >
-            <div className="absolute inset-y-0 w-1 -translate-x-0.5 group-hover:bg-theme-100/50" />
+            <div className="absolute inset-y-10 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-slate-200 group-hover:bg-slate-400" />
           </div>
         </>
       )}

@@ -1,7 +1,7 @@
 import { Button, Card } from "antd";
 import { Plus, Wand2 } from "lucide-react";
-import { BrainCellKind } from './types';
-import { KINDS } from './constants';
+import { BrainCellKind } from '../utils/types';
+import { KINDS } from '../utils/constants';
 
 interface PaletteProps {
   onAdd: (kind: BrainCellKind) => void;

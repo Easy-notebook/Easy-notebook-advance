@@ -21,10 +21,10 @@ interface Phase {
 /* -------------------------- Constants ------------------------------ */
 
 // 统一样式常量，支持文本换行而不是截断
-const NB_TEXT_CLASS = 'text-[14px] leading-[20px] font-normal text-theme-800 break-words';
+const NB_TEXT_CLASS = 'text-[14px] leading-[20px] font-medium text-slate-700 break-words';
 const NB_ICON_SIZE = 16;
 const NB_TRANSITION = 'transition-all duration-300';
-const NB_SHADOW = 'shadow-[0_2px_8px_rgba(0,0,0,0.1)]';
+const NB_SHADOW = 'shadow-[0_18px_40px_-28px_rgba(14,116,244,0.35)]';
 
 // 使用共享的样式常量
 const StatusStyles = SHARED_STYLES.status;
@@ -201,19 +201,17 @@ export const PhaseSection = memo(({
 
   // 计算动态样式类
   const buttonClasses = useMemo(() => `
-    w-full flex items-center p-2.5 rounded-lg
+    w-full flex items-center p-2.5 rounded-xl
     ${SHARED_STYLES.button.base} ${SHARED_STYLES.button.hover}
     ${isActive ? SHARED_STYLES.button.active : ''}
-    ${isCurrentStep ? `border-2 border-theme-500 ${NB_SHADOW}` : ''}
+    ${isCurrentStep ? `border-2 border-sky-300 ${NB_SHADOW}` : ''}
     ${NB_TRANSITION}
   `, [isActive, isCurrentStep]);
 
   const iconWrapperClasses = useMemo(() => `
-    w-10 h-10 flex items-center justify-center
+    w-10 h-10 flex items-center justify-center rounded-lg border border-white/40 backdrop-blur-md
     ${StatusStyles.colors[isActive ? 'in-progress' : 'pending']}
     ${NB_TRANSITION}
-    relative
-    before:absolute before:inset-0 
   `, [isActive]);
 
   const stepsContainerClasses = useMemo(() => `
@@ -227,8 +225,8 @@ export const PhaseSection = memo(({
   }
 
   return (
-    <div className="px-2.5">
-      <div className={`rounded-xl ${NB_TRANSITION}`}>
+    <div className="px-4">
+      <div className={`rounded-2xl ${NB_TRANSITION}`}>
         <button
           onClick={handleTitleClick}
           className={buttonClasses}
@@ -249,7 +247,7 @@ export const PhaseSection = memo(({
           )}
 
           {isTitle && (
-            <h2 className={`pl-2 text-lg font-semibold text-theme-800 ${NB_TRANSITION} break-words`}>
+            <h2 className={`pl-2 text-lg font-semibold text-slate-800 ${NB_TRANSITION} break-words`}>
               {phase.title}
             </h2>
           )}

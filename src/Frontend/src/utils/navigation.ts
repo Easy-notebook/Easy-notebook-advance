@@ -29,6 +29,15 @@ export const navigateToWorkspace = (notebookId: string): void => {
 };
 
 /**
+ * Navigate to a specific EasyNet view
+ * @param easyNetId - The EasyNet resource identifier
+ */
+export const navigateToEasyNet = (easyNetId: string): void => {
+  const { navigateToEasyNet: navToEasyNet } = useRouteStore.getState();
+  navToEasyNet(easyNetId);
+};
+
+/**
  * Get the current route information
  */
 export const getCurrentRoute = () => {
@@ -42,6 +51,11 @@ export const getCurrentRoute = () => {
     return { type: 'library' } as const;
   }
   
+  if (path.startsWith('/EasyNet/')) {
+    const easyNetId = path.split('/EasyNet/')[1];
+    return { type: 'easynet', easyNetId } as const;
+  }
+
   if (path.startsWith('/workspace/')) {
     const notebookId = path.split('/workspace/')[1];
     return { type: 'workspace', notebookId } as const;

@@ -1,7 +1,7 @@
 import { Brain } from "lucide-react";
 import { Handle, Position } from "reactflow";
-import { BrainCellMeta } from './types';
-import { IO_BADGE, STATUS_DOT } from './constants';
+import { BrainCellMeta } from '../utils/types';
+import { IO_BADGE, STATUS_DOT } from '../utils/constants';
 
 export function BrainCellNode({ data }: { data: BrainCellMeta }) {
   return (

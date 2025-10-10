@@ -7,6 +7,9 @@ import { memo, ReactNode } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { SHARED_STYLES, TabId, TAB_CONFIG } from './constants';
 
+const cx = (...classes: Array<string | false | null | undefined>) =>
+  classes.filter(Boolean).join(' ');
+
 // 状态指示器组件
 export const StatusIcon = memo<{ status: 'completed' | 'in-progress' | 'pending' }>(({ status }) => {
   if (status === 'completed') {
@@ -38,7 +41,7 @@ export const StatusDot = memo<{
 
 StatusDot.displayName = 'StatusDot';
 
-// Obsidian风格通用按钮组件
+// 现代通用按钮组件
 export const SidebarButton = memo<{
   children: ReactNode;
   isActive?: boolean;
@@ -55,20 +58,19 @@ export const SidebarButton = memo<{
   return (
     <button
       onClick={onClick}
-      className={`
-        w-full flex items-center gap-2.5 rounded-md group
-        ${SHARED_STYLES.button.base}
-        ${sizeClasses[size]}
-        ${isActive
+      className={cx(
+        'w-full flex items-center gap-2.5 group',
+        SHARED_STYLES.button.base,
+        sizeClasses[size],
+        isActive
           ? SHARED_STYLES.button.active
-          : `${SHARED_STYLES.button.inactive} ${SHARED_STYLES.button.hover}`
-        }
-        ${className}
-      `}
+          : cx(SHARED_STYLES.button.inactive, SHARED_STYLES.button.hover),
+        className
+      )}
     >
       {children}
       {isActive && (
-        <div className="ml-auto w-1.5 h-1.5 bg-slate-600 rounded-full" />
+        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#4F9EF9]" />
       )}
     </button>
   );
@@ -76,30 +78,32 @@ export const SidebarButton = memo<{
 
 SidebarButton.displayName = 'SidebarButton';
 
-// Obsidian风格Tab切换组件
+// 现代化 Tab 切换组件
 export const TabSwitcher = memo<{
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   className?: string;
 }>(({ activeTab, onTabChange, className = '' }) => {
   return (
-    <div className={`flex space-x-0.5 bg-slate-100/60 p-1 rounded-lg ${className}`}>
+    <div
+      className={cx(
+        'flex gap-1 rounded-full border border-slate-200 bg-white p-1 shadow-sm',
+        className
+      )}
+    >
       {TAB_CONFIG.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
-          className={`
-            ${SHARED_STYLES.tab.base}
-            ${activeTab === tab.id
-              ? SHARED_STYLES.tab.active
-              : SHARED_STYLES.tab.inactive
-            }
-            relative overflow-hidden
-          `}
+          className={cx(
+            'relative overflow-hidden',
+            SHARED_STYLES.tab.base,
+            activeTab === tab.id ? SHARED_STYLES.tab.active : SHARED_STYLES.tab.inactive
+          )}
         >
           <span className="relative z-10">{tab.label}</span>
           {activeTab === tab.id && (
-            <div className="absolute inset-0 bg-white shadow-sm rounded-md border border-slate-300/50" />
+            <span className="pointer-events-none absolute inset-0 rounded-full border border-[#C0DAFD] bg-[#E7F1FE] shadow-[0_12px_26px_-18px_rgba(79,158,249,0.45)]" />
           )}
         </button>
       ))}
@@ -118,7 +122,7 @@ export const SidebarContainer = memo<{
 }>(({ children, onMouseEnter, onMouseLeave, className = '' }) => {
   return (
     <div
-      className={`${SHARED_STYLES.container.base} ${className}`}
+      className={cx(SHARED_STYLES.container.base, className)}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -135,7 +139,7 @@ export const SidebarHeader = memo<{
   className?: string;
 }>(({ children, className = '' }) => {
   return (
-    <div className={`${SHARED_STYLES.container.header} ${className}`}>
+    <div className={cx(SHARED_STYLES.container.header, className)}>
       {children}
     </div>
   );
@@ -149,24 +153,24 @@ export const SidebarContent = memo<{
   className?: string;
 }>(({ children, className = '' }) => {
   return (
-    <div className={`${SHARED_STYLES.container.content} ${className}`}>
+    <div className={cx(SHARED_STYLES.container.content, className)}>
       <style>{`
         .scrollbar-thin::-webkit-scrollbar {
           width: 4px;
         }
         .scrollbar-thin::-webkit-scrollbar-track {
-          background: transparent;
+          background: rgba(148, 163, 184, 0.12);
         }
         .scrollbar-thin::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.3);
-          border-radius: 4px;
+          background: rgba(14, 116, 244, 0.35);
+          border-radius: 9999px;
         }
         .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.5);
+          background: rgba(14, 116, 244, 0.55);
         }
         .scrollbar-thin {
           scrollbar-width: thin;
-          scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+          scrollbar-color: rgba(14, 116, 244, 0.35) rgba(148, 163, 184, 0.1);
         }
       `}</style>
       {children}

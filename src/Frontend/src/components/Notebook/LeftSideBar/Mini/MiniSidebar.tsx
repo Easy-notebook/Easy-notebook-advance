@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import iconMapping from '@Utils/iconMapping';
 
+const cn = (...classes: Array<string | false | null | undefined>) =>
+  classes.filter(Boolean).join(' ');
+
 interface MiniSidebarItem {
   id: string;
   icon: React.ElementType;
@@ -60,19 +63,27 @@ const BOTTOM_ITEMS: MiniSidebarItem[] = [
 /** 按钮（图标底部对齐，去除多余 margin/padding） */
 const ItemButton: React.FC<
   React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }
-> = ({ className = '', children, active, ...props }) => (
+> = ({ className, children, active, ...props }) => (
   <button
     {...props}
     aria-current={active ? 'page' : undefined}
-    className={[
-      'w-8 h-8',
-      'relative rounded-lg transition-colors',
-      'flex items-end justify-center',
-      active ? 'text-theme-600' : 'text-gray-500',
+    className={cn(
+      'group relative flex h-10 w-10 items-center justify-center rounded-xl text-slate-500',
+      'transition-all duration-200 ease-out backdrop-blur-sm',
+      'hover:bg-white/80 hover:text-sky-700 hover:shadow-[0_10px_22px_-16px_rgba(14,116,244,0.5)]',
+      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theme-300',
+      active
+        ? 'bg-white/90 text-sky-700 shadow-[0_14px_30px_-18px_rgba(14,116,244,0.6)] border border-sky-200'
+        : 'border border-transparent',
       className,
-    ].join(' ')}
+    )}
   >
-    {children}
+    {active && (
+      <span className="pointer-events-none absolute left-0 top-1/2 h-6 w-[6px] -translate-x-full -translate-y-1/2 rounded-full bg-[#4F9EF9] shadow-[0_0_10px_rgba(79,158,249,0.45)]" />
+    )}
+    <span className="relative z-10 transition-transform duration-150 group-hover:scale-105 group-active:scale-95">
+      {children}
+    </span>
   </button>
 );
 
@@ -98,38 +109,38 @@ const MiniSidebar = memo(function MiniSidebar({
 
   return (
     <nav
-      className={[
-        'w-16 h-full',
-        'flex flex-col',
-        'bg-white',
-        'border-black',
-        'border-r',
-      ].join(' ')}
+      className={cn(
+        'flex h-full w-16 flex-col items-center justify-between border-r border-slate-200/70 bg-white px-3 text-slate-600'
+      )}
     >
       {/* Logo - only controls expand/collapse */}
-      <div className="h-12 flex items-center justify-center shrink-0 mt-2">
+      <div className="h-16 w-full flex items-center justify-center shrink-0">
         <button
           onClick={handleExpandClick}
-          className="rounded-lg transition-colors"
+          className={cn(
+            'group flex h-10 w-10 items-center justify-center rounded-xl text-slate-600',
+            'transition-all duration-200 ease-out hover:bg-white/80 hover:text-sky-700 hover:shadow-[0_12px_28px_-18px_rgba(14,116,244,0.45)]',
+            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theme-300'
+          )}
           title="Expand/Collapse Sidebar"
+          aria-label="Expand or collapse sidebar"
         >
-          <img src="/icon.svg" className="w-8 h-8"/>
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/80 border border-white/60 shadow-[0_12px_26px_-18px_rgba(14,116,244,0.35)]">
+            <img
+              src="/icon.svg"
+              alt="Easy Notebook"
+              className="h-10 w-10 transition-transform duration-200 group-hover:scale-105"
+            />
+          </div>
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-visible">
+      <div className="flex w-full flex-1 flex-col gap-3 overflow-y-auto overflow-x-visible">
         {/* Phases area - only show when workspace is active and sidebar is collapsed */}
         {shouldShowPhases && (
-          <div className="relative -mr-2 my-0">
-            <div 
-              className="absolute inset-0 bg-white rounded-l-3xl"
-              style={{
-                borderRight: 'none'
-              }}
-            />
-            
+          <div className="w-full rounded-2xl border border-white/30 bg-white/70 px-2.5 py-3.5 shadow-[0_18px_60px_-40px_rgba(14,116,244,0.35)] backdrop-blur-xl">
             {/* Phase icons list */}
-            <ul className="space-y-1 relative z-10 py-3 pl-1 pr-4">
+            <ul className="flex flex-col items-center gap-2">
               {phases!.map((phase) => {
                 const IconComp =
                   (iconMapping as Record<string, LucideIcon>)[phase.icon] ?? CheckCircle2;
@@ -137,7 +148,7 @@ const MiniSidebar = memo(function MiniSidebar({
 
                 return (
                   <li key={phase.id} className="flex justify-center overflow-visible">
-                    <div className="overflow-visible relative">
+                    <div className="relative overflow-visible">
                       <ItemButton
                         active={isActive}
                         onClick={() => onPhaseClick?.(phase.id)}
@@ -155,24 +166,16 @@ const MiniSidebar = memo(function MiniSidebar({
 
         {/* Folder icon - show when sidebar is expanded OR when active item is not workspace */}
         {shouldShowFolderIcon && (
-          <div className="relative -mr-2 my-0">
-            <div 
-              className="absolute inset-0 bg-white rounded-l-3xl"
-              style={{
-                border: '1px solid rgba(0,0,0,0.04)',
-                borderRight: 'none'
-              }}
-            />
-            
-            <ul className="space-y-1 relative z-10 py-3 pl-3 pr-4">
+          <div className="w-full rounded-2xl border border-white/30 bg-white/70 px-2.5 py-3.5 shadow-[0_18px_60px_-40px_rgba(14,116,244,0.35)] backdrop-blur-xl">
+            <ul className="flex flex-col items-center gap-2">
               <li className="flex justify-center overflow-visible">
-                <div className="overflow-visible relative">
+                <div className="relative overflow-visible">
                   <ItemButton
                     active={activeItemId === 'workspace'}
                     onClick={() => onItemClick?.('workspace')}
                     title="Workspace"
                   >
-                    <Folder size={18} />                        
+                    <Folder size={18} />
                   </ItemButton>
                 </div>
               </li>
@@ -181,7 +184,7 @@ const MiniSidebar = memo(function MiniSidebar({
         )}
 
         {/* Primary items - show non-workspace items */}
-        <ul className="space-y-1">
+        <ul className="flex flex-col items-center gap-2 pb-2">
           {PRIMARY_ITEMS.filter(item => item.id !== 'workspace').map((item) => {
             const Icon = item.icon;
             const isActive = activeItemId === item.id;
@@ -204,8 +207,8 @@ const MiniSidebar = memo(function MiniSidebar({
       </div>
 
       {/* Bottom items - always show */}
-      <div className="py-3 shrink-0">
-        <ul className="space-y-1">
+      <div className="w-full">
+        <ul className="flex flex-col items-center gap-2">
           {BOTTOM_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeItemId === item.id;

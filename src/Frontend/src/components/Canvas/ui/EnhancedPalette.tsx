@@ -1,9 +1,9 @@
 import { Card } from "antd";
 import { Wand2 } from "lucide-react";
-import { BrainCellKind } from './types';
-import { KINDS } from './constants';
-import { getNodeDesign, getNodeIcon } from './nodeDesigns';
-import { CircleShape, RectangleShape, HexagonShape, PentagonShape, DiamondShape } from './shapes/ShapeComponents';
+import { BrainCellKind } from '../utils/types';
+import { KINDS } from '../utils/constants';
+import { getNodeDesign, getNodeIcon } from '../nodes/nodeDesigns';
+import { CircleShape, RectangleShape, HexagonShape, PentagonShape, DiamondShape } from '../shapes/ShapeComponents';
 
 interface EnhancedPaletteProps {
   onAdd: (kind: BrainCellKind) => void;
@@ -30,8 +30,8 @@ export function EnhancedPalette({ onAdd }: EnhancedPaletteProps) {
             <Wand2 className="h-4 w-4 text-indigo-600" />
           </div>
           <div>
-            <span className="font-semibold text-gray-800">组件库</span>
-            <div className="text-xs text-gray-500">拖拽添加节点到画布</div>
+            <span className="font-semibold text-gray-800">Component Library</span>
+            <div className="text-xs text-gray-500">Drag to add nodes to canvas</div>
           </div>
         </div>
       }
@@ -43,7 +43,7 @@ export function EnhancedPalette({ onAdd }: EnhancedPaletteProps) {
           const icon = getNodeIcon(kind);
           const ShapeComponent = getShapeComponent(design.shape);
 
-          // 缩放比例以适应预览
+          // Scale ratio to fit preview
           const scale = 0.3;
           const previewSize = {
             width: design.size.width * scale,
@@ -56,7 +56,7 @@ export function EnhancedPalette({ onAdd }: EnhancedPaletteProps) {
               className="group relative flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl cursor-pointer hover:border-gray-300 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5"
               onClick={() => onAdd(kind)}
             >
-              {/* 节点预览 */}
+              {/* Node preview */}
               <div className="flex-shrink-0 flex items-center justify-center bg-gray-50 rounded-lg p-2" style={{ width: '80px', height: '60px' }}>
                 <ShapeComponent
                   width={previewSize.width}
@@ -70,7 +70,7 @@ export function EnhancedPalette({ onAdd }: EnhancedPaletteProps) {
                 </ShapeComponent>
               </div>
 
-              {/* 节点信息 */}
+              {/* Node information */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   <span

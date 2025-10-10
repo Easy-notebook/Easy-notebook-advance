@@ -269,7 +269,7 @@ const CodeBlockView = ({
   getPos
 }) => {
   const { language, code, cellId, outputs, enableEdit } = node.attrs
-  const { cells, updateCell, deleteCell, addCell, setCurrentCell, setEditingCellId } = useStore()
+  const { cells, updateCell, deleteCell, addCell, setCurrentCell, setEditingCellId, updateCellType, clearCellOutputs } = useStore()
   const [isInitialized, setIsInitialized] = useState(false)
 
   // 创建虚拟cell对象，优先从store中获取最新内容
@@ -300,82 +300,91 @@ const CodeBlockView = ({
 
   // 处理删除
   const handleDelete = useCallback(() => {
-    // 防止双重删除
     if (isDeleting) {
       console.log('删除已在进行中，跳过重复删除');
       return;
     }
-    
+
+    const language = (virtualCell as any)?.language || node.attrs.language || ''
+    const rawCode = (virtualCell.content || node.attrs.code || '').replace(/\r\n/g, '\n')
+    const hasCode = rawCode.trim().length > 0
+    const fenceHeader = language ? `\u0060\u0060\u0060${language}` : '```'
+    const scaffoldMarkdown = hasCode ? `${fenceHeader}\n${rawCode}\n\u0060\u0060\u0060` : `${fenceHeader}\n\u0060\u0060\u0060`
+
+    const hasOutputs = Array.isArray(virtualCell.outputs) && virtualCell.outputs.length > 0
+    if (hasOutputs) {
+      const confirmMessage = '当前代码单元格仍有输出，删除将把它转换为 Markdown 并清除输出，是否继续？'
+      const confirmed = typeof window !== 'undefined' ? window.confirm(confirmMessage) : false
+      if (!confirmed) {
+        return
+      }
+    }
+
     console.log('=== 删除代码块开始 ===');
     console.log('删除的代码块ID:', cellId);
-    
+
     setIsDeleting(true);
-    
-    if (editor && getPos) {
-      const pos = getPos();
-      const { tr } = editor.state;
-      
-      // 获取代码块在文档中的位置
-      const nodeStart = pos;
-      const nodeEnd = pos + node.nodeSize;
-      
-      console.log('代码块位置:', nodeStart, '-', nodeEnd);
-      
-      // 使用 markdown 占位符取代代码块，防止光标跳到文档开头
-      const placeholder = '```python\n';
-      const textNode = editor.state.schema.text(placeholder);
-      tr.replaceWith(nodeStart, nodeEnd, textNode);
 
-      // 将光标定位到占位符末尾
-      let targetPos = nodeStart + placeholder.length;
-      
-      console.log('删除后文档大小:', tr.doc.content.size, '目标位置:', targetPos);
-      
-      // 设置光标位置 - 使用更安全的方式
-      if (targetPos >= 0 && targetPos <= tr.doc.content.size) {
-        try {
-          const $pos = tr.doc.resolve(targetPos);
-          // 使用更简单的选择策略
-          const selection = TextSelection.near($pos);
-          tr.setSelection(selection);
-          console.log('最终光标位置:', targetPos);
-        } catch (e) {
-          console.warn('设置光标位置失败，使用默认位置:', e);
-          // 如果定位失败，让编辑器自动处理
-        }
-      }
-      
-      // 应用事务
-      editor.view.dispatch(tr);
-
-      // 事务完成后，确保焦点和光标仍在占位符处
-      setTimeout(() => {
-        const { state: newState, view: newView } = editor;
-        const safePos = Math.min(targetPos, newState.doc.content.size);
-        try {
-          const $pos = newState.doc.resolve(safePos);
-          const sel = TextSelection.near($pos);
-          newView.dispatch(newState.tr.setSelection(sel).scrollIntoView());
-          newView.focus();
-        } catch (err) {
-          console.warn('Post-delete focus reset failed', err);
-        }
-      }, 20);
-      
-      console.log('=== 删除代码块完成 ===');
-      
-      // 延迟重置删除标志，防止快速连续删除
-      setTimeout(() => {
-        setIsDeleting(false);
-      }, 200);
-    } else {
-      // 备用方案
-      deleteNode();
-      setTimeout(() => {
-        setIsDeleting(false);
-      }, 200);
+    updateCellType(cellId, 'markdown')
+    updateCell(cellId, scaffoldMarkdown)
+    if (hasOutputs) {
+      clearCellOutputs(cellId)
     }
-  }, [deleteNode, editor, getPos, cellId, node, isDeleting])
+    setEditingCellId?.(cellId)
+    setCurrentCell?.(cellId)
+
+    if (editor && getPos) {
+      const pos = getPos()
+      const { state } = editor
+      const { schema } = state
+      const nodeStart = pos
+      const nodeEnd = pos + node.nodeSize
+
+      const textNode = schema.text(scaffoldMarkdown)
+      const paragraph = schema.nodes.paragraph ? schema.nodes.paragraph.create({}, textNode) : textNode
+      let tr = state.tr.replaceWith(nodeStart, nodeEnd, paragraph)
+
+      try {
+        const $target = tr.doc.resolve(Math.max(0, nodeStart + (paragraph.nodeSize || textNode.nodeSize || scaffoldMarkdown.length) - 1))
+        tr = tr.setSelection(TextSelection.near($target))
+      } catch (error) {
+        console.warn('设置光标位置失败，将使用默认位置', error)
+      }
+
+      editor.view.dispatch(tr)
+
+      setTimeout(() => {
+        try {
+          const { state: newState, view: newView } = editor
+          const target = Math.max(0, nodeStart + scaffoldMarkdown.length - 1)
+          const $resolved = newState.doc.resolve(Math.min(target, newState.doc.content.size - 1))
+          newView.dispatch(newState.tr.setSelection(TextSelection.near($resolved)).scrollIntoView())
+          newView.focus()
+        } catch (focusError) {
+          console.warn('Post-delete focus reset failed', focusError)
+        }
+        setIsDeleting(false)
+      }, 40)
+    } else {
+      deleteNode()
+      setTimeout(() => {
+        setIsDeleting(false)
+      }, 200)
+    }
+  }, [
+    isDeleting,
+    virtualCell,
+    node,
+    editor,
+    getPos,
+    cellId,
+    updateCellType,
+    updateCell,
+    clearCellOutputs,
+    setEditingCellId,
+    setCurrentCell,
+    deleteNode,
+  ])
 
   // 防止重复插入的引用
   const hasTriedToAdd = useRef(false)

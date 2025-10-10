@@ -1,3 +1,4 @@
+// Silan Hu: 该组件负责封装 TipTap 编辑器，并将富文本交互与 Notebook Store 的单元格数据进行双向同步。
 import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo, useState } from 'react'
 import { useEditor, EditorContent, Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -61,6 +62,171 @@ interface TiptapNotebookEditorRef {
 // Debug flag - set to true only when debugging
 const DEBUG = false;
 
+type SyncReason = 'structure' | 'content'
+
+type MarkdownDiff = {
+  id: string;
+  content: string;
+}
+
+type SyncPlan =
+  | { type: 'noop' }
+  | { type: 'markdown'; diffs: MarkdownDiff[] }
+  | { type: 'structure'; cells: Cell[] }
+
+const outputsEqual = (a?: Cell['outputs'], b?: Cell['outputs']) => {
+  try {
+    return JSON.stringify(a ?? []) === JSON.stringify(b ?? [])
+  } catch {
+    return false
+  }
+}
+
+const metadataEqual = (a?: Cell['metadata'], b?: Cell['metadata']) => {
+  try {
+    return JSON.stringify(a ?? {}) === JSON.stringify(b ?? {})
+  } catch {
+    return false
+  }
+}
+
+const applyMarkdownDiffs = (cells: Cell[], diffs: MarkdownDiff[]) => {
+  if (!diffs.length) return cells
+  const diffMap = new Map(diffs.map(diff => [diff.id, diff.content]))
+  return cells.map(cell => {
+    if (diffMap.has(cell.id)) {
+      return {
+        ...cell,
+        content: diffMap.get(cell.id) ?? '',
+      }
+    }
+    return cell
+  })
+}
+
+const mergeCellsAfterStructureChange = (parsedCells: Cell[], currentCells: Cell[]): Cell[] => {
+  const currentById = new Map(currentCells.map(cell => [cell.id, cell]))
+
+  return parsedCells.map((parsedCell, index) => {
+    if (parsedCell.type === 'markdown') {
+      const existingAtIndex = currentCells[index]
+      if (existingAtIndex && existingAtIndex.type === 'markdown') {
+        return {
+          ...existingAtIndex,
+          content: parsedCell.content,
+        }
+      }
+      return parsedCell
+    }
+
+    if (parsedCell.id) {
+      const existingById = currentById.get(parsedCell.id)
+      if (existingById) {
+        if (parsedCell.type === 'code' || parsedCell.type === 'hybrid') {
+          return existingById
+        }
+        if (parsedCell.type === 'image') {
+          return {
+            ...existingById,
+            content: parsedCell.content,
+            metadata: parsedCell.metadata,
+          }
+        }
+        if (parsedCell.type === 'raw') {
+          return {
+            ...existingById,
+            content: parsedCell.content,
+          }
+        }
+        if (parsedCell.type === 'thinking' || parsedCell.type === 'link') {
+          return {
+            ...existingById,
+            ...parsedCell,
+          }
+        }
+      }
+    }
+
+    return parsedCell
+  })
+}
+
+const createSyncPlan = (currentCells: Cell[], parsedCells: Cell[]): SyncPlan => {
+  if (parsedCells.length !== currentCells.length) {
+    return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+  }
+
+  const markdownDiffs: MarkdownDiff[] = []
+
+  for (let index = 0; index < parsedCells.length; index += 1) {
+    const parsedCell = parsedCells[index]
+    const currentCell = currentCells[index]
+
+    if (!parsedCell || !currentCell) {
+      return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+    }
+
+    if (parsedCell.type !== currentCell.type) {
+      if (parsedCell.type === 'markdown' && currentCell.type === 'markdown') {
+        if ((parsedCell.content || '') !== (currentCell.content || '')) {
+          markdownDiffs.push({ id: currentCell.id, content: parsedCell.content || '' })
+        }
+        continue
+      }
+      return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+    }
+
+    switch (parsedCell.type) {
+      case 'markdown':
+        if ((parsedCell.content || '') !== (currentCell.content || '')) {
+          markdownDiffs.push({ id: currentCell.id, content: parsedCell.content || '' })
+        }
+        break
+      case 'code':
+      case 'hybrid':
+        if (parsedCell.id !== currentCell.id) {
+          return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+        }
+        if ((parsedCell.content || '') !== (currentCell.content || '') || !outputsEqual(parsedCell.outputs, currentCell.outputs)) {
+          return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+        }
+        break
+      case 'image':
+        if (parsedCell.id !== currentCell.id) {
+          return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+        }
+        if ((parsedCell.content || '') !== (currentCell.content || '') || !metadataEqual(parsedCell.metadata, currentCell.metadata)) {
+          return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+        }
+        break
+      case 'thinking':
+      case 'link':
+      case 'raw':
+        if (parsedCell.id !== currentCell.id) {
+          return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+        }
+        if ((parsedCell.content || '') !== (currentCell.content || '')) {
+          return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+        }
+        break
+      default:
+        return { type: 'structure', cells: mergeCellsAfterStructureChange(parsedCells, currentCells) }
+    }
+  }
+
+  if (markdownDiffs.length > 0) {
+    return { type: 'markdown', diffs: markdownDiffs }
+  }
+
+  return { type: 'noop' }
+}
+
+const prioritizeReason = (current: SyncReason | null, next: SyncReason): SyncReason => {
+  if (next === 'structure') return 'structure'
+  if (current === 'structure') return 'structure'
+  return next
+}
+
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(
   ({ className = "text-2xl font-bold leading-relaxed", placeholder = "Untitled", readOnly = false }, ref) => {
 
@@ -68,9 +234,142 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   const storeData = useStore()
   const cells = storeData?.cells ?? []
   const setCells = storeData?.setCells ?? (() => {})
+  const editingCellId = storeData?.editingCellId ?? null
 
   const editorRef = useRef<Editor | null>(null)
   const [currentEditor, setCurrentEditor] = useState<Editor | null>(null)
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const idleCallbackRef = useRef<number | null>(null)
+  const queuedSyncReasonRef = useRef<SyncReason | null>(null)
+  const forceSyncRef = useRef(false)
+  const latestCellsRef = useRef<Cell[]>(cells)
+  const setCellsRef = useRef<typeof setCells>(setCells)
+  const lastCellsRef = useRef<Cell[]>(cells)
+
+  const debugLogSyncPlan = useCallback((reason: SyncReason, plan: SyncPlan) => {
+    if (!DEBUG) return
+    const summary =
+      plan.type === 'structure'
+        ? `${plan.type} → ${plan.cells.length} cells`
+        : plan.type === 'markdown'
+          ? `${plan.type} → ${plan.diffs.length} diffs`
+          : 'noop'
+    console.groupCollapsed(`🎯 [NotebookSync] reason=${reason} plan=${summary}`)
+    console.log('plan', plan)
+    console.log('currentCells', latestCellsRef.current?.map(c => ({ id: c.id, type: c.type })) || [])
+    console.groupEnd()
+  }, [])
+
+  const clearScheduledSync = useCallback(() => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current)
+      syncTimeoutRef.current = null
+    }
+    if (idleCallbackRef.current !== null && typeof window !== 'undefined') {
+      const cancelIdle = (window as any).cancelIdleCallback as ((handle: number) => void) | undefined
+      if (typeof cancelIdle === 'function') {
+        cancelIdle(idleCallbackRef.current)
+      }
+      idleCallbackRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    setCellsRef.current = setCells
+  }, [setCells])
+
+  useEffect(() => {
+    latestCellsRef.current = cells
+  }, [cells])
+
+  const runSync = useCallback((reason: SyncReason, force = false) => {
+    if (!force && isInternalUpdate.current) return
+
+    const editorInstance = editorRef.current
+    if (!editorInstance) return
+
+    const parsedCells = convertEditorStateToCells(editorInstance)
+    const currentCells = latestCellsRef.current ?? []
+
+    const plan = createSyncPlan(currentCells, parsedCells)
+    debugLogSyncPlan(reason, plan)
+
+    if (plan.type === 'structure') {
+      const nextCells = plan.cells
+      isInternalUpdate.current = true
+      setCellsRef.current?.(nextCells)
+      latestCellsRef.current = nextCells
+      lastCellsRef.current = nextCells
+      setTimeout(() => {
+        isInternalUpdate.current = false
+      }, 16)
+    } else if (plan.type === 'markdown') {
+      if (plan.diffs.length > 0) {
+        try {
+          const storeStateNow = useStore.getState()
+          if (storeStateNow?.updateCell) {
+            plan.diffs.forEach(({ id, content }) => {
+              storeStateNow.updateCell(id, content)
+            })
+          }
+        } catch (error) {
+          console.warn('Notebook store update failed:', error)
+        }
+
+        const updatedCells = applyMarkdownDiffs(currentCells, plan.diffs)
+        latestCellsRef.current = updatedCells
+        lastCellsRef.current = updatedCells
+      }
+    }
+  }, [debugLogSyncPlan])
+
+  const scheduleSync = useCallback((reason: SyncReason, options: { immediate?: boolean; force?: boolean } = {}) => {
+    const { immediate = false, force = false } = options
+
+    forceSyncRef.current = forceSyncRef.current || force
+
+    if (immediate) {
+      clearScheduledSync()
+      const forceRun = forceSyncRef.current || force
+      queuedSyncReasonRef.current = null
+      forceSyncRef.current = false
+      runSync(reason, forceRun)
+      return
+    }
+
+    queuedSyncReasonRef.current = prioritizeReason(queuedSyncReasonRef.current, reason)
+
+    clearScheduledSync()
+
+    const finaliseRun = () => {
+      const finalReason = queuedSyncReasonRef.current ?? reason
+      const forceRun = forceSyncRef.current
+      queuedSyncReasonRef.current = null
+      forceSyncRef.current = false
+      runSync(finalReason, forceRun)
+    }
+
+    const requestIdle = typeof window !== 'undefined' ? (window as any).requestIdleCallback as ((cb: () => void, opts?: { timeout: number }) => number) | undefined : undefined
+    const useIdle = reason === 'content' && typeof requestIdle === 'function'
+
+    if (DEBUG) {
+      console.log('🗓️ [NotebookSync] schedule', { reason, immediate, force, queued: queuedSyncReasonRef.current, useIdle })
+    }
+
+    if (useIdle) {
+      idleCallbackRef.current = requestIdle(() => {
+        idleCallbackRef.current = null
+        finaliseRun()
+      }, { timeout: 160 })
+      return
+    }
+
+    const delay = reason === 'structure' ? 24 : 72
+    syncTimeoutRef.current = setTimeout(() => {
+      syncTimeoutRef.current = null
+      finaliseRun()
+    }, delay)
+  }, [runSync, clearScheduledSync])
 
   // TipTap快捷指令
   const slashCommands = useTipTapSlashCommands({ editor: currentEditor })
@@ -297,13 +596,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
   // 防止循环更新的标志
   const isInternalUpdate = useRef<boolean>(false)
-
-  // 缓存上次的cells状态，用于增量更新
-  const lastCellsRef = useRef<Cell[]>([])
-
-  // 同步超时计时器
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   const lastInsertedCodeCellIdRef = useRef<string | null>(null)
 
   // 初始内容 - 只在组件首次挂载时计算一次，避免与useEffect重复设置
@@ -313,7 +605,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     console.log('初始cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
     }
 
-    const content = convertCellsToHtml(cells)
+    const content = convertCellsToHtml(cells, {
+      activeCellId: editingCellId,
+      degradeActiveMarkdown: true,
+    })
 
     if (DEBUG) console.log('初始HTML长度:', content.length);
     return content
@@ -429,22 +724,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     onDestroy: () => {
       try {
         // Force final sync when editor is destroyed
-        if (syncTimeoutRef.current) {
-          clearTimeout(syncTimeoutRef.current);
-          syncTimeoutRef.current = null;
-        }
-        
-        // Safely attempt to sync state one last time
-        const editorInstance = editorRef.current;
-        if (editorInstance && typeof convertEditorStateToCells === 'function') {
-          const newCells = convertEditorStateToCells(editorInstance);
-          if (newCells && setCells && typeof setCells === 'function' && cells) {
-            if (JSON.stringify(newCells) !== JSON.stringify(cells)) {
-              console.log('📝 TipTap onDestroy: Final force sync for auto-save');
-              setCells(newCells);
-            }
-          }
-        }
+        clearScheduledSync()
+        scheduleSync('structure', { immediate: true, force: true })
       } catch (error) {
         console.warn('TipTap onDestroy error (safe to ignore during unmount):', error);
       }
@@ -474,6 +755,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             console.warn('Store access failed in onTransaction:', storeError);
           }
           lastInsertedCodeCellIdRef.current = newCodeCellId || null;
+          scheduleSync('structure', { immediate: true, force: true })
           setTimeout(() => {
             const codeElement = document.querySelector(`[data-cell-id="${newCodeCellId}"] .cm-editor .cm-content`);
             if (codeElement) {
@@ -488,189 +770,20 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
     onUpdate: (params) => {
       try {
-        const editor = params?.editor;
+        const editor = params?.editor
         if (!editor || isInternalUpdate.current) return
-      // Check for code block input rule meta
-      const isCodeBlockInputRule = false; // transaction?.getMeta('codeBlockInputRule')
-      if (isCodeBlockInputRule) {
-        if (DEBUG) console.log('处理InputRule创建的代码块变化');
-        const newCodeCellId = 'new-code-cell'; // transaction?.getMeta('newCodeCellId');
-
-        // 通过解析 editor state 得到准确的 cells（包含刚刚插入的代码块，且不含原触发行）
-        const parsedCells = convertEditorStateToCells(editor);
-
-        // 覆盖 store，确保不残留触发文本所在的旧 markdown 段落
-        isInternalUpdate.current = true;
-        setCells(parsedCells);
-
-        // 设置当前活跃 cell 为新代码块
-        try {
-          const storeState = useStore.getState();
-          if (storeState?.setCurrentCell) {
-            const setCurrentCell = storeState.setCurrentCell;
-            const setEditingCellId = storeState.setEditingCellId;
-            if (newCodeCellId && setCurrentCell) {
-              setCurrentCell(newCodeCellId);
-              setEditingCellId?.(newCodeCellId);
-            }
-          }
-        } catch (storeError) {
-          console.warn('Store access failed in onUpdate:', storeError);
-        }
-
-        setTimeout(() => {
-          isInternalUpdate.current = false;
-          // 聚焦到新代码块的编辑器
-          if (newCodeCellId) {
-            const codeElement = document.querySelector(`[data-cell-id="${newCodeCellId}"] .cm-editor .cm-content`);
-            if (codeElement) {
-              (codeElement as HTMLElement).focus();
-            }
-          }
-        }, 50);
-        return;
-      }
-
-        // 检查变化是否发生在特殊块内（代码块或表格）
-      const isSpecialBlockChange = false;
-
-      // 如果变化发生在特殊块内，不进行同步
-      if (isSpecialBlockChange) {
-        return
-      }
-
-      // 减少防抖时间，提高实时保存响应速度
-      const debounceTime = 50
-
-      // 使用防抖延迟同步，避免频繁更新
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current)
-      }
-      syncTimeoutRef.current = setTimeout(() => {
-        const newCells = convertEditorStateToCells(editor)
-
-        // 优化比较逻辑：减少不必要的深度比较
-        const structuralChange = newCells.length !== cells.length ||
-          newCells.some((newCell, index) => {
-            const existingCell = cells[index];
-            return !existingCell || newCell.type !== existingCell.type || newCell.id !== existingCell.id;
-          });
-
-        // 收集仅 Markdown 内容变化的单元格
-        const markdownDiffs: Array<{ id: string; content: string }> = [];
-        newCells.forEach((newCell, index) => {
-          if (newCell.type === 'markdown') {
-            const existingCell = cells[index];
-            if (existingCell && existingCell.type === 'markdown' && newCell.content !== existingCell.content) {
-              markdownDiffs.push({ id: existingCell.id, content: newCell.content as string });
-            }
-          }
-        });
-
-        if (structuralChange) {
-          isInternalUpdate.current = true
-
-          if (DEBUG) {
-          console.log('=== TiptapNotebookEditor 结构变化 Debug Info ===');
-          console.log('原有cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
-          console.log('新解析cells:', newCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
-          }
-
-          // 智能合并：保持现有代码块完整性，只更新markdown内容
-          let currentCells = cells; // fallback to current cells
-          try {
-            const storeState = useStore.getState();
-            if (storeState?.cells) {
-              currentCells = storeState.cells;
-            }
-          } catch (storeError) {
-            console.warn('Store access failed in merging cells:', storeError);
-          }
-          const mergedCells: Cell[] = newCells.map((newCell, index) => {
-            if (newCell.type === 'code') {
-              // For code cells always keep existing store data
-              const existingCodeCell = currentCells.find((cell: Cell) =>
-                cell.type === 'code' && cell.id === newCell.id
-              );
-              if (existingCodeCell) {
-                if (DEBUG) console.log(`Code cell at ${index}: keep existing ${existingCodeCell.id}`);
-                return existingCodeCell; // Keep code cell intact
-              } else {
-                if (DEBUG) console.log(`Code cell at ${index}: new code cell ${newCell.id}`);
-                return newCell; // 新的代码块
-              }
-            } else if (newCell.type === 'markdown') {
-              // Reuse existing markdown cell id/metadata when possible to keep store in sync
-              const existingMarkdownCell = currentCells[index];
-              if (existingMarkdownCell && existingMarkdownCell.type === 'markdown') {
-                return {
-                  ...existingMarkdownCell,
-                  content: newCell.content, // update content only
-                };
-              }
-              return newCell;
-            } else {
-              // Keep other cell types as is - 重要：保持其他特殊cell类型的处理
-              const existingSpecialCell = currentCells.find((cell: Cell) => cell.id === newCell.id);
-              return existingSpecialCell || newCell;
-            }
-          });
-
-          if (DEBUG) {
-          console.log('合并后cells:', mergedCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
-          console.log('===============================================');
-          }
-
-          setCells(mergedCells)
-          setTimeout(() => {
-            isInternalUpdate.current = false
-          }, 50)
-        } else if (markdownDiffs.length > 0) {
-          // 仅 Markdown 内容变更，无结构变化
-          isInternalUpdate.current = true;
-          try {
-            const storeStateNow = useStore.getState();
-            if (storeStateNow?.updateCell) {
-              markdownDiffs.forEach(({ id, content }) => {
-                storeStateNow.updateCell(id, content);
-              });
-            }
-          } catch (storeError) {
-            console.warn('Store access failed in updating markdown:', storeError);
-          }
-          setTimeout(() => {
-            isInternalUpdate.current = false;
-          }, 10);
-        }
-      }, debounceTime)
+        scheduleSync('content')
       } catch (error) {
-        console.warn('TipTap onUpdate error:', error);
+        console.warn('TipTap onUpdate error:', error)
       }
     },
 
-    onBlur: (params) => {
+    onBlur: (_params) => {
       try {
-        const editor = params?.editor;
-        if (!editor) return;
-        
-        // Force immediate sync when editor loses focus
-        if (syncTimeoutRef.current) {
-          clearTimeout(syncTimeoutRef.current);
-          syncTimeoutRef.current = null;
-        }
-        
-        // Immediately sync state to ensure auto-save triggers
-        const newCells = convertEditorStateToCells(editor);
-        if (JSON.stringify(newCells) !== JSON.stringify(cells)) {
-          console.log('📝 TipTap onBlur: Force syncing state for immediate auto-save');
-          isInternalUpdate.current = true;
-          setCells(newCells);
-          setTimeout(() => {
-            isInternalUpdate.current = false;
-          }, 10);
-        }
+        clearScheduledSync()
+        scheduleSync('structure', { immediate: true, force: true })
       } catch (error) {
-        console.warn('TipTap onBlur error:', error);
+        console.warn('TipTap onBlur error:', error)
       }
     },
 
@@ -687,7 +800,94 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           event.preventDefault();
           return true;
         }
-        
+
+        if (event.key === 'Backspace' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+          const { state } = view
+          const selection = state.selection
+          if (selection && selection.empty) {
+            const $from = selection.$from
+            if ($from.parentOffset === 0) {
+              let isAtStart = true
+              for (let depth = $from.depth; depth > 0; depth -= 1) {
+                if ($from.index(depth) !== 0) {
+                  isAtStart = false
+                  break
+                }
+              }
+
+              if (isAtStart) {
+                const storeSnapshot = useStore.getState()
+                const currentEditingId = storeSnapshot?.editingCellId ?? editingCellId
+                const storeCells = storeSnapshot?.cells ?? []
+
+                if (currentEditingId) {
+                  const currentIndex = storeCells.findIndex(cell => cell.id === currentEditingId)
+                  if (currentIndex > 0) {
+                    event.preventDefault()
+                    const previousCell = storeCells[currentIndex - 1]
+
+                    if (previousCell) {
+                      event.preventDefault()
+                      event.stopPropagation()
+
+                      const directionDetail = { targetCellId: previousCell.id, direction: 'up' as const }
+
+                      if (previousCell.type === 'code' || previousCell.type === 'hybrid') {
+                        storeSnapshot.setEditingCellId?.(previousCell.id)
+                        storeSnapshot.setCurrentCell?.(previousCell.id)
+                        window.dispatchEvent(new CustomEvent('cell-navigation', { detail: directionDetail }))
+                      } else if (previousCell.type === 'markdown') {
+                        storeSnapshot.setEditingCellId?.(previousCell.id)
+                        storeSnapshot.setCurrentCell?.(previousCell.id)
+                      } else {
+                        storeSnapshot.setCurrentCell?.(previousCell.id)
+                      }
+
+                      try {
+                        const prevPos = Math.max(0, $from.before($from.depth))
+                        const resolved = state.doc.resolve(Math.max(0, prevPos))
+                        const tr = state.tr.setSelection(Selection.near(resolved, -1))
+                        view.dispatch(tr)
+                        view.focus()
+                      } catch (navSelectionError) {
+                        if (DEBUG) console.warn('Backspace navigation selection failed:', navSelectionError)
+                      }
+
+                      setTimeout(() => {
+                        if (previousCell.type === 'markdown') {
+                          try {
+                            const targetNode = document.querySelector(`[data-cell-id="${previousCell.id}"]`)
+                            if (targetNode instanceof HTMLElement) {
+                              targetNode.scrollIntoView({ block: 'nearest' })
+                              const walker = document.createTreeWalker(targetNode, NodeFilter.SHOW_TEXT)
+                              let lastText: Node | null = null
+                              while (walker.nextNode()) {
+                                lastText = walker.currentNode
+                              }
+                              if (lastText) {
+                                const range = document.createRange()
+                                range.selectNodeContents(lastText)
+                                range.collapse(false)
+                                const sel = window.getSelection()
+                                sel?.removeAllRanges()
+                                sel?.addRange(range)
+                              }
+                            }
+                          } catch (navError) {
+                            if (DEBUG) console.warn('Backspace navigation fallback failed', navError)
+                          }
+                        }
+                      }, 24)
+
+                      return true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Handle Ctrl/Cmd + End - Jump to end of document
         if ((event.ctrlKey || event.metaKey) && event.key === 'End') {
           event.preventDefault();
@@ -723,20 +923,11 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
     immediatelyRender: false,
   })
-
-  // 初始化lastCellsRef
-  useEffect(() => {
-    lastCellsRef.current = cells
-  }, [])
-
   // 页面卸载时强制保存
   useEffect(() => {
     const handleBeforeUnload = () => {
       // Clear any pending debounced updates
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-        syncTimeoutRef.current = null;
-      }
+      clearScheduledSync()
       
       // Force immediate final save if editor exists and has unsaved changes
       // Add comprehensive safety checks to prevent uninitialized variable access
@@ -746,9 +937,12 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           !isInternalUpdate.current) {
         try {
           const finalCells = convertEditorStateToCells(editor);
-          if (finalCells && JSON.stringify(finalCells) !== JSON.stringify(cells)) {
+          const currentCellsSnapshot = latestCellsRef.current ?? []
+          if (finalCells && JSON.stringify(finalCells) !== JSON.stringify(currentCellsSnapshot)) {
             console.log('📝 Page unload: Emergency sync for auto-save');
-            setCells(finalCells);
+            setCellsRef.current?.(finalCells);
+            latestCellsRef.current = finalCells;
+            lastCellsRef.current = finalCells;
             
             // Force immediate auto-save instead of queueing
             try {
@@ -788,15 +982,13 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       clearTimeout(timer);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [editor, cells, setCells])
+  }, [editor, cells, setCells, clearScheduledSync])
 
   // 清理定时器和编辑器资源
   useEffect(() => {
     return () => {
       // 清理定时器
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current)
-      }
+      clearScheduledSync()
       // 清理编辑器
       if (editorRef.current) {
         editorRef.current.destroy()
@@ -804,7 +996,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       }
       // nothing to cleanup for slashCommands
     }
-  }, [])
+  }, [clearScheduledSync])
 
   // Helper functions moved to utils/markdownConverters.ts
 
@@ -893,97 +1085,110 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
   // 同步外部cells变化到编辑器 - 只处理必须同步到tiptap的变化
   useEffect(() => {
-    if (editor && cells && !isInternalUpdate.current) {
-      const lastCells = lastCellsRef.current
+    if (!editor) {
+      lastCellsRef.current = cells
+      return
+    }
 
-      // 完整的更新检查：确保所有cell类型都能正确处理
-      const needsTiptapUpdate = cells.length !== lastCells.length ||
-        cells.some((cell, index) => {
-          const lastCell = lastCells[index]
-          if (!lastCell) return true // 新增cell
+    if (isInternalUpdate.current) {
+      lastCellsRef.current = cells
+      return
+    }
 
-          // ID变化（顺序变化）
-          if (cell.id !== lastCell.id) return true
+    const lastCells = lastCellsRef.current
 
-          // 类型变化
-          if (cell.type !== lastCell.type) return true
+    // 完整的更新检查：确保所有cell类型都能正确处理
+    const needsTiptapUpdate = cells.length !== lastCells.length ||
+      cells.some((cell, index) => {
+        const lastCell = lastCells[index]
+        if (!lastCell) return true // 新增cell
 
-          // markdown cell的内容变化需要更新tiptap
-          if (cell.type === 'markdown' && cell.content !== lastCell.content) return true
+        // ID变化（顺序变化）
+        if (cell.id !== lastCell.id) return true
 
-          // image cell的内容或metadata变化也需要更新tiptap
-          if (cell.type === 'image') {
-            if (cell.content !== lastCell.content) return true
-            // 检查metadata变化（特别是生成状态）
-            if (JSON.stringify(cell.metadata || {}) !== JSON.stringify(lastCell.metadata || {})) return true
-          }
+        // 类型变化
+        if (cell.type !== lastCell.type) return true
 
-          // thinking cell 的字段变化也需要更新（agentName/customText/textArray/useWorkflowThinking）
-          if (cell.type === 'thinking') {
-            const fieldsChanged = (
-              (cell as any).agentName !== (lastCell as any).agentName ||
-              (cell as any).customText !== (lastCell as any).customText ||
-              JSON.stringify((cell as any).textArray || []) !== JSON.stringify((lastCell as any).textArray || []) ||
-              (cell as any).useWorkflowThinking !== (lastCell as any).useWorkflowThinking
-            )
-            if (fieldsChanged) return true
-          }
+        // markdown cell的内容变化需要更新tiptap
+        if (cell.type === 'markdown' && cell.content !== lastCell.content) return true
 
-          // code cell 和其他 cell 类型的内容和输出变化也需要同步到 tiptap
-          if (cell.type === 'code' || cell.type === 'hybrid') {
-            // 检查代码内容变化
-            if (cell.content !== lastCell.content) return true
-            // 检查输出变化
-            if (JSON.stringify(cell.outputs || []) !== JSON.stringify(lastCell.outputs || [])) return true
-            // language not part of Cell type here
-          }
-
-          // raw cell 的内容变化需要更新 tiptap
-          if (cell.type === 'raw') {
-            if (cell.content !== lastCell.content) return true
-          }
-
-          // 其他任何类型的 cell 变化都需要同步
-          return false
-        })
-
-      // 额外检查：如果是由InputRule触发的cells变化，跳过tiptap更新
-      const hasNewCodeBlock = cells.some(cell =>
-        cell.type === 'code' && !lastCells.find(lastCell => lastCell.id === cell.id)
-      )
-
-      if (hasNewCodeBlock) {
-        if (DEBUG) console.log('检测到新代码块，跳过tiptap更新以避免冲突');
-        lastCellsRef.current = cells; // 仍然更新缓存
-        return;
-      }
-
-      if (needsTiptapUpdate) {
-        if (DEBUG) {
-        console.log('=== 外部cells变化，需要更新tiptap ===');
-        console.log('原有cells:', lastCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
-        console.log('新的cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+        // image cell的内容或metadata变化也需要更新tiptap
+        if (cell.type === 'image') {
+          if (cell.content !== lastCell.content) return true
+          // 检查metadata变化（特别是生成状态）
+          if (JSON.stringify(cell.metadata || {}) !== JSON.stringify(lastCell.metadata || {})) return true
         }
 
-        isInternalUpdate.current = true
-        const expectedHtml = convertCellsToHtml(cells)
+        // thinking cell 的字段变化也需要更新（agentName/customText/textArray/useWorkflowThinking）
+        if (cell.type === 'thinking') {
+          const fieldsChanged = (
+            (cell as any).agentName !== (lastCell as any).agentName ||
+            (cell as any).customText !== (lastCell as any).customText ||
+            JSON.stringify((cell as any).textArray || []) !== JSON.stringify((lastCell as any).textArray || []) ||
+            (cell as any).useWorkflowThinking !== (lastCell as any).useWorkflowThinking
+          )
+          if (fieldsChanged) return true
+        }
 
-        // 使用 setTimeout 将 setContent 延迟到下一个事件循环，避免 flushSync 警告
-        setTimeout(() => {
-          editor.commands.setContent(expectedHtml, false)
-        }, 0)
+        // code cell 和其他 cell 类型的内容和输出变化也需要同步到 tiptap
+        if (cell.type === 'code' || cell.type === 'hybrid') {
+          // 检查代码内容变化
+          if (cell.content !== lastCell.content) return true
+          // 检查输出变化
+          if (JSON.stringify(cell.outputs || []) !== JSON.stringify(lastCell.outputs || [])) return true
+          // language not part of Cell type here
+        }
 
-        setTimeout(() => {
-          isInternalUpdate.current = false
-        }, 50) // 统一使用50ms延迟
+        // raw cell 的内容变化需要更新 tiptap
+        if (cell.type === 'raw') {
+          if (cell.content !== lastCell.content) return true
+        }
 
-        // 更新缓存
-        lastCellsRef.current = cells
+        // 其他任何类型的 cell 变化都需要同步
+        return false
+      })
 
-        if (DEBUG) console.log('=== tiptap内容已更新 ===');
-      }
+    // 额外检查：如果是由InputRule触发的cells变化，跳过tiptap更新
+    const hasNewCodeBlock = cells.some(cell =>
+      cell.type === 'code' && !lastCells.find(lastCell => lastCell.id === cell.id)
+    )
+
+    if (hasNewCodeBlock) {
+      if (DEBUG) console.log('检测到新代码块，跳过tiptap更新以避免冲突');
+      lastCellsRef.current = cells; // 仍然更新缓存
+      return;
     }
-  }, [cells, editor])
+
+    if (needsTiptapUpdate) {
+      if (DEBUG) {
+      console.log('=== 外部cells变化，需要更新tiptap ===');
+      console.log('原有cells:', lastCells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+      console.log('新的cells:', cells.map((c, i) => ({ index: i, id: c.id, type: c.type })));
+      }
+
+      isInternalUpdate.current = true
+      const expectedHtml = convertCellsToHtml(cells, {
+        activeCellId: editingCellId,
+        degradeActiveMarkdown: true,
+      })
+
+      // 使用 setTimeout 将 setContent 延迟到下一个事件循环，避免 flushSync 警告
+      setTimeout(() => {
+        editor.commands.setContent(expectedHtml, false)
+      }, 0)
+
+      setTimeout(() => {
+        isInternalUpdate.current = false
+      }, 50) // 统一使用50ms延迟
+
+      // 更新缓存
+      lastCellsRef.current = cells
+
+      if (DEBUG) console.log('=== tiptap内容已更新 ===');
+    }
+
+    lastCellsRef.current = cells
+  }, [cells, editor, editingCellId])
 
   // 强化：针对 thinking cell 的快速同步（即使未触发结构变化判断）
   const thinkingSignature = useMemo(() => {
@@ -1013,7 +1218,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     if (thinkingSignature && thinkingSignature !== lastThinkingSignatureRef.current) {
       // 强制仅基于thinking变化进行轻量刷新
       isInternalUpdate.current = true
-      const expectedHtml = convertCellsToHtml(cells)
+      const expectedHtml = convertCellsToHtml(cells, {
+        activeCellId: editingCellId,
+        degradeActiveMarkdown: true,
+      })
       setTimeout(() => {
         editor.commands.setContent(expectedHtml, false)
         lastThinkingSignatureRef.current = thinkingSignature
@@ -1022,7 +1230,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         }, 30)
       }, 0)
     }
-  }, [thinkingSignature, editor, cells])
+  }, [thinkingSignature, editor, cells, editingCellId])
 
 
 

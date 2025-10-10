@@ -3,41 +3,41 @@
  * 用于保持 LeftSideBar 各个栏目的一致性
  */
 
-// Obsidian风格的状态样式配置
+// Fluent / Windows 11 灵感的柔和高斯风格配置
 export const SHARED_STYLES = {
   status: {
     colors: {
-      completed: 'text-emerald-600 bg-emerald-50/80 backdrop-blur-md border border-emerald-200/50',
-      'in-progress': 'text-theme-600 bg-theme-50/80 backdrop-blur-md border border-theme-200/50',
-      pending: 'text-slate-500 bg-slate-50/80 backdrop-blur-md border border-slate-200/50'
+      completed: 'text-emerald-600 bg-emerald-50/80 border border-emerald-200/60 shadow-[0_6px_12px_-8px_rgba(16,185,129,0.4)] backdrop-blur-sm',
+      'in-progress': 'text-sky-700 bg-sky-50/80 border border-sky-200/60 shadow-[0_6px_12px_-8px_rgba(14,116,244,0.45)] backdrop-blur-sm',
+      pending: 'text-slate-600 bg-slate-100/80 border border-slate-200/60 shadow-[0_6px_12px_-8px_rgba(100,116,139,0.35)] backdrop-blur-sm'
     },
     steps: {
-      completed: 'bg-emerald-500 shadow-sm ring-1 ring-emerald-200',
-      'in-progress': 'bg-theme-500 shadow-sm ring-1 ring-theme-200 animate-pulse',
-      pending: 'bg-slate-300 shadow-sm ring-1 ring-slate-200'
+      completed: 'bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.24)]',
+      'in-progress': 'bg-sky-500 shadow-[0_0_0_2px_rgba(14,116,244,0.28)] animate-pulse',
+      pending: 'bg-slate-400 shadow-[0_0_0_2px_rgba(100,116,139,0.2)]'
     }
   },
 
-  // Obsidian风格按钮样式
+  // Fluent 风格按钮样式（柔和圆角 + 阴影）
   button: {
-    base: 'transition-all duration-200 ease-out font-medium text-sm',
-    hover: 'hover:bg-slate-100/80 hover:text-slate-700',
-    active: 'bg-slate-200/80 text-slate-800 shadow-sm ring-1 ring-slate-300/50',
-    inactive: 'text-slate-600 hover:text-slate-700'
+    base: 'px-3.5 py-2.5 rounded-lg transition-colors duration-200 ease-out text-sm font-medium text-slate-600 bg-white border border-transparent shadow-sm',
+    hover: 'hover:bg-slate-50 hover:border-slate-200',
+    active: 'bg-[#4F9EF9] text-white border border-[#4F9EF9] shadow-sm',
+    inactive: 'text-slate-600'
   },
 
-  // Obsidian风格容器样式
+  // 统一的容器样式
   container: {
-    base: 'relative h-full flex flex-col bg-white border-r border-slate-200/60 shadow-sm',
-    header: 'h-14 flex items-center justify-between px-4 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-sm',
-    content: 'flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300/50 scrollbar-track-transparent hover:scrollbar-thumb-slate-400/60'
+    base: 'relative h-full flex flex-col bg-white border-l border-slate-200/70',
+    header: 'h-14 flex items-center justify-between px-5 border-b border-slate-200/70 bg-white',
+    content: 'flex-1 overflow-y-auto px-5 py-4 scrollbar-thin bg-white text-slate-700'
   },
 
-  // Obsidian风格Tab样式
+  // 现代化的 Tab 样式
   tab: {
-    base: 'px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
-    active: 'bg-slate-200/80 text-slate-800 shadow-sm ring-1 ring-slate-300/50',
-    inactive: 'text-slate-600 hover:bg-slate-100/60 hover:text-slate-700'
+    base: 'px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-200 ease-out',
+    active: 'bg-[#E7F1FE] text-[#246BEB] border border-transparent shadow-[0_12px_24px_-16px_rgba(79,158,249,0.4)]',
+    inactive: 'text-slate-500 hover:text-[#246BEB]'
   }
 };
 
@@ -80,26 +80,24 @@ export const LAYOUT_CONSTANTS = {
   }
 };
 
-// Obsidian风格滚动条样式（CSS-in-JS）
+// Fluent 风格滚动条样式（CSS-in-JS）
 export const SCROLLBAR_STYLES = `
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(148, 163, 184, 0.1);
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
-    border-radius: 3px;
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(14, 116, 244, 0.35);
+    border-radius: 9999px;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.6);
-    border-color: rgba(148, 163, 184, 0.3);
+    background: rgba(14, 116, 244, 0.55);
   }
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+    scrollbar-color: rgba(14, 116, 244, 0.35) rgba(148, 163, 184, 0.12);
   }
 `;
 

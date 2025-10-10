@@ -50,47 +50,39 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-white">
-      <div className="p-4 space-y-6">
+    <div className="h-full overflow-y-auto bg-transparent">
+      <div className="p-5 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 align-middle justify-center my-auto">
-              <h1 className="text-lg font-semibold text-gray-900">Recent</h1>
-              <span className="text-xs text-gray-400">({recentNotebooks.length})</span>
+              <h1 className="text-base font-medium text-slate-900">Recent</h1>
+              <span className="text-xs text-slate-400">({recentNotebooks.length})</span>
           </div>
           <div className="flex items-center gap-2">
-          <Button 
-            type="primary" 
+          <Button
+            type="default"
             icon={<Plus className="w-4 h-4" />}
             onClick={createNotebook}
             loading={isCreatingNotebook}
             size="small"
-            style={{
-              borderRadius: 8,
-              boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.05)'
-            }}
-          >
-          </Button>
-          <Button 
-            type="primary" 
+            className="!border-slate-200 !bg-white !text-slate-700 hover:!border-[#4F9EF9] hover:!text-[#246BEB]"
+          />
+          <Button
+            type="default"
             icon={<Trees className="w-4 h-4" />}
             onClick={navigateToLibrary}
             loading={isCreatingNotebook}
             size="small"
-            style={{
-              borderRadius: 8,
-              boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.05)'
-            }}
-          >
-          </Button>
-          <Button 
-            type="primary" 
+            className="!border-slate-200 !bg-white !text-slate-700 hover:!border-[#4F9EF9] hover:!text-[#246BEB]"
+          />
+          <Button
+            type="default"
             icon={<Repeat className="w-4 h-4" />}
             onClick={refreshNotebooks}
             loading={isCreatingNotebook}
             size="small"
-          >
-          </Button>
+            className="!border-slate-200 !bg-white !text-slate-700 hover:!border-slate-400"
+          />
           {/* <Button 
             type="primary" 
             icon={<PanelLeftClose className="w-4 h-4" />}
@@ -107,10 +99,10 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Star className="w-4 h-4 text-yellow-500 fill-current" />
-              <h3 className="text-sm font-medium text-gray-700">Starred</h3>
-              <span className="text-xs text-gray-400">({starredNotebooks.length})</span>
+              <h3 className="text-sm font-medium text-slate-800">Starred</h3>
+              <span className="text-xs text-slate-400">({starredNotebooks.length})</span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {starredNotebooks.map(notebook => (
                 <NotebookHistoryCard
                   key={notebook.id}
@@ -126,7 +118,7 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
         {/* Recent Notebooks */}
         {recentNotebooks.length > 0 && (
           <div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {recentNotebooks.map(notebook => (
                 <NotebookHistoryCard
                   key={notebook.id}

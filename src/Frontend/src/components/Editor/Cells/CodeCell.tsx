@@ -119,6 +119,7 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
         setDetachedCellId,
         isDetachedCellFullscreen,
         toggleDetachedCellFullscreen,
+        updateCellType,
     } = useStore();
 
     // 独立窗口状态
@@ -386,6 +387,79 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
             const navCells = state.getCurrentViewCells ? state.getCurrentViewCells() : state.cells;
             const currentIndex = navCells.findIndex((c: any) => c.id === cell.id);
 
+            if (
+                (event.key === 'Backspace' || event.key === 'Delete') &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey &&
+                !event.shiftKey
+            ) {
+                const view = editorRef.current?.view;
+                const docText = view?.state?.doc?.toString?.() ?? cell.content ?? '';
+                const selectionEmpty = view?.state?.selection?.main?.empty ?? true;
+                const isEmptyDoc = docText.trim().length === 0;
+
+                if (selectionEmpty && isEmptyDoc) {
+                    const hasOutputs = Array.isArray(cell.outputs) && cell.outputs.length > 0;
+                    if (hasOutputs) {
+                        const confirmMessage = '当前代码单元格仍有输出，删除将把它转换为 Markdown 并清除输出，是否继续？';
+                        const confirmed = typeof window !== 'undefined' ? window.confirm(confirmMessage) : false;
+                        if (!confirmed) {
+                            event.preventDefault();
+                            return;
+                        }
+                    }
+
+                    event.preventDefault();
+
+                    const language = (cell as any)?.language || '';
+                    const fenceHeader = language ? `\u0060\u0060\u0060${language}` : '```';
+                    const scaffoldMarkdown = `${fenceHeader}\n\u0060\u0060\u0060`;
+
+                    updateCellType(cell.id, 'markdown');
+                    updateCell(cell.id, scaffoldMarkdown);
+                    if (hasOutputs) {
+                        clearCellOutputs(cell.id);
+                    }
+                    setEditingCellId(cell.id);
+                    setCurrentCell(cell.id);
+
+                    // 让 TipTap 有机会刷新内容并接管焦点
+                    setTimeout(() => {
+                        try {
+                            const tiptapEditor = document.querySelector('.tiptap-notebook-editor');
+                            if (tiptapEditor instanceof HTMLElement) {
+                                tiptapEditor.focus({ preventScroll: false });
+                            }
+                            const fallbackNode = document.querySelector(`[data-type="markdown-fallback"][data-cell-id="${cell.id}"]`);
+                            if (fallbackNode instanceof HTMLElement) {
+                                fallbackNode.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                            }
+                            const targetNode = document.querySelector(`[data-cell-id="${cell.id}"]`);
+                            if (targetNode instanceof HTMLElement) {
+                                const walker = document.createTreeWalker(targetNode, NodeFilter.SHOW_TEXT);
+                                let lastText: Node | null = null;
+                                while (walker.nextNode()) {
+                                    lastText = walker.currentNode;
+                                }
+                                if (lastText) {
+                                    const range = document.createRange();
+                                    range.selectNodeContents(lastText);
+                                    range.collapse(false);
+                                    const selection = window.getSelection();
+                                    selection?.removeAllRanges();
+                                    selection?.addRange(range);
+                                }
+                            }
+                        } catch (focusError) {
+                            console.warn('Code cell downgrade focus fallback failed', focusError);
+                        }
+                    }, 40);
+
+                    return;
+                }
+            }
+
             if (event.ctrlKey && event.key === 'Enter') {
                 event.preventDefault();
                 handleExecute();
@@ -481,7 +555,22 @@ const CodeCell: React.FC<CodeCellProps> = ({ cell, onDelete, isStepMode = false,
                 }
             }
         },
-        [cell.id, cell.content, cells, handleExecute, setCurrentCell, setEditingCellId, onDelete, isCursorAtFirstLine, isCursorAtLastLine, isCursorAtDocStart, isCursorAtDocEnd]
+        [
+            cell.id,
+            cell.content,
+            cell.outputs,
+            cells,
+            handleExecute,
+            setCurrentCell,
+            setEditingCellId,
+            clearCellOutputs,
+            updateCellType,
+            updateCell,
+            isCursorAtFirstLine,
+            isCursorAtLastLine,
+            isCursorAtDocStart,
+            isCursorAtDocEnd,
+        ]
     );
 
     // 渲染输出

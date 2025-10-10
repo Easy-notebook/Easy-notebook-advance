@@ -173,32 +173,32 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(({
   // Notebook preview cover for sidebar
   const notebookPreviewCover = useMemo(
     () => (
-      <div className="h-20 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative">
-        <div className="p-2 space-y-1 bg-theme-50/50">
+      <div className="h-20 bg-slate-50 overflow-hidden relative border-b border-slate-200">
+        <div className="p-2 space-y-1">
           {loading ? (
             <Skeleton active paragraph={{ rows: 2 }} />
           ) : previewCells.length > 0 ? (
             previewCells.map((cell) => renderCellPreview(cell))
           ) : (
-            <div className="text-gray-400 text-xs p-2 text-center">
-              <div className="text-lg mb-1">📝</div>
+            <div className="text-slate-400 text-xs p-2 text-center">
+              <div className="text-base mb-1">📝</div>
               <div>Empty</div>
             </div>
           )}
         </div>
 
         {/* Bottom fade gradient */}
-        <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-gray-100 to-transparent pointer-events-none" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-slate-50 to-transparent" />
 
         {/* Star indicator */}
         {notebook.isStarred && (
           <div className="absolute top-1 right-1">
-            <Star className="w-3 h-3 text-yellow-500 fill-current drop-shadow-sm" />
+            <Star className="w-3 h-3 text-amber-500 fill-current drop-shadow-[0_2px_6px_rgba(245,158,11,0.5)]" />
           </div>
         )}
 
         {/* Last accessed time */}
-        <div className="absolute top-1 left-1 bg-white bg-opacity-80 backdrop-blur-sm rounded px-1 py-0.5 text-xs text-gray-600">
+        <div className="absolute top-1 left-1 rounded px-1.5 py-0.5 text-xs text-slate-600 bg-white/90 shadow-sm border border-slate-200/60">
           <div className="flex items-center gap-0.5">
             <Clock className="w-2 h-2" />
             {formatTime(notebook.lastAccessedAt)}
@@ -211,28 +211,28 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(({
 
   return (
     <div
-      className="group relative bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md hover:border-theme-300 transition-all duration-200 cursor-pointer"
+      className="group relative bg-white border border-slate-200 rounded-xl overflow-hidden transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md hover:border-[#4F9EF9]"
       onClick={handleCardClick}
     >
       {/* Preview Cover */}
       {notebookPreviewCover}
 
       {/* Content */}
-      <div className="p-3">
+      <div className="p-3.5">
         {/* Title and actions */}
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-medium text-sm text-gray-900 truncate group-hover:text-theme-700 transition-colors flex-1">
+          <h3 className="font-semibold text-sm text-slate-800 truncate group-hover:text-[#246BEB] transition-colors flex-1">
             {notebook.title || notebook.name || 'Untitled'}
           </h3>
-          
+
           <Button
             type="text"
             size="small"
             icon={
               notebook.isStarred ? (
-                <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                <Star className="w-3 h-3 text-amber-500 fill-current" />
               ) : (
-                <Star className="w-3 h-3 text-gray-400 hover:text-yellow-500" />
+                <Star className="w-3 h-3 text-slate-400 group-hover:text-[#246BEB]" />
               )
             }
             onClick={handleStarClick}
@@ -240,9 +240,6 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(({
           />
         </div>
       </div>
-
-      {/* Hover overlay */}
-      <div className="absolute inset-0 bg-theme-500/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
     </div>
   );
 });
